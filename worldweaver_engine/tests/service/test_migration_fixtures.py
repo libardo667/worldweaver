@@ -10,7 +10,6 @@ from src.services.state_manager import AdvancedStateManager
 from tests.helpers.state_assertions import (
     assert_inventory_parity,
     assert_relationship_parity,
-    assert_goal_parity,
     assert_export_import_roundtrip,
 )
 
@@ -50,11 +49,9 @@ class TestV2FullSnapshot:
             manager._relationships,
             {"innkeeper:player": {"trust": 20.0, "fear": 0.0}},
         )
-        assert_goal_parity(
-            manager._goals,
-            {"primary_goal": "Find the stolen relic", "urgency": 0.4},
-        )
-        assert len(manager._beats.beats) == 1
+        exported = manager.export_state()
+        assert "goal_state" not in exported
+        assert "narrative_beats" not in exported
 
     def test_roundtrip(self, fixture_v2_full):
         manager = AdvancedStateManager("test")
@@ -80,8 +77,8 @@ class TestV2PartialSnapshot:
     def test_produces_safe_defaults(self, fixture_v2_partial):
         manager = AdvancedStateManager("test")
         manager.import_state(fixture_v2_partial)
-        assert manager._beats.to_dict() == []
-        assert manager._goals.state.primary_goal == ""
+        assert "goal_state" not in manager.export_state()
+        assert "narrative_beats" not in manager.export_state()
 
     def test_empty_inventory_ok(self, fixture_v2_partial):
         manager = AdvancedStateManager("test")

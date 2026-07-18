@@ -5,7 +5,6 @@ import type {
   DevHardResetResponse,
   LeaveSessionResponse,
   ResetSessionResponse,
-  StateSummaryResponse,
   WorldFactsResponse,
   WorldHistoryResponse,
   SettingsReadinessResponse,
@@ -665,12 +664,6 @@ export function getWorldFacts(
     limit: String(limit),
   });
   return requestJson<WorldFactsResponse>(`/api/world/facts?${params.toString()}`);
-}
-
-export function getStateSummary(sessionId: string): Promise<StateSummaryResponse> {
-  return requestJson<StateSummaryResponse>(
-    `/api/state/${encodeURIComponent(sessionId)}`,
-  );
 }
 
 export function postResetSession(): Promise<ResetSessionResponse> {

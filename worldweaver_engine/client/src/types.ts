@@ -76,17 +76,6 @@ export type WorldFactsResponse = {
 };
 
 
-export type StateSummaryResponse = {
-  session_id: string;
-  variables: VarsRecord;
-  inventory: VarsRecord;
-  relationships: VarsRecord;
-  goal: VarsRecord;
-  arc_timeline: VarsRecord[];
-  environment: VarsRecord;
-  stats: VarsRecord;
-};
-
 export type ChangeItem = {
   id: string;
   text: string;

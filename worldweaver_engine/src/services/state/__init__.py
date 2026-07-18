@@ -6,8 +6,6 @@
 from ._types import StateChange, StateChangeType
 from .inventory import InventoryDomain, ItemState
 from .relationships import RelationshipDomain, RelationshipState
-from .goals import GoalDomain, GoalMilestone, GoalState
-from .beats import NarrativeBeatsDomain
 
 __all__ = [
     "StateChange",
@@ -16,8 +14,4 @@ __all__ = [
     "ItemState",
     "RelationshipDomain",
     "RelationshipState",
-    "GoalDomain",
-    "GoalMilestone",
-    "GoalState",
-    "NarrativeBeatsDomain",
 ]

@@ -30,6 +30,9 @@ put both residents in the same exact place, which supports a bounded four-reside
 justifying forced movement or forced conversation. That run also found the last live fallback into the paid
 freeform action system. The human composer, model-key controls, expired demo gate, action referee, and action
 narrator are now removed; the old `/api/action` routes are honest tombstones.
+The follow-up state audit removed the equally isolated engine-side narrative beats, story-arc counter, and
+goal/milestone domain. Those fields had no production caller and duplicated cognition that belongs to the
+resident runtime. Legacy session snapshots remain loadable without carrying those fields forward.
 
 ## What landed after this plan was written
 
@@ -717,7 +720,8 @@ resident internals stay in a restricted steward surface rather than the ordinary
 
 ## Current immediate checkpoint
 
-1. Finish the narrator-removal documentation and keep the full repository check green.
+1. Keep the narrator/story-state removal green and regenerate the repository knowledge graph from this
+   cleaner boundary.
 2. Run Avram, Sal, Mateo, and Anton together for one bounded natural-time Alderbank window; do not force
    travel, co-location, speech, or continued city presence.
 3. Use only structural receipts and public city evidence to assess encounter frequency, action reliability,

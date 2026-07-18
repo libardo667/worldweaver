@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any, Dict, List
 if TYPE_CHECKING:
     from src.services.state.inventory import InventoryDomain
     from src.services.state.relationships import RelationshipDomain
-    from src.services.state.goals import GoalDomain
     from src.services.state_manager import AdvancedStateManager
 
 
@@ -33,19 +32,8 @@ def assert_relationship_parity(domain: "RelationshipDomain", expected: Dict[str,
                 assert abs(got - float(exp_data[attr])) < 1e-6, f"Relationship {rel_key}.{attr}: got {got}, expected {exp_data[attr]}"
 
 
-def assert_goal_parity(domain: "GoalDomain", expected: Dict[str, Any]) -> None:
-    """Assert domain.state matches expected goal dict."""
-    state = domain.state
-    if "primary_goal" in expected:
-        assert state.primary_goal == expected["primary_goal"], f"primary_goal mismatch: got {state.primary_goal!r}, expected {expected['primary_goal']!r}"
-    if "urgency" in expected:
-        assert abs(state.urgency - float(expected["urgency"])) < 1e-6, f"urgency mismatch: got {state.urgency}, expected {expected['urgency']}"
-    if "complication" in expected:
-        assert abs(state.complication - float(expected["complication"])) < 1e-6, f"complication mismatch: got {state.complication}, expected {expected['complication']}"
-
-
 def assert_export_import_roundtrip(manager: "AdvancedStateManager") -> None:
-    """Export state → fresh manager import → compare all 4 domain to_dict() outputs."""
+    """Export state, import it fresh, and compare the live state domains."""
     from src.services.state_manager import AdvancedStateManager
 
     exported = manager.export_state()
@@ -54,8 +42,6 @@ def assert_export_import_roundtrip(manager: "AdvancedStateManager") -> None:
 
     assert fresh._inventory.to_dict() == manager._inventory.to_dict(), "Inventory roundtrip mismatch"
     assert fresh._relationships.to_dict() == manager._relationships.to_dict(), "Relationships roundtrip mismatch"
-    assert fresh._goals.to_dict() == manager._goals.to_dict(), "Goals roundtrip mismatch"
-    assert fresh._beats.to_dict() == manager._beats.to_dict(), "Beats roundtrip mismatch"
 
 
 def assert_reducer_delta_applied(

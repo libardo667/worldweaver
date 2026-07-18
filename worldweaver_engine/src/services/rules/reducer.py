@@ -360,7 +360,6 @@ PROTECTED_INTERNAL_PREFIXES = (
 
 PROTECTED_INTERNAL_KEYS = {
     "_world_context",
-    "_story_arc",
     "_v",
     "_inventory_count",
     "_total_item_quantity",
@@ -368,8 +367,6 @@ PROTECTED_INTERNAL_KEYS = {
     "_time_of_day",
     "_weather",
     "_danger_level",
-    "_scene_card_now",
-    "_scene_card_history",
 }
 
 

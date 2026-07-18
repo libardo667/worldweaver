@@ -381,6 +381,12 @@ they make no model call. The client no longer offers a freeform action composer 
 Known human and resident verbs call concrete routes and return canonical receipts. Unsupported resident
 prose fails locally instead of pretending that something happened.
 
+A follow-up caller audit also removed the engine's separate `NarrativeBeat`, story-arc counter, and
+engine-side goal/milestone domains. They had no production writer or reader after the action pipeline was
+deleted; they only persisted themselves and tested that persistence. CognitiveCore remains the owner of a
+resident's goals. Old v2 session snapshots containing those fields still load, but new snapshots ignore and
+do not re-export them.
+
 ## F. Non-live validation gates
 
 These architectural slices do not require another faulty-machinery population run to establish correctness:

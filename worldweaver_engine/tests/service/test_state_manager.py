@@ -1,7 +1,5 @@
 """Tests for src/services/state_manager.py."""
 
-import math
-
 from src.services.state_manager import (
     AdvancedStateManager,
     EnvironmentalState,
@@ -129,111 +127,6 @@ class TestAdvancedStateManager:
         assert spatial["bridge"]["status"] == "destroyed"
         assert applied["variables"]["bridge_broken"] is True
 
-    def test_narrative_beats_stack_and_decay(self):
-        sm = self._make()
-        sm.add_narrative_beat(
-            {
-                "name": "IncreasingTension",
-                "intensity": 0.8,
-                "turns_remaining": 3,
-                "decay": 0.5,
-            }
-        )
-        sm.add_narrative_beat(
-            {
-                "name": "Catharsis",
-                "intensity": 0.4,
-                "turns_remaining": 2,
-                "decay": 0.5,
-            }
-        )
-
-        active = sm.get_active_narrative_beats()
-        assert len(active) == 2
-
-        sm.decay_narrative_beats()
-        active = sm.get_active_narrative_beats()
-        beat_by_name = {beat.name: beat for beat in active}
-        assert beat_by_name["IncreasingTension"].turns_remaining == 2
-        assert math.isclose(beat_by_name["IncreasingTension"].intensity, 0.4, rel_tol=1e-9)
-        assert beat_by_name["Catharsis"].turns_remaining == 1
-        assert math.isclose(beat_by_name["Catharsis"].intensity, 0.2, rel_tol=1e-9)
-
-        sm.decay_narrative_beats()
-        active = sm.get_active_narrative_beats()
-        assert len(active) == 1
-        assert active[0].name == "IncreasingTension"
-
-        sm.decay_narrative_beats()
-        assert sm.get_active_narrative_beats() == []
-
-    def test_goal_state_roundtrip_and_timeline(self):
-        sm = self._make()
-        sm.set_goal_state(
-            primary_goal="Deliver medicine to the ridge village",
-            subgoals=["Cross the river", "Find a guide"],
-            urgency=0.7,
-            complication=0.2,
-            note="Initial objective",
-            source="test",
-        )
-        sm.mark_goal_milestone(
-            "Bandits blocked the road",
-            status="complicated",
-            complication_delta=0.3,
-            source="test",
-        )
-        summary = sm.get_state_summary()
-        assert summary["goal"]["primary_goal"] == "Deliver medicine to the ridge village"
-        assert summary["goal"]["urgency"] == 0.7
-        assert summary["goal"]["complication"] == 0.5
-        assert summary["arc_timeline"]
-        assert summary["arc_timeline"][0]["status"] == "complicated"
-
-    def test_apply_goal_update_branches_subgoal(self):
-        sm = self._make()
-        sm.set_goal_state(primary_goal="Find the missing scout", source="test")
-        sm.apply_goal_update(
-            {
-                "status": "branched",
-                "milestone": "Chased a rumor toward the marsh",
-                "subgoal": "Question the ferryman",
-                "urgency_delta": 0.1,
-                "complication_delta": 0.2,
-            },
-            source="test",
-        )
-        assert "Question the ferryman" in sm.goal_state.subgoals
-        assert sm.goal_state.urgency == 0.1
-        assert sm.goal_state.complication == 0.2
-
-    def test_backfill_primary_goal_after_initial_turn_is_deterministic_and_idempotent(self):
-        sm = self._make()
-        sm.set_variable("player_role", "exiled cartographer")
-        sm.set_world_context({"premise": "A fragile city-state changes block by block."})
-        sm.advance_story_arc()  # turn_count -> 1
-
-        first = sm.backfill_primary_goal_if_empty_after_initial_turn()
-        second = sm.backfill_primary_goal_if_empty_after_initial_turn()
-        goal_state = sm.get_goal_state()
-        timeline = sm.get_arc_timeline(limit=5)
-
-        assert first["applied"] is True
-        assert second["applied"] is False
-        assert second["reason"] == "primary_goal_present"
-        assert goal_state["primary_goal"]
-        assert "exiled cartographer" in goal_state["primary_goal"].lower()
-        assert len(timeline) == 1
-        assert timeline[0]["source"] == "system_goal_backfill"
-
-    def test_backfill_primary_goal_noop_before_initial_turn(self):
-        sm = self._make()
-        sm.set_variable("player_role", "courier")
-        outcome = sm.backfill_primary_goal_if_empty_after_initial_turn()
-        assert outcome["applied"] is False
-        assert outcome["reason"] == "below_turn_threshold"
-        assert sm.get_goal_state()["primary_goal"] == ""
-
     def test_structured_state_defaults_exist(self):
         sm = self._make()
         assert sm.get_variable("stance") == "observing"
@@ -263,22 +156,6 @@ class TestAdvancedStateManager:
         sm.add_item("gem", "Ruby", quantity=2)
         sm.update_relationship("player", "npc1", {"trust": 30})
         sm.update_environment({"weather": "snowy"})
-        sm.set_goal_state(
-            primary_goal="Secure safe passage",
-            subgoals=["Negotiate with caravan leader"],
-            urgency=0.6,
-            complication=0.3,
-            source="test",
-        )
-        sm.add_narrative_beat(
-            {
-                "name": "IncreasingTension",
-                "intensity": 0.5,
-                "turns_remaining": 3,
-                "decay": 0.65,
-            }
-        )
-
         exported = sm.export_state()
         assert exported["_v"] == 2
 
@@ -288,9 +165,6 @@ class TestAdvancedStateManager:
         assert sm2.inventory["gem"].quantity == 2
         assert sm2.get_relationship("player", "npc1").trust == 30
         assert sm2.environment.weather == "snowy"
-        assert sm2.goal_state.primary_goal == "Secure safe passage"
-        assert sm2.goal_state.subgoals == ["Negotiate with caravan leader"]
-        assert sm2.get_active_narrative_beats()[0].name == "IncreasingTension"
 
     # -- Change history --
 
@@ -359,29 +233,12 @@ class TestOrchestratorDomainDelegation:
         # Both are the same dict
         assert sm.inventory is sm._inventory.items
 
-    def test_goal_state_property_reflects_domain(self):
-        sm = AdvancedStateManager("test")
-        sm.set_goal_state(primary_goal="Defeat the dragon")
-        assert sm.goal_state.primary_goal == "Defeat the dragon"
-        assert sm._goals.state.primary_goal == "Defeat the dragon"
-        assert sm.goal_state is sm._goals.state
-
-    def test_active_narrative_beats_property_reflects_domain(self):
-        from src.models import NarrativeBeat
-
-        sm = AdvancedStateManager("test")
-        sm.add_narrative_beat(NarrativeBeat(name="Tension", intensity=0.5, turns_remaining=3))
-        assert len(sm.active_narrative_beats) == 1
-        assert sm.active_narrative_beats is sm._beats.beats
-
     def test_fork_shares_domain_references(self):
         sm = AdvancedStateManager("test")
         sm.add_item("map", "Treasure Map")
         fork = sm.fork_for_projection()
         assert fork._inventory is sm._inventory
         assert fork._relationships is sm._relationships
-        assert fork._goals is sm._goals
-        assert fork._beats is sm._beats
         # Variables are copied, not shared
         assert fork.variables is not sm.variables
 
@@ -391,5 +248,4 @@ class TestOrchestratorDomainDelegation:
         sm = AdvancedStateManager("test")
         sm.add_item("torch", "Torch", quantity=3)
         sm.update_relationship("player", "guard", {"respect": 15})
-        sm.set_goal_state(primary_goal="Survive the night", urgency=0.6)
         assert_export_import_roundtrip(sm)

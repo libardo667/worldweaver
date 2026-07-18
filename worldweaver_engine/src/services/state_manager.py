@@ -15,7 +15,6 @@ from collections import deque
 from dataclasses import dataclass
 import logging
 
-from ..models import NarrativeBeat
 from ..models.schemas import StructuredCharacterState
 from .requirements import evaluate_requirement_value, evaluate_requirements
 from .state import (
@@ -23,10 +22,6 @@ from .state import (
     ItemState,
     RelationshipDomain,
     RelationshipState,
-    GoalDomain,
-    GoalMilestone,
-    GoalState,
-    NarrativeBeatsDomain,
     StateChange,
     StateChangeType,
 )
@@ -49,7 +44,7 @@ def _parse_dt(value: Any) -> Optional[datetime]:
         return None
 
 
-# StateChangeType, StateChange, ItemState, RelationshipState, GoalMilestone, GoalState
+# StateChangeType, StateChange, ItemState, and RelationshipState
 # are now canonical in src/services/state/. Imported above for use throughout this module.
 # Compat re-exports preserved for callers that imported directly from state_manager.
 # Retirement condition: after Major 106, verify no external code imports these from here.
@@ -96,9 +91,6 @@ class EnvironmentalState:
                 setattr(self, attr, value)
 
 
-# GoalMilestone and GoalState now live in src/services/state/goals.py (imported above).
-
-
 class AdvancedStateManager:
     """
     Sophisticated state management system that tracks:
@@ -114,8 +106,6 @@ class AdvancedStateManager:
         self.variables = {}
         self._inventory = InventoryDomain()
         self._relationships = RelationshipDomain()
-        self._goals = GoalDomain()
-        self._beats = NarrativeBeatsDomain()
         self.environment = EnvironmentalState()
         self.change_history = deque(maxlen=200)
         self.context_stack = []
@@ -139,19 +129,6 @@ class AdvancedStateManager:
     def relationships(self) -> Dict[str, RelationshipState]:
         """Direct reference to the relationships items dict."""
         return self._relationships.items
-
-    @property
-    def goal_state(self) -> GoalState:
-        """Direct reference to the GoalState object."""
-        return self._goals.state
-
-    @property
-    def active_narrative_beats(self) -> List[NarrativeBeat]:
-        return self._beats.beats
-
-    @active_narrative_beats.setter
-    def active_narrative_beats(self, value: List[NarrativeBeat]) -> None:
-        self._beats._beats = value
 
     def set_variable(
         self,
@@ -430,256 +407,6 @@ class AdvancedStateManager:
         self._invalidate_cache()
         logger.debug(f"Updated environment: {changes}")
 
-    def _clamp_goal_signal(self, value: float) -> float:
-        return max(0.0, min(1.0, float(value)))
-
-    def _record_goal_milestone(
-        self,
-        title: str,
-        status: str,
-        *,
-        note: str = "",
-        source: str = "system",
-        urgency_delta: float = 0.0,
-        complication_delta: float = 0.0,
-    ) -> GoalMilestone:
-        valid_statuses = {"progressed", "complicated", "derailed", "branched", "completed"}
-        clean_status = str(status).lower().strip()
-        if clean_status not in valid_statuses:
-            clean_status = "progressed"
-
-        milestone = GoalMilestone(
-            title=str(title).strip() or "Milestone",
-            status=clean_status,
-            note=str(note or ""),
-            source=str(source or "system"),
-            urgency_delta=float(urgency_delta),
-            complication_delta=float(complication_delta),
-        )
-        self.goal_state.milestones.append(milestone)
-        if len(self.goal_state.milestones) > 50:
-            self.goal_state.milestones = self.goal_state.milestones[-50:]
-        self.goal_state.updated_at = datetime.now(timezone.utc)
-        self._invalidate_cache()
-        return milestone
-
-    def set_goal_state(
-        self,
-        *,
-        primary_goal: Optional[str] = None,
-        subgoals: Optional[List[str]] = None,
-        urgency: Optional[float] = None,
-        complication: Optional[float] = None,
-        note: Optional[str] = None,
-        source: str = "player",
-    ) -> Dict[str, Any]:
-        """Create or update structured goal state."""
-        changed = False
-        if primary_goal is not None:
-            cleaned = str(primary_goal).strip()
-            if cleaned and cleaned != self.goal_state.primary_goal:
-                self.goal_state.primary_goal = cleaned
-                changed = True
-                self._record_goal_milestone(
-                    title=f"Primary goal set: {cleaned}",
-                    status="branched",
-                    note=str(note or ""),
-                    source=source,
-                )
-
-        if subgoals is not None:
-            cleaned_subgoals = [str(goal).strip() for goal in subgoals[:10] if str(goal).strip()]
-            self.goal_state.subgoals = cleaned_subgoals
-            changed = True
-
-        if urgency is not None:
-            self.goal_state.urgency = self._clamp_goal_signal(float(urgency))
-            changed = True
-
-        if complication is not None:
-            self.goal_state.complication = self._clamp_goal_signal(float(complication))
-            changed = True
-
-        if changed:
-            self.goal_state.updated_at = datetime.now(timezone.utc)
-            self._invalidate_cache()
-
-        return self.get_goal_state()
-
-    def add_goal_subgoal(self, subgoal: str, source: str = "system") -> None:
-        cleaned = str(subgoal).strip()
-        if not cleaned:
-            return
-        if cleaned not in self.goal_state.subgoals:
-            self.goal_state.subgoals.append(cleaned)
-            self.goal_state.subgoals = self.goal_state.subgoals[:10]
-            self._record_goal_milestone(
-                title=f"New subgoal: {cleaned}",
-                status="branched",
-                source=source,
-            )
-
-    def mark_goal_milestone(
-        self,
-        title: str,
-        *,
-        status: str = "progressed",
-        note: str = "",
-        source: str = "system",
-        urgency_delta: float = 0.0,
-        complication_delta: float = 0.0,
-    ) -> Dict[str, Any]:
-        """Append a milestone and update urgency/complication signals."""
-        self.goal_state.urgency = self._clamp_goal_signal(self.goal_state.urgency + float(urgency_delta))
-        self.goal_state.complication = self._clamp_goal_signal(self.goal_state.complication + float(complication_delta))
-        self._record_goal_milestone(
-            title=title,
-            status=status,
-            note=note,
-            source=source,
-            urgency_delta=urgency_delta,
-            complication_delta=complication_delta,
-        )
-        return self.get_goal_state()
-
-    def get_goal_lens_payload(self) -> Dict[str, Any]:
-        """Return the structured goal lens payload for synthesis and semantic matching."""
-        milestones = [m.to_dict() for m in self.goal_state.milestones[-3:]]
-        return {
-            "primary_goal": str(self.goal_state.primary_goal or ""),
-            "subgoals": list(self.goal_state.subgoals),
-            "urgency": float(self.goal_state.urgency),
-            "complication": float(self.goal_state.complication),
-            "recent_milestones": milestones,
-        }
-
-    def apply_goal_update(
-        self,
-        update: Dict[str, Any],
-        *,
-        source: str = "system",
-    ) -> Dict[str, Any]:
-        """Apply goal changes from action interpretation metadata."""
-        if not update:
-            return self.get_goal_state()
-
-        status = str(update.get("status", "progressed")).lower()
-        valid_statuses = {"progressed", "complicated", "derailed", "branched", "completed"}
-        if status not in valid_statuses:
-            status = "progressed"
-
-        milestone = str(update.get("milestone", "")).strip()
-        note = str(update.get("note", "")).strip()
-        subgoal = str(update.get("subgoal", "")).strip()
-
-        urgency_delta = float(update.get("urgency_delta", 0.0))
-        complication_delta = float(update.get("complication_delta", 0.0))
-
-        # Apply heuristic deltas if none explicitly provided
-        if urgency_delta == 0.0 and complication_delta == 0.0:
-            if status == "complicated":
-                urgency_delta = 0.1
-                complication_delta = 0.2
-            elif status == "derailed":
-                urgency_delta = 0.2
-                complication_delta = 0.4
-            elif status == "branched":
-                urgency_delta = 0.05
-                complication_delta = 0.1
-            elif status == "progressed":
-                complication_delta = -0.05
-            elif status == "completed":
-                urgency_delta = -0.2
-                complication_delta = -0.1
-
-        primary_goal = update.get("primary_goal")
-        if primary_goal is not None:
-            self.set_goal_state(
-                primary_goal=str(primary_goal),
-                source=source,
-                note=note,
-            )
-
-        if subgoal:
-            self.add_goal_subgoal(subgoal, source=source)
-
-        if milestone or urgency_delta or complication_delta:
-            self.mark_goal_milestone(
-                milestone or "Goal state adjusted",
-                status=status,
-                note=note,
-                source=source,
-                urgency_delta=urgency_delta,
-                complication_delta=complication_delta,
-            )
-
-        return self.get_goal_state()
-
-    def get_goal_state(self) -> Dict[str, Any]:
-        """Return goal state suitable for API responses/persistence."""
-        return self.goal_state.to_dict()
-
-    def get_arc_timeline(self, limit: int = 20) -> List[Dict[str, Any]]:
-        """Return recent arc milestones newest-first."""
-        recent = self.goal_state.milestones[-max(1, int(limit)) :]
-        return [milestone.to_dict() for milestone in reversed(recent)]
-
-    def get_goal_embedding_context(self) -> str:
-        """Dense text context that can be embedded for semantic scoring."""
-        if not self.goal_state.primary_goal:
-            return ""
-
-        parts = [f"Primary goal: {self.goal_state.primary_goal}"]
-        if self.goal_state.subgoals:
-            parts.append("Subgoals: " + ", ".join(self.goal_state.subgoals[:5]))
-        parts.append(f"Goal urgency={self.goal_state.urgency:.2f}, complication={self.goal_state.complication:.2f}")
-        if self.goal_state.milestones:
-            milestone_text = "; ".join(f"{m.status}: {m.title}" for m in self.goal_state.milestones[-3:])
-            parts.append("Recent arc milestones: " + milestone_text)
-        return " ".join(parts)
-
-    def add_narrative_beat(self, beat: Union[NarrativeBeat, Dict[str, Any]]) -> None:
-        """Add or refresh a narrative beat that steers semantic selection."""
-        normalized = beat if isinstance(beat, NarrativeBeat) else NarrativeBeat.from_dict(beat)
-        normalized.name = str(normalized.name or "").strip() or "ThematicResonance"
-        normalized.intensity = max(0.0, float(normalized.intensity))
-        normalized.turns_remaining = max(0, int(normalized.turns_remaining))
-        normalized.decay = max(0.0, min(1.0, float(normalized.decay)))
-        if not normalized.is_active():
-            return
-
-        for idx, existing in enumerate(self.active_narrative_beats):
-            if existing.name.lower() == normalized.name.lower():
-                merged = NarrativeBeat(
-                    name=existing.name,
-                    intensity=max(0.0, float(existing.intensity) + float(normalized.intensity)),
-                    turns_remaining=max(existing.turns_remaining, normalized.turns_remaining),
-                    decay=min(float(existing.decay), float(normalized.decay)),
-                    vector=normalized.vector or existing.vector,
-                    source=normalized.source or existing.source,
-                )
-                self.active_narrative_beats[idx] = merged
-                self._invalidate_cache()
-                return
-
-        self.active_narrative_beats.append(normalized)
-        self._invalidate_cache()
-
-    def get_active_narrative_beats(self) -> List[NarrativeBeat]:
-        """Return currently active beats."""
-        self.active_narrative_beats = [beat for beat in self.active_narrative_beats if beat.is_active()]
-        return list(self.active_narrative_beats)
-
-    def decay_narrative_beats(self) -> None:
-        """Decay active narrative beats by one turn."""
-        if not self.active_narrative_beats:
-            return
-
-        for beat in self.active_narrative_beats:
-            beat.consume_turn()
-        self.active_narrative_beats = [beat for beat in self.active_narrative_beats if beat.is_active()]
-        self._invalidate_cache()
-
     def apply_world_delta(self, delta: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
         """Apply a world-event delta to persistent state.
 
@@ -822,9 +549,6 @@ class AdvancedStateManager:
         context["danger_level"] = self.environment.danger_level
         context["inventory_items"] = list(self.inventory.keys())
         context["known_people"] = list({rel.entity_a if rel.entity_a != "player" else rel.entity_b for rel in self.relationships.values()})
-        context["goal_primary"] = self.goal_state.primary_goal
-        context["goal_subgoals"] = list(self.goal_state.subgoals[:5])
-
         # Add mood modifiers from environment
         mood_modifiers = self.environment.get_mood_modifier()
         for mood, modifier in mood_modifiers.items():
@@ -874,8 +598,6 @@ class AdvancedStateManager:
             "inventory_summary": inventory_summary,  # Keep for backward compatibility
             "relationships": relationships_summary,  # Add expected key
             "relationships_summary": relationships_summary,  # Keep for backward compatibility
-            "goal": self.get_goal_state(),
-            "arc_timeline": self.get_arc_timeline(limit=20),
             "environment": {
                 "time_of_day": self.environment.time_of_day,
                 "weather": self.environment.weather,
@@ -904,8 +626,6 @@ class AdvancedStateManager:
         # Shared read-only domain references — projection never mutates these
         fork._inventory = self._inventory
         fork._relationships = self._relationships
-        fork._goals = self._goals
-        fork._beats = self._beats
         fork.environment = self.environment
         fork.change_history = deque(maxlen=0)
         fork.context_stack = []
@@ -931,9 +651,7 @@ class AdvancedStateManager:
             "variables": self.variables,
             "inventory": self._inventory.to_dict(),
             "relationships": self._relationships.to_dict(),
-            "goal_state": self._goals.to_dict(),
             "environment": self.environment.__dict__.copy(),
-            "narrative_beats": self._beats.to_dict(),
         }
 
     def import_state(self, state_data: Dict[str, Any]):
@@ -956,18 +674,6 @@ class AdvancedStateManager:
         if "environment" in state_data:
             self.environment = EnvironmentalState(**state_data["environment"])
 
-        goal_payload = state_data.get("goal_state", {})
-        self._goals = GoalDomain.from_dict(goal_payload if isinstance(goal_payload, dict) else {})
-
-        self._beats = NarrativeBeatsDomain()
-        for beat_payload in state_data.get("narrative_beats", []):
-            if not isinstance(beat_payload, dict):
-                continue
-            try:
-                self._beats.add(NarrativeBeat.from_dict(beat_payload))
-            except Exception:
-                continue
-
         # change_history is not persisted (v2 omits it intentionally).
         self.change_history = deque(maxlen=200)
         self.ensure_structured_state_defaults(record_history=False)
@@ -976,14 +682,11 @@ class AdvancedStateManager:
         logger.info(f"Imported state for session {self.session_id}")
 
     # -----------------------------------------------------------------------
-    # Shared world identity, context, and action-arc helpers
+    # Shared world identity and context helpers
     # -----------------------------------------------------------------------
 
     _WORLD_CONTEXT_KEY = "_world_context"
     _WORLD_ID_KEY = "_world_id"
-    _STORY_ARC_KEY = "_story_arc"
-    _GOAL_BACKFILL_NOTE = "auto_backfill_after_initial_turn"
-    _GOAL_BACKFILL_SOURCE = "system_goal_backfill"
 
     def set_world_context(self, context: Dict[str, Any]) -> None:
         """Persist a thin shared-world context object into session state."""
@@ -1016,100 +719,3 @@ class AdvancedStateManager:
         rather than the individual resident.
         """
         return self.get_world_id() or self.session_id
-
-    def get_story_arc(self) -> Dict[str, Any]:
-        """Return the current turn counter state, initialising it if absent."""
-        arc = self.variables.get(self._STORY_ARC_KEY)
-        if not isinstance(arc, dict):
-            arc = {"turn_count": 0}
-            self.variables[self._STORY_ARC_KEY] = arc
-            self._invalidate_cache()
-        return dict(arc)
-
-    def _derive_fallback_goal_thesis(self) -> str:
-        """Build a deterministic fallback primary-goal thesis."""
-        role = ""
-        for key in ("player_role", "character_profile", "role", "occupation"):
-            candidate = str(self.variables.get(key, "")).strip()
-            if candidate:
-                role = candidate
-                break
-        role = role or "wanderer"
-
-        world_theme = str(self.variables.get("world_theme", "")).strip()
-
-        if world_theme:
-            return (f"As {role}, establish your footing in this {world_theme} world and secure a reliable way forward.")[:220]
-        return f"As {role}, secure your footing and define a clear path forward."[:220]
-
-    def backfill_primary_goal_if_empty_after_initial_turn(
-        self,
-        *,
-        minimum_turn_count: int = 1,
-        source: str = _GOAL_BACKFILL_SOURCE,
-    ) -> Dict[str, Any]:
-        """Populate primary_goal once after turn 1 if still empty.
-
-        This is deterministic and idempotent:
-        - no-op when a primary goal already exists,
-        - no-op before the configured turn threshold,
-        - applies one explicit goal-state update when both conditions are met.
-        """
-        current_goal = str(self.goal_state.primary_goal or "").strip()
-        if current_goal:
-            return {
-                "applied": False,
-                "reason": "primary_goal_present",
-                "primary_goal": current_goal,
-            }
-
-        arc_payload = self.variables.get(self._STORY_ARC_KEY)
-        if isinstance(arc_payload, dict):
-            turn_count = max(0, int(arc_payload.get("turn_count", 0) or 0))
-        else:
-            turn_count = 0
-        required = max(1, int(minimum_turn_count))
-        if turn_count < required:
-            return {
-                "applied": False,
-                "reason": "below_turn_threshold",
-                "turn_count": turn_count,
-                "minimum_turn_count": required,
-                "primary_goal": "",
-            }
-
-        fallback_goal = self._derive_fallback_goal_thesis()
-        if not fallback_goal:
-            return {
-                "applied": False,
-                "reason": "fallback_empty",
-                "turn_count": turn_count,
-                "primary_goal": "",
-            }
-
-        self.set_goal_state(
-            primary_goal=fallback_goal,
-            source=source,
-            note=self._GOAL_BACKFILL_NOTE,
-        )
-        return {
-            "applied": True,
-            "reason": "goal_backfilled",
-            "turn_count": turn_count,
-            "primary_goal": str(self.goal_state.primary_goal or ""),
-            "source": source,
-            "note": self._GOAL_BACKFILL_NOTE,
-        }
-
-    def advance_story_arc(
-        self,
-        choices_made: Optional[List[Dict[str, Any]]] = None,
-    ) -> Dict[str, Any]:
-        """Increment turn_count. Drama fields (act/tension/unresolved_threads) removed."""
-        arc = self.variables.get(self._STORY_ARC_KEY)
-        if not isinstance(arc, dict):
-            arc = {"turn_count": 0}
-        arc["turn_count"] = int(arc.get("turn_count", 0)) + 1
-        self.variables[self._STORY_ARC_KEY] = arc
-        self._invalidate_cache()
-        return dict(arc)
