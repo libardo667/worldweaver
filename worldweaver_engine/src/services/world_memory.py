@@ -1365,8 +1365,14 @@ def record_event(
     skip_graph_extraction: bool = False,
     skip_projection: bool = False,
     preserve_event_type: bool = False,
+    commit: bool = True,
 ) -> WorldEvent:
-    """Create a WorldEvent, apply deltas, embed summary, and persist it."""
+    """Create a WorldEvent, apply deltas, embed summary, and persist it.
+
+    ``commit=False`` is reserved for structural services that must commit the
+    event and their own canonical rows in one transaction. Those callers skip
+    projection and graph extraction, which have their own commit boundaries.
+    """
     from .embedding_service import embed_text
 
     normalized_idempotency_key = _normalize_idempotency_key(idempotency_key)
@@ -1402,10 +1408,13 @@ def record_event(
         world_state_delta=persisted_delta,
     )
     db.add(event)
-    db.commit()
-    db.refresh(event)
+    if commit:
+        db.commit()
+        db.refresh(event)
+    else:
+        db.flush()
 
-    if settings.enable_world_projection and not skip_projection:
+    if commit and settings.enable_world_projection and not skip_projection:
         try:
             projection_updates = apply_event_to_projection(db, event)
             db.commit()
@@ -1414,7 +1423,7 @@ def record_event(
             db.rollback()
             logger.warning("Failed to update world projection for event %s: %s", event.id, e)
 
-    if settings.enable_world_graph_extraction and not skip_graph_extraction:
+    if commit and settings.enable_world_graph_extraction and not skip_graph_extraction:
         try:
             counts = _record_graph_assertions(db, event)
             db.commit()

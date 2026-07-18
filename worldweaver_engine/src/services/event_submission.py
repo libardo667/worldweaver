@@ -37,6 +37,7 @@ class WorldEventCommand:
     skip_graph_extraction: bool = False
     skip_projection: bool = False
     preserve_event_type: bool = False
+    defer_commit: bool = False
 
 
 @dataclass(frozen=True)
@@ -84,6 +85,8 @@ def _validate_command(command: WorldEventCommand) -> None:
         raise EventSubmissionError("state_manager mutations require an explicit reducer intent")
     if command.idempotency_key and not command.session_id:
         raise EventSubmissionError("idempotency_key requires session_id")
+    if command.defer_commit and (not command.skip_graph_extraction or not command.skip_projection):
+        raise EventSubmissionError("deferred commit requires graph extraction and projection to be skipped")
 
 
 def _record_command(
@@ -114,6 +117,7 @@ def _record_command(
             skip_graph_extraction=command.skip_graph_extraction,
             skip_projection=command.skip_projection,
             preserve_event_type=command.preserve_event_type,
+            commit=not command.defer_commit,
         )
     except Exception:
         db.rollback()

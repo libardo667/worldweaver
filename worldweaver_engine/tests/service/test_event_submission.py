@@ -194,3 +194,41 @@ def test_invalid_prepared_submission_restores_state(db_session):
 
     assert state_manager.get_variable("trust") == 6
     assert db_session.query(WorldEvent).count() == 0
+
+
+def test_structural_event_can_share_an_outer_transaction(db_session):
+    receipt = submit_world_event(
+        db_session,
+        WorldEventCommand(
+            session_id="event-spine-transaction",
+            event_type="object_placed",
+            summary="A durable object is placed.",
+            delta={"consequence": {"object_id": "object-1"}},
+            skip_graph_extraction=True,
+            skip_projection=True,
+            preserve_event_type=True,
+            defer_commit=True,
+        ),
+    )
+
+    assert receipt.event_id > 0
+    assert db_session.query(WorldEvent).count() == 1
+
+    db_session.rollback()
+
+    assert db_session.query(WorldEvent).count() == 0
+
+
+def test_deferred_event_rejects_independent_projection_or_graph_work(db_session):
+    with pytest.raises(EventSubmissionError, match="deferred commit"):
+        submit_world_event(
+            db_session,
+            WorldEventCommand(
+                session_id="event-spine-unsafe-transaction",
+                event_type="object_placed",
+                summary="A structurally unsafe event is attempted.",
+                defer_commit=True,
+            ),
+        )
+
+    assert db_session.query(WorldEvent).count() == 0
