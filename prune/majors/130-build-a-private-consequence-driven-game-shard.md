@@ -7,8 +7,9 @@ objects and direct giving, replenishing recipe-based making, and non-trapping ac
 spaces, followed by exact two-party accepted exchange and bounded stoops for real objects. A compact original
 river village named Alderbank is now a validated city pack and a healthy dormant shard. Its pre-entry rules
 and schematic preview work, and its place graph, stoop, and material pools are seeded with no person sessions
-or resident files. Its visual player view, resident tool adapters, and game-native residents have not been
-built yet. The first playable version is for Levi to run privately.
+or resident files. The human `Here` view and resident tools now share typed making, placement, pickup, direct
+giving, and stoop commands. Accepted exchange and access decisions still need those adapters before the new
+game-native residents are created. The first playable version is for Levi to run privately.
 Public release, federation with ordinary commons shards, harmful rules, and a large resident population are
 later decisions, not assumptions built into the prototype.
 
@@ -377,7 +378,17 @@ Stoop command checkpoint completed 2026-07-18:
   transfer through freeform action narration; and
 - ordinary placement remains a separate reversible action and never implies stoop-style permission to take.
 
-The pack remains deliberately uninhabited. Both sides still need the changing commands for giving, exchange,
+Direct-giving checkpoint completed 2026-07-18:
+
+- a human carrying an object sees an explicit `Give to` action only for another stable session at the same
+  exact place;
+- a resident first electively inspects carried objects and receives the same exact object and recipient
+  session IDs for co-present people;
+- both paths call the typed direct-give route, receive its canonical custody change and receipt, and do not
+  ask freeform narration to decide whether the transfer happened; and
+- a resident records the transfer receipt in its own append-only runtime ledger.
+
+The pack remains deliberately uninhabited. Both sides still need the changing commands for accepted exchange
 and access decisions before new residents are created. The existing
 presence and diagnostic UI also still needs a clean steward-only boundary before the whole ordinary player
 surface can meet this major's no-surveillance acceptance criterion.

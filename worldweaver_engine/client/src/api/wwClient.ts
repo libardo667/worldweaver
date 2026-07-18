@@ -453,6 +453,22 @@ export function postPickUpWorldObject(
   });
 }
 
+export function postGiveWorldObject(
+  sessionId: string,
+  objectId: string,
+  recipientSessionId: string,
+  idempotencyKey: string,
+): Promise<ObjectCommandResponse> {
+  return requestJson<ObjectCommandResponse>(`/api/world/objects/${encodeURIComponent(objectId)}/give`, {
+    method: "POST",
+    body: JSON.stringify({
+      session_id: sessionId,
+      recipient_session_id: recipientSessionId,
+      idempotency_key: idempotencyKey,
+    }),
+  });
+}
+
 export function postAction(
   sessionId: string,
   action: string,

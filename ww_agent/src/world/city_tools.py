@@ -271,6 +271,19 @@ def _make_objects_source(client: Any, session_id: str) -> InformationSource:
         except Exception:
             return {"ok": False, "reason": "source_unavailable", "records": []}
 
+        try:
+            scene = await client.get_scene(session_id)
+            recipients = [
+                {
+                    "session_id": str(getattr(person, "session_id", "") or "").strip(),
+                    "name": str(getattr(person, "role", "") or getattr(person, "name", "") or "").strip(),
+                }
+                for person in list(getattr(scene, "present", []) or [])
+                if str(getattr(person, "session_id", "") or "").strip() not in {"", session_id}
+            ][:4]
+        except Exception:
+            recipients = []
+
         records: list[dict[str, Any]] = []
         for item in list(payload.get("objects") or []):
             if not isinstance(item, dict):
@@ -286,6 +299,12 @@ def _make_objects_source(client: Any, session_id: str) -> InformationSource:
                 continue
             if relation == "carried":
                 relation_text = f'You are carrying it. To place it here, act with kind "do" and target "object-place:{object_id}".'
+                if recipients:
+                    give_choices = " ".join(
+                        f'To give it immediately to {recipient["name"]}, act with kind "do" and target "object-give:{object_id}:{recipient["session_id"]}".'
+                        for recipient in recipients
+                    )
+                    relation_text = f"{relation_text} {give_choices}"
             elif can_pick_up:
                 relation_text = f'It is here with you. You placed it here; to pick it back up, act with kind "do" and target "object-pick-up:{object_id}".'
             else:
@@ -304,6 +323,7 @@ def _make_objects_source(client: Any, session_id: str) -> InformationSource:
                         "object_kind": kind,
                         "relation": relation,
                         "can_pick_up": can_pick_up,
+                        "give_recipients": recipients if relation == "carried" else [],
                         "revision": item.get("revision"),
                     },
                 }

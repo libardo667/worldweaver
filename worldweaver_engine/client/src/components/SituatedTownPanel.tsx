@@ -11,6 +11,7 @@ import {
   getWorldStoop,
   postMakeWorldObject,
   postLeaveObjectOnStoop,
+  postGiveWorldObject,
   postPickUpWorldObject,
   postPlaceWorldObject,
   postTakeStoopObject,
@@ -27,13 +28,14 @@ type SituatedTownPanelProps = {
   location: string;
   active: boolean;
   observerMode: boolean;
+  peopleHere: Array<{ sessionId: string; name: string }>;
 };
 
 const EMPTY_OBJECTS: WorldObjectsResponse = { objects: [], count: 0 };
 const EMPTY_MAKING: LocalMakingResponse = { location: "", materials: [], recipes: [] };
 const EMPTY_STOOPS: LocalStoopsResponse = { location: "", stoops: [], count: 0 };
 
-export function SituatedTownPanel({ sessionId, location, active, observerMode }: SituatedTownPanelProps) {
+export function SituatedTownPanel({ sessionId, location, active, observerMode, peopleHere }: SituatedTownPanelProps) {
   const [experience, setExperience] = useState<ShardExperienceResponse | null>(null);
   const [objects, setObjects] = useState<WorldObjectsResponse>(EMPTY_OBJECTS);
   const [making, setMaking] = useState<LocalMakingResponse>(EMPTY_MAKING);
@@ -127,6 +129,27 @@ export function SituatedTownPanel({ sessionId, location, active, observerMode }:
     }
   }, [refresh, sessionId]);
 
+  const giveObject = useCallback(async (objectId: string, recipient: { sessionId: string; name: string }) => {
+    setPending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await postGiveWorldObject(
+        sessionId,
+        objectId,
+        recipient.sessionId,
+        `human-give:${crypto.randomUUID()}`,
+      );
+      await refresh();
+      const name = result.object?.name || "The object";
+      setNotice(`You gave ${name} to ${recipient.name}.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "That object could not be given right now.");
+    } finally {
+      setPending(false);
+    }
+  }, [refresh, sessionId]);
+
   const moveStoopObject = useCallback(async (
     command: "leave" | "take" | "withdraw",
     primaryId: string,
@@ -212,6 +235,15 @@ export function SituatedTownPanel({ sessionId, location, active, observerMode }:
                   <button onClick={() => void moveObject(item.object_id, "place")} disabled={pending}>
                     Place here
                   </button>
+                  {peopleHere.map((person) => (
+                    <button
+                      key={`${item.object_id}:${person.sessionId}`}
+                      onClick={() => void giveObject(item.object_id, person)}
+                      disabled={pending}
+                    >
+                      Give to {person.name}
+                    </button>
+                  ))}
                 </li>
               ))}
             </ul>

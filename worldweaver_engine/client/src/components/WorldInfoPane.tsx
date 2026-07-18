@@ -24,7 +24,13 @@ type WorldInfoPaneProps = {
   setChatSubTab: (tab: "dms" | "local" | "city" | "global") => void;
   chatUnread: Record<"dms" | "local" | "city" | "global", boolean>;
   rosterDigest: {
-    roster: Array<{ session_id: string; display_name?: string | null; player_name?: string | null; status?: string | null }>;
+    roster: Array<{
+      session_id: string;
+      location: string;
+      display_name?: string | null;
+      player_name?: string | null;
+      status?: string | null;
+    }>;
     active_sessions: number;
   } | null;
   sessionId: string;
@@ -224,6 +230,12 @@ export function WorldInfoPane({
             location={currentViewLocation}
             active={!showingEntryScreen}
             observerMode={observerMode}
+            peopleHere={(rosterDigest?.roster ?? [])
+              .filter((person) => person.session_id !== sessionId && person.location === currentViewLocation)
+              .map((person) => ({
+                sessionId: person.session_id,
+                name: person.display_name ?? person.player_name ?? person.session_id.slice(0, 12),
+              }))}
           />
         )}
 

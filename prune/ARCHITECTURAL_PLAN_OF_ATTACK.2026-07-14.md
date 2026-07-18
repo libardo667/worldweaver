@@ -644,8 +644,11 @@ only by inspecting visible objects. Ordinary placement keeps a reclaim claim for
 object down is reversible and does not give a bystander permission to take it.
 Stoop leave, take, and depositor withdrawal are now also wired to both surfaces. Unlike ordinary placement,
 leaving on a stoop explicitly grants another present visitor permission to take the single real object.
+Direct giving is wired as well. A human sees named recipients only when they are at the same exact place; a
+resident receives the same object and recipient IDs only after electively inspecting carried objects. Both
+use the canonical immediate-transfer route and receipt rather than asking narration to decide custody.
 
-The next checkpoint is to attach giving, exchange, and access commands
+The next checkpoint is to attach accepted exchange and access commands
 to both surfaces without routing those consequences through freeform narration. Only after both surfaces use
 the same rules should the new game-native residents be created or woken. Major 125's wider
 text-and-artifact commons, keep/decay rules, Murmur, and public interface remain later work rather than being

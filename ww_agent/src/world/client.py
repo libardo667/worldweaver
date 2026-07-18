@@ -338,6 +338,25 @@ class WorldWeaverClient:
         )
         return resp.json()
 
+    async def give_world_object(
+        self,
+        session_id: str,
+        object_id: str,
+        recipient_session_id: str,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        """Give one carried object to a co-present stable actor."""
+        resp = await self._post(
+            f"/api/world/objects/{object_id}/give",
+            {
+                "session_id": session_id,
+                "recipient_session_id": recipient_session_id,
+                "idempotency_key": idempotency_key,
+            },
+            timeout=30.0,
+        )
+        return resp.json()
+
     async def get_local_stoops(self, session_id: str) -> dict[str, Any]:
         """List stoops at the resident's exact place without opening them."""
         resp = await self._get(

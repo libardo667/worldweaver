@@ -467,6 +467,47 @@ class WorldEffector:
             "object-place:": ("place", "place_world_object"),
             "object-pick-up:": ("pick_up", "pick_up_world_object"),
         }
+        give_match = re.fullmatch(r"object-give:([^:]+):([^:]+)", target, re.IGNORECASE)
+        if give_match:
+            object_id = give_match.group(1).strip()
+            recipient_session_id = give_match.group(2).strip()
+            give = getattr(self._ww, "give_world_object", None)
+            if not callable(give):
+                return {"executed": False, "kind": "do", "reason": "giving_unavailable"}
+            result = await give(
+                self._session_id,
+                object_id,
+                recipient_session_id,
+                f"resident-give:{uuid.uuid4().hex}",
+            )
+            changed_object = dict(result.get("object") or {}) if isinstance(result, dict) else {}
+            receipt = dict(result.get("receipt") or {}) if isinstance(result, dict) else {}
+            receipt_id = str(receipt.get("receipt_id") or "").strip()
+            executed = bool(receipt_id)
+            append_runtime_event(
+                self._memory_dir,
+                event_type="game_object_given" if executed else "game_command_declined",
+                payload={
+                    **self.relational_context(),
+                    "command": "give",
+                    "object_id": object_id,
+                    "object_name": str(changed_object.get("name") or ""),
+                    "recipient_session_id": recipient_session_id,
+                    "attachment": dict(changed_object.get("attachment") or {}),
+                    "receipt_id": receipt_id,
+                    "status": "executed" if executed else "declined",
+                },
+            )
+            return {
+                "executed": executed,
+                "kind": "do",
+                "command": "give",
+                "object_id": object_id,
+                "object_name": str(changed_object.get("name") or ""),
+                "recipient_session_id": recipient_session_id,
+                "receipt_id": receipt_id,
+            }
+
         for prefix, (command, method_name) in object_commands.items():
             if not target.lower().startswith(prefix):
                 continue

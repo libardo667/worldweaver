@@ -103,8 +103,9 @@ resident prompts. `POST /api/world/make` consumes the declared inputs and create
 in the same transaction and receipt. Material declarations must state that they are not essential and are not
 used for resident needs. Refill is capped, based on elapsed intervals, and cannot accumulate beyond capacity.
 The same backend now supports non-trapping room access, exact two-party accepted exchange, and bounded stoops
-for deliberately shared single-instance objects. These commands still need CognitiveCore and situated-player
-adapters before the first game-native residents run.
+for deliberately shared single-instance objects. Making, ordinary placement and pickup, direct giving, and
+stoop leave/take/withdraw now have matching CognitiveCore and situated-player adapters. Accepted exchange and
+room access still need those adapters before the first game-native residents run.
 
 `GET /api/world/travel/destinations` keeps that boundary visible in the API. It starts with the local
 pack's possible routes, then attaches any matching live nodes reported by this node's federation. If the

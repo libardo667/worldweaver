@@ -150,6 +150,7 @@ class _StubWorld:
         self.world_traces: list[dict] = []
         self.made_objects: list[dict] = []
         self.object_commands: list[dict] = []
+        self.given_objects: list[dict] = []
         self.stoop_commands: list[dict] = []
         self.place_names = {"North Beach", "Chinatown"}
 
@@ -205,6 +206,20 @@ class _StubWorld:
         return {
             "object": {"object_id": object_id, "name": "Small clay cup", "attachment": {"kind": "custody", "actor_id": "actor-123"}},
             "receipt": {"receipt_id": "receipt-pick-up"},
+        }
+
+    async def give_world_object(self, session_id, object_id, recipient_session_id, idempotency_key):
+        self.given_objects.append(
+            {
+                "session_id": session_id,
+                "object_id": object_id,
+                "recipient_session_id": recipient_session_id,
+                "idempotency_key": idempotency_key,
+            }
+        )
+        return {
+            "object": {"object_id": object_id, "name": "Small clay cup", "attachment": {"kind": "custody", "actor_id": "actor-riley"}},
+            "receipt": {"receipt_id": "receipt-give"},
         }
 
     async def leave_object_on_stoop(self, session_id, stoop_id, object_id, idempotency_key):
@@ -475,6 +490,37 @@ def test_effector_routes_place_and_pick_up_as_typed_object_commands(tmp_path):
     assert world.actions == []
     assert [item["command"] for item in world.object_commands] == ["place", "pick_up"]
     assert all(item["idempotency_key"].startswith("resident-") for item in world.object_commands)
+
+
+def test_effector_routes_direct_giving_without_narration(tmp_path):
+    world = _StubWorld(_Scene(location="Alderbank Workshop"))
+    eff = WorldEffector(
+        ww_client=world,
+        session_id="s1",
+        identity=_identity(),
+        memory_dir=tmp_path,
+        location_hint="Alderbank Workshop",
+    )
+
+    result = asyncio.run(
+        eff(
+            Act(
+                kind="do",
+                body="I hand Riley the cup.",
+                target="object-give:cup-1:resident-riley",
+            )
+        )
+    )
+
+    assert result["executed"] is True
+    assert result["command"] == "give"
+    assert result["recipient_session_id"] == "resident-riley"
+    assert world.actions == []
+    assert world.given_objects[0]["object_id"] == "cup-1"
+    assert world.given_objects[0]["recipient_session_id"] == "resident-riley"
+    assert world.given_objects[0]["idempotency_key"].startswith("resident-give:")
+    event = _events_by_type(tmp_path, "game_object_given")[0]["payload"]
+    assert event["receipt_id"] == "receipt-give"
 
 
 def test_effector_routes_stoop_permission_commands_without_narration(tmp_path):

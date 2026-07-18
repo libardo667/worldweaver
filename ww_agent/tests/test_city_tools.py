@@ -7,7 +7,7 @@ import json
 
 from src.world.city_tools import build_city_source_registry
 from src.world.city_world import CityWorld
-from src.world.client import AmbientPresence, SceneData, TurnResult
+from src.world.client import AmbientPresence, PresentCharacter, SceneData, TurnResult
 from src.runtime.information import InformationSource, InformationSourceRegistry
 from src.runtime.travel import TravelRequest
 
@@ -369,7 +369,16 @@ class _ReadClient:
             session_id=session_id,
             location="Chinatown",
             role="",
-            present=[],
+            present=[
+                PresentCharacter(
+                    name="Riley",
+                    role="Riley",
+                    last_action="",
+                    last_seen="2026-07-18T12:00:00Z",
+                    actor_id="actor-riley",
+                    session_id="resident-riley",
+                )
+            ],
             recent_events_here=[],
             location_graph={},
             ambient_presence=[
@@ -506,6 +515,10 @@ def test_objects_source_separates_carried_from_local_objects():
     assert carried["locality"] == "carried"
     assert carried["metadata"]["object_id"] == "cup-1"
     assert 'target "object-place:cup-1"' in carried["content"]
+    assert 'target "object-give:cup-1:resident-riley"' in carried["content"]
+    assert carried["metadata"]["give_recipients"] == [
+        {"session_id": "resident-riley", "name": "Riley"}
+    ]
     placed = next(item for item in result["records"] if item["title"] == "Wooden token")
     assert 'target "object-pick-up:token-1"' in placed["content"]
 
