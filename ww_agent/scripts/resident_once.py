@@ -391,6 +391,7 @@ async def _run(args: argparse.Namespace) -> int:
                         "inference_calls": llm.total_calls,
                         "prompt_tokens": llm.total_prompt_tokens,
                         "completion_tokens": llm.total_completion_tokens,
+                        "recovered_json_responses": llm.recovered_json_responses,
                         "action_tendency": bool(args.action_tendency),
                     },
                     sort_keys=True,

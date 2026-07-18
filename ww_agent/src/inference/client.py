@@ -46,6 +46,7 @@ class InferenceClient:
         self.total_calls = 0
         self.total_prompt_tokens = 0
         self.total_completion_tokens = 0
+        self.recovered_json_responses = 0
         self._client = httpx.AsyncClient(
             base_url=self._base_url,
             headers={
@@ -145,15 +146,38 @@ class InferenceClient:
             text = "\n".join(lines[1:-1] if lines[-1] == "```" else lines[1:])
 
         try:
-            return json.loads(text)
+            decoded = json.loads(text)
         except json.JSONDecodeError as e:
+            decoded = None
+            if e.msg == "Extra data":
+                try:
+                    candidate, end = json.JSONDecoder().raw_decode(text)
+                    trailing = text[end:].strip()
+                except json.JSONDecodeError:
+                    candidate, trailing = None, ""
+                # Some provider-routed models honor the requested JSON object
+                # and then append a closing fence or prose. The first object is
+                # still unambiguous and schema-checked by the caller. Do not,
+                # however, choose between two competing JSON values.
+                after_fence = trailing.removeprefix("```").strip()
+                if isinstance(candidate, dict) and trailing and not after_fence.startswith(("{", "[")):
+                    self.recovered_json_responses += 1
+                    logger.warning("inference: ignored trailing text after one valid JSON object")
+                    decoded = candidate
+            if decoded is None:
+                raise InferenceError(
+                    f"Response was not valid JSON: {e}",
+                    private_diagnostic={
+                        "response_text": text,
+                        "json_error": str(e),
+                    },
+                ) from e
+        if not isinstance(decoded, dict):
             raise InferenceError(
-                f"Response was not valid JSON: {e}",
-                private_diagnostic={
-                    "response_text": text,
-                    "json_error": str(e),
-                },
-            ) from e
+                "Response JSON was not an object.",
+                private_diagnostic={"response_text": text},
+            )
+        return decoded
 
     async def _post_with_retry(
         self,

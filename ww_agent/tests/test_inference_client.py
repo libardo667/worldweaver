@@ -83,3 +83,51 @@ def test_invalid_json_keeps_response_out_of_public_error_text():
 
     assert "private resident text" not in str(caught.value)
     assert caught.value.private_diagnostic["response_text"] == private_response
+
+
+def test_complete_json_recovers_one_object_with_trailing_non_json_text():
+    client = InferenceClient(
+        base_url="https://inference.example/v1",
+        api_key="test-key",
+        default_model="test/model",
+    )
+
+    async def fake_post(_path, _payload):
+        return {"choices": [{"message": {"content": '{"felt_sense":"kept private","reach":null,"act":null}\n```\nDone.'}}]}
+
+    client._post_with_retry = fake_post
+
+    async def run():
+        try:
+            return await client.complete_json("system", "user")
+        finally:
+            await client.close()
+
+    assert asyncio.run(run()) == {
+        "felt_sense": "kept private",
+        "reach": None,
+        "act": None,
+    }
+    assert client.recovered_json_responses == 1
+
+
+def test_complete_json_refuses_competing_objects_and_non_object_json():
+    async def attempt(content):
+        client = InferenceClient(
+            base_url="https://inference.example/v1",
+            api_key="test-key",
+            default_model="test/model",
+        )
+
+        async def fake_post(_path, _payload):
+            return {"choices": [{"message": {"content": content}}]}
+
+        client._post_with_retry = fake_post
+        try:
+            with pytest.raises(InferenceError):
+                await client.complete_json("system", "user")
+        finally:
+            await client.close()
+
+    asyncio.run(attempt('{"act":null}\n{"act":{"kind":"move"}}'))
+    asyncio.run(attempt('[{"act":null}]'))
