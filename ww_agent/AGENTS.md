@@ -63,6 +63,8 @@ inputs in the identity loader; they do not restore the old ownership model.
   Relative read roots resolve from that resident's home and remain behind FileScope's structural guards.
 - Elective information uses typed `Pulse.reach` → `InformationAccess`; it never masquerades as `act.do`
   and never crosses the engine action/narration endpoint. A reach continuation may end with no outward act.
+  The final allowed read must close the reading window in both prompt and routing: never invite or persist
+  a reach that the current pulse can no longer fulfill.
 - Federation route discovery is an elective city source. Reading possible routes must not move a resident;
   actual city-to-city travel belongs to the resident host and must use the engine's recoverable departure
   and arrival contract before switching its WorldWeaver client.

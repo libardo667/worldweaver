@@ -18,7 +18,8 @@
 - `runtime/integrator.py`, `salience.py`, `prediction.py` — turn world changes into pressure and candidate
   action.
 - `runtime/pulse.py`, `pulse_engine.py`, `effectors.py` — form a pulse, distinguish private `reach` from
-  outward `act`, and discharge only the latter through concrete effectors.
+  outward `act`, and discharge only the latter through concrete effectors. The bounded reach continuation
+  closes its source catalog on the last allowed read and cannot route an unfulfillable extra request.
 - `runtime/travel.py` — classifies world travel separately from ordinary movement and derives unfinished
   city handoffs from ledger evidence; worlds signal intent and `resident.py` performs or resumes the
   lifecycle change without running cognition between nodes.

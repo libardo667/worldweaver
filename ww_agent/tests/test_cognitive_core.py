@@ -968,6 +968,45 @@ def test_reach_continuation_returns_chosen_result_without_reperception(tmp_path)
     assert [item["name"] for item in records[0]["source_context"]["available_sources"]] == ["eats", "places"]
 
 
+def test_final_reach_continuation_closes_reading_and_drops_an_extra_request(tmp_path):
+    llm = _StubLLM(
+        json_response={
+            "felt_sense": "I can leave it there",
+            "reach": {"kind": "inspect", "source": "places", "query": "one more"},
+            "act": None,
+        }
+    )
+    producer = LLMPulseProducer(llm=llm, identity=_identity(), memory_dir=tmp_path)
+    producer.latest_perception = {
+        "affordances": [
+            {
+                "source_id": "source:places",
+                "name": "places",
+                "description": "inspect nearby landmarks",
+                "provenance": "local-knowledge",
+            }
+        ]
+    }
+
+    pulse = asyncio.run(
+        producer.continue_reach(
+            request={"kind": "inspect", "source": "places", "query": "the neighborhood"},
+            result={"detail": "One nearby cafe."},
+            prior_felt="still curious",
+            reaches_remaining=0,
+        )
+    )
+
+    assert pulse is not None and pulse.reach is None and pulse.act is None
+    prompt = llm.calls[0]["user"]
+    assert "This was the final private read available in this pulse" in prompt
+    assert "reading window closed for this pulse" in prompt
+    assert "You may reach toward another available source" not in prompt
+    assert '"reach": null,' in prompt
+    trace = json.loads((tmp_path / "prompt_traces.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    assert trace["source_context"]["reaches_remaining"] == 0
+
+
 def test_reach_continuation_frames_scoped_file_result_as_read_not_known(tmp_path):
     llm = _StubLLM(json_response={"felt_sense": "the page is in view", "act": None})
     producer = LLMPulseProducer(llm=llm, identity=_identity(), memory_dir=tmp_path)

@@ -49,6 +49,9 @@ A pulse separates private information access from outward behavior. `reach` name
 an elective query (`inspect`, `read`, or `attend`); its result returns inside the same bounded ignition,
 which may reach again, emit one outward `act`, or stop. Only `act` can speak, move, physically do, or write.
 City knowledge sources and familiar file reading no longer travel through `do` or `/api/action`.
+The reading chain is capped. On its final allowed result, the continuation says that reading is finished
+and offers only one outward act or rest; an extra generated reach is closed instead of being recorded as
+an unanswered request.
 
 Named providers return structured records rather than source-authored mini-narratives. Each record keeps
 its provenance, freshness, locality, visibility, selection mode, and source identity through private

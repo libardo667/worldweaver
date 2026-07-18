@@ -287,6 +287,7 @@ def _pulse_contract(
     clean_drive_nudges: bool = False,
     example: str | None = None,
     can_mark_world: bool = False,
+    allow_reach: bool = True,
 ) -> str:
     """The pulse contract, advertising only the self-feel axes this world can feed.
     A mail-less familiar isn't told it has a correspondence sense, so it won't predict
@@ -298,7 +299,19 @@ def _pulse_contract(
     eg = _DRIVE_NUDGES_EG_CLEAN if clean_drive_nudges else _DRIVE_NUDGES_EG
     act_kinds = "speak, move, do, write, mark" if can_mark_world else "speak, move, do, write"
     mark_guide = "- mark leaves a slow physical trace at this exact place for later visitors. Put what remains in body and the surface/object in target. It is not speech and does not broadcast." if can_mark_world else ""
-    return _PULSE_CONTRACT_TEMPLATE.replace("__FEEL_AXES__", axes).replace("__DRIVE_NUDGES_EG__", eg).replace("__ACT_KINDS__", act_kinds).replace("__MARK_GUIDE__", mark_guide).replace("__EXAMPLE__", example or _DEFAULT_EXAMPLE)
+    contract = _PULSE_CONTRACT_TEMPLATE.replace("__FEEL_AXES__", axes).replace("__DRIVE_NUDGES_EG__", eg).replace("__ACT_KINDS__", act_kinds).replace("__MARK_GUIDE__", mark_guide).replace("__EXAMPLE__", example or _DEFAULT_EXAMPLE)
+    if not allow_reach:
+        contract = contract.replace(
+            '"reach": null OR { "kind": "inspect", "source": "the exact name of an available source", "query": "what you choose to seek there" },',
+            '"reach": null,',
+        ).replace(
+            "- reach is a PRIVATE, elective information request, exactly one of inspect, read,\n"
+            "  or attend. Use an exact source name shown under \"Things you can USE\". A reach\n"
+            "  is not a physical act: its result returns inside this same waking moment, where\n"
+            "  you may reach again, act outwardly, or do nothing. Never emit reach and act together.",
+            "- reach must be null: this pulse's private reading window is finished. You may act outwardly once or do nothing.",
+        )
+    return contract
 
 
 # Back-compat: the full-axes contract as a module constant (any importer / the
@@ -775,7 +788,7 @@ Result:
 Sources still available in this waking moment:
 {available}
 
-Continue. You may reach toward another available source, act outwardly once, or rest (null reach and null act).
+{continuation_instruction}
 {provenance_guidance}
 Your felt_sense should reflect what you've just learned. Only keep facts worth remembering tomorrow.
 
@@ -784,7 +797,14 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
 
     REACH_LOOP_CAP = 6
 
-    async def continue_reach(self, *, request: dict[str, Any], result: Any, prior_felt: str) -> "Pulse | None":
+    async def continue_reach(
+        self,
+        *,
+        request: dict[str, Any],
+        result: Any,
+        prior_felt: str,
+        reaches_remaining: int | None = None,
+    ) -> "Pulse | None":
         """A lighter LLM call within the same ignition: the resident reached a source,
         here's what happened, now decide the next step. No re-perception, no re-surprise —
         the world is frozen from the initial prompt; only the chosen result is new."""
@@ -799,7 +819,14 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
         result_text = str(structured_result.get("detail") or structured_result.get("result") or "")
         result_text = result_text[:4000] if len(result_text) > 4000 else result_text
         active_context = self._active_prompt_context or PulseContext.from_perception(self.latest_perception or {}, mode="react")
-        available = render_affordance_catalog(active_context)
+        reading_closed = reaches_remaining is not None and reaches_remaining <= 0
+        available = "  (reading window closed for this pulse)" if reading_closed else render_affordance_catalog(active_context)
+        continuation_instruction = (
+            "This was the final private read available in this pulse. Set reach to null. "
+            "You may act outwardly once, or rest with both reach and act null."
+            if reading_closed
+            else "Continue. You may reach toward another available source, act outwardly once, or rest (null reach and null act)."
+        )
         user_prompt = self._REACH_CONTINUE_TEMPLATE.format(
             felt=prior_felt or "",
             kind=str(request.get("kind") or ""),
@@ -807,12 +834,14 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
             query=str(request.get("query") or ""),
             result=result_text,
             available=available.rstrip() or "  (none)",
+            continuation_instruction=continuation_instruction,
             provenance_guidance=provenance_guidance(str(structured_result.get("provenance") or "")),
             contract=_pulse_contract(
                 self.live_senses,
                 self.clean_drive_nudges,
                 example=self._pulse_example(),
                 can_mark_world=self.can_mark_world,
+                allow_reach=not reading_closed,
             ),
         )
         system_prompt = self._identity.soul_with_voice(self._voice_samples(), self.world_briefing) if VOICE_REGISTER_ENABLED else self._identity.composed_system_prompt(self.world_briefing)
@@ -827,6 +856,7 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
                 "request": dict(request),
                 "result": traced_result,
                 "prior_felt": prior_felt or "",
+                "reaches_remaining": reaches_remaining,
                 "available_sources": [
                     {
                         "source_id": item.source_id,
@@ -872,6 +902,8 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
             return None
         self._prompt_trace.record_completion(prompt_trace_id, raw)
         try:
+            if reading_closed and raw.get("reach") not in (None, "", {}):
+                raw = {**raw, "reach": None}
             return Pulse.from_dict(raw)
         except PulseValidationError as exc:
             self._prompt_trace.record_validation_failure(prompt_trace_id, exc)

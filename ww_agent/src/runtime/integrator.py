@@ -130,11 +130,17 @@ async def _reach_then_act(
                 request=current.reach.to_dict(),
                 result=normalized,
                 prior_felt=current.felt_sense or "",
+                reaches_remaining=max(0, cap - steps),
             )
         )
         if next_pulse is None:
             return current, None, accesses, None
         current = next_pulse if isinstance(next_pulse, Pulse) else Pulse.from_dict(next_pulse)
+        # The final continuation has already received the last available read.
+        # If a producer nevertheless asks again, close that private request
+        # instead of routing an unfulfillable reach as the pulse's final state.
+        if steps >= cap and current.reach is not None:
+            current = Pulse.from_dict({**current.to_dict(), "reach": None})
 
     if current.reach is not None:
         accesses.append({"accessed": False, "source": current.reach.source, "reason": "reach_cap"})

@@ -803,8 +803,8 @@ def test_private_reach_continues_inside_one_ignition_and_may_end_without_world_a
                 }
             )
 
-        async def continue_reach(self, *, request, result, prior_felt):
-            self.continuations.append((request, result, prior_felt))
+        async def continue_reach(self, *, request, result, prior_felt, reaches_remaining):
+            self.continuations.append((request, result, prior_felt, reaches_remaining))
             return Pulse.from_dict({"felt_sense": "I know enough now", "act": None})
 
     producer = Producer()
@@ -833,6 +833,7 @@ def test_private_reach_continues_inside_one_ignition_and_may_end_without_world_a
 
     assert reached == [{"kind": "attend", "source": "chatter", "query": "gardens"}]
     assert producer.continuations[0][1]["detail"] == "A gardener is trading nasturtium seeds."
+    assert producer.continuations[0][3] == 2
     assert acted == []
     assert result["act_executed"] is None
     assert result["information_accessed"][0]["accessed"] is True
@@ -871,3 +872,42 @@ def test_private_reach_can_resolve_to_one_outward_act(tmp_path):
 
     assert acted == [{"kind": "move", "body": "head there", "target": "Mission"}]
     assert result["act_executed"] == {"executed": True, "kind": "move"}
+
+
+def test_private_reach_cap_closes_an_extra_request_instead_of_routing_it(tmp_path):
+    class Producer:
+        REACH_LOOP_CAP = 1
+
+        async def __call__(self, **kwargs):
+            return Pulse.from_dict(
+                {"reach": {"kind": "inspect", "source": "places", "query": "first"}}
+            )
+
+        async def continue_reach(self, *, reaches_remaining, **kwargs):
+            assert reaches_remaining == 0
+            return Pulse.from_dict(
+                {"reach": {"kind": "inspect", "source": "chatter", "query": "extra"}}
+            )
+
+    reached = []
+
+    async def information_access(request, **kwargs):
+        reached.append(request.source)
+        return {"accessed": True, "detail": "one result"}
+
+    result = asyncio.run(
+        tick(
+            tmp_path,
+            pulse_producer=Producer(),
+            information_access=information_access,
+            stimulus={},
+            now=T0.isoformat(),
+            force_ignite=True,
+        )
+    )
+
+    assert reached == ["places"]
+    assert len(result["information_accessed"]) == 1
+    pulses = _events_by_type(tmp_path, "pulse_emitted")
+    assert pulses[0]["payload"]["pulse"]["reach"] is None
+    assert _events_by_type(tmp_path, "pulse_reach_emitted") == []

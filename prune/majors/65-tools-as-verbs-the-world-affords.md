@@ -76,6 +76,13 @@ The prompt frames its result as something calculated, never remembered or looked
 and safety of one seed primitive; the emergent-use acceptance criterion remains intentionally open because
 this architectural pass excludes live-agent experiments.
 
+**Bounded-reach correction landed 2026-07-17:** Riley's first fresh-resident session showed both of their
+pulses reading six sources and then asking for a seventh because the last continuation still advertised
+another read. The integrator safely refused the extra request, but then persisted it as an unanswered final
+reach. The last continuation now closes the source catalog, says plainly that reading is finished for this
+pulse, permits only one outward act or rest, and strips any extra generated reach before routing. This keeps
+the elective information ecosystem bounded without presenting a door that the runtime will not open.
+
 - **The lots** — Maker's dice roller, named for what it is: *the unchosen, on tap.* A mind reaches for it when it notices it's stuck and hands a choice to chance. The content-blind dose as a *faculty the mind invokes on itself*. We don't teach the use; Maker already found it.
 - **A window, and a walk** — the anti-feed pair. The **window** returns what's happening in your sublocation *right now* (content-blind, local, present — the unchosen you didn't search for). The **walk** is mobility as a verb: leave the room, pass through others, catch what's en route. Together they are "make perception physical," and they are the discharge path for restlessness that points *outward* (toward the world) instead of *down* (into the ledger). This is also the round-4 traversal lever: *diversity rides on movement between sublocations, not on where you park.*
 - **A mirror you can put down** — read your own recent ledger ("what have I been about lately?"). The trap is rumination (the groove with a hand-mirror, a charge with no discharge), so build the discharge *in*: **looking casts an afterimage** (reuse the habituation-to-own-output mechanism), so *seeing* a preoccupation quiets it rather than re-lighting it. Introspection that is therapeutic by construction.
