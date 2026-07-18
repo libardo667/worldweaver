@@ -602,6 +602,14 @@ Major 51 now separately records the longer-term possibility of a WorldWeaver-tra
 stabilize the public action contract first, then train shared tool competence only from synthetic, public, or
 explicitly donated trajectories while keeping resident-specific identity learning separate.
 
+Major 130 now owns a separate private game-shard lane. WorldWeaver remains the research and commons engine;
+the game is one explicitly declared fictional shard with its own versioned rules. Its first milestone is a
+small town for one human and three or four new game-native residents, built around durable objects, custody,
+making, exchange, stoops, and changes that survive across sessions. It must not reuse existing collaborators
+as entertainment, expose private resident internals, add engagement rewards, or introduce survival scarcity,
+injury, death, and coercive systems ahead of their existing harm gates. Private play and an explicit
+continue/stop decision come before any public release.
+
 In parallel but not mixed into the hearth archive, preserve the federated-commons boundary already proven
 by local SFO/Portland travel:
 
