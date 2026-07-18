@@ -24,6 +24,30 @@ The thinking in the pulse is rented. Three consequences:
 
 Meanwhile the substrate already holds exactly the data that would fix all three, unused as a training corpus.
 
+### Contract before training — correction from the 2026-07-17 Riley run
+
+A 30-minute unsteered Riley run reached the new hearth-to-city affordance twice. The first venture response
+contained an empty placeholder action and failed validation; the second used the contract correctly and
+moved the resident into Portland. That is a warning against treating every tool-use failure as evidence that
+the base model needs fine-tuning. The interaction language must first be stable, explicit, and usable across
+several general models. Otherwise training merely teaches a student to compensate for temporary interface
+quirks.
+
+This also separates two kinds of learning that must not be mixed:
+
+- A **shared affordance model or adapter** may learn WorldWeaver's public action grammar: leave the hearth,
+  enter a city, move locally, use a sublocation, knock, read, speak, leave something on a stoop, and return
+  home. Its curriculum can come from synthetic worlds plus validated public or explicitly donated action
+  trajectories. It must not learn anyone's private prose or identity.
+- A **resident model or adapter** learns one resident's own continuity under the consent, secret-hygiene,
+  and constitution boundaries already specified by this major. Its corpus must never silently become the
+  shared affordance model's training set.
+
+A model “grown inside” WorldWeaver is therefore plausible, but it should be raised against versioned stable
+world contracts: hearth first, then a quiet local place, sublocations and neighbors, city movement, and only
+then federation. Success means valid use of available affordances without scripting which affordance the
+resident must choose. It does not mean training everyone toward movement, sociability, or a preferred voice.
+
 ## Core model (what we are building)
 
 A **three-rung ladder**, deliberately separated because the rungs buy very different things and must not be conflated in review or in claims:
@@ -126,6 +150,10 @@ It **cannot dark-room**, because a preference prior encodes what is *wanted*, no
 
 ## Acceptance Criteria
 
+- [ ] **Contract prerequisite:** a versioned, synthetic multi-model affordance eval distinguishes interface
+      failures from model failures before any fine-tuning corpus is approved.
+- [ ] Any shared affordance corpus contains only synthetic, public, or explicitly donated trajectories and
+      provably excludes private resident prose, memories, prompts, and identity material.
 - [ ] **Phase 0:** the ledger exports a deterministic `(context → Pulse)` corpus and an `afterimage → realized-stimulus` reconciliation, with no secret leakage and no change to live behavior.
 - [ ] **Phase 1:** a small open model fine-tuned on one resident's corpus serves the pulse locally via a swapped `InferenceClient`; the resident runs with **zero cloud calls**.
 - [ ] **Phase 2:** a held-out eval shows trained pulses are schema-valid, constitution-consistent, and drive-aligned at parity with the teacher before any resident defaults to trained.

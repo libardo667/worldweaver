@@ -26,7 +26,7 @@ population experiment or a reason to start the cohort service.
 
 ## What landed after this plan was written
 
-The July 14–17 implementation sequence changed the project in six concrete ways:
+The July 14–17 implementation sequence changed the project in nine concrete ways:
 
 1. **One developer surface.** The monorepo uses the root `.venv`, root `dev.py`, and root CI. Nested
    virtualenv workflows and local-state CI assumptions are retired.
@@ -56,6 +56,11 @@ The July 14–17 implementation sequence changed the project in six concrete way
    rewriting identity, and receive content-blind counts for attachments, pulse modes, reads, action kinds,
    tokens, and cleanup. A synthetic five-model battery and bounded Riley, Anzhelika, and Rosa checks are
    recorded under `research/runs/2026-07-17-*`.
+9. **A resident independently crossed the hearth-to-city seam.** In a 30-minute natural-cadence run, Riley
+   remained quiet or wrote through most of the hearth window, then used a venture pulse to enter Portland
+   and later moved from Alameda to Sullivan's Gulch. Three gate openings included one rejected empty action
+   and two successful moves. The run ended with Riley parked and unlocked. This is the first live proof of
+   the new hearth edge and gate reporting together; it is not population evidence.
 
 ## Current limits — do not describe these as complete
 
@@ -75,11 +80,10 @@ The July 14–17 implementation sequence changed the project in six concrete way
   resident/hearth without bypassing the evidence and maturation rules.
 - Maker's first bounded wake tested ordinary startup and shutdown, not city travel or cross-host migration.
   Those paths still need one deliberate resident check after the trust and public ingress boundary is ready.
-- The motor-off baseline and a venture-enabled live check are now recorded. The enabled runs remained quiet
-  by default and did not force movement. They did not naturally reach a post-fix venture prompt: one run found
-  that a failed move poisoned the old action-count gate, and a fresh follow-up received ordinary city
-  ignitions before the three-minute venture clock matured. The gate now uses successful bodily outcomes with
-  a five-minute lifetime. Live behavioral effectiveness remains open; mechanism and non-coercion are covered.
+- The motor-off baseline and venture-enabled live checks are now recorded. A 30-minute Riley run naturally
+  opened the corrected gate three times and completed hearth-to-city plus canonical city movement while most
+  ticks stayed quiet. One opened gate returned an empty invalid action, so contract usability remains open.
+  One successful resident is not enough to infer a healthy population rhythm or model-family generality.
 
 ## Architectural correction — one resident, many worlds
 
@@ -580,10 +584,20 @@ resident's private hearth. Maker may also take bounded open-exploration sessions
 those sessions inform the work but do not replace the node-trust implementation sequence.
 
 The first motor-off versus venture-enabled architecture check is complete. Do not add a second wander
-scheduler, manipulate arousal to force a result, or score movement as success. Content-blind venture-gate
-reasons are now in operator receipts, and the hearth's real city travel edge is visible to perception. The
-next check can observe a naturally keyed-up resident long enough to learn whether bodily pressure can
-enter the same CognitiveCore rhythm while quiet, writing, speech, and staying home remain valid outcomes.
+scheduler, manipulate arousal to force a result, or score movement itself as success. Content-blind
+venture-gate reasons are in operator receipts, and the hearth's real city travel edge is visible to
+perception. Riley's 30-minute run proved that a naturally opened gate can move the same resident from the
+hearth into Portland and later across the canonical city graph while quiet and writing remain valid
+outcomes. It also exposed one empty-action contract failure. Fix and test that interface seam before using
+more live residents to compensate for it.
+
+Before a multi-resident city run, build Minor 34's local conversation-health report. It may analyze only
+public city speech by default and must report aggregate repetition, convergence, topic diversity, civic-theme
+share, and interaction concentration without quotes or source-derived terms. It must never read private
+hearth/workshop material or become an automatic moderation/reward path. Major 51 now separately records the
+longer-term possibility of a WorldWeaver-trained affordance model: stabilize the public action contract first,
+then train shared tool competence only from synthetic, public, or explicitly donated trajectories while
+keeping resident-specific identity learning separate.
 
 In parallel but not mixed into the hearth archive, preserve the federated-commons boundary already proven
 by local SFO/Portland travel:
