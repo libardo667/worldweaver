@@ -53,7 +53,11 @@ def parse_world_travel(
         return None
     lowered = normalized.lower()
 
-    if allow_hearth and _HEARTH_RX.search(lowered):
+    # Structured move acts carry an exact target rather than a sentence. The
+    # resident prompt may therefore choose `home` directly; treat that as the
+    # hearth boundary before a city backend can mistake it for a sublocation.
+    exact_hearth_targets = {"home", "hearth", "your home", "your hearth", "the hearth"}
+    if allow_hearth and (lowered in exact_hearth_targets or _HEARTH_RX.search(lowered)):
         return TravelRequest("hearth")
 
     names = {

@@ -6,6 +6,8 @@ def test_travel_parser_distinguishes_world_travel_from_city_movement():
         "go home",
         allow_hearth=True,
     ) == TravelRequest("hearth")
+    assert parse_world_travel("home", allow_hearth=True) == TravelRequest("hearth")
+    assert parse_world_travel("your hearth", allow_hearth=True) == TravelRequest("hearth")
     assert parse_world_travel(
         "travel to city",
         city_names={"city"},
@@ -23,6 +25,7 @@ def test_travel_parser_distinguishes_world_travel_from_city_movement():
 
 def test_home_is_not_a_destination_while_already_at_the_hearth():
     assert parse_world_travel("go home", allow_hearth=False) is None
+    assert parse_world_travel("home", allow_hearth=False) is None
 
 
 def test_city_travel_requires_one_explicit_live_node():

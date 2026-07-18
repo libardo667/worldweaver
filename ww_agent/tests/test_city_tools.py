@@ -108,6 +108,11 @@ def test_city_world_intercepts_home_travel_before_the_backend():
 
     assert result["travel_pending"] is True
     assert world.take_pending_travel() == TravelRequest("hearth")
+
+    exact = asyncio.run(world.post_map_move("resident-city", "home"))
+    assert exact["travel_pending"] is True
+    assert exact["to_location"] == "your hearth"
+    assert world.take_pending_travel() == TravelRequest("hearth")
     assert world.take_pending_travel() is None
     assert client.posted == []
 
