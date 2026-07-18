@@ -14,7 +14,9 @@ from src.familiar.local_world import LocalWorld
 def _deliver(home: Path, name: str, data: bytes, *, note: str = "") -> None:
     given = home / "workshop" / "given"
     given.mkdir(parents=True, exist_ok=True)
-    (given / name).write_bytes(data)
+    destination = given / name
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(data)
     with (home / "given.jsonl").open("a", encoding="utf-8") as handle:
         handle.write(
             json.dumps(
@@ -67,6 +69,35 @@ def test_gifts_source_does_not_exist_without_an_explicit_grant(tmp_path):
     assert "gifts" not in [affordance.name for affordance in scene.affordances]
     assert result["ok"] is False
     assert result["reason"] == "unknown_source"
+
+
+def test_gifts_reopen_safe_nested_paths_from_a_carried_inbox(tmp_path):
+    home = tmp_path / "resident"
+    world = LocalWorld(home_dir=home, keeper_name="", gifts_enabled=True)
+    _deliver(home, "inbox/72-salience.md", b"the carried page")
+
+    listing = asyncio.run(world.access_information(kind="inspect", source="gifts", query=""))
+    opened = asyncio.run(world.access_information(kind="read", source="gifts", query="given/inbox/72-salience.md"))
+
+    assert listing["records"][0]["title"] == "inbox/72-salience.md"
+    assert opened["ok"] is True
+    assert "the carried page" in opened["records"][0]["content"]
+
+
+def test_gifts_reject_a_nested_path_that_could_escape_the_archive(tmp_path):
+    home = tmp_path / "resident"
+    world = LocalWorld(home_dir=home, keeper_name="", gifts_enabled=True)
+    _deliver(home, "note.txt", b"safe")
+    with (home / "given.jsonl").open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps({"ts": datetime.now().astimezone().isoformat(), "file": "../outside.txt", "note": ""}) + "\n")
+
+    listing = asyncio.run(world.access_information(kind="inspect", source="gifts", query=""))
+    escaped = asyncio.run(world.access_information(kind="read", source="gifts", query="../outside.txt"))
+
+    assert [record["title"] for record in listing["records"]] == ["note.txt"]
+    assert escaped["ok"] is False
+    assert escaped["reason"] == "gift_not_found"
+    assert escaped["records"] == []
 
 
 def test_give_command_stores_a_file_for_an_enabled_resident(tmp_path):

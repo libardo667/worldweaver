@@ -70,7 +70,9 @@ inputs in the identity loader; they do not restore the old ownership model.
 - Images and rendered PDF pages may accompany only the typed read that requested them and only under an
   explicit vision grant. Prompt traces store their hashes and sizes, not the image bodies.
 - Gift delivery writes a resident-owned artifact and private notice. It never becomes ambient scene
-  narration; an explicitly granted `gifts` source lists and opens it when the resident chooses.
+  narration; an explicitly granted `gifts` source lists and opens it when the resident chooses. A legacy
+  import carrying both the private delivery ledger and its files must keep that archive readable, including
+  safe nested inbox paths, without weakening FileScope's traversal guards.
 - Physical `mark` acts use the narrator-free world-trace endpoint. Local trace encounters are bounded,
   source-attributed, and consume-on-prompt; they never enter chat or the rolling world-event bundle.
 - WorldWeaver is the canonical owner of the resident substrate. `the-stable` is source history only:

@@ -159,6 +159,11 @@ def import_stable_hearth(
             "place": str(place or "the hearth").strip() or "the hearth",
             "read_roots": [str(Path(root).resolve()) for root in read_roots],
         }
+        # A carried gift archive is resident-owned material, not an old host grant.
+        # Keep its private elective reader available after import so the resident can
+        # reopen what moved with them.
+        if (temporary / "given.jsonl").is_file() and (temporary / "workshop" / "given").is_dir():
+            hearth["gifts"] = True
         (temporary / "hearth.json").write_text(
             json.dumps(hearth, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",

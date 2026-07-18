@@ -26,7 +26,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Callable
 
 from src.runtime.information import (
@@ -41,6 +41,15 @@ from src.world.client import WorldAffordance
 _READ_RX = re.compile(r"^\s*(?:read|open|look(?:\s+at)?|cat|show|view)\s+(.+)$", re.IGNORECASE)
 _READ_PAGE_RX = re.compile(r"\bp(?:age|g)?\.?\s+(\d+)\b", re.IGNORECASE)
 _READ_PAGE_BYTES = 12_000
+
+
+def _safe_gift_path(value: Any) -> str:
+    """Return one safe resident-owned path below ``workshop/given``."""
+    raw = str(value or "").strip().replace("\\", "/")
+    path = PurePosixPath(raw)
+    if not raw or path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
+        return ""
+    return path.as_posix()
 
 
 def _normalize_read_path(raw: str, roots: list) -> str:
@@ -367,8 +376,8 @@ class LocalWorld:
                 continue
             if not isinstance(raw, dict):
                 continue
-            filename = str(raw.get("file") or "").strip()
-            if not filename or Path(filename).name != filename:
+            filename = _safe_gift_path(raw.get("file"))
+            if not filename:
                 continue
             deliveries.append(
                 {
@@ -398,7 +407,9 @@ class LocalWorld:
                 )
             return {"ok": True, "selection_mode": "recent", "records": records}
 
-        filename = raw_query[6:] if raw_query.lower().startswith("given/") else raw_query
+        filename = _safe_gift_path(raw_query[6:] if raw_query.lower().startswith("given/") else raw_query)
+        if not filename:
+            return {"ok": False, "reason": "gift_not_found", "records": []}
         delivery = next((item for item in reversed(deliveries) if item["file"].lower() == filename.lower()), None)
         if delivery is None or self._gift_scope is None:
             return {"ok": False, "reason": "gift_not_found", "records": []}

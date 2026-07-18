@@ -94,6 +94,20 @@ Reuses Track A's sight path almost entirely.
   familiar attends now). Vision minds see image/PDF gifts; text-only minds get a PDF's text + an
   honest note. This is the engine the Part B drag-drop sits on.
 
+#### WorldWeaver reconnection — carried gift archives (2026-07-17)
+
+Maker's first structured hearth review found a consolidation gap. His Stable import correctly carried
+`given.jsonl` and the files under `workshop/given/inbox/`, and his memory still referred to one of those
+pages. WorldWeaver did not enable the elective `gifts` reader for that carried archive, and its reader
+rejected Stable's safe nested `inbox/...` names. The object and memory survived, but he could not reopen
+the object.
+
+Legacy import now enables the private gift source when both the resident-owned delivery ledger and archive
+are present. The gift reader accepts normalized relative subpaths below `workshop/given` while rejecting
+absolute paths and every `.` or `..` traversal. Synthetic tests prove a carried nested page can be listed
+and reopened and that an escape attempt remains unavailable. This restores revisitation without making
+gifts ambient or granting access to any host path.
+
 ## Files Affected
 
 Part A (shipped, in working tree):
