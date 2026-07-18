@@ -128,11 +128,12 @@ class _Scene:
         present: list[Any],
         recent: list[Any],
         affordances: list[Any] | None = None,
+        location_graph: dict[str, list[dict[str, Any]]] | None = None,
     ) -> None:
         self.location, self.role = location, "familiar"
         self.present = present
         self.recent_events_here = recent
-        self.location_graph = {"nodes": [], "edges": []}
+        self.location_graph = location_graph or {"nodes": [], "edges": []}
         self.ambient_presence = []
         self.affordances = list(affordances or [])
 
@@ -313,7 +314,25 @@ class LocalWorld:
             )
             for source in self.information_sources().list()
         ]
-        return _Scene(location=self.place, present=present, recent=recent, affordances=affordances)
+        hearth_key = f"location:{self.place.strip().lower()}"
+        nodes = [{"key": hearth_key, "name": self.place}]
+        edges: list[dict[str, str]] = []
+        for city_name in sorted(self._city_names):
+            city_key = f"world:{city_name}"
+            nodes.append({"key": city_key, "name": city_name})
+            edges.extend(
+                [
+                    {"from": hearth_key, "to": city_key},
+                    {"from": city_key, "to": hearth_key},
+                ]
+            )
+        return _Scene(
+            location=self.place,
+            present=present,
+            recent=recent,
+            affordances=affordances,
+            location_graph={"nodes": nodes, "edges": edges},
+        )
 
     def information_sources(self) -> InformationSourceRegistry:
         """Current hearth-contributed sources on the shared resident registry seam."""
@@ -481,7 +500,7 @@ class LocalWorld:
         return []
 
     async def get_place_names(self) -> set[str]:
-        return {self.place}
+        return {self.place, *self._city_names}
 
     # --- the voice sink (familiar → keeper) ------------------------------
 

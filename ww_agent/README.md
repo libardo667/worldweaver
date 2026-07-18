@@ -74,7 +74,9 @@ city or the private hearth, and runs the shard-backed mirror only while the resi
 resident can choose to go home or return to the city. City departure must be confirmed before the hearth
 activates; returning creates a fresh city-local session for the same durable actor. The host rebuilds the
 world-specific source catalog on every switch, so city sources cannot appear at home and a keeper is never
-invented for a resident who has none. The optional doula observes world evidence and proposes new
+invented for a resident who has none. A hearth scene exposes each configured city name as a real adjacent
+travel destination, so ordinary perception and `move` can carry the resident back out without relying on a
+prose-only hint or a separate travel scheduler. The optional doula observes world evidence and proposes new
 residents; it is not a resident cognition loop.
 
 There is no current fast/slow/mail loop bank, tiered memory package, storylet turn endpoint, or

@@ -50,7 +50,8 @@
   into text and optional image blocks; `local_world.py` exposes configured gifts as an elective private
   source rather than scene narration, including safe nested paths in a carried Stable inbox; `weather.py`
   is enabled only when configured. A normal resident enters the hearth without an invented keeper,
-  FileScope, weather lookup, host tool, or network grant.
+  FileScope, weather lookup, host tool, or network grant. Configured city names appear as adjacent nodes in
+  the private scene graph, letting the shared movement/travel path carry an elective return to the city.
 
 The deleted `loops/` and tiered `memory/` packages are historical architecture. New behavior belongs in
 the unified runtime unless an active work item explicitly changes that ownership.

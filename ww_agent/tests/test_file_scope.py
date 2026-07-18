@@ -10,6 +10,7 @@ from src.familiar import visual
 from src.runtime.information import InformationSourceRegistry
 from src.runtime.prompt_context import PulseContext, render_affordance_catalog
 from src.runtime.travel import TravelRequest
+from src.runtime.perception import _reachable_destinations
 
 
 def _tree(tmp_path):
@@ -272,6 +273,8 @@ def test_unkept_hearth_is_private_without_inventing_a_keeper(tmp_path):
     assert "keeper" not in facts
     assert "city" in facts["travel"]
     assert scene.present == []
+    assert _reachable_destinations(scene.location, scene.location_graph) == ["city"]
+    assert asyncio.run(world.get_place_names()) == {"the hearth", "city"}
 
 
 def test_hearth_travel_request_is_consumed_once(tmp_path):
