@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 import shutil
@@ -494,8 +495,18 @@ def _conversation_health(args: list[str]) -> int:
         description="Measure aggregate public city-conversation health without printing source speech.",
     )
     parser.add_argument("--city", required=True, help="city shard directory name")
-    parser.add_argument("--since-hours", type=float, default=24.0, help="public chat lookback window (0.25-720 hours)")
-    parser.add_argument("--minimum-speakers", type=int, default=3, help="minimum population for language metrics (3-100)")
+    parser.add_argument(
+        "--since-hours",
+        type=float,
+        default=24.0,
+        help="public chat lookback window (0.25-720 hours)",
+    )
+    parser.add_argument(
+        "--minimum-speakers",
+        type=int,
+        default=3,
+        help="minimum population for language metrics (3-100)",
+    )
     parser.add_argument("--windows", type=int, default=3, help="ordered comparison windows (2-12)")
     parser.add_argument("--shuffle-seed", type=int, default=0, help="repeatable null-comparison seed")
     parsed = parser.parse_args(args)
@@ -515,7 +526,10 @@ def _conversation_health(args: list[str]) -> int:
         return 2
     docker = shutil.which("docker")
     if not docker:
-        print("Docker is required to read the selected city's public chat store.", file=sys.stderr)
+        print(
+            "Docker is required to read the selected city's public chat store.",
+            file=sys.stderr,
+        )
         return 2
 
     command = [
@@ -539,6 +553,88 @@ def _conversation_health(args: list[str]) -> int:
         "--shuffle-seed",
         str(parsed.shuffle_seed),
     ]
+    return _run(command, cwd=city_dir)
+
+
+def _space_policy(args: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="python dev.py space-policy",
+        description="Assign one reviewed exact place to one activated resident without starting them.",
+    )
+    parser.add_argument("--city", required=True, help="city shard directory name")
+    parser.add_argument("--location", required=True, help="exact canonical place name")
+    parser.add_argument("--controller-resident", required=True, help="resident directory name")
+    parser.add_argument(
+        "--mode",
+        choices=("public", "requestable", "private", "closed"),
+        default="private",
+    )
+    parser.add_argument("--note", default="", help="short steward-visible setup note")
+    parsed = parser.parse_args(args)
+    if Path(parsed.city).name != parsed.city or Path(parsed.controller_resident).name != parsed.controller_resident:
+        parser.error("--city and --controller-resident must be single directory names")
+
+    city_dir = ROOT / "shards" / parsed.city
+    compose_file = city_dir / "docker-compose.yml"
+    resident_home = city_dir / "residents" / parsed.controller_resident
+    if not compose_file.is_file():
+        print(f"City shard not found: {parsed.city}", file=sys.stderr)
+        return 2
+    try:
+        manifest = json.loads((resident_home / "identity" / "hearth_manifest.json").read_text(encoding="utf-8"))
+        activation = json.loads((resident_home / "hearth_activation.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"Resident hearth is not ready for stewardship: {exc}", file=sys.stderr)
+        return 2
+    actor_id = str(manifest.get("actor_id") or "").strip()
+    if not actor_id or activation.get("state") != "active" or str(activation.get("actor_id") or "").strip() != actor_id:
+        print(
+            "Resident hearth must be active and match its stable actor ID.",
+            file=sys.stderr,
+        )
+        return 2
+
+    topology = _run(
+        [
+            sys.executable,
+            "scripts/dev.py",
+            "weave-status",
+            "--city",
+            parsed.city,
+            "--strict",
+        ],
+        cwd=ENGINE_DIR,
+    )
+    if topology != 0:
+        return topology
+    docker = shutil.which("docker")
+    if not docker:
+        print(
+            "Docker is required to reach the selected city's trusted setup seam.",
+            file=sys.stderr,
+        )
+        return 2
+    command = [
+        docker,
+        "compose",
+        "-p",
+        parsed.city,
+        "-f",
+        str(compose_file),
+        "exec",
+        "-T",
+        "backend",
+        "python",
+        "scripts/setup_space_policy.py",
+        "--location",
+        parsed.location,
+        "--controller-actor-id",
+        actor_id,
+        "--mode",
+        parsed.mode,
+    ]
+    if parsed.note:
+        command.extend(["--note", parsed.note])
     return _run(command, cwd=city_dir)
 
 
@@ -567,6 +663,8 @@ def _help() -> None:
                                         create homes without activating or waking them
   python dev.py conversation-health --city CITY --since-hours 24
                                         aggregate public speech without printing it
+  python dev.py space-policy --city CITY --location PLACE --controller-resident NAME
+                                        assign one reviewed place without waking its controller
   python dev.py run <script> [args...]  run a repository Python script
 
 Other commands are passed to worldweaver_engine/scripts/dev.py, so commands such as
@@ -596,6 +694,8 @@ def main() -> int:
         return _seed_residents(rest)
     if command == "conversation-health":
         return _conversation_health(rest)
+    if command == "space-policy":
+        return _space_policy(rest)
     if command == "agent":
         return _run([sys.executable, "-m", "src.main", *rest], cwd=AGENT_DIR)
     if command == "engine":

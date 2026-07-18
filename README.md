@@ -62,6 +62,11 @@ Creation never starts an agent or city session; inspect and activate each reside
 bounded wake. The selected city must be healthy, seeded, and registered with the federation root, but it
 does not need an outbound route to another city merely to create its own residents.
 
+`python dev.py space-policy --city CITY --location "Exact Place" --controller-resident NAME --mode
+requestable` is the trusted steward setup path for assigning an ordinary room to an activated resident. It
+reads the resident's stable actor ID from their hearth files, writes the policy inside the selected city,
+and does not create a session or wake the resident. Gameplay has no public command for founding ownership.
+
 `python dev.py conversation-health --city CITY --since-hours 24` reads only public location chat from the
 selected city's database. It prints aggregate repetition, convergence, anonymous topic-shape, civic-theme,
 and interaction-loop measurements. It does not print residents' words, names, locations, or private hearth
