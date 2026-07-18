@@ -1202,7 +1202,13 @@ def get_world_digest(
     # Agent last-known locations from event history.
     # Agent session IDs follow the pattern "{agentname}-{YYYYMMDD-HHMMSS}".
     agent_last_location: Dict[str, str] = {}
+    active_agent_session_ids = {str(row["session_id"]) for row in full_roster if _slug_display_name(str(row.get("session_id") or ""))}
     for sid, loc in session_last_location.items():
+        # Public history outlives a resident's city incarnation. Once /session/leave
+        # removes that incarnation, its last movement remains true history but must
+        # not continue to count as current map presence.
+        if sid not in active_agent_session_ids:
+            continue
         for agent_name in available_agents:
             if sid == agent_name or sid.startswith(agent_name + "-"):
                 agent_last_location[agent_name] = loc

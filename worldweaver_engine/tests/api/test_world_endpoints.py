@@ -139,6 +139,28 @@ class TestWorldGraphEndpoints:
 
 
 class TestAgentSceneEndpoints:
+    def test_digest_does_not_count_retired_resident_history_as_live_presence(self, seeded_client, db_session):
+        db_session.add(
+            WorldEvent(
+                session_id="test_resident-20260316-120000",
+                event_type="movement",
+                summary="Test Resident arrived at The Mission.",
+                world_state_delta={
+                    "location": "Chinatown",
+                    "destination": "The Mission",
+                },
+            )
+        )
+        db_session.commit()
+
+        response = seeded_client.get("/api/world/digest")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["active_sessions"] == 0
+        assert payload["roster"] == []
+        assert all("Test Resident" not in node["agent_names"] and node["agent_count"] == 0 for node in payload["location_graph"]["nodes"])
+
     def test_scene_reads_presence_from_session_vars_without_state_manager(self, client, db_session, monkeypatch):
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         db_session.add_all(
