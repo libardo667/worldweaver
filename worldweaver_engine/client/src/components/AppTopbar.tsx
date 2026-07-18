@@ -16,6 +16,8 @@ type AppTopbarProps = {
   observerMode: boolean;
   sessionId: string;
   shortSession: string;
+  isLogOpen: boolean;
+  onToggleLog: () => void;
   onNewSession: () => void;
   onOpenSettings: () => void;
 };
@@ -39,6 +41,8 @@ export function AppTopbar({
   observerMode,
   sessionId,
   shortSession,
+  isLogOpen,
+  onToggleLog,
   onNewSession,
   onOpenSettings,
 }: AppTopbarProps) {
@@ -85,6 +89,14 @@ export function AppTopbar({
             )}
           </>
         )}
+        <button
+          className={`ww-icon-btn${isLogOpen ? " is-active" : ""}`}
+          onClick={onToggleLog}
+          title={isLogOpen ? "Hide activity log" : "Show activity log"}
+          aria-pressed={isLogOpen}
+        >
+          ▤
+        </button>
         <span className="ww-session-label" title={observerMode ? "public threshold shell" : sessionId}>
           {observerMode ? "threshold" : `…${shortSession}`}
         </span>

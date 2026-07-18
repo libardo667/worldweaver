@@ -185,6 +185,10 @@ export default function App() {
   const [leftWidth, setLeftWidth] = useState(35);
   const [isResizing, setIsResizing] = useState(false);
   const [isInfoPaneCollapsed, setIsInfoPaneCollapsed] = useState(false);
+  const [isHereOpen, setIsHereOpen] = useState(false);
+  // The activity log is an opt-in diagnostic, not the default surface: the
+  // map is primary. Pre-entry the left pane still hosts the entry flow.
+  const [isLogOpen, setIsLogOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [, setPlayerInfoState] = useState<PlayerInfo | null>(() => getPlayerInfo());
   const [authRecoveryMessage, setAuthRecoveryMessage] = useState<string | null>(null);
@@ -993,7 +997,7 @@ export default function App() {
     const next = replaceSessionId();
     setSessionId(next);
     setParticipationMode("participant");
-    setInfoTab("here");
+    setInfoTab("map");
     setTurns([]);
     setDigest(null);
     setAgentFeed([]);
@@ -1020,7 +1024,7 @@ export default function App() {
     clearOnboardedSession();
     clearObserverShell();
     setParticipationMode("participant");
-    setInfoTab("here");
+    setInfoTab("map");
     setPendingDest(null);
     setActiveRoute(null);
   }
@@ -1029,7 +1033,7 @@ export default function App() {
     clearOnboardedSession();
     clearObserverShell();
     setParticipationMode("participant");
-    setInfoTab("here");
+    setInfoTab("map");
     setPendingDest(null);
     setActiveRoute(null);
     setEntryIntent("join");
@@ -1106,7 +1110,11 @@ export default function App() {
       setPendingDest(nodeName);
       return;
     }
-    if (playerNode.key === targetNode.key) return;
+    // Clicking your own location opens "Here" — look around instead of traveling.
+    if (playerNode.key === targetNode.key) {
+      setIsHereOpen(true);
+      return;
+    }
     // Normal case: stage as pending so user confirms
     setPendingDest(nodeName);
   }, [currentViewLocation, mapQueryResult?.nodes, nodes, observerMode]);
@@ -1261,6 +1269,8 @@ export default function App() {
         observerMode={observerMode}
         sessionId={sessionId}
         shortSession={shortSession}
+        isLogOpen={isLogOpen}
+        onToggleLog={() => setIsLogOpen((current) => !current)}
         onNewSession={handleNewSession}
         onOpenSettings={() => setIsSettingsOpen(true)}
       />
@@ -1305,6 +1315,7 @@ export default function App() {
       )}
 
       <div className={`ww-body${isMobile ? " ww-body--mobile" : ""}${isResizing ? " is-resizing" : ""}${isInfoPaneCollapsed ? " is-collapsed" : ""}`}>
+          {(showingEntryScreen || isLogOpen) && (
           <WorldActionPane
             isMobile={isMobile}
             isInfoPaneCollapsed={isInfoPaneCollapsed}
@@ -1324,7 +1335,7 @@ export default function App() {
                   setEntryIntent(null);
                   setParticipationMode("participant");
                   setObserverLocation("");
-                  setInfoTab("here");
+                  setInfoTab("map");
                   setOnboardedSessionId(sessionId);
                   if (digest?.world_id) setOnboardedWorldId(digest.world_id);
                   recordArrival(action);
@@ -1333,7 +1344,7 @@ export default function App() {
                   setEntryIntent(null);
                   setParticipationMode("observer");
                   setObserverLocation(location);
-                  setInfoTab("here");
+                  setInfoTab("map");
                 }}
                 onRuntimeError={handleRuntimeInteractionError}
               />
@@ -1352,8 +1363,9 @@ export default function App() {
             }}
             onRestartArrival={resetForFreshArrival}
           />
+          )}
 
-          {!isMobile && !isInfoPaneCollapsed && (
+          {(showingEntryScreen || isLogOpen) && !isMobile && !isInfoPaneCollapsed && (
             <div
               className="ww-divider"
               onMouseDown={startResizing}
@@ -1363,6 +1375,7 @@ export default function App() {
 
           <WorldInfoPane
             isMobile={isMobile}
+            fullWidth={!(showingEntryScreen || isLogOpen)}
             isInfoPaneCollapsed={isInfoPaneCollapsed}
             leftWidth={leftWidth}
             observerMode={observerMode}
@@ -1370,6 +1383,9 @@ export default function App() {
             setInfoTab={setInfoTab}
             chatsTabHasUnread={chatsTabHasUnread}
             onCollapse={() => setIsInfoPaneCollapsed((current) => !current)}
+            isHereOpen={isHereOpen}
+            onOpenHere={() => setIsHereOpen(true)}
+            onCloseHere={() => setIsHereOpen(false)}
             chatSubtabs={chatSubtabs}
             chatSubTab={chatSubTab}
             setChatSubTab={setChatSubTab}

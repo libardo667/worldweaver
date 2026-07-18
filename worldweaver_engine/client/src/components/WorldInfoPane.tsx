@@ -12,6 +12,7 @@ import { SituatedTownPanel } from "./SituatedTownPanel";
 
 type WorldInfoPaneProps = {
   isMobile: boolean;
+  fullWidth: boolean;
   isInfoPaneCollapsed: boolean;
   leftWidth: number;
   observerMode: boolean;
@@ -19,6 +20,9 @@ type WorldInfoPaneProps = {
   setInfoTab: (tab: InfoTab) => void;
   chatsTabHasUnread: boolean;
   onCollapse: () => void;
+  isHereOpen: boolean;
+  onOpenHere: () => void;
+  onCloseHere: () => void;
   chatSubtabs: Array<"dms" | "local" | "city" | "global">;
   chatSubTab: "dms" | "local" | "city" | "global";
   setChatSubTab: (tab: "dms" | "local" | "city" | "global") => void;
@@ -90,6 +94,7 @@ type WorldInfoPaneProps = {
 
 export function WorldInfoPane({
   isMobile,
+  fullWidth,
   isInfoPaneCollapsed,
   leftWidth,
   observerMode,
@@ -97,6 +102,9 @@ export function WorldInfoPane({
   setInfoTab,
   chatsTabHasUnread,
   onCollapse,
+  isHereOpen,
+  onOpenHere,
+  onCloseHere,
   chatSubtabs,
   chatSubTab,
   setChatSubTab,
@@ -193,16 +201,17 @@ export function WorldInfoPane({
       style={
         isMobile
           ? undefined
-          : {
-              width: `${100 - leftWidth}%`,
-              flex: `0 0 ${100 - leftWidth}%`,
-            }
+          : fullWidth
+            ? { width: "100%", flex: "1 1 100%" }
+            : {
+                width: `${100 - leftWidth}%`,
+                flex: `0 0 ${100 - leftWidth}%`,
+              }
       }
     >
       <div className="ww-info-tabs">
         <div className="ww-info-tabs-list">
           {([
-            "here",
             "map",
             "presence",
             "chats",
@@ -228,22 +237,6 @@ export function WorldInfoPane({
       </div>
 
       <div className="ww-info-body" style={{ flex: 1, overflowY: "auto", position: "relative" }}>
-        {infoTab === "here" && (
-          <SituatedTownPanel
-            sessionId={sessionId}
-            location={currentViewLocation}
-            active={!showingEntryScreen}
-            observerMode={observerMode}
-            places={situatedPlaces}
-            peopleHere={(rosterDigest?.roster ?? [])
-              .filter((person) => person.session_id !== sessionId && person.location === currentViewLocation)
-              .map((person) => ({
-                sessionId: person.session_id,
-                name: person.display_name ?? person.player_name ?? person.session_id.slice(0, 12),
-              }))}
-          />
-        )}
-
         {infoTab === "chats" && (
           <div className="ww-chats-container" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
             <div className="ww-chat-subtabs">
@@ -520,7 +513,16 @@ export function WorldInfoPane({
                   </>
                 ) : (
                   <>
-                    You are at <strong>{currentViewLocation}</strong>. Click any neighborhood to travel there.
+                    You are at{" "}
+                    <button
+                      type="button"
+                      className="ww-here-hint-btn"
+                      onClick={onOpenHere}
+                      title="Open Here — look around this place"
+                    >
+                      <strong>{currentViewLocation}</strong>
+                    </button>
+                    . Click it to look around, or click any neighborhood to travel there.
                   </>
                 )}
               </div>
@@ -565,6 +567,43 @@ export function WorldInfoPane({
           />
         )}
       </div>
+
+      {isHereOpen && (
+        <div
+          className="ww-here-modal-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Here — ${currentViewLocation}`}
+          onClick={onCloseHere}
+        >
+          <div className="ww-here-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="ww-here-modal-head">
+              <div className="ww-here-modal-title">
+                <span className="ww-here-modal-eyebrow">You are here</span>
+                <span className="ww-here-modal-place">{currentViewLocation || "This place"}</span>
+              </div>
+              <button className="ww-here-modal-close" onClick={onCloseHere} aria-label="Close Here" title="Close">
+                ✕
+              </button>
+            </div>
+            <div className="ww-here-modal-body">
+              <SituatedTownPanel
+                sessionId={sessionId}
+                location={currentViewLocation}
+                active={isHereOpen && !showingEntryScreen}
+                observerMode={observerMode}
+                places={situatedPlaces}
+                peopleHere={(rosterDigest?.roster ?? [])
+                  .filter((person) => person.session_id !== sessionId && person.location === currentViewLocation)
+                  .map((person) => ({
+                    sessionId: person.session_id,
+                    name: person.display_name ?? person.player_name ?? person.session_id.slice(0, 12),
+                  }))}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
