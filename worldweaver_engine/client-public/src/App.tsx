@@ -6,10 +6,23 @@ import { Route, useLocation, useRoute } from "wouter";
 import { getEntry, getShardExperience, queryMap } from "./api/ww";
 import type { EntryInfo, MapEdge, MapNode, ShardExperience } from "./api/types";
 import { ThemeToggle } from "./components/ThemeToggle";
+import { ThresholdOverlay } from "./components/ThresholdOverlay";
 import { WorldMap, type MapBounds } from "./components/WorldMap";
 import { useGrounding } from "./hooks/useGrounding";
 import { usePoll } from "./hooks/usePoll";
 import { findNodeBySlug, isVisitablePlace, slugifyPlace } from "./lib/places";
+
+/** Where "look around" drops you: the liveliest entry place, else any entry place. */
+function pickLookAroundTarget(entry: EntryInfo | null, nodes: MapNode[]): string | null {
+  const entryNames = new Set((entry?.entry_nodes ?? []).map((n) => n.name));
+  if (entryNames.size === 0) return null;
+  const candidates = nodes.filter((n) => entryNames.has(n.name) && isVisitablePlace(n));
+  candidates.sort((a, b) => (b.present_count ?? 0) - (a.present_count ?? 0));
+  const liveliest = candidates[0];
+  if (liveliest) return slugifyPlace(liveliest.name);
+  const fallback = entry?.entry_nodes?.[Math.floor(Math.random() * (entry?.entry_nodes.length ?? 1))];
+  return fallback ? slugifyPlace(fallback.name) : null;
+}
 
 function entryFrame(entry: EntryInfo | null): MapBounds | null {
   const coords = (entry?.entry_nodes ?? []).filter((n) => n.lat != null && n.lon != null);
@@ -29,6 +42,10 @@ export function App() {
   const [entry, setEntry] = useState<EntryInfo | null>(null);
   const [nodes, setNodes] = useState<MapNode[]>([]);
   const [edges, setEdges] = useState<MapEdge[]>([]);
+  // The threshold greets every fresh page load, whatever the URL — deep links
+  // included. It closes on an explicit choice (or walking off) and stays
+  // closed for client-side navigation within this load.
+  const [thresholdOpen, setThresholdOpen] = useState(true);
   const viewportRef = useRef<MapBounds | null>(null);
   const atmosphere = useGrounding();
   const [, navigate] = useLocation();
@@ -69,10 +86,19 @@ export function App() {
   const handleNodeClick = useCallback(
     (node: MapNode) => {
       if (!isVisitablePlace(node)) return;
+      setThresholdOpen(false);
       navigate(`/place/${slugifyPlace(node.name)}`);
     },
     [navigate],
   );
+
+  const handleLookAround = useCallback(() => {
+    setThresholdOpen(false);
+    // A deep-linked place already is the look-around; otherwise pick one.
+    if (placeParams?.slug) return;
+    const slug = pickLookAroundTarget(entry, nodes);
+    if (slug) navigate(`/place/${slug}`);
+  }, [entry, nodes, navigate, placeParams?.slug]);
 
   return (
     <div className="app-shell" data-phase={atmosphere.phase} data-haze={atmosphere.hazy ? "true" : "false"}>
@@ -86,15 +112,26 @@ export function App() {
       />
       <div className="sky-tint" aria-hidden="true" />
 
-      <Route path="/">
-        <div className="dev-caption">
-          <strong>{experience?.entry_disclosure?.title ?? "WorldWeaver"}</strong>
-          <span>{atmosphere.grounding?.datetime_str} — {atmosphere.grounding?.weather_description}</span>
-        </div>
-      </Route>
       <Route path="/place/:slug">
         {(params) => <div className="dev-caption">at: {findNodeBySlug(nodes, params.slug)?.name ?? params.slug}</div>}
       </Route>
+      <Route path="/join">
+        <div className="dev-caption">join flow lands in the next slice</div>
+      </Route>
+
+      {thresholdOpen && (
+        <ThresholdOverlay
+          experience={experience}
+          entry={entry}
+          grounding={atmosphere.grounding}
+          nodes={nodes}
+          onLookAround={handleLookAround}
+          onJoin={() => {
+            setThresholdOpen(false);
+            navigate("/join");
+          }}
+        />
+      )}
 
       <ThemeToggle />
     </div>
