@@ -89,6 +89,8 @@ class Resident:
         self._identity: ResidentIdentity | None = None
         self._session_id: str | None = None
         self._world_id: str = ""
+        self._city_id: str | None = None
+        self._city_capabilities: frozenset[str] = frozenset()
         self._attachment_kind: str = "city"
         self._attachment_lock = asyncio.Lock()
         self._hearth_config = hearth_config
@@ -189,6 +191,7 @@ class Resident:
             self._session_id = await self._get_or_create_session(self._world_id)
             logger.info("[%s] session: %s", self.name, self._session_id)
             await self._hydrate_identity_growth()
+            await self._refresh_city_profile()
 
     async def run(
         self,
@@ -375,6 +378,8 @@ class Resident:
                 client=self._ww,
                 session_id=session_id,
                 memory_dir=self._resident_dir / "memory",
+                city_id=self._city_id,
+                capabilities=self._city_capabilities,
             ),
             hearth_available=True,
         )
@@ -551,6 +556,7 @@ class Resident:
         self._session_id = city_session_id
         self._attachment_kind = "city"
         await self._hydrate_identity_growth()
+        await self._refresh_city_profile()
         city = self._build_city_world(city_session_id)
         self._record_transition(
             "world_attachment_changed",
@@ -690,6 +696,7 @@ class Resident:
                     self._attachment_kind = "city"
                     (self._resident_dir / "session_id.txt").write_text(self._session_id, encoding="utf-8")
                     await self._hydrate_identity_growth()
+                    await self._refresh_city_profile()
                     self._record_transition(
                         "inter_shard_travel_arrived",
                         travel_id=pending.travel_id,
@@ -717,6 +724,36 @@ class Resident:
                     exc,
                 )
             await asyncio.sleep(self._travel_retry_seconds)
+
+    async def _refresh_city_profile(self) -> None:
+        """Refresh place identity and optional verbs after attaching to a node."""
+
+        experience_reader = getattr(self._ww, "get_shard_experience", None)
+        preview_reader = getattr(self._ww, "get_city_pack_preview", None)
+        if not callable(experience_reader) and not callable(preview_reader):
+            # Small test and third-party clients predating public shard profiles keep
+            # the old catalog until they adopt the two public endpoints.
+            return
+
+        self._city_id = ""
+        self._city_capabilities = frozenset()
+        if callable(experience_reader):
+            try:
+                experience = await experience_reader()
+                disclosure = experience.get("entry_disclosure") if isinstance(experience, dict) else {}
+                rows = disclosure.get("capabilities") if isinstance(disclosure, dict) else []
+                self._city_capabilities = frozenset(capability_id for item in list(rows or []) if isinstance(item, dict) and (capability_id := str(item.get("id") or "").strip()))
+            except Exception as exc:
+                logger.warning("[%s] could not read shard capabilities: %s", self.name, exc)
+
+        if callable(preview_reader):
+            try:
+                preview = await preview_reader()
+                manifest = preview.get("manifest") if isinstance(preview, dict) else {}
+                if isinstance(manifest, dict):
+                    self._city_id = str(manifest.get("city_id") or "").strip()
+            except Exception as exc:
+                logger.warning("[%s] could not read city identity: %s", self.name, exc)
 
     def _record_transition(
         self,

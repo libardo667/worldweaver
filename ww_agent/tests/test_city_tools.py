@@ -253,6 +253,81 @@ class _ReadClient:
     async def get_world_facts(self, query: str, session_id=None, limit: int = 5):
         return [_WorldFact(f"Someone was overheard talking about {query} at the taqueria.")] if query else []
 
+    async def get_world_objects(self, session_id: str) -> dict:
+        return {
+            "objects": [
+                {
+                    "object_id": "cup-1",
+                    "name": "Small clay cup",
+                    "description": "A thumb-sized cup made from river clay.",
+                    "object_kind": "clay_cup",
+                    "relation": "carried",
+                    "revision": 1,
+                },
+                {
+                    "object_id": "token-1",
+                    "name": "Wooden token",
+                    "description": "A smooth alder token.",
+                    "object_kind": "wooden_token",
+                    "relation": "here",
+                    "revision": 2,
+                },
+            ]
+        }
+
+    async def get_local_making(self, session_id: str) -> dict:
+        return {
+            "location": "Alderbank Workshop",
+            "materials": [
+                {
+                    "material_id": "reclaimed_clay",
+                    "title": "Reclaimed river clay",
+                    "description": "Clay gathered from the riverbank.",
+                    "available_units": 8,
+                    "capacity_units": 10,
+                }
+            ],
+            "recipes": [
+                {
+                    "recipe_id": "small_clay_cup",
+                    "title": "Small clay cup",
+                    "description": "Shape a small cup by hand.",
+                    "inputs": {"reclaimed_clay": 2},
+                    "can_make": True,
+                }
+            ],
+        }
+
+    async def get_local_stoops(self, session_id: str) -> dict:
+        return {
+            "location": "Alderbank Commons",
+            "stoops": [
+                {
+                    "stoop_id": "alderbank-commons-stoop",
+                    "title": "The Commons Stoop",
+                    "prompt": "Leave something useful or curious.",
+                    "active_count": 1,
+                }
+            ],
+        }
+
+    async def browse_world_stoop(self, session_id: str, stoop_id: str) -> dict:
+        assert stoop_id == "alderbank-commons-stoop"
+        return {
+            "entries": [
+                {
+                    "entry_id": "entry-1",
+                    "object": {
+                        "object_id": "reed-whistle-1",
+                        "name": "Reed whistle",
+                        "description": "A small whistle cut from a river reed.",
+                    },
+                    "can_take": True,
+                    "can_withdraw": False,
+                }
+            ]
+        }
+
     async def get_travel_destinations(self) -> dict:
         return {
             "registry": {"reachable": True},
@@ -399,6 +474,67 @@ def test_full_context_grants_the_whole_catalog(tmp_path):
         "chatter",
         "travel",
     }
+
+
+def test_alderbank_gets_its_declared_sources_without_san_francisco_material():
+    registry = build_city_source_registry(
+        client=_ReadClient(),
+        session_id="s1",
+        city_id="alderbank",
+        capabilities={"durable_objects", "replenishing_materials", "making", "stoops"},
+    )
+
+    assert {"objects", "making", "stoops"}.issubset(registry.names)
+    assert "eats" not in registry.names
+    assert "news" not in registry.names
+
+
+def test_objects_source_separates_carried_from_local_objects():
+    registry = build_city_source_registry(
+        client=_ReadClient(),
+        session_id="s1",
+        city_id="alderbank",
+        capabilities={"durable_objects"},
+    )
+
+    result = asyncio.run(registry.read("objects", ""))
+
+    assert {item["title"] for item in result["records"]} == {"Small clay cup", "Wooden token"}
+    carried = next(item for item in result["records"] if item["title"] == "Small clay cup")
+    assert carried["locality"] == "carried"
+    assert carried["metadata"]["object_id"] == "cup-1"
+
+
+def test_making_source_reports_local_availability_without_making_anything():
+    registry = build_city_source_registry(
+        client=_ReadClient(),
+        session_id="s1",
+        city_id="alderbank",
+        capabilities={"replenishing_materials", "making"},
+    )
+
+    result = asyncio.run(registry.read("making", ""))
+
+    assert "8 of 10 units" in _record_text(result)
+    recipe = next(item for item in result["records"] if item["metadata"]["kind"] == "recipe")
+    assert recipe["metadata"]["can_make"] is True
+
+
+def test_stoops_source_lists_before_opening_a_named_stoop():
+    registry = build_city_source_registry(
+        client=_ReadClient(),
+        session_id="s1",
+        city_id="alderbank",
+        capabilities={"stoops"},
+    )
+
+    listed = asyncio.run(registry.read("stoops", ""))
+    opened = asyncio.run(registry.read("stoops", "Commons"))
+
+    assert [item["title"] for item in listed["records"]] == ["The Commons Stoop"]
+    assert "Name this stoop to look inside" in _record_text(listed)
+    assert [item["title"] for item in opened["records"]] == ["Reed whistle"]
+    assert opened["records"][0]["metadata"]["can_take"] is True
 
 
 # --- chatter: the CHOSEN channel — a drive-filtered citywide pull (Major 60) ---

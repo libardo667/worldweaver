@@ -3,16 +3,13 @@
 
 """City information sources — a resident's elective local knowledge ecosystem.
 
-The city analog of the familiar's scoped reading surface.
-The breakthrough that gave the familiars a craft was not the specific sources — it was
-having *something to find out and reason over*; the March field journal documented the
-opposite (residents with nothing to do but talk, looping "HI!" and mirroring). These give
-a San Francisco resident a small, named, zero-egress information ecology.
+The city analog of the familiar's scoped reading surface. Residents need useful things
+they can choose to inspect instead of a prompt that constantly narrates the city at them.
+The registry is selected from the current node's city identity and declared features, so
+an Alderbank resident does not receive San Francisco knowledge or unavailable game tools.
 
-**Local-first, by construction.** Every source here is computed locally and sends nothing off
-the machine — the ``eats`` guide is "false egress": it gives the worldly *feel* of looking up
-where to eat (real SF spots) with none of the actual reach. The egress×goal×learning rule
-(the-stable minor 54) stays honored — no source here leaves the box.
+**Local-first, by construction.** Every source here is computed locally and sends nothing
+off the machine. The San Francisco ``eats`` guide, for example, is local pack knowledge.
 """
 
 from __future__ import annotations
@@ -55,6 +52,7 @@ class CitySourceRegistry(InformationSourceRegistry):
         if self._drive_holder is not None:
             self._drive_holder.drive = drive
 
+
 # ---------------------------------------------------------------------------
 # eats — the "false egress" SF foodie guide (local data, worldly feel)
 # ---------------------------------------------------------------------------
@@ -80,13 +78,27 @@ _SF_EATS: dict[str, list[tuple[str, str]]] = {
 
 # Common ways a resident might name a neighborhood → its canonical key.
 _EATS_ALIASES: dict[str, str] = {
-    "the mission": "mission", "mission district": "mission", "the castro": "castro",
-    "the haight": "haight", "haight ashbury": "haight", "the sunset": "sunset",
-    "inner sunset": "sunset", "outer sunset": "sunset", "the richmond": "richmond",
-    "inner richmond": "richmond", "outer richmond": "richmond", "the marina": "marina",
-    "the tenderloin": "tenderloin", "tl": "tenderloin", "south of market": "soma",
-    "the embarcadero": "north beach", "telegraph hill": "north beach", "russian hill": "nob hill",
-    "polk gulch": "nob hill", "bernal": "bernal heights", "cole valley": "haight",
+    "the mission": "mission",
+    "mission district": "mission",
+    "the castro": "castro",
+    "the haight": "haight",
+    "haight ashbury": "haight",
+    "the sunset": "sunset",
+    "inner sunset": "sunset",
+    "outer sunset": "sunset",
+    "the richmond": "richmond",
+    "inner richmond": "richmond",
+    "outer richmond": "richmond",
+    "the marina": "marina",
+    "the tenderloin": "tenderloin",
+    "tl": "tenderloin",
+    "south of market": "soma",
+    "the embarcadero": "north beach",
+    "telegraph hill": "north beach",
+    "russian hill": "nob hill",
+    "polk gulch": "nob hill",
+    "bernal": "bernal heights",
+    "cole valley": "haight",
 }
 
 _STRIP = re.compile(r"\b(district|neighborhood|neighbourhood|area|sf|san francisco)\b", re.IGNORECASE)
@@ -206,11 +218,7 @@ def _make_surroundings_source(client: Any, session_id: str) -> InformationSource
             label = str(getattr(item, "label", "") or "").strip()
             sensory_note = str(getattr(item, "sensory_note", "") or "").strip()
             source = str(getattr(item, "source", "") or "scene").strip()
-            pressure_tags = [
-                str(tag).strip()
-                for tag in list(getattr(item, "pressure_tags", []) or [])
-                if str(tag).strip()
-            ]
+            pressure_tags = [str(tag).strip() for tag in list(getattr(item, "pressure_tags", []) or []) if str(tag).strip()]
             searchable = " ".join([kind, label, sensory_note, source, *pressure_tags]).lower()
             if not label or (query and query not in searchable):
                 continue
@@ -244,6 +252,224 @@ def _make_surroundings_source(client: Any, session_id: str) -> InformationSource
     return InformationSource(
         name="surroundings",
         description="look more closely at the ambient features of your current place (query: optional detail)",
+        run=_run,
+        provenance=PROVENANCE_LOCAL_PERCEPTION,
+        freshness="live",
+        locality="current place",
+        visibility="local",
+        selection_mode="embodied_local",
+    )
+
+
+def _make_objects_source(client: Any, session_id: str) -> InformationSource:
+    """Show only durable objects carried by the resident or present right here."""
+
+    async def _run(arg: str) -> dict[str, Any]:
+        query = str(arg or "").strip().lower()
+        try:
+            payload = await client.get_world_objects(session_id)
+        except Exception:
+            return {"ok": False, "reason": "source_unavailable", "records": []}
+
+        records: list[dict[str, Any]] = []
+        for item in list(payload.get("objects") or []):
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name") or "").strip()
+            description = str(item.get("description") or "").strip()
+            kind = str(item.get("object_kind") or "object").strip()
+            relation = str(item.get("relation") or "here").strip()
+            object_id = str(item.get("object_id") or "").strip()
+            searchable = " ".join((name, description, kind, relation, object_id)).lower()
+            if not name or (query and query not in searchable):
+                continue
+            relation_text = "You are carrying it." if relation == "carried" else "It is here with you."
+            records.append(
+                {
+                    "record_id": f"object:{object_id}",
+                    "title": name,
+                    "content": " ".join(part for part in (description, relation_text) if part),
+                    "freshness": "live",
+                    "locality": "carried" if relation == "carried" else "current place",
+                    "visibility": "private" if relation == "carried" else "local",
+                    "selection_mode": "text_match" if query else "embodied_local",
+                    "metadata": {
+                        "object_id": object_id,
+                        "object_kind": kind,
+                        "relation": relation,
+                        "revision": item.get("revision"),
+                    },
+                }
+            )
+        return {
+            "selection_mode": "text_match" if query else "embodied_local",
+            "records": records[:12],
+        }
+
+    return InformationSource(
+        name="objects",
+        description="look at what you carry and what durable objects are here (query: optional object detail)",
+        run=_run,
+        provenance=PROVENANCE_LOCAL_PERCEPTION,
+        freshness="live",
+        locality="current place",
+        visibility="local",
+        selection_mode="embodied_local",
+    )
+
+
+def _make_making_source(client: Any, session_id: str) -> InformationSource:
+    """Show declared materials and recipes available at this exact place."""
+
+    async def _run(arg: str) -> dict[str, Any]:
+        query = str(arg or "").strip().lower()
+        try:
+            payload = await client.get_local_making(session_id)
+        except Exception:
+            return {"ok": False, "reason": "source_unavailable", "records": []}
+
+        location = str(payload.get("location") or "current place").strip()
+        records: list[dict[str, Any]] = []
+        for material in list(payload.get("materials") or []):
+            if not isinstance(material, dict):
+                continue
+            material_id = str(material.get("material_id") or "").strip()
+            title = str(material.get("title") or material_id).strip()
+            description = str(material.get("description") or "").strip()
+            available = material.get("available_units", 0)
+            capacity = material.get("capacity_units", 0)
+            searchable = " ".join((material_id, title, description)).lower()
+            if query and query not in searchable:
+                continue
+            records.append(
+                {
+                    "record_id": f"material:{material_id}:{location}",
+                    "title": title,
+                    "content": f"{description} {available} of {capacity} units are currently available here.".strip(),
+                    "freshness": "live",
+                    "locality": location,
+                    "visibility": "local",
+                    "selection_mode": "text_match" if query else "embodied_local",
+                    "metadata": {"kind": "material", "material_id": material_id},
+                }
+            )
+        for recipe in list(payload.get("recipes") or []):
+            if not isinstance(recipe, dict):
+                continue
+            recipe_id = str(recipe.get("recipe_id") or "").strip()
+            title = str(recipe.get("title") or recipe_id).strip()
+            description = str(recipe.get("description") or "").strip()
+            can_make = bool(recipe.get("can_make"))
+            searchable = " ".join((recipe_id, title, description)).lower()
+            if query and query not in searchable:
+                continue
+            availability = "The materials are available now." if can_make else "Some required materials are not available now."
+            records.append(
+                {
+                    "record_id": f"recipe:{recipe_id}:{location}",
+                    "title": title,
+                    "content": f"{description} {availability}".strip(),
+                    "freshness": "live",
+                    "locality": location,
+                    "visibility": "local",
+                    "selection_mode": "text_match" if query else "embodied_local",
+                    "metadata": {
+                        "kind": "recipe",
+                        "recipe_id": recipe_id,
+                        "can_make": can_make,
+                        "inputs": dict(recipe.get("inputs") or {}),
+                    },
+                }
+            )
+        return {
+            "selection_mode": "text_match" if query else "embodied_local",
+            "records": records[:12],
+        }
+
+    return InformationSource(
+        name="making",
+        description="see what materials and recipes are available at your exact place (query: optional material or recipe)",
+        run=_run,
+        provenance=PROVENANCE_LOCAL_PERCEPTION,
+        freshness="live",
+        locality="current place",
+        visibility="local",
+        selection_mode="embodied_local",
+    )
+
+
+def _make_stoops_source(client: Any, session_id: str) -> InformationSource:
+    """List local stoops, then open one only when it is named."""
+
+    async def _run(arg: str) -> dict[str, Any]:
+        query = str(arg or "").strip()
+        try:
+            payload = await client.get_local_stoops(session_id)
+        except Exception:
+            return {"ok": False, "reason": "source_unavailable", "records": []}
+
+        location = str(payload.get("location") or "current place").strip()
+        stoops = [item for item in list(payload.get("stoops") or []) if isinstance(item, dict)]
+        if query:
+            lowered = query.lower()
+            matches = [item for item in stoops if lowered in str(item.get("stoop_id") or "").lower() or lowered in str(item.get("title") or "").lower()]
+            if len(matches) == 1:
+                stoop_id = str(matches[0].get("stoop_id") or "").strip()
+                try:
+                    opened = await client.browse_world_stoop(session_id, stoop_id)
+                except Exception:
+                    return {"ok": False, "reason": "source_unavailable", "records": []}
+                records = []
+                for entry in list(opened.get("entries") or []):
+                    if not isinstance(entry, dict):
+                        continue
+                    item = entry.get("object") if isinstance(entry.get("object"), dict) else {}
+                    object_id = str(item.get("object_id") or "").strip()
+                    title = str(item.get("name") or "object").strip()
+                    description = str(item.get("description") or "").strip()
+                    records.append(
+                        {
+                            "record_id": f"stoop-entry:{entry.get('entry_id')}",
+                            "title": title,
+                            "content": description or "An object left for a visitor.",
+                            "freshness": "live",
+                            "locality": location,
+                            "visibility": "local",
+                            "selection_mode": "named_stoop",
+                            "metadata": {
+                                "stoop_id": stoop_id,
+                                "entry_id": str(entry.get("entry_id") or ""),
+                                "object_id": object_id,
+                                "can_take": bool(entry.get("can_take")),
+                                "can_withdraw": bool(entry.get("can_withdraw")),
+                            },
+                        }
+                    )
+                return {"selection_mode": "named_stoop", "records": records}
+
+        records = []
+        for item in stoops:
+            stoop_id = str(item.get("stoop_id") or "").strip()
+            title = str(item.get("title") or stoop_id).strip()
+            prompt = str(item.get("prompt") or "").strip()
+            active_count = int(item.get("active_count") or 0)
+            records.append(
+                {
+                    "record_id": f"stoop:{stoop_id}",
+                    "title": title,
+                    "content": f"{prompt} It currently holds {active_count} object{'s' if active_count != 1 else ''}. Name this stoop to look inside.".strip(),
+                    "freshness": "live",
+                    "locality": location,
+                    "visibility": "local",
+                    "selection_mode": "embodied_local",
+                    "metadata": {"stoop_id": stoop_id, "active_count": active_count},
+                }
+            )
+        return {"selection_mode": "embodied_local", "records": records}
+
+    return InformationSource(
+        name="stoops",
+        description="see stoops at your exact place, or look inside one by name (query: optional stoop name)",
         run=_run,
         provenance=PROVENANCE_LOCAL_PERCEPTION,
         freshness="live",
@@ -471,22 +697,32 @@ def build_city_source_registry(
     client: Any = None,
     session_id: str = "",
     memory_dir: Path | None = None,
+    city_id: str | None = None,
+    capabilities: set[str] | frozenset[str] = frozenset(),
 ) -> CitySourceRegistry:
     """Build a resident's named city information-source registry.
 
-    ``eats`` is universal (everyone in SF eats). ``recall`` is granted when the
-    resident's memory dir is known (its own mind to look back over). The world-facing
-    sources (``news``, ``places``, ``investigate``) are granted when a world client is
-    available. ``identity`` is the future per-character hook — today every resident
-    carries the same catalog, the way a familiar declares its sources in familiar.json.
+    ``city_id=None`` preserves the legacy San Francisco catalog for direct callers.
+    A live resident passes the node's published city ID and game capabilities so a
+    fictional town is not quietly given San Francisco knowledge or unavailable verbs.
     """
     holder = _DriveHolder()
-    sources: list[InformationSource] = [_EATS_SOURCE, *resident_information_sources(memory_dir)]
+    legacy_or_sf = city_id is None or city_id == "san_francisco"
+    sources: list[InformationSource] = [*resident_information_sources(memory_dir)]
+    if legacy_or_sf:
+        sources.append(_EATS_SOURCE)
     if client is not None:
-        sources.append(_make_news_source(client))
+        if legacy_or_sf:
+            sources.append(_make_news_source(client))
         sources.append(_make_places_source(client))
         sources.append(_make_surroundings_source(client, session_id))
         sources.append(_make_investigate_source(client, session_id))
         sources.append(_make_chatter_source(client, holder, session_id))
         sources.append(_make_travel_source(client))
+        if "durable_objects" in capabilities:
+            sources.append(_make_objects_source(client, session_id))
+        if {"replenishing_materials", "making"}.issubset(capabilities):
+            sources.append(_make_making_source(client, session_id))
+        if "stoops" in capabilities:
+            sources.append(_make_stoops_source(client, session_id))
     return CitySourceRegistry(sources, drive_holder=holder)

@@ -264,6 +264,52 @@ class WorldWeaverClient:
         data = resp.json()
         return data.get("world_id") or None
 
+    async def get_shard_experience(self) -> dict[str, Any]:
+        """Read the node's public declaration of optional game rules."""
+        resp = await self._get("/api/shard/experience", timeout=10.0)
+        return resp.json()
+
+    async def get_city_pack_preview(self) -> dict[str, Any]:
+        """Read the node's public, schematic city-pack identity."""
+        resp = await self._get("/api/shard/city-pack/preview", timeout=10.0)
+        return resp.json()
+
+    async def get_world_objects(self, session_id: str) -> dict[str, Any]:
+        """List only objects carried by the resident or visible right here."""
+        resp = await self._get(
+            "/api/world/objects",
+            params={"session_id": session_id},
+            timeout=10.0,
+        )
+        return resp.json()
+
+    async def get_local_making(self, session_id: str) -> dict[str, Any]:
+        """Read materials and recipes available at the resident's exact place."""
+        resp = await self._get(
+            "/api/world/making",
+            params={"session_id": session_id},
+            timeout=10.0,
+        )
+        return resp.json()
+
+    async def get_local_stoops(self, session_id: str) -> dict[str, Any]:
+        """List stoops at the resident's exact place without opening them."""
+        resp = await self._get(
+            "/api/world/stoops",
+            params={"session_id": session_id},
+            timeout=10.0,
+        )
+        return resp.json()
+
+    async def browse_world_stoop(self, session_id: str, stoop_id: str) -> dict[str, Any]:
+        """Open one local stoop after the resident elects to inspect it."""
+        resp = await self._get(
+            f"/api/world/stoops/{stoop_id}",
+            params={"session_id": session_id},
+            timeout=10.0,
+        )
+        return resp.json()
+
     async def _get_roster_directory(self, session_id: str | None = None) -> list[dict[str, Any]]:
         cache_key = session_id or ""
         now_monotonic = time.monotonic()

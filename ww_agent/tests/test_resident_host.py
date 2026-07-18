@@ -234,6 +234,34 @@ def test_city_to_city_travel_retires_source_then_swaps_one_host_to_destination(t
     ]
 
 
+def test_city_profile_selects_local_sources_and_refreshes_after_attachment(tmp_path):
+    class _AlderbankClient(_FakeCityClient):
+        async def get_shard_experience(self) -> dict:
+            return {
+                "entry_disclosure": {
+                    "capabilities": [
+                        {"id": "durable_objects"},
+                        {"id": "replenishing_materials"},
+                        {"id": "making"},
+                        {"id": "stoops"},
+                    ]
+                }
+            }
+
+        async def get_city_pack_preview(self) -> dict:
+            return {"manifest": {"city_id": "alderbank"}}
+
+    resident = _resident(tmp_path, _AlderbankClient())
+
+    asyncio.run(resident._refresh_city_profile())
+    city = resident._build_city_world(resident._active_session_id())
+
+    assert resident._city_id == "alderbank"
+    assert {"objects", "making", "stoops"}.issubset(city._sources.names)
+    assert "eats" not in city._sources.names
+    assert "news" not in city._sources.names
+
+
 def test_city_to_city_travel_retries_the_same_destination_handoff(tmp_path):
     class _RecoveringDestination(_FakeCityClient):
         async def arrive_session_from_travel(self, **payload) -> dict:
