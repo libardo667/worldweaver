@@ -32,7 +32,7 @@ commands also work at the root, for example `python dev.py weave-up --city ww_sf
 activate `.venv` or change directories; `dev.py` automatically uses the root environment.
 
 `python dev.py resident --city CITY --resident NAME` performs a read-only, exactly-one-resident preflight.
-It checks the live city route, confirms the cohort container is stopped, inspects the hearth generation
+It checks the live city registration, confirms the cohort container is stopped, inspects the hearth generation
 and runtime lock, reports the resident's effective model, and performs a small embedding probe without
 printing credentials. The host runner replaces an unreachable Docker-only embedding hostname with a
 reachable localhost endpoint when available. Add `--wake --ticks 3` only for a deliberately compressed
@@ -47,10 +47,15 @@ real reachable destinations in the hearth scene, so the resident can later choos
 movement path. If an interrupted older run left a
 city session behind, `--park` retires it without running cognition.
 
+The resident command requires a healthy, seeded city registered with federation discovery. It does not
+require that city to publish an outbound route; use `weave-status --strict --require-travel` when a test
+specifically needs city-to-city travel.
+
 `python dev.py seed-residents --city CITY --count 3` plans a small fresh cohort without writing anything.
 Add `--apply` to create portable resident homes with empty life histories and dormant hearth manifests.
 Creation never starts an agent or city session; inspect and activate each resident separately before a
-bounded wake.
+bounded wake. The selected city must be healthy, seeded, and registered with the federation root, but it
+does not need an outbound route to another city merely to create its own residents.
 
 `python dev.py conversation-health --city CITY --since-hours 24` reads only public location chat from the
 selected city's database. It prints aggregate repetition, convergence, anonymous topic-shape, civic-theme,

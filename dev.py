@@ -290,7 +290,6 @@ def _resident(args: list[str]) -> int:
             "--city",
             parsed.city,
             "--strict",
-            "--require-travel",
         ],
         cwd=ENGINE_DIR,
     )
@@ -424,7 +423,6 @@ def _seed_residents(args: list[str]) -> int:
             "--city",
             parsed.city,
             "--strict",
-            "--require-travel",
         ],
         cwd=ENGINE_DIR,
     )

@@ -123,6 +123,9 @@ python dev.py seed-residents --city ww_pdx --count 3
 python dev.py seed-residents --city ww_pdx --count 3 --apply
 ```
 
+The city must be healthy, seeded, and registered with federation discovery. A live route to a second city
+is not required to create a dormant local cohort.
+
 The applied command creates dormant hearth manifests and birth records only. It never activates or wakes
 the residents. Use the exact-one-resident preflight and activation tools for the later review checkpoint.
 
