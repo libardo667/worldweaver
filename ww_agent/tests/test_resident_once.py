@@ -10,6 +10,7 @@ from scripts.resident_once import (
     _effective_model,
     _inactive_tuning_fields,
     _parse_duration,
+    _record_tick,
     inspect_resident_home,
     main,
 )
@@ -97,6 +98,56 @@ def test_preflight_names_loaded_but_inactive_loop_controls(tmp_path):
 def test_tick_receipt_reads_effector_execution_flag():
     assert _did_execute({"executed": True}) is True
     assert _did_execute({"executed": False, "reason": "exception"}) is False
+
+
+def test_tick_receipt_counts_attachment_mode_and_action_kind():
+    from src.familiar.local_world import LocalWorld
+
+    stats = {
+        "ticks": 0,
+        "ignitions": 0,
+        "settling_pulses": 0,
+        "fervor_pulses": 0,
+        "venture_pulses": 0,
+        "pulses_routed": 0,
+        "information_reads": 0,
+        "acts_executed": 0,
+        "resting_ticks": 0,
+        "ticks_by_attachment": {},
+        "actions_by_attachment": {},
+        "action_kinds": {},
+    }
+    world = object.__new__(LocalWorld)
+
+    receipt = _record_tick(
+        stats,
+        world,
+        {
+            "ignited": False,
+            "settled": True,
+            "fervor": False,
+            "venture": False,
+            "pulse_routed": {"pulse_id": "pulse-test"},
+            "information_accessed": [{"source": "recall"}],
+            "act_executed": {"executed": True, "kind": "write"},
+            "resting": False,
+        },
+        1,
+    )
+
+    assert receipt == {
+        "event": "resident_tick",
+        "tick": 1,
+        "attachment": "hearth",
+        "mode": "settling",
+        "pulse_routed": True,
+        "information_reads": 1,
+        "act_executed": True,
+        "act_kind": "write",
+    }
+    assert stats["ticks_by_attachment"] == {"hearth": 1}
+    assert stats["actions_by_attachment"] == {"hearth": 1}
+    assert stats["action_kinds"] == {"write": 1}
 
 
 def test_duration_parser_accepts_operator_units():

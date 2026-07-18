@@ -38,7 +38,8 @@ printing credentials. The host runner replaces an unreachable Docker-only embedd
 reachable localhost endpoint when available. Add `--wake --ticks 3` only for a deliberately compressed
 smoke test. To observe the resident's real timing, use `--wake --duration 15m`; duration runs keep the
 natural 20-second cognitive cadence and print a run summary with pulse, read, action, token, and timing
-counts. `--model MODEL` temporarily swaps the pulse model without rewriting resident identity or tuning.
+counts. Tick receipts and summaries identify the active city/hearth attachment and action kinds without
+printing private resident prose. `--model MODEL` temporarily swaps the pulse model without rewriting resident identity or tuning.
 Every bounded wake returns the resident to their hearth when it ends. If an interrupted older run left a
 city session behind, `--park` retires it without running cognition.
 

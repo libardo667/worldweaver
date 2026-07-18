@@ -31,7 +31,9 @@ from src.identity.hearth_activation import (  # noqa: E402
 )
 from src.identity.hearth_package import inventory_hearth  # noqa: E402
 from src.inference.client import InferenceClient  # noqa: E402
+from src.familiar.local_world import LocalWorld  # noqa: E402
 from src.resident import Resident  # noqa: E402
+from src.world.city_world import CityWorld  # noqa: E402
 from src.world.client import WorldWeaverClient  # noqa: E402
 
 
@@ -43,6 +45,45 @@ def _did_execute(result: Any) -> bool:
     if isinstance(result, dict):
         return bool(result.get("executed"))
     return bool(result)
+
+
+def _attachment_kind(world: Any) -> str:
+    if isinstance(world, LocalWorld):
+        return "hearth"
+    if isinstance(world, CityWorld):
+        return "city"
+    return world.__class__.__name__.lower() or "unknown"
+
+
+def _record_tick(stats: dict[str, Any], world: Any, result: dict[str, Any], tick: int) -> dict[str, Any]:
+    attachment = _attachment_kind(world)
+    act_result = result.get("act_executed")
+    act_executed = _did_execute(act_result)
+    act_kind = str(act_result.get("kind") or "") if isinstance(act_result, dict) else ""
+    stats["ticks"] = tick
+    stats["ignitions"] += int(bool(result.get("ignited")))
+    stats["settling_pulses"] += int(bool(result.get("settled")))
+    stats["fervor_pulses"] += int(bool(result.get("fervor")))
+    stats["venture_pulses"] += int(bool(result.get("venture")))
+    stats["pulses_routed"] += int(bool(result.get("pulse_routed")))
+    stats["information_reads"] += len(result.get("information_accessed") or [])
+    stats["acts_executed"] += int(act_executed)
+    stats["resting_ticks"] += int(bool(result.get("resting")))
+    stats["ticks_by_attachment"][attachment] = stats["ticks_by_attachment"].get(attachment, 0) + 1
+    if act_executed:
+        stats["actions_by_attachment"][attachment] = stats["actions_by_attachment"].get(attachment, 0) + 1
+        stats["action_kinds"][act_kind or "unknown"] = stats["action_kinds"].get(act_kind or "unknown", 0) + 1
+    mode = "ignition" if result.get("ignited") else "venture" if result.get("venture") else "fervor" if result.get("fervor") else "settling" if result.get("settled") else "quiet"
+    return {
+        "event": "resident_tick",
+        "tick": tick,
+        "attachment": attachment,
+        "mode": mode,
+        "pulse_routed": bool(result.get("pulse_routed")),
+        "information_reads": len(result.get("information_accessed") or []),
+        "act_executed": act_executed,
+        "act_kind": act_kind or None,
+    }
 
 
 def _parse_duration(value: str) -> float:
@@ -308,29 +349,14 @@ async def _run(args: argparse.Namespace) -> int:
             "information_reads": 0,
             "acts_executed": 0,
             "resting_ticks": 0,
+            "ticks_by_attachment": {},
+            "actions_by_attachment": {},
+            "action_kinds": {},
         }
 
         async def observe_tick(_identity, _world, _core, result, tick):
-            stats["ticks"] = tick
-            stats["ignitions"] += int(bool(result.get("ignited")))
-            stats["settling_pulses"] += int(bool(result.get("settled")))
-            stats["fervor_pulses"] += int(bool(result.get("fervor")))
-            stats["venture_pulses"] += int(bool(result.get("venture")))
-            stats["pulses_routed"] += int(bool(result.get("pulse_routed")))
-            stats["information_reads"] += len(result.get("information_accessed") or [])
-            stats["acts_executed"] += int(_did_execute(result.get("act_executed")))
-            stats["resting_ticks"] += int(bool(result.get("resting")))
             print(
-                json.dumps(
-                    {
-                        "event": "resident_tick",
-                        "tick": tick,
-                        "ignited": bool(result.get("ignited")),
-                        "pulse_routed": bool(result.get("pulse_routed")),
-                        "act_executed": _did_execute(result.get("act_executed")),
-                    },
-                    sort_keys=True,
-                ),
+                json.dumps(_record_tick(stats, _world, result, tick), sort_keys=True),
                 flush=True,
             )
 
@@ -378,6 +404,7 @@ async def _run(args: argparse.Namespace) -> int:
                 park_at_hearth_on_stop=True,
             )
             elapsed = time.monotonic() - started_at
+            pulse_attempts = stats["ignitions"] + stats["settling_pulses"] + stats["fervor_pulses"]
             print(
                 json.dumps(
                     {
@@ -390,6 +417,8 @@ async def _run(args: argparse.Namespace) -> int:
                         "requested_duration_seconds": args.duration,
                         "requested_ticks": args.ticks,
                         "elapsed_seconds": round(elapsed, 3),
+                        "pulse_attempts": pulse_attempts,
+                        "unrouted_pulse_attempts": max(0, pulse_attempts - stats["pulses_routed"]),
                         **stats,
                         "inference_calls": llm.total_calls,
                         "prompt_tokens": llm.total_prompt_tokens,
