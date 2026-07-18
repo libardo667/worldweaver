@@ -81,6 +81,7 @@ class Resident:
         tick_observer: TickObserver | None = None,
         world_client_factory: Callable[[str], WorldWeaverClient] | None = None,
         travel_retry_seconds: float = 5.0,
+        action_tendency: bool | None = None,
     ):
         self._resident_dir = resident_dir
         self._ww = ww_client
@@ -96,10 +97,9 @@ class Resident:
         self._pulse_model = str(pulse_model or "").strip() or None
         self._pulse_temperature = pulse_temperature
         self._tick_observer = tick_observer
-        self._world_client_factory = world_client_factory or (
-            lambda url: WorldWeaverClient(base_url=url)
-        )
+        self._world_client_factory = world_client_factory or (lambda url: WorldWeaverClient(base_url=url))
         self._travel_retry_seconds = max(0.0, float(travel_retry_seconds))
+        self._action_tendency = action_tendency
         self._owned_world_clients: list[WorldWeaverClient] = []
         self._tasks: list[asyncio.Task] = []
         self._packet_queue: StimulusPacketQueue | None = None
@@ -201,9 +201,7 @@ class Resident:
         """Run the one resident core while holding its exclusive hearth lease."""
         if self._runtime_lease is None:
             if not self._identity:
-                raise RuntimeError(
-                    f"Resident {self.name} not started — call start() first"
-                )
+                raise RuntimeError(f"Resident {self.name} not started — call start() first")
             self._runtime_lease = acquire_hearth_runtime(self._resident_dir)
         try:
             await self._run_started(
@@ -258,19 +256,13 @@ class Resident:
             raise RuntimeError(f"Resident {self.name} not started — call start() first")
         if max_ticks > 0 and max_duration_seconds is not None:
             raise ValueError("choose either max_ticks or max_duration_seconds")
-        duration = (
-            None
-            if max_duration_seconds is None
-            else max(0.0, float(max_duration_seconds))
-        )
+        duration = None if max_duration_seconds is None else max(0.0, float(max_duration_seconds))
         loop = asyncio.get_running_loop()
         deadline = loop.time() + duration if duration is not None else None
 
         # Initialize the runtime snapshot so the substrate state is inspectable
         # from the first tick. Packets are now emitted by perception.
-        packet_queue = StimulusPacketQueue(
-            self._resident_dir / "memory" / "stimulus_packets.json"
-        )
+        packet_queue = StimulusPacketQueue(self._resident_dir / "memory" / "stimulus_packets.json")
         packet_queue.ensure_file()
         self._packet_queue = packet_queue
 
@@ -301,11 +293,7 @@ class Resident:
                 mirror_task = self._start_runtime_mirror()
                 try:
                     while True:
-                        if (
-                            tick_count > 0
-                            and deadline is not None
-                            and loop.time() >= deadline
-                        ):
+                        if tick_count > 0 and deadline is not None and loop.time() >= deadline:
                             return
                         result: dict[str, Any] | None = None
                         try:
@@ -330,9 +318,7 @@ class Resident:
                                 tick_count,
                             )
                         stop_after_tick = max_ticks > 0 and tick_count >= max_ticks
-                        stop_after_duration = (
-                            deadline is not None and loop.time() >= deadline
-                        )
+                        stop_after_duration = deadline is not None and loop.time() >= deadline
 
                         take_pending = getattr(world, "take_pending_travel", None)
                         request = take_pending() if callable(take_pending) else None
@@ -353,11 +339,7 @@ class Resident:
                             mirror_task = self._start_runtime_mirror()
                         if stop_after_tick or stop_after_duration:
                             return
-                        delay = (
-                            core.tick_seconds
-                            if pause_seconds is None
-                            else max(0.0, float(pause_seconds))
-                        )
+                        delay = core.tick_seconds if pause_seconds is None else max(0.0, float(pause_seconds))
                         if deadline is not None:
                             delay = min(delay, max(0.0, deadline - loop.time()))
                         await asyncio.sleep(delay)
@@ -400,9 +382,7 @@ class Resident:
     def _build_hearth_world(self) -> LocalWorld:
         identity = self._require_identity()
         config = self._hearth_config or HearthConfig()
-        file_scope = (
-            FileScope(read_roots=list(config.read_roots)) if config.read_roots else None
-        )
+        file_scope = FileScope(read_roots=list(config.read_roots)) if config.read_roots else None
         if config.weather and self._weather_provider is None:
             self._weather_provider = WeatherProvider()
         return LocalWorld(
@@ -423,36 +403,21 @@ class Resident:
         session_id: str,
     ) -> CognitiveCore:
         identity = self._require_identity()
-        pulse_temperature = (
-            identity.tuning.fast_temperature
-            if self._pulse_temperature is _IDENTITY_TEMPERATURE
-            else self._pulse_temperature
-        )
+        pulse_temperature = identity.tuning.fast_temperature if self._pulse_temperature is _IDENTITY_TEMPERATURE else self._pulse_temperature
         return CognitiveCore(
             identity=identity,
             resident_dir=self._resident_dir,
             ww_client=world,
             llm=self._llm,
             session_id=session_id,
-            pulse_model=self._pulse_model
-            or identity.tuning.slow_model
-            or identity.tuning.fast_model,
+            pulse_model=self._pulse_model or identity.tuning.slow_model or identity.tuning.fast_model,
             pulse_temperature=pulse_temperature,
-            **(
-                {"tick_seconds": self._tick_seconds}
-                if self._tick_seconds is not None
-                else {}
-            ),
+            **({"tick_seconds": self._tick_seconds} if self._tick_seconds is not None else {}),
             writes_to_workshop_only=self._attachment_kind == "hearth",
             pulse_vision=bool(self._hearth_config and self._hearth_config.vision),
             anchor_gating=identity.tuning.anchor_gating,
-            incubation=(
-                self._attachment_kind == "city"
-                and (
-                    identity.tuning.incubation_enabled
-                    or _env_flag("WW_INCUBATION_ENABLED")
-                )
-            ),
+            incubation=(self._attachment_kind == "city" and (identity.tuning.incubation_enabled or _env_flag("WW_INCUBATION_ENABLED"))),
+            action_tendency=self._action_tendency,
         )
 
     def _start_runtime_mirror(self) -> asyncio.Task | None:
@@ -475,12 +440,7 @@ class Resident:
     ) -> CityWorld | LocalWorld:
         if self._attachment_kind == "city" and request.destination_kind == "hearth":
             return await self._enter_hearth(world)
-        if (
-            self._attachment_kind == "city"
-            and request.destination_kind == "city"
-            and request.route_id
-            and request.destination_shard
-        ):
+        if self._attachment_kind == "city" and request.destination_kind == "city" and request.route_id and request.destination_shard:
             return await self._enter_remote_city(world, request)
         if self._attachment_kind == "hearth" and request.destination_kind == "city":
             return await self._enter_city(world)
@@ -643,11 +603,7 @@ class Resident:
     async def _resume_inter_shard_travel(self, pending: PendingShardTravel) -> bool:
         """Finish one ledger-recorded trip without running cognition in both cities."""
         source_client = self._ww
-        if (
-            not pending.source_departed
-            and pending.source_url
-            and self._client_url(source_client) != pending.source_url
-        ):
+        if not pending.source_departed and pending.source_url and self._client_url(source_client) != pending.source_url:
             source_client = self._new_world_client(pending.source_url)
         if not pending.source_departed:
             self._ww = source_client
@@ -664,9 +620,7 @@ class Resident:
                 )
                 handoff = receipt.get("handoff") if isinstance(receipt, dict) else None
                 if isinstance(handoff, dict):
-                    destination_url = str(
-                        handoff.get("destination_url") or destination_url
-                    ).strip()
+                    destination_url = str(handoff.get("destination_url") or destination_url).strip()
                     if str(handoff.get("status") or "").strip() == "traveling":
                         pending = replace(
                             pending,
@@ -699,9 +653,7 @@ class Resident:
                     )
                     self._session_id = pending.source_session_id
                     self._attachment_kind = "city"
-                    (self._resident_dir / "session_id.txt").write_text(
-                        self._session_id, encoding="utf-8"
-                    )
+                    (self._resident_dir / "session_id.txt").write_text(self._session_id, encoding="utf-8")
                     logger.warning(
                         "[%s] departure failed before source retirement; remaining in source city: %s",
                         self.name,
@@ -727,23 +679,16 @@ class Resident:
                     session_id=pending.destination_session_id,
                 )
                 handoff = receipt.get("handoff") if isinstance(receipt, dict) else None
-                if (
-                    isinstance(handoff, dict)
-                    and str(handoff.get("status") or "").strip() == "arrived"
-                ):
+                if isinstance(handoff, dict) and str(handoff.get("status") or "").strip() == "arrived":
                     world_id = await destination_client.get_world_id()
                     if not world_id:
-                        raise RuntimeError(
-                            "destination has no readable world ID after arrival"
-                        )
+                        raise RuntimeError("destination has no readable world ID after arrival")
                     previous_client = self._ww
                     self._ww = destination_client
                     self._world_id = world_id
                     self._session_id = pending.destination_session_id
                     self._attachment_kind = "city"
-                    (self._resident_dir / "session_id.txt").write_text(
-                        self._session_id, encoding="utf-8"
-                    )
+                    (self._resident_dir / "session_id.txt").write_text(self._session_id, encoding="utf-8")
                     await self._hydrate_identity_growth()
                     self._record_transition(
                         "inter_shard_travel_arrived",
@@ -757,15 +702,10 @@ class Resident:
                         to_session_id=pending.destination_session_id,
                         destination_shard=pending.destination_shard,
                     )
-                    if (
-                        previous_client in self._owned_world_clients
-                        and previous_client is not destination_client
-                    ):
+                    if previous_client in self._owned_world_clients and previous_client is not destination_client:
                         await previous_client.close()
                         self._owned_world_clients.remove(previous_client)
-                    logger.info(
-                        "[%s] arrived at node %s", self.name, pending.destination_shard
-                    )
+                    logger.info("[%s] arrived at node %s", self.name, pending.destination_shard)
                     return True
             except asyncio.CancelledError:
                 raise
@@ -800,9 +740,7 @@ class Resident:
                 return "city"
             if event_type != "world_attachment_changed":
                 continue
-            destination = str(
-                (event.get("payload") or {}).get("to_world") or ""
-            ).strip()
+            destination = str((event.get("payload") or {}).get("to_world") or "").strip()
             if destination in {"city", "hearth"}:
                 return destination
         return None
@@ -810,9 +748,7 @@ class Resident:
     def _last_city_url(self) -> str:
         for event in reversed(load_runtime_events(self._resident_dir / "memory")):
             event_type = str(event.get("event_type") or "").strip()
-            payload = (
-                event.get("payload") if isinstance(event.get("payload"), dict) else {}
-            )
+            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
             if event_type == "inter_shard_travel_arrived":
                 city_url = str(payload.get("to_world_url") or "").strip()
                 if city_url:
@@ -829,9 +765,7 @@ class Resident:
         return ""
 
     def _pending_shard_travel(self) -> PendingShardTravel | None:
-        return derive_pending_shard_travel(
-            load_runtime_events(self._resident_dir / "memory")
-        )
+        return derive_pending_shard_travel(load_runtime_events(self._resident_dir / "memory"))
 
     @staticmethod
     def _client_url(client: Any) -> str:
@@ -930,14 +864,10 @@ class Resident:
         if live_world_id:
             world_id = live_world_id
         else:
-            logger.warning(
-                "[%s] could not fetch live world_id — using startup value", self.name
-            )
+            logger.warning("[%s] could not fetch live world_id — using startup value", self.name)
 
         # player_role format "Name — vibe" lets the server extract just the name
-        player_role = (
-            f"{identity.name} — {identity.vibe}" if identity.vibe else identity.name
-        )
+        player_role = f"{identity.name} — {identity.vibe}" if identity.vibe else identity.name
 
         entry_location_path = self._resident_dir / "identity" / "entry_location.txt"
         entry_location = ""

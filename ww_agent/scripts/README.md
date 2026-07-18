@@ -8,7 +8,9 @@ directory is only for tools you run to *operate* the system, not to measure it.
 - `resident_once.py` — read-only preflight by default, or wake one explicitly named resident against one
   live city. A 1–20 tick run is a compressed smoke test; `--duration 15m` instead keeps the resident's
   natural cadence. It uses the shared `Resident` host, accepts a run-only model override, prints a small
-  receipt and summary, and parks the resident at their hearth when the bound ends. `--park` retires a
+  receipt and summary, and parks the resident at their hearth when the bound ends. `--action-tendency`
+  enables the existing venture path for only that run: it can turn sustained, awake restlessness into a
+  bodily prompt when somewhere is reachable, but it does not add a wander timer. `--park` retires a
   leftover city session without running cognition.
 - `live_boot.py` — compatibility entrypoint for `resident_once.py`; prefer root `dev.py resident`, which
   also checks topology and the city's cohort container.

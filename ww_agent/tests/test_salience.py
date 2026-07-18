@@ -756,8 +756,7 @@ def test_venture_goes_hard_on_a_high_fresh_charge(tmp_path):
     assert v["venture"] is True and v["strength"] >= VENTURE_HARD_STRENGTH
 
 
-def test_tick_steers_a_venture_pulse_when_action_tendency_enabled(tmp_path, monkeypatch):
-    monkeypatch.setattr("src.runtime.integrator._ACTION_TENDENCY_ENABLED", True)
+def test_tick_steers_a_venture_pulse_when_action_tendency_enabled(tmp_path):
     _keyed_up(tmp_path, 0.85)
     captured = {}
 
@@ -767,14 +766,23 @@ def test_tick_steers_a_venture_pulse_when_action_tendency_enabled(tmp_path, monk
         return Pulse.from_dict({"felt_sense": "the walls are too close", "act": {"kind": "move", "body": "out into the evening", "target": "Market Square"}})
 
     producer.latest_perception = {"reachable": ["Market Square", "The Stall"]}
-    r = asyncio.run(tick(tmp_path, pulse_producer=producer, stimulus={}, now=(T0 + timedelta(seconds=200)).isoformat()))
+    r = asyncio.run(
+        tick(
+            tmp_path,
+            pulse_producer=producer,
+            stimulus={},
+            now=(T0 + timedelta(seconds=200)).isoformat(),
+            action_tendency=True,
+        )
+    )
     assert r["ignited"] is False and r["venture"] is True
     assert captured["mode"] == "venture"
     assert captured["tendency"] and captured["tendency"]["strength"] >= VENTURE_SOFT_STRENGTH
 
 
-def test_action_tendency_off_by_default_leaves_fervor_untouched(tmp_path):
+def test_action_tendency_off_by_default_leaves_fervor_untouched(tmp_path, monkeypatch):
     # With the flag off (the default), a keyed-up resident with somewhere to go still just fervors.
+    monkeypatch.delenv("WW_ACTION_TENDENCY", raising=False)
     _keyed_up(tmp_path, 0.85)
     captured = {}
 
@@ -784,6 +792,34 @@ def test_action_tendency_off_by_default_leaves_fervor_untouched(tmp_path):
 
     producer.latest_perception = {"reachable": ["Market Square"]}
     r = asyncio.run(tick(tmp_path, pulse_producer=producer, stimulus={}, now=(T0 + timedelta(seconds=200)).isoformat()))
+    assert r["fervor"] is True and r["venture"] is False
+    assert captured["mode"] == "fervor"
+
+
+def test_explicit_action_tendency_override_wins_over_environment(tmp_path, monkeypatch):
+    monkeypatch.setenv("WW_ACTION_TENDENCY", "1")
+    _keyed_up(tmp_path, 0.85)
+    captured = {}
+
+    def producer(*, traces, stimulus, arousal, mode="react", tendency=None):
+        captured["mode"] = mode
+        return Pulse.from_dict(
+            {
+                "felt_sense": "still here",
+                "act": {"kind": "write", "body": "one line", "target": "journal"},
+            }
+        )
+
+    producer.latest_perception = {"reachable": ["Market Square"]}
+    r = asyncio.run(
+        tick(
+            tmp_path,
+            pulse_producer=producer,
+            stimulus={},
+            now=(T0 + timedelta(seconds=200)).isoformat(),
+            action_tendency=False,
+        )
+    )
     assert r["fervor"] is True and r["venture"] is False
     assert captured["mode"] == "fervor"
 
@@ -879,15 +915,11 @@ def test_private_reach_cap_closes_an_extra_request_instead_of_routing_it(tmp_pat
         REACH_LOOP_CAP = 1
 
         async def __call__(self, **kwargs):
-            return Pulse.from_dict(
-                {"reach": {"kind": "inspect", "source": "places", "query": "first"}}
-            )
+            return Pulse.from_dict({"reach": {"kind": "inspect", "source": "places", "query": "first"}})
 
         async def continue_reach(self, *, reaches_remaining, **kwargs):
             assert reaches_remaining == 0
-            return Pulse.from_dict(
-                {"reach": {"kind": "inspect", "source": "chatter", "query": "extra"}}
-            )
+            return Pulse.from_dict({"reach": {"kind": "inspect", "source": "chatter", "query": "extra"}})
 
     reached = []
 

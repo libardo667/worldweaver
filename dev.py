@@ -199,6 +199,11 @@ def _resident(args: list[str]) -> int:
         type=float,
         help="temporary sampling temperature; omitted model swaps use the model default",
     )
+    parser.add_argument(
+        "--action-tendency",
+        action="store_true",
+        help=("for this run only, let sustained restless fervor become a venture " "toward a reachable place"),
+    )
     parsed = parser.parse_args(args)
     if parsed.ticks is None and parsed.duration is None:
         parsed.ticks = 3
@@ -332,6 +337,8 @@ def _resident(args: list[str]) -> int:
         command.extend(["--model", parsed.model])
     if parsed.temperature is not None:
         command.extend(["--temperature", str(parsed.temperature)])
+    if parsed.action_tendency:
+        command.append("--action-tendency")
     if parsed.wake:
         command.append("--wake")
     if parsed.park:

@@ -547,3 +547,24 @@ def test_model_override_can_omit_temperature_without_rewriting_identity(
     assert captured["pulse_model"] == "research/model"
     assert captured["pulse_temperature"] is None
     assert resident.identity.tuning.fast_model is None
+
+
+def test_action_tendency_override_reaches_each_rebuilt_core(tmp_path, monkeypatch):
+    captured: dict = {}
+
+    class _Core:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    monkeypatch.setattr(resident_module, "CognitiveCore", _Core)
+    resident = Resident(
+        tmp_path / "resident",
+        _FakeCityClient(),
+        llm=object(),
+        action_tendency=True,
+    )
+    resident._identity = _identity()
+
+    resident._build_core(object(), "session-test")
+
+    assert captured["action_tendency"] is True

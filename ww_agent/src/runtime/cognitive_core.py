@@ -107,6 +107,7 @@ class CognitiveCore:
         ignition_refractory_seconds: float | None = None,
         pulse_vision: bool = False,
         incubation: bool = False,
+        action_tendency: bool | None = None,
     ) -> None:
         self._identity = identity
         self._memory_dir = resident_dir / "memory"
@@ -120,6 +121,9 @@ class CognitiveCore:
         # arrival from the citywide current until it has built enough of a self to resist
         # being swept onto the loudest shared thing. Off here keeps behaviour unchanged.
         self._incubation = bool(incubation)
+        # A run-scoped override for the existing venture tendency. None retains
+        # the shard environment default; True/False is explicit for this host.
+        self._action_tendency = action_tendency
         # Min gap between arousal-driven ignitions (None = substrate default). A direct
         # address always bypasses it; this only stops a hot talker echoing itself a
         # paraphrase every tick into the gap before the keeper replies. Per-familiar.
@@ -333,6 +337,7 @@ class CognitiveCore:
             gate_anchors=anchor_stimulus is not None,
             muted_senses=self._muted_senses,
             refractory_seconds=self._refractory_seconds,
+            action_tendency=self._action_tendency,
         )
         # A packet becomes observed only after it was actually assembled into the
         # LLM prompt. Merely polling the HTTP feed is not cognitive delivery.

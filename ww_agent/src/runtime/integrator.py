@@ -46,11 +46,24 @@ from src.runtime.salience import (
 
 logger = logging.getLogger(__name__)
 
-# Action-tendency (the substrate as motor cortex). When set, a keyed-up resident with
-# nowhere put into words but somewhere to GO is steered toward the world (a venture pulse)
-# instead of always re-deciding {speak,move,do,write} from a verbal-biased prior. Default
-# off: unset leaves the idle gear exactly as it was (these files are shared with the-stable).
-_ACTION_TENDENCY_ENABLED = (os.environ.get("WW_ACTION_TENDENCY") or "0") != "0"
+
+def action_tendency_enabled(override: bool | None = None) -> bool:
+    """Resolve the venture switch for this run.
+
+    An explicit resident-run override wins. Otherwise retain the shard-wide
+    ``WW_ACTION_TENDENCY`` compatibility switch. Reading the environment here,
+    rather than once at import time, also makes operator changes unambiguous in
+    long-lived Python processes.
+    """
+    if override is not None:
+        return bool(override)
+    return str(os.environ.get("WW_ACTION_TENDENCY") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
 
 # A pulse producer is handed the igniting traces, the current stimulus field, and
 # the arousal level, and returns a typed Pulse (or a raw dict to validate), or
@@ -169,6 +182,7 @@ async def tick(
     gate_anchors: bool = False,
     muted_senses: tuple[str, ...] = (),
     refractory_seconds: float | None = None,
+    action_tendency: bool | None = None,
 ) -> dict[str, Any]:
     """Run one integration tick. Returns a summary of what happened.
 
@@ -237,7 +251,7 @@ async def tick(
             mode, igniting = "fervor", decision["traces"]
             # The substrate as motor cortex: if this keyed-up charge has gone all words and
             # there is somewhere to go, steer it OUT (a venture) rather than onto the page.
-            if _ACTION_TENDENCY_ENABLED:
+            if action_tendency_enabled(action_tendency):
                 perception = getattr(pulse_producer, "latest_perception", {}) or {}
                 has_destination = bool(perception.get("reachable") or perception.get("present"))
                 venture = check_venture(memory_dir, now=now_iso, reactivity=reactivity, has_destination=has_destination)
