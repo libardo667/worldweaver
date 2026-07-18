@@ -14,17 +14,23 @@ class TestWorldHistoryEndpoint:
         assert data["count"] == 0
         assert data["filters"] == {}
 
-    def test_history_after_next(self, seeded_client):
-        # Record an event via POST /api/action
-        resp = seeded_client.post("/api/action", json={"session_id": "world-test", "action": "look around"})
-        assert resp.status_code == 200
+    def test_history_after_recorded_world_event(self, seeded_client, db_session):
+        db_session.add(
+            WorldEvent(
+                session_id="world-test",
+                event_type="world_trace",
+                summary="A public trace was left at the square.",
+                world_state_delta={"location": "square"},
+            )
+        )
+        db_session.commit()
 
         # Check world history
         resp = seeded_client.get("/api/world/history")
         assert resp.status_code == 200
         data = resp.json()
         assert data["count"] >= 1
-        assert data["events"][0]["event_type"] == "freeform_action"
+        assert data["events"][0]["event_type"] == "world_trace"
         assert data["filters"] == {}
 
     def test_history_with_session_filter(self, seeded_client):
@@ -122,13 +128,6 @@ class TestWorldFactsEndpoint:
 class TestWorldGraphEndpoints:
     def test_graph_facts_returns_shape(self, seeded_client):
         seeded_client.post("/api/next", json={"session_id": "graph-api", "vars": {}})
-        seeded_client.post(
-            "/api/action",
-            json={
-                "session_id": "graph-api",
-                "action": "I break the bridge supports",
-            },
-        )
 
         resp = seeded_client.get("/api/world/graph/facts?query=bridge&session_id=graph-api")
         assert resp.status_code == 200
@@ -520,9 +519,16 @@ class TestWorldRestMetricsEndpoint:
         assert sessions[resting_sid]["rest_started_at"] is not None
         assert sessions[resting_sid]["rest_until"] is None
 
-    def test_rest_metrics_can_include_active_sessions(self, seeded_client):
+    def test_rest_metrics_can_include_active_sessions(self, seeded_client, db_session):
         session_id = "active-rest-metrics"
-        seeded_client.post("/api/action", json={"session_id": session_id, "action": "look around"})
+        db_session.add(
+            SessionVars(
+                session_id=session_id,
+                vars={"location": "Commons Bank", "player_role": "Visitor"},
+                updated_at=datetime.now(timezone.utc).replace(tzinfo=None),
+            )
+        )
+        db_session.commit()
 
         response = seeded_client.get("/api/world/rest-metrics?include_active=true")
         assert response.status_code == 200

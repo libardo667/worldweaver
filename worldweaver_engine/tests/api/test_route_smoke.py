@@ -8,12 +8,12 @@ def test_health_route_smoke(client):
 
 def test_action_route_smoke(client):
     response = client.post("/api/action", json={"session_id": "smoke-action"})
-    assert response.status_code == 422
+    assert response.status_code == 410
 
 
 def test_action_stream_route_smoke(client):
     response = client.post("/api/action/stream", json={"session_id": "smoke-action"})
-    assert response.status_code == 422
+    assert response.status_code == 410
 
 
 def test_world_history_route_smoke(client):

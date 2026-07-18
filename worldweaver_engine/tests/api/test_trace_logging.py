@@ -31,23 +31,6 @@ class TestTraceLogging:
         assert response.headers.get("X-WW-Trace-Id") == incoming
         assert response.headers.get("X-Correlation-Id") == incoming
 
-    def test_action_commit_logs_reuse_request_trace(self, seeded_client, caplog):
-        caplog.set_level("INFO")
-
-        response = seeded_client.post(
-            "/api/action",
-            json={"session_id": "trace-action-1", "action": "inspect the gate"},
-        )
-        assert response.status_code == 200
-
-        trace_id = response.headers.get("X-WW-Trace-Id")
-        assert trace_id
-
-        payloads = _json_records(caplog)
-        committed = [row for row in payloads if row.get("event") == "state_committed" and row.get("action_type") == "freeform"]
-        assert committed
-        assert committed[-1]["trace_id"] == trace_id
-
     def test_instrumented_llm_logs_llm_call_with_bound_trace(self, caplog):
         class _FakeCompletions:
             def create(self, **kwargs):

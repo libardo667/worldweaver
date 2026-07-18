@@ -1,9 +1,7 @@
 from src.config import settings
 
 
-def test_settings_readiness_missing(monkeypatch, client):
-    """Test readiness when keys are missing."""
-    # Force state for test
+def test_settings_readiness_reports_missing_shard_infrastructure(monkeypatch, client):
     monkeypatch.setenv("OPENROUTER_API_KEY", "")
     monkeypatch.setenv("LLM_API_KEY", "")
     monkeypatch.setenv("OPENAI_API_KEY", "")
@@ -20,9 +18,9 @@ def test_settings_readiness_missing(monkeypatch, client):
     data = response.json()
     assert data["ready"] is False
     assert data["startup_ready"] is False
-    assert "api_key" in data["missing"]
-    assert "model" in data["missing"]
+    assert data["missing"] == data["runtime_missing"]
     assert "jwt_secret" in data["runtime_missing"]
+    assert all(check["code"] not in {"api_key", "model", "demo_access", "observer_mode"} for check in data["checks"])
     assert any(check["code"] == "public_url" for check in data["checks"])
     assert data["shard"]["city_id"] == settings.city_id
     runtime = data["v3_runtime"]
@@ -36,22 +34,28 @@ def test_settings_readiness_missing(monkeypatch, client):
     assert runtime["budgets"]["projection_ttl_seconds"] == 180
 
 
-def test_settings_readiness_partial(monkeypatch, client):
-    """Test readiness when only model is set."""
+def test_missing_resident_inference_does_not_block_human_world_actions(monkeypatch, client):
     monkeypatch.setenv("OPENROUTER_API_KEY", "")
     monkeypatch.setenv("LLM_API_KEY", "")
     monkeypatch.setenv("OPENAI_API_KEY", "")
     monkeypatch.setattr(settings, "openrouter_api_key", "")
     monkeypatch.setattr(settings, "llm_api_key", "")
-    monkeypatch.setattr(settings, "llm_model", "some-model")
+    monkeypatch.setattr(settings, "llm_model", "")
+    monkeypatch.setattr(settings, "jwt_secret", "test-secret")
+    monkeypatch.setattr(settings, "data_encryption_key", "enc-key")
+    monkeypatch.setattr(settings, "federation_url", "http://example.test")
+    monkeypatch.setattr(settings, "public_url", "http://shard.example.test")
 
     response = client.get("/api/settings/readiness")
     assert response.status_code == 200
     data = response.json()
-    assert data["ready"] is False
-    assert data["startup_ready"] is False
-    assert "api_key" in data["missing"]
-    assert "model" not in data["missing"]
+    assert data["ready"] is True
+    assert data["startup_ready"] is True
+    assert data["missing"] == []
+    checks = {check["code"]: check for check in data["checks"]}
+    assert checks["agent_inference_key"]["ok"] is False
+    assert checks["agent_inference_model"]["ok"] is False
+    assert "Human world actions still work" in checks["agent_inference_key"]["message"]
 
 
 def test_settings_readiness_complete(monkeypatch, client):
@@ -101,26 +105,6 @@ def test_settings_readiness_world_shard_marks_city_checks_not_required(monkeypat
     assert "Not required on the world shard" in checks["federation_token"]["message"]
 
 
-def test_settings_readiness_demo_access_ok_when_runtime_key_exists(monkeypatch, client):
-    """An explicit runtime key should suppress demo-expiry warnings from blocking readiness semantics."""
-    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
-    monkeypatch.setattr(settings, "openrouter_api_key", "")
-    monkeypatch.setattr(settings, "llm_model", "test-model")
-    monkeypatch.setattr(settings, "jwt_secret", "test-secret")
-    monkeypatch.setattr(settings, "data_encryption_key", "enc-key")
-    monkeypatch.setattr(settings, "federation_url", "http://example.test")
-    monkeypatch.setattr(settings, "public_url", "http://shard.example.test")
-    monkeypatch.setattr(settings, "demo_key_expires_at", "2000-01-01T00:00:00+00:00")
-
-    response = client.get("/api/settings/readiness")
-    assert response.status_code == 200
-    data = response.json()
-    checks = {check["code"]: check for check in data["checks"]}
-
-    assert checks["demo_access"]["ok"] is True
-    assert "demo access is not required" in checks["demo_access"]["message"].lower()
-
-
 def test_settings_readiness_v3_runtime_overrides(monkeypatch, client):
     """Readiness reports runtime flag and budget overrides for reproducible runs."""
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
@@ -147,23 +131,6 @@ def test_settings_readiness_v3_runtime_overrides(monkeypatch, client):
     assert runtime["budgets"]["max_projection_nodes"] == 33
     assert runtime["budgets"]["projection_time_budget_ms"] == 250
     assert runtime["budgets"]["projection_ttl_seconds"] == 600
-
-
-def test_update_api_key(client):
-    """Test updating the API key."""
-    # Reset state
-    settings.openrouter_api_key = ""
-
-    response = client.post("/api/settings/key", json={"api_key": "sk-new-key"})
-    assert response.status_code == 200
-    assert response.json()["success"] is True
-    assert settings.openrouter_api_key == "sk-new-key"
-
-
-def test_update_api_key_blank(client):
-    """Test updating with a blank key should fail."""
-    response = client.post("/api/settings/key", json={"api_key": "  "})
-    assert response.status_code == 422
 
 
 def test_settings_readiness_adaptive_pruning_flags(monkeypatch, client):
