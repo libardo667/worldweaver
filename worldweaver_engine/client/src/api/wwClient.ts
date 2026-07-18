@@ -323,6 +323,17 @@ export type WorldStoopResponse = {
   count: number;
 };
 
+export type MakeWorldObjectResponse = {
+  ok: boolean;
+  replayed: boolean;
+  object: Omit<SituatedWorldObject, "relation">;
+  receipt: {
+    receipt_id: string;
+    operation: string;
+    object_id: string;
+  };
+};
+
 export function getShardExperience(): Promise<ShardExperienceResponse> {
   return requestJson<ShardExperienceResponse>("/api/shard/experience");
 }
@@ -345,6 +356,21 @@ export function getLocalStoops(sessionId: string): Promise<LocalStoopsResponse> 
 export function getWorldStoop(sessionId: string, stoopId: string): Promise<WorldStoopResponse> {
   const params = new URLSearchParams({ session_id: sessionId });
   return requestJson<WorldStoopResponse>(`/api/world/stoops/${encodeURIComponent(stoopId)}?${params.toString()}`);
+}
+
+export function postMakeWorldObject(
+  sessionId: string,
+  recipeId: string,
+  idempotencyKey: string,
+): Promise<MakeWorldObjectResponse> {
+  return requestJson<MakeWorldObjectResponse>("/api/world/make", {
+    method: "POST",
+    body: JSON.stringify({
+      session_id: sessionId,
+      recipe_id: recipeId,
+      idempotency_key: idempotencyKey,
+    }),
+  });
 }
 
 export function postAction(

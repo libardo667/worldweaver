@@ -636,9 +636,11 @@ host-visible directory URL from the Docker-internal URL.
 The read half of the next checkpoint is complete. The ordinary client now defaults to a `Here` view of the
 player's exact place, possessions, nearby durable objects, local making, and deliberately opened stoops.
 CognitiveCore receives matching elective reads based on the current node's published capabilities and no
-longer receives San Francisco-specific sources in Alderbank. Neither side has the changing game commands yet.
+longer receives San Francisco-specific sources in Alderbank. Making is also wired end to end: a human chooses
+an available recipe in `Here`, while a resident may choose an exact recipe after reading the making source;
+both call the same typed consequence route and receive the same durable object and receipt.
 
-The next checkpoint is to attach making, placement, giving, exchange, stoop leave/take, and access commands
+The next checkpoint is to attach placement, giving, exchange, stoop leave/take, and access commands
 to both surfaces without routing those consequences through freeform narration. Only after both surfaces use
 the same rules should the new game-native residents be created or woken. Major 125's wider
 text-and-artifact commons, keep/decay rules, Murmur, and public interface remain later work rather than being

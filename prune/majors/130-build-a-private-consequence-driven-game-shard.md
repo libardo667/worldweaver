@@ -341,8 +341,19 @@ Read-only interface checkpoint completed 2026-07-18:
 - the ordinary client now opens on a small `Here` view centered on the player's exact location, possessions,
   nearby objects, local making, and local stoops. It contains no resident-private or global operator data.
 
-The pack remains deliberately uninhabited. Both sides still need the changing commands for making, placing,
-giving, exchange, stoop leave/take, and access decisions before new residents are created. The existing
+First changing-command checkpoint completed 2026-07-18:
+
+- a human can choose an available recipe in `Here` and make it through `POST /api/world/make` rather than
+  asking the freeform action narrator to invent the outcome;
+- a resident first electively reads the local making catalog, which returns the exact declared recipe ID,
+  and may then route a `do` act targeted at that recipe through the same typed endpoint;
+- both paths receive the canonical durable object and append-only receipt, and the resident host records the
+  returned IDs in its own runtime ledger; and
+- a malformed recipe target or a world without the making command fails closed instead of falling back to
+  narrated success.
+
+The pack remains deliberately uninhabited. Both sides still need the changing commands for placing, giving,
+exchange, stoop leave/take, and access decisions before new residents are created. The existing
 presence and diagnostic UI also still needs a clean steward-only boundary before the whole ordinary player
 surface can meet this major's no-surveillance acceptance criterion.
 

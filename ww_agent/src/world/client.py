@@ -292,6 +292,24 @@ class WorldWeaverClient:
         )
         return resp.json()
 
+    async def make_world_object(
+        self,
+        session_id: str,
+        recipe_id: str,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        """Execute one declared recipe through the canonical consequence route."""
+        resp = await self._post(
+            "/api/world/make",
+            {
+                "session_id": session_id,
+                "recipe_id": recipe_id,
+                "idempotency_key": idempotency_key,
+            },
+            timeout=30.0,
+        )
+        return resp.json()
+
     async def get_local_stoops(self, session_id: str) -> dict[str, Any]:
         """List stoops at the resident's exact place without opening them."""
         resp = await self._get(

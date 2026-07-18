@@ -518,6 +518,7 @@ def test_making_source_reports_local_availability_without_making_anything():
     assert "8 of 10 units" in _record_text(result)
     recipe = next(item for item in result["records"] if item["metadata"]["kind"] == "recipe")
     assert recipe["metadata"]["can_make"] is True
+    assert 'target "recipe:small_clay_cup"' in recipe["content"]
 
 
 def test_stoops_source_lists_before_opening_a_named_stoop():

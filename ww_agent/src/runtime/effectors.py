@@ -407,6 +407,46 @@ class WorldEffector:
         }
 
     async def _do(self, act: Act) -> dict[str, Any]:
+        target = str(act.target or "").strip()
+        if target.lower().startswith("recipe:"):
+            recipe_id = target.split(":", 1)[1].strip().lower()
+            if not re.fullmatch(r"[a-z0-9]+(?:[._-][a-z0-9]+)*", recipe_id):
+                return {"executed": False, "kind": "do", "reason": "invalid_recipe"}
+            make = getattr(self._ww, "make_world_object", None)
+            if not callable(make):
+                return {"executed": False, "kind": "do", "reason": "making_unavailable"}
+            result = await make(
+                self._session_id,
+                recipe_id,
+                f"resident-make:{uuid.uuid4().hex}",
+            )
+            made_object = dict(result.get("object") or {}) if isinstance(result, dict) else {}
+            receipt = dict(result.get("receipt") or {}) if isinstance(result, dict) else {}
+            object_id = str(made_object.get("object_id") or "").strip()
+            executed = bool(object_id)
+            append_runtime_event(
+                self._memory_dir,
+                event_type="game_object_made" if executed else "game_command_declined",
+                payload={
+                    **self.relational_context(),
+                    "command": "make",
+                    "recipe_id": recipe_id,
+                    "object_id": object_id,
+                    "object_name": str(made_object.get("name") or ""),
+                    "receipt_id": str(receipt.get("receipt_id") or ""),
+                    "status": "made" if executed else "declined",
+                },
+            )
+            return {
+                "executed": executed,
+                "kind": "do",
+                "command": "make",
+                "recipe_id": recipe_id,
+                "object_id": object_id,
+                "object_name": str(made_object.get("name") or ""),
+                "receipt_id": str(receipt.get("receipt_id") or ""),
+            }
+
         result = await self._ww.post_action(self._session_id, act.body)
         narrative = str(getattr(result, "narrative", "") or "")
         if bool(getattr(result, "travel_pending", False)):

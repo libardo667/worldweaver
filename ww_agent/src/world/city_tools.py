@@ -364,11 +364,12 @@ def _make_making_source(client: Any, session_id: str) -> InformationSource:
             if query and query not in searchable:
                 continue
             availability = "The materials are available now." if can_make else "Some required materials are not available now."
+            choice = f'To choose this recipe, act with kind "do" and target "recipe:{recipe_id}".' if can_make else ""
             records.append(
                 {
                     "record_id": f"recipe:{recipe_id}:{location}",
                     "title": title,
-                    "content": f"{description} {availability}".strip(),
+                    "content": f"{description} {availability} {choice}".strip(),
                     "freshness": "live",
                     "locality": location,
                     "visibility": "local",

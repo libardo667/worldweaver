@@ -2404,6 +2404,12 @@ select {
   padding-left: 0.65rem;
 }
 
+.ww-situated-notice {
+  color: #d8fff8;
+  border-left: 2px solid var(--accent);
+  padding-left: 0.65rem;
+}
+
 .ww-situated-stoop-contents {
   display: flex;
   flex-direction: column;

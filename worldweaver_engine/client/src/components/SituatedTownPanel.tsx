@@ -9,6 +9,7 @@ import {
   getShardExperience,
   getWorldObjects,
   getWorldStoop,
+  postMakeWorldObject,
   type LocalMakingResponse,
   type LocalStoopsResponse,
   type ShardExperienceResponse,
@@ -35,6 +36,7 @@ export function SituatedTownPanel({ sessionId, location, active, observerMode }:
   const [openStoop, setOpenStoop] = useState<WorldStoopResponse | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const capabilities = useMemo(
     () => new Set(experience?.entry_disclosure.capabilities.map((item) => item.id) ?? []),
@@ -45,6 +47,7 @@ export function SituatedTownPanel({ sessionId, location, active, observerMode }:
     if (!active || !sessionId) return;
     setPending(true);
     setError(null);
+    setNotice(null);
     setOpenStoop(null);
     try {
       const profile = await getShardExperience();
@@ -81,6 +84,25 @@ export function SituatedTownPanel({ sessionId, location, active, observerMode }:
     }
   }, [sessionId]);
 
+  const makeObject = useCallback(async (recipeId: string) => {
+    setPending(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await postMakeWorldObject(
+        sessionId,
+        recipeId,
+        `human-make:${crypto.randomUUID()}`,
+      );
+      await refresh();
+      setNotice(result.object?.name ? `You made ${result.object.name}.` : "The object was made.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "That object could not be made right now.");
+    } finally {
+      setPending(false);
+    }
+  }, [refresh, sessionId]);
+
   if (observerMode) {
     return (
       <div className="ww-situated-panel ww-situated-panel--empty">
@@ -116,6 +138,7 @@ export function SituatedTownPanel({ sessionId, location, active, observerMode }:
       </header>
 
       {error && <p className="ww-situated-error">{error}</p>}
+      {notice && <p className="ww-situated-notice">{notice}</p>}
       {!pending && experience && !hasGameFeatures && (
         <p className="ww-situated-empty">This shard has no optional object or making rules.</p>
       )}
@@ -171,6 +194,12 @@ export function SituatedTownPanel({ sessionId, location, active, observerMode }:
                     <strong>{recipe.title}</strong>
                     <span>{recipe.description}</span>
                     <small>{recipe.can_make ? "Materials available" : "Missing materials"}</small>
+                    <button
+                      onClick={() => void makeObject(recipe.recipe_id)}
+                      disabled={pending || !recipe.can_make}
+                    >
+                      Make this
+                    </button>
                   </li>
                 ))}
               </ul>

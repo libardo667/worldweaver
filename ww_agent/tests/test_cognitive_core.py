@@ -148,6 +148,7 @@ class _StubWorld:
         self.moves: list[str] = []
         self.letters: list[dict] = []
         self.world_traces: list[dict] = []
+        self.made_objects: list[dict] = []
         self.place_names = {"North Beach", "Chinatown"}
 
     async def get_scene(self, session_id):
@@ -176,6 +177,19 @@ class _StubWorld:
     async def post_action(self, session_id, action):
         self.actions.append(action)
         return type("TR", (), {"narrative": f"{action}."})()
+
+    async def make_world_object(self, session_id, recipe_id, idempotency_key):
+        self.made_objects.append(
+            {
+                "session_id": session_id,
+                "recipe_id": recipe_id,
+                "idempotency_key": idempotency_key,
+            }
+        )
+        return {
+            "object": {"object_id": "cup-1", "name": "Small clay cup"},
+            "receipt": {"receipt_id": "receipt-1"},
+        }
 
     async def post_world_trace(self, session_id, body, target=""):
         trace = {
@@ -365,6 +379,43 @@ def test_effector_move_do_write(tmp_path):
     assert len(_events_by_type(tmp_path, "move_executed")) == 1
     assert len(_events_by_type(tmp_path, "action_executed")) == 1
     assert len(_events_by_type(tmp_path, "mail_intent_sent")) == 1
+
+
+def test_effector_routes_a_named_recipe_around_freeform_narration(tmp_path):
+    world = _StubWorld(_Scene(location="Alderbank Workshop"))
+    eff = WorldEffector(
+        ww_client=world,
+        session_id="s1",
+        identity=_identity(),
+        memory_dir=tmp_path,
+        location_hint="Alderbank Workshop",
+    )
+
+    result = asyncio.run(
+        eff(
+            Act(
+                kind="do",
+                body="I shape a small cup from the available clay.",
+                target="recipe:small_clay_cup",
+            )
+        )
+    )
+
+    assert result == {
+        "executed": True,
+        "kind": "do",
+        "command": "make",
+        "recipe_id": "small_clay_cup",
+        "object_id": "cup-1",
+        "object_name": "Small clay cup",
+        "receipt_id": "receipt-1",
+    }
+    assert world.actions == []
+    assert world.made_objects[0]["recipe_id"] == "small_clay_cup"
+    assert world.made_objects[0]["idempotency_key"].startswith("resident-make:")
+    event = _events_by_type(tmp_path, "game_object_made")[0]["payload"]
+    assert event["object_id"] == "cup-1"
+    assert event["receipt_id"] == "receipt-1"
 
 
 def test_effector_leaves_a_narrator_free_physical_trace(tmp_path):
