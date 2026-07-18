@@ -1118,6 +1118,35 @@ def test_pulse_engine_fails_closed_on_inference_error(tmp_path):
     assert pulse is None
 
 
+def test_private_inference_diagnostic_stays_in_private_prompt_trace(tmp_path):
+    class _PrivateFailureLLM:
+        async def complete_json(self, *_args, **_kwargs):
+            raise InferenceError(
+                "Response was not valid JSON: truncated",
+                private_diagnostic={"response_text": "private resident text"},
+            )
+
+    producer = LLMPulseProducer(
+        llm=_PrivateFailureLLM(),
+        identity=_identity(),
+        memory_dir=tmp_path,
+    )
+
+    assert asyncio.run(producer(traces=[], stimulus={}, arousal=1.0)) is None
+    records = [
+        json.loads(line)
+        for line in (tmp_path / "prompt_traces.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    failure = records[-1]
+    assert failure["record_type"] == "completion_failed"
+    assert failure["error"] == "Response was not valid JSON: truncated"
+    assert failure["private_diagnostic"] == {
+        "response_text": "private resident text"
+    }
+
+
 def test_pulse_engine_fails_closed_on_invalid_pulse(tmp_path):
     producer = LLMPulseProducer(
         llm=_StubLLM(json_response={"act": {"kind": "teleport", "body": "x"}}),

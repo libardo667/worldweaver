@@ -109,6 +109,7 @@ class PromptTraceRecorder:
     def record_failure(self, prompt_trace_id: str | None, exc: Exception) -> None:
         if not prompt_trace_id:
             return
+        private_diagnostic = getattr(exc, "private_diagnostic", None)
         self._append(
             {
                 "record_type": "completion_failed",
@@ -117,6 +118,11 @@ class PromptTraceRecorder:
                 "resident": self._resident_name,
                 "error_type": exc.__class__.__name__,
                 "error": str(exc),
+                **(
+                    {"private_diagnostic": private_diagnostic}
+                    if private_diagnostic is not None
+                    else {}
+                ),
             }
         )
 

@@ -14,7 +14,11 @@ logger = logging.getLogger(__name__)
 
 
 class InferenceError(Exception):
-    pass
+    """Safe public inference failure with optional private trace detail."""
+
+    def __init__(self, message: str, *, private_diagnostic: Any = None) -> None:
+        super().__init__(message)
+        self.private_diagnostic = private_diagnostic
 
 
 class InferenceClient:
@@ -143,7 +147,13 @@ class InferenceClient:
         try:
             return json.loads(text)
         except json.JSONDecodeError as e:
-            raise InferenceError(f"Response was not valid JSON: {e}\n\nResponse was:\n{text}") from e
+            raise InferenceError(
+                f"Response was not valid JSON: {e}",
+                private_diagnostic={
+                    "response_text": text,
+                    "json_error": str(e),
+                },
+            ) from e
 
     async def _post_with_retry(
         self,
