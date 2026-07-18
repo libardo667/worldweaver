@@ -119,6 +119,23 @@ export type StoopBrowse = {
 
 export type StoopList = { location: string; stoops: StoopShell[]; count: number };
 
+export type AuthResponse = {
+  token: string;
+  actor_id: string;
+  player_id: string;
+  username: string;
+  display_name: string;
+};
+
+export type MoveResponse = {
+  moved: boolean;
+  from_location: string;
+  to_location: string;
+  route: string[];
+  route_remaining: string[];
+  narrative: string;
+};
+
 export type ShardInfo = {
   shard_id: string;
   shard_url: string;

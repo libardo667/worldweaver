@@ -7,17 +7,20 @@
 // place you are looking at, never the whole town's internals.
 
 import type {
+  AuthResponse,
   ChatMessage,
   EntryInfo,
   Grounding,
   Landmark,
   MapQueryResult,
+  MoveResponse,
   PlaceContext,
   ShardExperience,
   ShardInfo,
   StoopBrowse,
   StoopList,
 } from "./types";
+import { getJwt } from "../session/store";
 
 export class ApiError extends Error {
   status: number;
@@ -84,4 +87,69 @@ export function browseStoopAt(stoopId: string, location: string): Promise<StoopB
 
 export function getShards(): Promise<{ shards: ShardInfo[] }> {
   return getJson("/ww-world/api/federation/shards");
+}
+
+// --- Participant verbs (the join-the-world half) ---------------------------
+
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const headers: Record<string, string> = { "Content-Type": "application/json", Accept: "application/json" };
+  const jwt = getJwt();
+  if (jwt) headers.Authorization = `Bearer ${jwt}`;
+  const resp = await fetch(path, { method: "POST", headers, body: JSON.stringify(body) });
+  if (!resp.ok) {
+    let detail = "";
+    try {
+      const payload = await resp.json();
+      detail = typeof payload?.detail === "string" ? payload.detail : JSON.stringify(payload?.detail ?? "");
+    } catch {
+      // Leave the status alone.
+    }
+    throw new ApiError(resp.status, detail || `${path} -> ${resp.status}`);
+  }
+  return (await resp.json()) as T;
+}
+
+export function getTerms(): Promise<{ terms: string }> {
+  return getJson("/api/auth/terms");
+}
+
+export function postRegister(input: { email: string; username: string; display_name: string; password: string }): Promise<AuthResponse> {
+  return postJson("/api/auth/register", { ...input, pass_type: "citizen", terms_accepted: true });
+}
+
+export function postLogin(identifier: string, password: string): Promise<AuthResponse> {
+  return postJson("/api/auth/login", { identifier, password });
+}
+
+export function postSessionBootstrap(sessionId: string, worldId: string, playerRole: string, entryLocation: string): Promise<{ success: boolean; session_id: string }> {
+  return postJson("/api/session/bootstrap", {
+    session_id: sessionId,
+    world_id: worldId,
+    player_role: playerRole,
+    entry_location: entryLocation,
+    bootstrap_source: "commons_client",
+  });
+}
+
+export function postMove(sessionId: string, destination: string): Promise<MoveResponse> {
+  return postJson("/api/game/move", { session_id: sessionId, destination, skip_to_destination: false });
+}
+
+export function postSpeak(location: string, sessionId: string, displayName: string, message: string): Promise<{ success: boolean }> {
+  return postJson(`/api/world/location/${encodeURIComponent(location)}/chat`, {
+    session_id: sessionId,
+    display_name: displayName,
+    message,
+  });
+}
+
+export function postLeaveSession(sessionId: string): Promise<{ success?: boolean }> {
+  return postJson("/api/session/leave", { session_id: sessionId });
+}
+
+export function postTakeStoopEntry(entryId: string, sessionId: string): Promise<{ replayed?: boolean }> {
+  return postJson(`/api/world/stoops/entries/${encodeURIComponent(entryId)}/take`, {
+    session_id: sessionId,
+    idempotency_key: `take-${entryId}-${sessionId}`,
+  });
 }

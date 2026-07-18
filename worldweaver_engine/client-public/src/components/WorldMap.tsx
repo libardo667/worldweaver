@@ -3,14 +3,13 @@
 
 import { useEffect, useRef } from "react";
 import type * as Leaflet from "leaflet";
-import type { MapEdge, MapNode } from "../api/types";
+import type { MapNode } from "../api/types";
 import "leaflet/dist/leaflet.css";
 
 export type MapBounds = { north: number; south: number; east: number; west: number };
 
 type Props = {
   nodes: MapNode[];
-  edges: MapEdge[];
   /** Key of the place the viewer is currently at/looking at; drawn as "here". */
   focusKey?: string | null;
   onNodeClick?: (node: MapNode) => void;
@@ -37,11 +36,10 @@ function markerRadius(node: MapNode, isFocus: boolean): number {
   return node.node_type !== "location" ? 4 : 7;
 }
 
-export function WorldMap({ nodes, edges, focusKey, onNodeClick, onViewportChange, frame }: Props) {
+export function WorldMap({ nodes, focusKey, onNodeClick, onViewportChange, frame }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Leaflet.Map | null>(null);
   const markersRef = useRef<Leaflet.LayerGroup | null>(null);
-  const edgesRef = useRef<Leaflet.LayerGroup | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const onViewportChangeRef = useRef(onViewportChange);
   const onNodeClickRef = useRef(onNodeClick);
@@ -71,7 +69,6 @@ export function WorldMap({ nodes, edges, focusKey, onNodeClick, onViewportChange
           attribution: "© <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a>",
           maxZoom: 19,
         }).addTo(map);
-        edgesRef.current = L.layerGroup().addTo(map);
         markersRef.current = L.layerGroup().addTo(map);
         mapRef.current = map;
 
@@ -98,8 +95,7 @@ export function WorldMap({ nodes, edges, focusKey, onNodeClick, onViewportChange
 
       const map = mapRef.current;
       const markers = markersRef.current;
-      const edgeLayer = edgesRef.current;
-      if (!map || !markers || !edgeLayer) return;
+      if (!map || !markers) return;
 
       // One-shot framing (entry bounds) the first time it arrives.
       if (frame && !framedRef.current) {
@@ -112,30 +108,6 @@ export function WorldMap({ nodes, edges, focusKey, onNodeClick, onViewportChange
 
       const georef = nodes.filter((n) => n.lat != null && n.lon != null);
       const byKey = new Map(georef.map((n) => [n.key, n]));
-
-      // Walkable adjacency as faint strokes — the town's honest street plan.
-      // Only main-place pairs: location->landmark edges are membership ("the
-      // footbridge is AT the commons"), not streets, and the graph carries
-      // self-loops and both directions of each street.
-      edgeLayer.clearLayers();
-      const drawnPairs = new Set<string>();
-      for (const edge of edges) {
-        if (edge.from === edge.to) continue;
-        const a = byKey.get(edge.from);
-        const b = byKey.get(edge.to);
-        if (!a || !b) continue;
-        if (a.node_type !== "location" || b.node_type !== "location") continue;
-        const pairKey = [edge.from, edge.to].sort().join("|");
-        if (drawnPairs.has(pairKey)) continue;
-        drawnPairs.add(pairKey);
-        L.polyline(
-          [
-            [a.lat as number, a.lon as number],
-            [b.lat as number, b.lon as number],
-          ],
-          { className: "walk-edge", interactive: false },
-        ).addTo(edgeLayer);
-      }
 
       markers.clearLayers();
       // Fan out markers sharing one coordinate so none hides another.
@@ -178,7 +150,7 @@ export function WorldMap({ nodes, edges, focusKey, onNodeClick, onViewportChange
     return () => {
       active = false;
     };
-  }, [nodes, edges, focusKey, frame]);
+  }, [nodes, focusKey, frame]);
 
   useEffect(() => {
     return () => {

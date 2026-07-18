@@ -11,12 +11,12 @@ import { timeAgo } from "../lib/time";
  * The read-only stream of what's being said at this place. Sessionless: the
  * engine sends display names and words only, no speaker ids.
  */
-export function Overheard({ location }: { location: string }) {
+export function Overheard({ location, refreshKey = 0 }: { location: string; refreshKey?: number }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loaded, setLoaded] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  usePoll(async () => {
+  const fetchNow = async () => {
     try {
       const result = await getLocationChat(location, undefined, 30);
       setMessages(result.messages ?? []);
@@ -25,12 +25,20 @@ export function Overheard({ location }: { location: string }) {
     } finally {
       setLoaded(true);
     }
-  }, 5_000);
+  };
+
+  usePoll(fetchNow, 5_000);
 
   useEffect(() => {
     setMessages([]);
     setLoaded(false);
   }, [location]);
+
+  // Hear yourself right away after speaking instead of waiting out the poll.
+  useEffect(() => {
+    if (refreshKey > 0) void fetchNow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
 
   useEffect(() => {
     const el = scrollRef.current;

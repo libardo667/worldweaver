@@ -2,16 +2,25 @@
 // Copyright (C) 2026 Levi Banks
 
 import { useEffect, useState } from "react";
-import { browseStoopAt } from "../api/ww";
+import { browseStoopAt, postTakeStoopEntry } from "../api/ww";
 import type { StoopBrowse, StoopShell } from "../api/types";
+
+type Props = {
+  location: string;
+  stoops: StoopShell[];
+  /** Session of a participant standing at this exact place; enables taking. */
+  takerSessionId?: string | null;
+};
 
 /**
  * Things people left for whoever comes next. Browsing is an explicit act —
  * a stoop announces itself but never spills its contents into the view.
  */
-export function StoopHere({ location, stoops }: { location: string; stoops: StoopShell[] }) {
+export function StoopHere({ location, stoops, takerSessionId }: Props) {
   const [openStoopId, setOpenStoopId] = useState<string | null>(null);
   const [browse, setBrowse] = useState<StoopBrowse | null>(null);
+  const [refreshCount, setRefreshCount] = useState(0);
+  const [takingEntryId, setTakingEntryId] = useState<string | null>(null);
 
   useEffect(() => {
     setOpenStoopId(null);
@@ -34,7 +43,21 @@ export function StoopHere({ location, stoops }: { location: string; stoops: Stoo
     return () => {
       live = false;
     };
-  }, [openStoopId, location]);
+  }, [openStoopId, location, refreshCount]);
+
+  async function takeEntry(entryId: string) {
+    if (!takerSessionId || takingEntryId) return;
+    setTakingEntryId(entryId);
+    try {
+      await postTakeStoopEntry(entryId, takerSessionId);
+      setRefreshCount((n) => n + 1);
+    } catch {
+      // The entry may have just been taken by someone else; refresh shows truth.
+      setRefreshCount((n) => n + 1);
+    } finally {
+      setTakingEntryId(null);
+    }
+  }
 
   if (stoops.length === 0) return null;
 
@@ -65,6 +88,11 @@ export function StoopHere({ location, stoops }: { location: string; stoops: Stoo
                   <div key={entry.entry_id} className="stoop-entry">
                     <span className="stoop-entry-name">{entry.object.name}</span>
                     {entry.object.description && <span className="stoop-entry-desc">{entry.object.description}</span>}
+                    {takerSessionId && (
+                      <button className="stoop-take" onClick={() => takeEntry(entry.entry_id)} disabled={takingEntryId != null}>
+                        {takingEntryId === entry.entry_id ? "Taking…" : "Take it with you"}
+                      </button>
+                    )}
                   </div>
                 ))
               )}

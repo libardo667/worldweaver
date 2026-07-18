@@ -2,9 +2,10 @@
 // Copyright (C) 2026 Levi Banks
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Route, useLocation, useRoute } from "wouter";
-import { getEntry, getShardExperience, queryMap } from "./api/ww";
+import { Route, useLocation, useRoute, useSearch } from "wouter";
+import { getEntry, getShardExperience, postLeaveSession, postMove, queryMap } from "./api/ww";
 import type { EntryInfo, MapEdge, MapNode, ShardExperience } from "./api/types";
+import { JoinFlow } from "./components/JoinFlow";
 import { PlacePanel } from "./components/PlacePanel";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { ThresholdOverlay } from "./components/ThresholdOverlay";
@@ -12,6 +13,20 @@ import { WorldMap, type MapBounds } from "./components/WorldMap";
 import { useGrounding } from "./hooks/useGrounding";
 import { usePoll } from "./hooks/usePoll";
 import { findNodeBySlug, isVisitablePlace, slugifyPlace } from "./lib/places";
+import { clearParticipant, getJwt, getPlayer, getSessionId, getStandingPlace, setStandingPlace } from "./session/store";
+
+/** A participant: someone standing in the world, not just looking at it. */
+type Me = { sessionId: string; displayName: string; place: string };
+
+function rememberedMe(): Me | null {
+  const player = getPlayer();
+  const sessionId = getSessionId();
+  const place = getStandingPlace();
+  if (getJwt() && player && sessionId && place) {
+    return { sessionId, displayName: player.display_name, place };
+  }
+  return null;
+}
 
 /** Where "look around" drops you: the liveliest entry place, else any entry place. */
 function pickLookAroundTarget(entry: EntryInfo | null, nodes: MapNode[]): string | null {
@@ -47,10 +62,12 @@ export function App() {
   // included. It closes on an explicit choice (or walking off) and stays
   // closed for client-side navigation within this load.
   const [thresholdOpen, setThresholdOpen] = useState(true);
+  const [me, setMe] = useState<Me | null>(rememberedMe);
   const viewportRef = useRef<MapBounds | null>(null);
   const atmosphere = useGrounding();
   const [, navigate] = useLocation();
   const [, placeParams] = useRoute("/place/:slug");
+  const search = useSearch();
 
   useEffect(() => {
     getShardExperience().then(setExperience).catch(() => setExperience(null));
@@ -101,11 +118,50 @@ export function App() {
     if (slug) navigate(`/place/${slug}`);
   }, [entry, nodes, navigate, placeParams?.slug]);
 
+  // Actually walk there: one real move per hop, so residents see you pass
+  // through, then look at where you've arrived (or wherever you got stuck).
+  const walkTo = useCallback(
+    async (target: MapNode) => {
+      if (!me) return;
+      let current = me.place;
+      for (let hop = 0; hop < 8 && current !== target.name; hop++) {
+        try {
+          const result = await postMove(me.sessionId, target.name);
+          if (!result.moved) break;
+          current = result.to_location;
+          setStandingPlace(current);
+          setMe((prev) => (prev ? { ...prev, place: result.to_location } : prev));
+        } catch {
+          break;
+        }
+      }
+      void refreshMap();
+      navigate(`/place/${slugifyPlace(current === target.name ? target.name : current)}`);
+    },
+    [me, navigate, refreshMap],
+  );
+
+  const leaveWorld = useCallback(async () => {
+    if (!me) return;
+    try {
+      await postLeaveSession(me.sessionId);
+    } catch {
+      // Best effort; the identity is cleared locally regardless.
+    }
+    clearParticipant();
+    setMe(null);
+    void refreshMap();
+  }, [me, refreshMap]);
+
+  const suggestedJoinPlace = useMemo(() => {
+    const slug = new URLSearchParams(search).get("place");
+    return slug ? (findNodeBySlug(nodes, slug)?.name ?? null) : null;
+  }, [search, nodes]);
+
   return (
     <div className="app-shell" data-phase={atmosphere.phase} data-haze={atmosphere.hazy ? "true" : "false"}>
       <WorldMap
         nodes={nodes}
-        edges={edges}
         focusKey={focusNode?.key ?? null}
         onNodeClick={handleNodeClick}
         onViewportChange={handleViewportChange}
@@ -120,14 +176,52 @@ export function App() {
             node={findNodeBySlug(nodes, params.slug)}
             nodes={nodes}
             edges={edges}
+            me={me}
             onWalk={handleNodeClick}
+            onTravel={walkTo}
             onClose={() => navigate("/")}
           />
         )}
       </Route>
       <Route path="/join">
-        <div className="dev-caption">join flow lands in the next slice</div>
+        {me ? (
+          <div className="threshold">
+            <div className="threshold-card">
+              <h1 className="threshold-title">You're already here</h1>
+              <p className="threshold-summary">
+                Standing at {me.place} as {me.displayName}.
+              </p>
+              <div className="threshold-actions">
+                <button className="btn btn-primary" onClick={() => navigate(`/place/${slugifyPlace(me.place)}`)}>
+                  Back to {me.place}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <JoinFlow
+            entry={entry}
+            suggestedPlace={suggestedJoinPlace}
+            onJoined={(place) => {
+              setMe(rememberedMe());
+              void refreshMap();
+              navigate(`/place/${slugifyPlace(place)}`);
+            }}
+            onClose={() => navigate("/")}
+          />
+        )}
       </Route>
+
+      {me && (
+        <div className="me-chip">
+          <button className="me-chip-name" onClick={() => navigate(`/place/${slugifyPlace(me.place)}`)} title="Back to where you are standing">
+            {me.displayName} · at {me.place}
+          </button>
+          <button className="me-chip-leave" onClick={() => void leaveWorld()} title="Leave the world">
+            leave
+          </button>
+        </div>
+      )}
 
       {thresholdOpen && (
         <ThresholdOverlay
