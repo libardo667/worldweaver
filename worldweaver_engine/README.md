@@ -113,6 +113,9 @@ future-entry revocation, and mode changes. Revocation never ejects or traps a pe
 `GET /api/world/entry` is deterministic startup information, not a story generator. It returns the current
 city-pack name, reviewed shard disclosure, and canonical starting areas. It does not call an LLM, summarize
 recent prose, or invent character-role cards before a person enters.
+City-pack seed context also resolves its entry point from that pack's travel hubs, with the first canonical
+place as a fallback; it no longer assumes San Francisco's Mission. Session bootstrap sets the state name from
+the supplied player or resident role instead of retaining a generic `Adventurer` label.
 
 `GET /api/world/travel/destinations` keeps that boundary visible in the API. It starts with the local
 pack's possible routes, then attaches any matching live nodes reported by this node's federation. If the

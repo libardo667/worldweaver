@@ -429,6 +429,12 @@ Live entry preflight correction completed 2026-07-18:
   and
 - the dead entry-card generator, prompt, fallback scenario, and prompt test were removed with that live path.
 
+The same disposable bootstrap then exposed two quieter defaults: every city-pack world used `The Mission` as
+its hidden entry point, and every new session retained the generic state name `Adventurer`. City-pack seeding
+now resolves entry from that pack's travel hub (falling back to its first canonical place), and bootstrap sets
+the session name from the supplied human or resident role. Alderbank therefore carries `Commons Bank`, not a
+San Francisco neighborhood, through its shared world context.
+
 ### Phase 3 — Bounded private play
 
 Create the small dormant cast, activate residents deliberately, and play across several sessions. Record

@@ -44,13 +44,28 @@ _NODE_TRANSIT = "transit"
 _NODE_LANDMARK = "landmark"
 _NODE_CORRIDOR = "corridor"
 
-# Default entry location when city-pack seeding
-DEFAULT_ENTRY_LOCATION = "The Mission"
-
-
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
+
+
+def _pack_entry_location(pack: dict[str, Any], neighborhoods: list[dict]) -> str:
+    """Resolve one published travel-hub entry to its canonical place name."""
+
+    names_by_id = {str(item.get("id") or "").strip().lower(): str(item.get("name") or "").strip() for item in neighborhoods if str(item.get("id") or "").strip() and str(item.get("name") or "").strip()}
+    names = [str(item.get("name") or "").strip() for item in neighborhoods if str(item.get("name") or "").strip()]
+    for hub in pack.get("travel_hubs", []):
+        if not isinstance(hub, dict):
+            continue
+        raw = str(hub.get("entry_location") or "").strip()
+        if not raw:
+            continue
+        if raw.lower() in names_by_id:
+            return names_by_id[raw.lower()]
+        exact = next((name for name in names if name.lower() == raw.lower()), "")
+        if exact:
+            return exact
+    return names[0] if names else ""
 
 
 def seed_world_from_city_pack(
@@ -235,7 +250,7 @@ def seed_world_from_city_pack(
             theme=world_theme,
             tone=tone,
             premise=world_description,
-            entry_point=DEFAULT_ENTRY_LOCATION,
+            entry_point=_pack_entry_location(pack, neighborhoods),
             canonical_locations=[n.get("name", "") for n in neighborhoods],
             source="city_pack",
         ),

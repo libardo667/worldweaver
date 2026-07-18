@@ -815,10 +815,7 @@ def seed_world(
 
         if payload.seed_from_city_pack:
             # ── City-pack path: seed real SF geography ───────────────────────
-            from ...services.city_pack_seeder import (
-                DEFAULT_ENTRY_LOCATION,
-                seed_world_from_city_pack,
-            )
+            from ...services.city_pack_seeder import seed_world_from_city_pack
 
             seed_result = seed_world_from_city_pack(
                 db,
@@ -833,7 +830,9 @@ def seed_world(
             city_pack_used = payload.city_id
             if isinstance(seed_result.get("world_context"), dict):
                 world_context = seed_result["world_context"]
-            state_manager.set_variable("location", DEFAULT_ENTRY_LOCATION)
+            entry_location = str(world_context.get("entry_point") or "").strip()
+            if entry_location:
+                state_manager.set_variable("location", entry_location)
             state_manager.set_variable("city_id", payload.city_id)
             logging.info(
                 "World seeded from city pack '%s': %d nodes, %d edges",
@@ -918,6 +917,8 @@ def bootstrap_session_world(
             state_manager.set_variable("world_theme", world_theme)
             state_manager.set_variable("player_role", player_role)
             state_manager.set_variable("character_profile", player_role)
+            display_name = player_role.split(" — ", 1)[0].strip() if " — " in player_role else player_role
+            state_manager.set_variable("name", display_name)
             tone = payload.tone.strip() or "adventure"
             state_manager.set_variable("world_tone", tone)
             if payload.key_elements:
@@ -950,7 +951,7 @@ def bootstrap_session_world(
 
             # Log a WorldEvent so the digest roster can show the player's location immediately
             # Extract just the name from player_role ("Name — vibe" format)
-            _display = player_role.split(" — ")[0].strip() if " — " in player_role else player_role
+            _display = display_name
             submit_world_event(
                 db,
                 WorldEventCommand(

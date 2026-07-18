@@ -2,6 +2,23 @@ from pathlib import Path
 
 from src.config import settings
 from src.models import MaterialPool, WorldEdge, WorldNode, WorldStoop
+from src.services.city_pack_seeder import _pack_entry_location
+
+
+def test_city_pack_entry_uses_its_travel_hub_or_first_canonical_place():
+    neighborhoods = [
+        {"id": "commons-bank", "name": "Commons Bank"},
+        {"id": "mill-reach", "name": "Mill Reach"},
+    ]
+
+    assert (
+        _pack_entry_location(
+            {"travel_hubs": [{"entry_location": "mill-reach"}]},
+            neighborhoods,
+        )
+        == "Mill Reach"
+    )
+    assert _pack_entry_location({}, neighborhoods) == "Commons Bank"
 
 
 def test_world_seed_defaults_to_deterministic_city_pack(client, db_session, monkeypatch):

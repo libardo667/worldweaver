@@ -56,6 +56,7 @@ class TestGameEndpoints:
         sv = db_session.get(SessionVars, session_id)
         assert sv is not None
         assert sv.actor_id == actor_id
+        assert sv.vars["variables"]["name"] == "Test Resident"
         bootstrap_event = (
             db_session.query(WorldEvent)
             .filter(

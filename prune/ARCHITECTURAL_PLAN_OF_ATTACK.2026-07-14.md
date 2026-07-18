@@ -667,6 +667,10 @@ The first live client preflight caught and removed one old entry contaminant bef
 was still capable of returning a generated Oakhaven crisis, machinery trouble, and an engineer role. The current
 entry path is now deterministic pack and rules disclosure with canonical starting areas; it does not generate
 character cards or read recent world prose.
+That same preflight removed two bootstrap defaults beneath the visible screen: city packs no longer inherit
+`The Mission` as their world-context entry point, and supplied identities no longer remain named
+`Adventurer` in session state. Each pack resolves its own travel-hub entry, while bootstrap uses the supplied
+human or resident name.
 
 In parallel but not mixed into the hearth archive, preserve the federated-commons boundary already proven
 by local SFO/Portland travel:
