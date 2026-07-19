@@ -135,6 +135,14 @@ export function postLogin(identifier: string, password: string): Promise<AuthRes
   return postJson("/api/auth/login", { identifier, password });
 }
 
+export function postRequestPasswordReset(identifier: string): Promise<{ ok: boolean }> {
+  return postJson("/api/auth/request-password-reset", { identifier });
+}
+
+export function postResetPassword(token: string, newPassword: string): Promise<AuthResponse> {
+  return postJson("/api/auth/reset-password", { token, new_password: newPassword });
+}
+
 export function postSessionBootstrap(sessionId: string, worldId: string, playerRole: string, entryLocation: string): Promise<{ success: boolean; session_id: string }> {
   return postJson("/api/session/bootstrap", {
     session_id: sessionId,

@@ -17,6 +17,17 @@ def test_public_client_wraps_current_typed_participant_custody_actions():
         assert route in source
 
 
+def test_public_client_keeps_actor_password_recovery_on_the_public_entry_path():
+    source = PUBLIC_API.read_text(encoding="utf-8")
+    app = (ENGINE_ROOT / "client-public" / "src" / "App.tsx").read_text(encoding="utf-8")
+    join = (PUBLIC_COMPONENTS / "JoinFlow.tsx").read_text(encoding="utf-8")
+
+    assert '"/api/auth/request-password-reset"' in source
+    assert '"/api/auth/reset-password"' in source
+    assert 'get("reset_token")' in app
+    assert 'mode === "reset"' in join
+
+
 def test_public_client_does_not_wrap_private_or_shard_wide_telemetry():
     source = PUBLIC_API.read_text(encoding="utf-8")
 

@@ -11,6 +11,9 @@ place controller can answer knocks and change that exact door's rule without
 receiving a town-wide access dashboard. Place URLs (`/place/mill-reach`)
 are shareable deep links.
 
+Registration, login, and password recovery use the shard's actor-auth service. Password-reset email links
+open the reset form directly; delivery requires the node to configure its email provider.
+
 ## Run
 
 ```bash

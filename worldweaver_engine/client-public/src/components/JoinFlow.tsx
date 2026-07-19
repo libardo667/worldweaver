@@ -3,7 +3,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { getTerms, postLogin, postRegister, postSessionBootstrap } from "../api/ww";
+import {
+  getTerms,
+  postLogin,
+  postRegister,
+  postRequestPasswordReset,
+  postResetPassword,
+  postSessionBootstrap,
+} from "../api/ww";
 import type { EntryInfo } from "../api/types";
 import { getPlayer, mintSessionId, setJwt, setPlayer, setStandingPlace } from "../session/store";
 
@@ -15,7 +22,7 @@ type Props = {
   onClose: () => void;
 };
 
-type Mode = "register" | "login";
+type Mode = "register" | "login" | "reset";
 
 /**
  * Native join: make or recall an identity, then step into the world at a
@@ -28,6 +35,9 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose }: Props) {
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [identifier, setIdentifier] = useState(getPlayer()?.username ?? "");
+  const [resetToken, setResetToken] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [resetNotice, setResetNotice] = useState("");
   const [termsText, setTermsText] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [termsLoading, setTermsLoading] = useState(true);
@@ -60,6 +70,13 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose }: Props) {
   }, [loadTerms]);
 
   useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get("reset_token");
+    if (!token) return;
+    setResetToken(token);
+    setMode("reset");
+  }, []);
+
+  useEffect(() => {
     if (place) return;
     if (suggestedPlace && entryPlaces.includes(suggestedPlace)) {
       setPlace(suggestedPlace);
@@ -75,9 +92,10 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose }: Props) {
     setError("");
     let newlyRegisteredUsername = "";
     try {
-      const auth =
-        mode === "register"
-          ? await postRegister({ email, username, display_name: displayName, password, terms_accepted: termsAccepted })
+      const auth = mode === "register"
+        ? await postRegister({ email, username, display_name: displayName, password, terms_accepted: termsAccepted })
+        : mode === "reset"
+          ? await postResetPassword(resetToken, newPassword)
           : await postLogin(identifier, password);
       if (mode === "register") newlyRegisteredUsername = auth.username;
       setJwt(auth.token);
@@ -106,6 +124,22 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose }: Props) {
 
   const registerReady = email && username && displayName && password.length >= 8 && termsText && termsAccepted && !termsLoading && !termsError;
   const loginReady = identifier && password;
+  const resetReady = resetToken && newPassword.length >= 8;
+
+  async function requestReset() {
+    if (busy || !identifier.trim()) return;
+    setBusy(true);
+    setError("");
+    setResetNotice("");
+    try {
+      await postRequestPasswordReset(identifier.trim());
+      setResetNotice("If that account exists, a one-time reset token has been emailed. It expires in 30 minutes.");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The reset request could not be sent.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="threshold">
@@ -117,6 +151,9 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose }: Props) {
           </button>
           <button type="button" aria-pressed={mode === "login"} className={mode === "login" ? "is-active" : ""} onClick={() => setMode("login")}>
             Coming back
+          </button>
+          <button type="button" aria-pressed={mode === "reset"} className={mode === "reset" ? "is-active" : ""} onClick={() => setMode("reset")}>
+            Reset password
           </button>
         </div>
 
@@ -147,12 +184,25 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose }: Props) {
                 </label>
               )}
             </>
-          ) : (
+          ) : mode === "login" ? (
             <>
               <label className="sr-only" htmlFor="join-identifier">Username or email</label>
               <input id="join-identifier" placeholder="username or email" value={identifier} onChange={(e) => setIdentifier(e.target.value)} autoComplete="username" />
               <label className="sr-only" htmlFor="join-password">Password</label>
               <input id="join-password" type="password" placeholder="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+            </>
+          ) : (
+            <>
+              <label className="sr-only" htmlFor="reset-identifier">Username or email</label>
+              <input id="reset-identifier" placeholder="username or email" value={identifier} onChange={(e) => setIdentifier(e.target.value)} autoComplete="username" />
+              <button type="button" className="btn btn-quiet reset-request" disabled={busy || !identifier.trim()} onClick={() => void requestReset()}>
+                Email a reset token
+              </button>
+              {resetNotice && <p className="object-notice" role="status">{resetNotice}</p>}
+              <label className="sr-only" htmlFor="reset-token">One-time reset token</label>
+              <input id="reset-token" placeholder="one-time reset token" value={resetToken} onChange={(e) => setResetToken(e.target.value)} autoComplete="off" />
+              <label className="sr-only" htmlFor="reset-new-password">New password, at least 8 characters</label>
+              <input id="reset-new-password" type="password" placeholder="new password (8+ characters)" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" />
             </>
           )}
 
@@ -172,8 +222,8 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose }: Props) {
           {error && <p className="join-error" role="alert">{error}</p>}
 
           <div className="threshold-actions">
-            <button type="submit" className="btn btn-primary" disabled={busy || !place || !(mode === "register" ? registerReady : loginReady)}>
-              {busy ? "Stepping in…" : "Step into the world"}
+            <button type="submit" className="btn btn-primary" disabled={busy || !place || !(mode === "register" ? registerReady : mode === "reset" ? resetReady : loginReady)}>
+              {busy ? "Stepping in…" : mode === "reset" ? "Reset and step into the world" : "Step into the world"}
             </button>
             <button type="button" className="btn btn-quiet" onClick={onClose}>
               Just look around instead

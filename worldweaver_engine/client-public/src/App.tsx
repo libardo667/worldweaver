@@ -69,6 +69,15 @@ export function App() {
   const [, placeParams] = useRoute("/place/:slug");
   const search = useSearch();
 
+  // Password-reset emails point at the public root. Carry their one-time token
+  // into the join card instead of making the person dismiss the town threshold.
+  useEffect(() => {
+    const resetToken = new URLSearchParams(search).get("reset_token");
+    if (!resetToken || placeParams) return;
+    setThresholdOpen(false);
+    navigate(`/join?reset_token=${encodeURIComponent(resetToken)}`, { replace: true });
+  }, [navigate, placeParams, search]);
+
   useEffect(() => {
     getShardExperience().then(setExperience).catch(() => setExperience(null));
     getEntry().then(setEntry).catch(() => setEntry(null));

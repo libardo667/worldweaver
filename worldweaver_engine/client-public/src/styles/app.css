@@ -622,7 +622,7 @@ button {
   border-radius: var(--radius-small);
   background: transparent;
   color: var(--ink-soft);
-  font-size: 0.9rem;
+  font-size: 0.82rem;
 }
 
 .join-tabs button.is-active {
@@ -678,6 +678,12 @@ button {
   margin: 0;
   font-size: 0.85rem;
   color: #d4564a;
+}
+
+.reset-request {
+  align-self: flex-start;
+  padding: 8px 12px;
+  font-size: 0.86rem;
 }
 
 .me-chip {

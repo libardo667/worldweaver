@@ -17,8 +17,8 @@ combined interface is no longer launched by a normal development or deployment c
 temporarily available as the explicitly named local `client-legacy` command while the useful parts are
 sorted from the telemetry and obsolete controls.
 
-The action inventory found real participant gaps still to review: password recovery, correspondence,
-direct invitations and revocation with a safe encounter target, and human cross-node travel. Their presence in
+The action inventory found real participant gaps still to review: correspondence, direct invitations and
+revocation with a safe encounter target, and human cross-node travel. Their presence in
 the old client does not automatically mean every old interaction should be copied. Each should use the
 current typed engine contract and fit the place-centered interface.
 
@@ -38,6 +38,11 @@ does not offer a duplicate request.
 The supported path now also has explicit labels for join fields, visible keyboard focus, keyboard-operable
 map places, focus handoff when a place opens, and reduced-motion behavior for both CSS and map movement.
 The mobile place sheet uses more of the usable viewport and keeps form controls at a readable touch size.
+
+Password recovery now uses the current actor-auth routes in the public join card. A reset link arriving at
+the site opens the reset form directly, and a successful reset creates a normal local session. The request
+response does not reveal whether an account exists. Actual delivery still depends on the node configuring
+its optional email provider.
 
 ## Build next
 
