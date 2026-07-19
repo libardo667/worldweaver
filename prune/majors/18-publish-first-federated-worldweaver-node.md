@@ -13,8 +13,9 @@ registration, and replay. The three active development cities have been migrated
 shared federation token. A public directory still needs an explicit first-registration and key-recovery
 policy. Generated folders now use immutable engine and agent image references rather than neighboring source
 folders. Each carries a standard-library `ww.py` for checks, setup, start, one-time city seeding, stop, status,
-version updates, full backup, and same-identity restore. The image publisher exists, but its first GitHub
-Container Registry run and a clean-computer pull still need verification.
+version updates, full backup, and same-identity restore. GitHub now publishes both images under the full commit
+SHA, and both were pulled back successfully from the registry. A clean-computer run still needs
+verification.
 
 The signed local network has also completed a real Portland-to-San-Francisco session handoff and return with
 a throwaway actor. Each source retired its session before the destination created one, and the wrong signing
