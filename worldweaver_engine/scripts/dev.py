@@ -947,10 +947,7 @@ def _registration_needs_refresh(entry: dict[str, object] | None, shard: ShardSpe
         return True
     registered_api = str(entry.get("shard_url") or "").rstrip("/")
     registered_client = str(entry.get("client_url") or "").rstrip("/")
-    return (
-        registered_api != _docker_host_backend_url(shard).rstrip("/")
-        or registered_client != _shard_client_url(shard).rstrip("/")
-    )
+    return registered_api != _docker_host_backend_url(shard).rstrip("/") or registered_client != _shard_client_url(shard).rstrip("/")
 
 
 def run_install() -> int:

@@ -310,15 +310,7 @@ def resolve_travel_hub_entry(hub_id: str, city_id: str = "san_francisco") -> dic
     raw_entry = str(hub.get("entry_location") or "").strip()
     neighborhoods = [item for item in pack.get("neighborhoods", []) if isinstance(item, dict)]
     place_name = next(
-        (
-            str(item.get("name") or "").strip()
-            for item in neighborhoods
-            if raw_entry
-            and (
-                str(item.get("id") or "").strip().casefold() == raw_entry.casefold()
-                or str(item.get("name") or "").strip().casefold() == raw_entry.casefold()
-            )
-        ),
+        (str(item.get("name") or "").strip() for item in neighborhoods if raw_entry and (str(item.get("id") or "").strip().casefold() == raw_entry.casefold() or str(item.get("name") or "").strip().casefold() == raw_entry.casefold())),
         "",
     )
     if not place_name:
