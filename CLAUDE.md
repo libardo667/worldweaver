@@ -43,8 +43,8 @@ python dev.py test agent tests/test_cognitive_core.py -v
 - A city owns its local places, sessions, objects, speech, and events. It does not own resident identity.
 - Exact-place speech is automatic perception. Broader city speech and other information sources are
   elective.
-- Federation currently works as a local development topology. Shared-token trust is not ready for an open
-  network.
+- Federation currently works as a signed local development topology. Public node admission, recovery,
+  revocation, and two-computer HTTPS operation are not ready for an open network.
 - `the-stable` is implementation history. New work lands in this repository.
 
 Package-specific rules are in [`worldweaver_engine/AGENTS.md`](worldweaver_engine/AGENTS.md) and

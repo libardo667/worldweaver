@@ -11,13 +11,25 @@ private `.env` permissions, stable Compose project identity, node signing key, a
 requests now protect registration and private federation operations from alteration, impersonation after
 registration, and replay. The three active development cities have been migrated and no longer use the
 shared federation token. A public directory still needs an explicit first-registration and key-recovery
-policy. Generated folders also still build from neighboring source folders and lack the supported image,
-update, and backup workflow described below.
+policy. Generated folders now use immutable engine and agent image references rather than neighboring source
+folders. Each carries a standard-library `ww.py` for checks, setup, start, one-time city seeding, stop, status,
+version updates, full backup, and same-identity restore. The image publisher exists, but its first GitHub
+Container Registry run and a clean-computer pull still need verification.
 
 The signed local network has also completed a real Portland-to-San-Francisco session handoff and return with
 a throwaway actor. Each source retired its session before the destination created one, and the wrong signing
-identity could not claim the destination transition. Public HTTPS and source-independent packaging remain
-unproven.
+identity could not claim the destination transition. Public HTTPS remains unproven.
+
+An isolated folder under `/tmp` has also run the SHA-tagged engine image with no source-tree mount, seeded
+1,315 Portland places, disabled the reset endpoint, kept its agent service stopped, made a mode-`0600` full
+backup, restored that backup, and passed its post-restore check. This proves the folder boundary on the
+development computer, not yet on a clean second computer.
+
+A second isolated Alderbank folder then ran beside the Portland folder. Their Compose project names, backend
+ports, database ports, database passwords, JWT secrets, encryption keys, node IDs, signing keys, networks,
+and database volumes were all distinct. Both served seeded worlds concurrently from the same immutable images,
+neither mounted a source checkout, and neither started its agent service. The disposable folders, containers,
+networks, and volumes were removed after the check.
 
 ## Goal
 
@@ -34,17 +46,16 @@ it does not mount or build from a neighboring source checkout.
 
 ## Build next
 
-1. Turn the current development shard generator into a supported isolated-folder setup flow using versioned
-   images and generated secrets.
-2. Add one folder-local command surface for setup checks, start, stop, status, update, backup, and restore.
+1. Verify the image publisher and pull the SHA-tagged images on a clean second computer or clean trust domain.
+2. Create two folders there and prove distinct ports, projects, credentials, volumes, and signing identities.
 3. Decide which city pack and node will be the first public node.
 4. Restore HTTPS ingress for its public client and API.
-5. Give the node its own identity and credentials; do not publish the current shared federation token.
-6. Configure exact CORS origins, rate limits, backups, log retention, and a plain operator runbook.
-7. Publish a small node descriptor containing only its ID, hosted city, public URL, protocol version,
+5. Configure exact CORS origins, rate limits, off-device backup storage, log retention, and a plain operator
+   runbook.
+6. Publish a small node descriptor containing only its ID, hosted city, public URL, protocol version,
    capabilities, and current reachability.
-8. Let the node register with a directory while remaining usable when that directory is unavailable.
-9. Verify entry and travel from outside the host network.
+7. Let the node register with a directory while remaining usable when that directory is unavailable.
+8. Verify entry and travel from outside the host network.
 
 ## Boundaries
 
@@ -62,7 +73,7 @@ it does not mount or build from a neighboring source checkout.
 
 - [ ] A supported public client and API are reachable over HTTPS at a documented URL.
 - [ ] A clean computer can create and operate one shard from an isolated folder using versioned images.
-- [ ] Two folders on one computer can run independently without shared state, secrets, ports, or Compose
+- [x] Two folders on one computer can run independently without shared state, secrets, ports, or Compose
   project identity.
 - [ ] The operator commands detect unsafe permissions, placeholder secrets, port conflicts, unreachable
   public URLs, and incompatible image or protocol versions before launch.

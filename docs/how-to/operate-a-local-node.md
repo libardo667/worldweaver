@@ -8,6 +8,9 @@ sidebar_position: 3
 This guide covers the supported single-computer development topology. Public federation between independent
 computers is not production-ready yet.
 
+There are two command surfaces. The repository-root commands below operate the development topology. A node
+created with `python dev.py new-shard` carries its own `ww.py` and is operated entirely from that folder.
+
 ## Start one city
 
 ```bash
@@ -49,13 +52,34 @@ python dev.py weave-logs --city ww_sfo --target world
 python dev.py weave-down --city ww_sfo
 ```
 
+## Operate an isolated folder
+
+From inside a generated node folder:
+
+```bash
+python ww.py setup
+python ww.py check
+python ww.py start
+python ww.py seed       # one time, for a new city
+python ww.py status
+python ww.py backup
+python ww.py stop
+```
+
+`start` leaves residents stopped. `start --agents` wakes them deliberately. `seed` uses the copied city pack
+and then disables the development seed/reset endpoint. `update` accepts versioned engine and agent image
+references. `restore BACKUP --yes` restores only a backup with the same node identity.
+
+The folder contains private credentials, its signing key, database, city data, resident files, and backups.
+Do not commit or casually copy it. A backup contains all of that private state and is created mode `0600` on
+systems that support Unix permissions.
+
 ## Public-node limitation
 
 A real steward network still needs:
 
 - stable HTTPS ingress for each node;
-- independently signed node identities instead of one shared federation token;
-- authenticated travel handoffs between nodes;
+- a public first-registration, key-recovery, and revocation policy;
 - discovery that does not make one directory the owner of the network;
 - resident-host authorization and recovery rules.
 

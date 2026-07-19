@@ -34,13 +34,14 @@ the federation registry.
 
 ## What remains to build
 
-The local handoff protocol works between containers on one machine. An open network still needs:
+Every active local node now has a separate Ed25519 key. Registration, pulses, private lookup, account origin,
+and travel transitions are signed and replay-protected. A live Portland-to-San-Francisco trip and return
+also proved that the wrong node key cannot claim another node's transition. An open network still needs:
 
-1. a key pair and stable identity for every node;
-2. signed registration and handoff requests;
-3. HTTPS ingress and address rotation;
-4. trust and revocation rules that do not depend on one shared secret;
-5. resident-host authorization and recovery;
-6. discovery that tolerates more than one directory.
+1. HTTPS ingress and address rotation;
+2. first-registration, key-recovery, and revocation rules;
+3. resident-host authorization and recovery;
+4. discovery that tolerates more than one directory;
+5. a two-computer travel proof.
 
 Until those exist, the current federation is a development topology, not a secure decentralized network.

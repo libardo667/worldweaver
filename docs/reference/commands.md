@@ -27,6 +27,21 @@ python dev.py weave-status --city CITY --strict
 python dev.py weave-status --city CITY --strict --require-travel
 python dev.py weave-logs --city CITY --follow
 python dev.py weave-down --city CITY
+python dev.py new-shard CITY_ID [options]
+```
+
+Inside a generated, source-independent node folder:
+
+```bash
+python ww.py setup
+python ww.py check
+python ww.py start [--agents]
+python ww.py seed
+python ww.py status
+python ww.py update [--engine-image IMAGE] [--agent-image IMAGE]
+python ww.py backup [--output DIRECTORY]
+python ww.py restore BACKUP --yes
+python ww.py stop
 ```
 
 ## Clients

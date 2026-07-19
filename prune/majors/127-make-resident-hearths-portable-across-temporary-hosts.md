@@ -13,8 +13,9 @@ The local stopped-migration foundation is built:
 - older `the-stable` homes can be imported through an explicit allowlist.
 
 The work is not complete. Existing residents are not all initialized, archives are not encrypted or signed,
-unrelated nodes still share federation credentials, and no cross-computer migration or remote-city
-attachment has been proven.
+hearth-host authorization is not defined, and no cross-computer migration or remote-city attachment has been
+proven. Active city nodes now have separate signing identities; that does not by itself authorize a computer
+to run a resident's hearth.
 
 ## Model
 
@@ -31,7 +32,8 @@ whole hearth; moving the hearth to another computer is a separate operation.
 
 1. Initialize manifests for current residents through reviewed, idempotent migration commands.
 2. Add archive encryption and signatures without storing the only recovery key in a federation directory.
-3. Give each host a cryptographic identity and replace the shared federation token.
+3. Define explicit hearth-host authorization using cryptographic identity without treating the host as the
+   resident's owner.
 4. Authorize a host and generation explicitly before it may wake a hearth.
 5. Prove a stopped hearth transfer between two clean computers, including interruption at every write.
 6. Prove that a resident hosted on one computer can attach over HTTPS to a city on another without giving

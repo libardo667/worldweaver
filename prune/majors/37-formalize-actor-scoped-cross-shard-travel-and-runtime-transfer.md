@@ -58,19 +58,26 @@ Francisco arrival was rejected with HTTP 403. Both travel records reached `arriv
 in Portland, and all probe rows were removed afterward. This proves the local multi-node path and its separate
 signing identities; it is not yet the required two-computer HTTPS proof.
 
+The standalone generator now writes image-only Compose files and a folder-local operator. A clean temporary
+folder ran without either source tree mounted, seeded its copied city pack, kept residents stopped, backed up
+its database, secrets, identity, city data, and resident directory, restored them, and passed its safety
+check. The next isolation proof is two independently created folders, then two computers.
+
+That two-folder check now passes locally as well: disposable Portland and Alderbank nodes ran concurrently
+with different project names, ports, credentials, keys, networks, and database volumes. Neither mounted the
+monorepo or woke its agents. This still does not replace the two-computer HTTPS test.
+
 ## Build next
 
 1. Define explicit first-registration and key-recovery policy before accepting unknown nodes on a public
    directory; continuity of a key proves node identity but does not establish community trust by itself.
-2. Run the folder against published, versioned images so it does not reach into a neighboring source tree.
-3. Give a steward one plain setup/check/start/stop/update/backup workflow that operates only on that folder
-   and does not print or copy private credentials.
-4. Put two independently created node folders behind real HTTPS addresses on different computers or trust
+2. Verify two independently generated folders use distinct credentials, projects, ports, volumes, and keys.
+3. Put two independently created node folders behind real HTTPS addresses on different computers or trust
    domains.
-5. Prove that a resident can remain hosted at their hearth, visit a remote city, and return without copying
+4. Prove that a resident can remain hosted at their hearth, visit a remote city, and return without copying
    the complete hearth to that city.
-6. Configure and verify a real public-client URL for each independently hosted destination.
-7. Test directory outage, destination outage, interrupted departure, interrupted arrival, and replay across
+5. Configure and verify a real public-client URL for each independently hosted destination.
+6. Test directory outage, destination outage, interrupted departure, interrupted arrival, and replay across
    independently operated nodes.
 
 ## Rules
@@ -97,9 +104,9 @@ signing identities; it is not yet the required two-computer HTTPS proof.
 - [x] Resident travel can be requested through an elective world capability.
 - [x] Occupancy reads deduplicate current presence by actor identity.
 - [ ] Independently operated nodes authenticate travel with separate identities.
-- [ ] Two shards created in separate folders share no writable state, credentials, Docker project identity,
+- [x] Two shards created in separate folders share no writable state, credentials, Docker project identity,
   or dependency on a neighboring source checkout.
-- [ ] A steward can set up, inspect, start, stop, update, and back up one shard from its folder through a
+- [x] A steward can set up, inspect, start, stop, update, and back up one shard from its folder through a
   documented command surface.
 - [ ] A two-computer HTTPS test completes city-to-city travel and return.
 - [ ] No tested failure leaves one actor active in both cities.

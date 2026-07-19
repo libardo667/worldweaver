@@ -54,5 +54,6 @@ after arrival succeeds.
 
 ## Current trust boundary
 
-The HTTP and database boundaries are real, but the public federation trust model is unfinished. Local nodes
-still share one federation token. Do not describe the current topology as a secure open federation.
+The HTTP and database boundaries are real, and active local nodes authenticate with separate signing keys.
+The public federation trust model is still unfinished: unknown-node admission, key recovery, revocation, and
+two-computer HTTPS operation remain unproven. Do not describe the current topology as a secure open federation.

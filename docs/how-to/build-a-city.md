@@ -48,13 +48,24 @@ placed over real map tiles.
 ## Create a local shard
 
 ```bash
-python dev.py run worldweaver_engine/scripts/new_shard.py CITY_ID \
+python dev.py new-shard CITY_ID \
   --port 8005 \
   --federation http://localhost:9000 \
-  --runtime-federation http://ww_world-backend:8000
+  --runtime-federation http://host.docker.internal:9000
 ```
 
-Review the generated `.env` and compose file before starting it.
+The generated folder uses immutable engine and agent images for the current Git commit. It does not build or
+mount either source tree. Review its `.env`, then operate it from that folder:
+
+```bash
+cd PATH_TO_GENERATED_NODE
+python ww.py setup
+python ww.py start
+python ww.py seed
+```
+
+Do not add residents until the city has been reviewed and seeded. Residents remain stopped unless you later
+run `python ww.py start --agents`.
 
 ## Do not rebuild an inhabited city in place
 
