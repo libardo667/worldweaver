@@ -85,6 +85,18 @@ def _bounds(config: Mapping[str, Any]) -> dict[str, float]:
     return {"south": south, "west": west, "north": north, "east": east}
 
 
+def _validate_projected_aspect(bounds: Mapping[str, float], *, width: int, height: int) -> None:
+    """Keep square generator cells square when Leaflet projects the SVG."""
+    south_y = math.asinh(math.tan(math.radians(bounds["south"])))
+    north_y = math.asinh(math.tan(math.radians(bounds["north"])))
+    projected_width = math.radians(bounds["east"] - bounds["west"])
+    projected_height = north_y - south_y
+    actual = projected_width / projected_height
+    expected = width / height
+    if abs(actual / expected - 1.0) > 0.02:
+        raise ValueError("fictional map bounds must match the grid aspect after Web Mercator projection " f"(expected {expected:.3f}, got {actual:.3f})")
+
+
 def _grid_point(lat: float, lon: float, *, bounds: Mapping[str, float], width: int, height: int) -> tuple[float, float]:
     x = (float(lon) - bounds["west"]) / (bounds["east"] - bounds["west"]) * width
     y = (bounds["north"] - float(lat)) / (bounds["north"] - bounds["south"]) * height
@@ -558,6 +570,7 @@ def compile_fictional_map(
         raise ValueError("fictional map section size must be between 8 and 48")
 
     bounds = _bounds(config)
+    _validate_projected_aspect(bounds, width=width, height=height)
     compiled_anchors = _anchors(neighborhoods, landmarks, bounds=bounds, width=width, height=height)
     routes = _routes(neighborhoods, compiled_anchors)
     waterways = _waterways(source, seed=seed, width=width, height=height)

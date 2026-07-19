@@ -3,11 +3,11 @@
   "city_id": "alderbank",
   "schema_version": "1.1.0",
   "version": "0.1.0",
-  "built_at": "2026-07-19T21:45:25.953790Z",
+  "built_at": "2026-07-19T21:59:22.568361Z",
   "bounds": {
-    "south": 45.0,
+    "south": 45.004395194,
     "west": -122.02,
-    "north": 45.03,
+    "north": 45.025602843,
     "east": -121.98
   },
   "source": "Original WorldWeaver fictional village",
@@ -30,6 +30,6 @@
       "version": "0.1.0",
       "seed": "alderbank-fields-v1"
     },
-    "artifact_sha256": "a7d13b408fface08fb3b6ee77ea16aa8fd245418b3b3382eef87fd97e5a997df"
+    "artifact_sha256": "d4e596f956a0168cc2579debf025c4b7026fac8236726d5bfa371ebfd60d41c6"
   }
 }

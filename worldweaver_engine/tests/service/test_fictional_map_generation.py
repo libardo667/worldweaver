@@ -4,6 +4,8 @@ import copy
 import json
 from pathlib import Path
 
+import pytest
+
 from scripts.build_city_pack import _build_landmarks, _build_neighborhoods
 from src.services.map_generation import compile_fictional_map
 
@@ -64,3 +66,11 @@ def test_encoded_fields_match_the_declared_grid_shape():
         assert len(field["rows"]) == artifact["grid"]["height"]
         row_width = artifact["grid"]["width"] * (2 if field["encoding"] == "hex-u8-rows" else 1)
         assert {len(row) for row in field["rows"]} == {row_width}, name
+
+
+def test_fictional_map_rejects_bounds_that_would_letterbox_the_svg():
+    config, neighborhoods, landmarks = _alderbank_inputs()
+    config["bboxes"]["default"] = "45.0000,-122.0200,45.0300,-121.9800"
+
+    with pytest.raises(ValueError, match="must match the grid aspect"):
+        compile_fictional_map(config, neighborhoods=neighborhoods, landmarks=landmarks)
