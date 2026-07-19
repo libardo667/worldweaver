@@ -62,6 +62,8 @@ python ww.py check
 python ww.py start
 python ww.py seed       # one time, for a new city
 python ww.py status
+python ww.py map inspect /path/to/built-city-pack
+python ww.py map publish /path/to/built-city-pack --yes
 python ww.py backup
 python ww.py stop
 ```
@@ -69,6 +71,10 @@ python ww.py stop
 `start` leaves residents stopped. `start --agents` wakes them deliberately. `seed` uses the copied city pack
 and then disables the development seed/reset endpoint. `update` accepts versioned engine and agent image
 references. `restore BACKUP --yes` restores only a backup with the same node identity.
+
+`map inspect` verifies a generated drawing without changing the node. `map publish` is deliberately limited
+to that drawing: canonical city files must be byte-for-byte unchanged, resident agents must be stopped, and
+a full backup is made before the backend reloads it. It is not a general city-pack replacement command.
 
 On a generated federation directory, receive a city's public `node.json` through a channel where you can
 confirm who sent it, then run:

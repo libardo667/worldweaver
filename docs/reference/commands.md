@@ -39,6 +39,8 @@ python ww.py start [--agents]
 python ww.py seed
 python ww.py status
 python ww.py update [--engine-image IMAGE] [--agent-image IMAGE]
+python ww.py map inspect BUILT_CITY_PACK
+python ww.py map publish BUILT_CITY_PACK --yes
 python ww.py backup [--output DIRECTORY]
 python ww.py restore BACKUP --yes
 python ww.py stop

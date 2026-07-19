@@ -2,6 +2,7 @@ import subprocess
 import sys
 import json
 from pathlib import Path
+import shutil
 
 
 def _read_env(path: Path) -> dict[str, str]:
@@ -193,3 +194,69 @@ def test_new_game_shard_copies_versioned_experience_and_uses_readable_name(tmp_p
     )
     assert checked.returncode == 0, checked.stderr
     assert "Node folder check passed" in checked.stdout
+
+
+def test_folder_operator_verifies_generated_maps_before_publication(tmp_path: Path) -> None:
+    engine_root = Path(__file__).resolve().parents[2]
+    city_pack = engine_root / "data" / "cities" / "alderbank"
+    script = engine_root / "scripts" / "new_shard.py"
+    subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "alderbank",
+            "--base-dir",
+            str(tmp_path),
+            "--city-pack-dir",
+            str(city_pack),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    shard = tmp_path / "ww_alderbank"
+
+    inspected = subprocess.run(
+        [sys.executable, str(shard / "ww.py"), "map", "inspect", str(city_pack)],
+        cwd=shard,
+        capture_output=True,
+        text=True,
+    )
+    assert inspected.returncode == 0, inspected.stderr
+    assert "Verified generated map for alderbank pack 0.2.0" in inspected.stdout
+
+    unconfirmed = subprocess.run(
+        [sys.executable, str(shard / "ww.py"), "map", "publish", str(city_pack)],
+        cwd=shard,
+        capture_output=True,
+        text=True,
+    )
+    assert unconfirmed.returncode == 1
+    assert "Re-run with --yes" in unconfirmed.stderr
+
+    changed_pack = tmp_path / "changed-pack"
+    shutil.copytree(city_pack, changed_pack)
+    with (changed_pack / "generated_map.svg").open("a", encoding="utf-8") as stream:
+        stream.write("<!-- changed after review -->\n")
+    rejected = subprocess.run(
+        [sys.executable, str(shard / "ww.py"), "map", "inspect", str(changed_pack)],
+        cwd=shard,
+        capture_output=True,
+        text=True,
+    )
+    assert rejected.returncode == 1
+    assert "does not match its recorded hash" in rejected.stderr
+
+    changed_canonical_pack = tmp_path / "changed-canonical-pack"
+    shutil.copytree(city_pack, changed_canonical_pack)
+    neighborhoods = json.loads((changed_canonical_pack / "neighborhoods.json").read_text(encoding="utf-8"))
+    neighborhoods[0]["vibe"] = "A canonical city change that map-only publication must refuse."
+    (changed_canonical_pack / "neighborhoods.json").write_text(json.dumps(neighborhoods, indent=2) + "\n", encoding="utf-8")
+    rejected_canonical_change = subprocess.run(
+        [sys.executable, str(shard / "ww.py"), "map", "publish", str(changed_canonical_pack), "--yes"],
+        cwd=shard,
+        capture_output=True,
+        text=True,
+    )
+    assert rejected_canonical_change.returncode == 1
+    assert "cannot change canonical city-pack file neighborhoods.json" in rejected_canonical_change.stderr

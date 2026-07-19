@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime, timezone
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -28,6 +29,17 @@ PRIVATE_KEY = ROOT / "identity" / "node.key"
 BACKUP_SCHEMA = "worldweaver.node-backup"
 BACKUP_SCHEMA_VERSION = 1
 MUTABLE_IMAGE_TAGS = {"latest", "main", "master", "edge", "dev", "stable"}
+MAP_PUBLISH_UNCHANGED_FILES = (
+    "neighborhoods.json",
+    "transit_graph.json",
+    "landmarks.json",
+    "street_corridors.json",
+    "travel_hubs.json",
+    "inter_city.json",
+    "stoops.json",
+    "weather_config.json",
+    "transit_config.json",
+)
 
 
 class OperatorError(RuntimeError):
@@ -394,6 +406,127 @@ def command_update(args: argparse.Namespace) -> int:
     return 0
 
 
+def _canonical_json_hash(payload: dict) -> str:
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def _read_map_release(pack_value: str) -> tuple[Path, dict, dict, str]:
+    pack_dir = Path(pack_value).expanduser().resolve()
+    manifest_path = pack_dir / "manifest.json"
+    artifact_path = pack_dir / "generated_map.json"
+    svg_path = pack_dir / "generated_map.svg"
+    for path in (manifest_path, artifact_path, svg_path):
+        if not path.is_file():
+            raise OperatorError(f"Map release is missing {path.name}: {pack_dir}")
+    if artifact_path.stat().st_size > 10 * 1024 * 1024 or svg_path.stat().st_size > 20 * 1024 * 1024:
+        raise OperatorError("Map release is too large for the folder-local publisher.")
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    svg = svg_path.read_text(encoding="utf-8")
+    if not isinstance(manifest, dict) or not isinstance(artifact, dict):
+        raise OperatorError("Map release manifest and artifact must be JSON objects.")
+    city_id = str(manifest.get("city_id") or "").strip()
+    version = str(manifest.get("version") or "").strip()
+    if not city_id or not version:
+        raise OperatorError("Map release manifest needs a city ID and pack version.")
+    source = artifact.get("source") if isinstance(artifact.get("source"), dict) else {}
+    if str(source.get("city_id") or "").strip() != city_id or str(source.get("pack_version") or "").strip() != version:
+        raise OperatorError("Generated map source does not match its manifest city and version.")
+    if artifact.get("schema_version") != "1.0.0":
+        raise OperatorError("Generated map uses an unsupported schema version.")
+
+    svg_meta = artifact.get("svg") if isinstance(artifact.get("svg"), dict) else {}
+    if svg_meta.get("filename") != "generated_map.svg":
+        raise OperatorError("Generated map names an unsupported SVG file.")
+    if hashlib.sha256(svg.encode("utf-8")).hexdigest() != str(svg_meta.get("sha256") or ""):
+        raise OperatorError("Generated map SVG does not match its recorded hash.")
+    unsafe_svg_tokens = ("<!doctype", "<script", "<foreignobject", "javascript:", "href=", "url(")
+    lowered_svg = svg.lower()
+    if not svg.lstrip().startswith("<?xml") or "<svg" not in lowered_svg or any(token in lowered_svg for token in unsafe_svg_tokens):
+        raise OperatorError("Generated map SVG contains unsupported active or external content.")
+
+    claimed_hash = str(artifact.get("artifact_sha256") or "").strip()
+    hash_payload = dict(artifact)
+    hash_payload.pop("artifact_sha256", None)
+    if not re.fullmatch(r"[a-f0-9]{64}", claimed_hash) or _canonical_json_hash(hash_payload) != claimed_hash:
+        raise OperatorError("Generated map artifact does not match its recorded hash.")
+    manifest_map = manifest.get("generated_map") if isinstance(manifest.get("generated_map"), dict) else {}
+    if manifest_map.get("artifact_sha256") != claimed_hash:
+        raise OperatorError("Manifest and generated map name different artifacts.")
+
+    neighborhoods_path = pack_dir / "neighborhoods.json"
+    neighborhoods = json.loads(neighborhoods_path.read_text(encoding="utf-8")) if neighborhoods_path.is_file() else None
+    if not isinstance(neighborhoods, list) or not all(isinstance(item, dict) for item in neighborhoods):
+        raise OperatorError("Map release needs a neighborhood graph for route verification.")
+    expected_routes: set[str] = set()
+    for neighborhood in neighborhoods:
+        source_id = str(neighborhood.get("id") or "").strip()
+        adjacent = neighborhood.get("adjacent_to") if isinstance(neighborhood.get("adjacent_to"), list) else []
+        for target_value in adjacent:
+            pair = tuple(sorted((source_id, str(target_value or "").strip())))
+            if pair[0] and pair[1] and pair[0] != pair[1]:
+                expected_routes.add(f"path:{pair[0]}:{pair[1]}")
+    routes = artifact.get("routes") if isinstance(artifact.get("routes"), list) else []
+    route_ids = {str(route.get("id") or "").strip() for route in routes if isinstance(route, dict)}
+    if route_ids != expected_routes:
+        raise OperatorError("Generated map routes do not match the release's canonical neighborhood paths.")
+    return pack_dir, manifest, artifact, svg
+
+
+def command_map(args: argparse.Namespace) -> int:
+    pack_dir, manifest, artifact, svg = _read_map_release(args.pack_dir)
+    city_id = str(manifest["city_id"])
+    version = str(manifest["version"])
+    digest = str(artifact["artifact_sha256"])
+    if args.map_action == "inspect":
+        print(f"Verified generated map for {city_id} pack {version} ({digest[:16]}).")
+        return 0
+
+    env = _read_env()
+    if env.get("SHARD_TYPE") == "world":
+        raise OperatorError("A federation directory does not publish a city map.")
+    if city_id != env.get("CITY_ID", ""):
+        raise OperatorError(f"Map release belongs to {city_id}, not this node's {env.get('CITY_ID', '')} city pack.")
+    current_pack_dir = ROOT / "data" / "cities" / city_id
+    for filename in MAP_PUBLISH_UNCHANGED_FILES:
+        release_file = pack_dir / filename
+        current_file = current_pack_dir / filename
+        if not release_file.is_file() or not current_file.is_file() or release_file.read_bytes() != current_file.read_bytes():
+            raise OperatorError(f"Map-only publication cannot change canonical city-pack file {filename}.")
+    if not args.yes:
+        raise OperatorError("Map publication replaces this node's public drawing. Re-run with --yes after inspecting the release.")
+    if not _docker_available() or "db" not in _services(running_only=True):
+        raise OperatorError("Start the node database so a full backup can be made before map publication.")
+    if "agent" in _services(running_only=True):
+        raise OperatorError("Stop resident agents before publishing a new map drawing.")
+
+    command_backup(argparse.Namespace(output=""))
+    target_dir = current_pack_dir
+    target_dir.mkdir(parents=True, exist_ok=True)
+    staged: list[tuple[Path, Path]] = []
+    for filename, content in (
+        ("generated_map.json", json.dumps(artifact, indent=2, ensure_ascii=False) + "\n"),
+        ("generated_map.svg", svg),
+        ("manifest.json", json.dumps(manifest, indent=2, ensure_ascii=False) + "\n"),
+    ):
+        temporary = target_dir / f".{filename}.publish-{os.getpid()}"
+        temporary.write_text(content, encoding="utf-8")
+        staged.append((temporary, target_dir / filename))
+    # The manifest moves last and acts as the release pointer. Every individual
+    # replacement is atomic on the node folder's filesystem.
+    for temporary, destination in staged:
+        temporary.replace(destination)
+
+    if "backend" in _services(running_only=True):
+        _compose("up", "-d", "--no-deps", "--force-recreate", "backend")
+        if not _wait_for_backend():
+            raise OperatorError("Backend did not become healthy after map publication; restore the backup just created.")
+    print(f"Published generated map for {city_id} pack {version} from {pack_dir}.")
+    print("Resident agents remain stopped.")
+    return 0
+
+
 def _database_dump() -> bytes:
     env = _read_env()
     result = _compose(
@@ -661,6 +794,15 @@ def build_parser() -> argparse.ArgumentParser:
     update.add_argument("--agent-image", default="")
     update.add_argument("--agents", action="store_true", help="wake residents after updating")
     update.set_defaults(handler=command_update)
+
+    map_command = commands.add_parser("map", help="inspect or publish one verified generated city map")
+    map_commands = map_command.add_subparsers(dest="map_action", required=True)
+    map_inspect = map_commands.add_parser("inspect", help="verify a generated map release without changing the node")
+    map_inspect.add_argument("pack_dir", help="built city-pack directory containing manifest and generated map files")
+    map_publish = map_commands.add_parser("publish", help="back up the node and publish only its generated map drawing")
+    map_publish.add_argument("pack_dir", help="built city-pack directory containing manifest and generated map files")
+    map_publish.add_argument("--yes", action="store_true", help="confirm replacement of the current public map drawing")
+    map_command.set_defaults(handler=command_map)
 
     backup = commands.add_parser("backup", help="make a restricted full-node backup")
     backup.add_argument("--output", default="", help="backup directory (default: ./backups)")

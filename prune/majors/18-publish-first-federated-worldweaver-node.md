@@ -42,7 +42,7 @@ neither mounted a source checkout, and neither started its agent service. The di
 networks, and volumes were removed after the check.
 
 On 2026-07-19, a fresh project-operated directory and Alderbank node were created outside the monorepo under
-`~/worldweaver-nodes`. They now run the immutable engine image `sha-9c6dc66...` with separate secrets, signing keys,
+`~/worldweaver-nodes`. They now run the immutable engine image `sha-b5a98fe...` with separate secrets, signing keys,
 projects, networks, volumes, databases, and loopback-only host ports. The directory admitted Alderbank's
 public descriptor with a written reason. Alderbank then registered and pulsed with its own signature, seeded
 15 places, and disabled its reset endpoint. No resident container was started.
@@ -64,6 +64,12 @@ fixed through the shared engine contracts and deployed after a fresh backup. The
 account, objects, and stoop history. Humans can now read and leave local marks without receiving temporary
 session IDs, and active stoop objects appear only on their stoop. GitHub checks and image publication passed
 for the deployed commit. Residents remained stopped throughout this public human check.
+
+The folder operator now also supports verified additive-map publication. It inspects artifact, SVG, city,
+version, and route hashes; refuses changes to canonical city files or publication while resident agents are
+active; makes a full backup; and reloads the backend. The command completed against live Alderbank and kept
+its resident service stopped. This removes a source-tree-dependent manual copy from routine map work without
+creating a general inhabited-city migration command.
 
 This is a useful single-computer public test, not the completed deployment proof. The human client still uses
 Vite's development server, the backups are on the same computer, WSL reboot recovery is not configured, and

@@ -18,6 +18,10 @@ landmark waypoint. The compiler refuses display metadata for a path that does no
 and the pack validator refuses an artifact whose drawn route set differs from that graph. Alderbank now
 draws River Path, Footbridge Path, and Pineward Path and keeps permanent labels on its four main places.
 
+The generated node operator now has explicit `map inspect` and `map publish` commands. Publication verifies
+the city, pack version, artifact and SVG hashes, passive SVG content, and canonical routes; refuses changes
+to non-map city files or publication while residents run; makes a full backup; and reloads the backend.
+
 Alderbank is the project's experiment town. On 2026-07-19, the project owner explicitly approved using the
 inhabited Alderbank shard for this work. That approval is narrow: the generated drawing may change while we
 learn, but accounts, objects, marks, doors, named places, and movement edges remain canonical engine state

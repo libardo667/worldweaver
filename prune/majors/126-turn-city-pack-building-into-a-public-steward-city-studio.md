@@ -6,7 +6,11 @@ The command-line builder now supports real and fictional cities, structured vali
 schema versions, travel hubs, route hub IDs, schematic previews, and noninteractive builds. San Francisco,
 Portland, and Alderbank use the shared format. The engine exposes a read-only preview of the current pack.
 
-The missing part is the draft editor and safe publication workflow.
+The folder-local operator can now inspect a generated-map release and publish only that additive drawing.
+It verifies hashes, rejects active SVG content and invented routes, requires every canonical city-pack file
+to remain byte-for-byte unchanged, refuses active resident agents, makes a full backup, and restarts the
+backend. This closes the manual-copy gap found while testing Alderbank, but it is not the missing draft
+editor or a general city-pack publication workflow.
 
 ## Goal
 

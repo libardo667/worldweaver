@@ -73,5 +73,18 @@ Seeding founds a world. Once people or residents have inhabited it, changing the
 explicit migration plan. The current tools do not provide that migration. Treat an inhabited pack as
 read-only.
 
+An additive generated-map drawing is narrower than a city rebuild. On a city explicitly approved for map
+experiments, inspect and publish a built drawing from inside its isolated node folder:
+
+```bash
+python ww.py map inspect /path/to/built-city-pack
+python ww.py map publish /path/to/built-city-pack --yes
+```
+
+The publisher verifies the city, version, artifact hash, SVG hash, passive SVG content, and canonical route
+set. It refuses any change to the node's actual neighborhood, landmark, path, travel, stoop, weather, or
+transit files. It also refuses to run while resident agents are active, makes a full private backup, and
+restarts the backend. This command does not authorize a general inhabited-city migration.
+
 The planned City Studio will put the same builder and validator behind a steward-facing browser editor. It
 will not introduce a second city format.
