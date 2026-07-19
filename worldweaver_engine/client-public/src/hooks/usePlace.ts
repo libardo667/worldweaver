@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { getNearbyLandmarks, getPlaceContext, getStoopsAt } from "../api/ww";
 import type { Landmark, PlaceContext, StoopShell } from "../api/types";
+import { usePoll } from "./usePoll";
 
 // Geography doesn't move: context prose and landmarks are cached for the
 // whole page load. Stoops are living furniture and are refetched per visit.
@@ -66,6 +67,18 @@ export function usePlace(name: string | null, stoopRefreshKey = 0): PlaceDetails
       live = false;
     };
   }, [name, stoopRefreshKey]);
+
+  // Stoops are living furniture other people change too — keep shell counts
+  // honest while someone is watching this place.
+  usePoll(async () => {
+    if (!name) return;
+    try {
+      const result = await getStoopsAt(name);
+      setStoops(result.stoops ?? []);
+    } catch {
+      // Keep the last truthful reading.
+    }
+  }, name ? 15_000 : null);
 
   return { context, landmarks, stoops };
 }

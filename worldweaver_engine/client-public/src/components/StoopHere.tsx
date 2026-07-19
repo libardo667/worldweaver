@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { browseStoopAt, postTakeStoopEntry } from "../api/ww";
 import type { StoopBrowse, StoopShell } from "../api/types";
+import { usePoll } from "../hooks/usePoll";
 
 type Props = {
   location: string;
@@ -48,6 +49,12 @@ export function StoopHere({ location, stoops, takerSessionId, refreshKey = 0, on
       live = false;
     };
   }, [openStoopId, location, refreshCount, refreshKey]);
+
+  // An opened stoop is being watched: refetch its entries so someone else's
+  // leave/take shows up without reopening.
+  usePoll(async () => {
+    setRefreshCount((n) => n + 1);
+  }, openStoopId ? 10_000 : null);
 
   async function takeEntry(entryId: string) {
     if (!takerSessionId || takingEntryId) return;

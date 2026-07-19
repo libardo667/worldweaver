@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { getMyObjects, postLeaveOnStoop, postPickUpObject, postPutDownObject } from "../api/ww";
 import type { DurableObjectView, StoopShell } from "../api/types";
+import { usePoll } from "../hooks/usePoll";
 import { getPlayer } from "../session/store";
 
 type Props = {
@@ -35,6 +36,16 @@ export function ObjectsHere({ location, sessionId, stoops, refreshKey, onChanged
       live = false;
     };
   }, [sessionId, location, refreshKey]);
+
+  // Other people place and pick things up too.
+  usePoll(async () => {
+    try {
+      const result = await getMyObjects(sessionId);
+      setObjects(result.objects ?? []);
+    } catch {
+      // Keep the last truthful reading.
+    }
+  }, 10_000);
 
   const carried = objects.filter((o) => o.attachment.kind === "custody" && o.attachment.actor_id === myActorId);
   const lyingHere = objects.filter((o) => o.attachment.kind === "place");

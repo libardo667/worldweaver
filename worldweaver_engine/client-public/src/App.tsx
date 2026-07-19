@@ -94,7 +94,9 @@ export function App() {
     [refreshMap],
   );
 
-  usePoll(refreshMap, 30_000);
+  // Watching a place deserves a livelier pulse than ambient map-gazing:
+  // presence chips and glow both come from this query.
+  usePoll(refreshMap, placeParams ? 5_000 : 15_000);
 
   const focusNode = useMemo(
     () => (placeParams?.slug ? findNodeBySlug(nodes, placeParams.slug) : undefined),
