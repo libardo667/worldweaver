@@ -96,3 +96,23 @@ def test_alderbank_entry_uses_pack_and_rule_disclosure_not_generated_scenario_ca
     assert payload["snapshot"].startswith("Alderbank. This is an explicitly game-shaped WorldWeaver shard.")
     assert "machinery" not in payload["snapshot"].lower()
     assert "engineer" not in str(payload).lower()
+
+
+def test_alderbank_grounding_uses_authored_conditions_not_san_francisco_weather(client, monkeypatch):
+    monkeypatch.setattr(settings, "city_id", "alderbank")
+    city_pack_service._PACK_CACHE.pop("alderbank", None)
+
+    response = client.get("/api/world/grounding")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["city"] == "Alderbank"
+    assert payload["fictional"] is True
+    assert payload["temperature_f"] is None
+    assert payload["weather_description"] == "Cool river air, broken cloud, and changeable mountain weather"
+
+
+def test_non_sf_shard_does_not_import_san_francisco_headlines(client, monkeypatch):
+    monkeypatch.setattr(settings, "city_id", "alderbank")
+
+    assert client.get("/api/world/grounding/news").json() == {"headlines": []}

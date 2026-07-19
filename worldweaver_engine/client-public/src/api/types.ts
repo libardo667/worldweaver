@@ -37,6 +37,10 @@ export type ChatMessage = {
 };
 
 export type Grounding = {
+  city: string;
+  city_id: string;
+  fictional: boolean;
+  timezone: string;
   datetime_str: string;
   day_of_week: string;
   time_of_day: "morning" | "afternoon" | "evening" | "night" | string;

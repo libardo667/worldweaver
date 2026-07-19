@@ -2809,9 +2809,9 @@ def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
         location_name=location,
         anchor_name=graph_anchor,
     )
-    from ...services.grounding import get_sf_time_context
+    from ...services.grounding import get_city_time_context
 
-    grounding = get_sf_time_context()
+    grounding = get_city_time_context(settings.city_id)
     ambient_presence = _derive_scene_ambient_presence(
         location=location,
         neighborhood=neighborhood,
@@ -3035,8 +3035,7 @@ def get_location_presence(
     names = list(presence["present_names"].get(normalized_location, []))
     return {
         "location": normalized_location,
-        "present_count": int(presence["human_counts"].get(normalized_location, 0))
-        + int(presence["agent_counts"].get(normalized_location, 0)),
+        "present_count": int(presence["human_counts"].get(normalized_location, 0)) + int(presence["agent_counts"].get(normalized_location, 0)),
         "present_names": names,
     }
 
@@ -3167,26 +3166,24 @@ def get_world_travel_destinations():
 
 @router.get("/world/grounding")
 def get_world_grounding():
-    """
-    Return current real-world grounding context for SF: time, date, weather.
-    Agents call this to build naturalistic awareness of the world outside.
-    No API key required — derived from wall-clock time + Open-Meteo (free).
-    """
-    from ...services.grounding import get_sf_time_context
+    """Return the configured city's current clock and weather context."""
+    from ...services.grounding import get_city_time_context
 
-    return get_sf_time_context()
+    return get_city_time_context(settings.city_id)
 
 
 @router.get("/world/grounding/news")
 def get_world_news():
     """
-    Return recent SF/Bay Area news headlines for agent grounding.
+    Return recent local headlines where the city has a configured source.
     Sourced from free RSS feeds (KQED, SF Standard). Cached for 1 hour.
     No API key required.
     """
     from ...services.grounding import get_sf_news
 
-    return {"headlines": get_sf_news(max_items=5)}
+    # The only current feed is San Francisco-specific. Other cities receive
+    # silence instead of imported concerns from the wrong place.
+    return {"headlines": get_sf_news(max_items=5) if settings.city_id == "san_francisco" else []}
 
 
 @router.get("/world/landmarks/nearby")

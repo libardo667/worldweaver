@@ -247,8 +247,8 @@ class TestAgentSceneEndpoints:
         db_session.commit()
 
         monkeypatch.setattr(
-            "src.services.grounding.get_sf_time_context",
-            lambda: {
+            "src.services.grounding.get_city_time_context",
+            lambda _city_id: {
                 "time_of_day": "night",
                 "weather": "light rain",
                 "weather_description": "light rain, 54°F",

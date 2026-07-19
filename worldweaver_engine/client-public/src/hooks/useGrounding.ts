@@ -26,7 +26,7 @@ function hazeOf(grounding: Grounding | null): boolean {
   return /fog|mist|overcast|cloud|drizzle|rain/.test(weather);
 }
 
-/** Real-world time and weather for the shard's city, refreshed every 5 minutes. */
+/** The shard's declared local clock and weather, refreshed every 5 minutes. */
 export function useGrounding(): Atmosphere {
   const [grounding, setGrounding] = useState<Grounding | null>(null);
 

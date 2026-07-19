@@ -1,17 +1,16 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Levi Banks
 
-"""
-grounding.py — Real-world grounding utilities.
+"""Read-only clock and weather context for the shard's configured city.
 
-Derives time, season, and weather from authoritative external sources rather
-than mutable session state. These values flow into world and resident views as
-read-only context; model output cannot write back to them.
+Real city packs use their own timezone and Open-Meteo coordinates. Fictional
+packs use their declared timezone and authored conditions; they never borrow a
+real city's weather merely because their schematic needs coordinates.
 
 Grounded facts:
-    time_of_day   — derived from SF wall-clock time
-    season        — derived from calendar month (SF timezone)
-    weather       — Open-Meteo current conditions for SF (cached 15 min)
+    time_of_day   — derived from the city pack's local wall-clock time
+    season        — derived from the local calendar month
+    weather       — city-specific live or authored conditions
     temperature   — Open-Meteo current temperature in °F (cached 15 min)
 
 Non-grounded (narrative state, LLM-mutable):
@@ -27,8 +26,6 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
-
-SF_TZ = ZoneInfo("America/Los_Angeles")
 
 # SF coordinates (city centre)
 _SF_LAT = 37.7749
@@ -65,15 +62,22 @@ _WMO_CONDITIONS: dict[int, str] = {
 }
 
 
-def _sf_now() -> datetime:
-    return datetime.now(SF_TZ)
-
-
-def _fetch_sf_weather() -> dict[str, Any]:
-    """Fetch current SF weather from Open-Meteo (free, no API key)."""
+def _fetch_open_meteo_weather(latitude: float, longitude: float, timezone_name: str) -> dict[str, Any]:
+    """Fetch current weather from Open-Meteo (free, no API key)."""
     import urllib.request
+    from urllib.parse import urlencode
 
-    url = f"https://api.open-meteo.com/v1/forecast" f"?latitude={_SF_LAT}&longitude={_SF_LON}" f"&current=temperature_2m,weather_code,wind_speed_10m" f"&temperature_unit=fahrenheit" f"&wind_speed_unit=mph" f"&timezone=America%2FLos_Angeles"
+    params = urlencode(
+        {
+            "latitude": latitude,
+            "longitude": longitude,
+            "current": "temperature_2m,weather_code,wind_speed_10m",
+            "temperature_unit": "fahrenheit",
+            "wind_speed_unit": "mph",
+            "timezone": timezone_name,
+        }
+    )
+    url = f"https://api.open-meteo.com/v1/forecast?{params}"
     import json
 
     with urllib.request.urlopen(url, timeout=5) as resp:
@@ -102,6 +106,11 @@ def _fetch_sf_weather() -> dict[str, Any]:
     }
 
 
+def _fetch_sf_weather() -> dict[str, Any]:
+    """Backward-compatible San Francisco weather fetch."""
+    return _fetch_open_meteo_weather(_SF_LAT, _SF_LON, "America/Los_Angeles")
+
+
 def get_sf_weather() -> dict[str, Any]:
     """Return current SF weather, cached for 15 minutes.  Never raises."""
     global _weather_cache, _weather_cache_ts
@@ -126,6 +135,69 @@ def get_sf_weather() -> dict[str, Any]:
             }
 
     return _weather_cache
+
+
+_city_weather_cache: dict[str, dict[str, Any]] = {}
+_city_weather_cache_ts: dict[str, float] = {}
+
+
+def _city_config(city_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    from .city_pack_service import get_pack
+
+    pack = get_pack(city_id) or {}
+    return dict(pack.get("manifest") or {}), dict(pack.get("weather_config") or {})
+
+
+def get_city_weather(city_id: str) -> dict[str, Any]:
+    """Return honest weather for a real or fictional city pack. Never raises."""
+    manifest, weather_config = _city_config(city_id)
+    fictional = bool(manifest.get("fictional", weather_config.get("fictional", False)))
+    if fictional:
+        description = str(weather_config.get("default_conditions") or "Local conditions are not specified.").strip()
+        return {
+            "condition": description,
+            "temperature_f": None,
+            "wind_mph": None,
+            "wmo_code": None,
+            "description": description,
+        }
+
+    latitude = weather_config.get("open_meteo_lat")
+    longitude = weather_config.get("open_meteo_lon")
+    timezone_name = str(weather_config.get("timezone") or "UTC")
+    if latitude is None or longitude is None:
+        return (
+            get_sf_weather()
+            if city_id == "san_francisco"
+            else {
+                "condition": "conditions unavailable",
+                "temperature_f": None,
+                "wind_mph": None,
+                "wmo_code": None,
+                "description": "Current conditions are unavailable.",
+            }
+        )
+
+    now_ts = time.monotonic()
+    cached = _city_weather_cache.get(city_id)
+    if cached and now_ts - _city_weather_cache_ts.get(city_id, 0.0) < _WEATHER_CACHE_TTL:
+        return cached
+    try:
+        fresh = _fetch_open_meteo_weather(float(latitude), float(longitude), timezone_name)
+        _city_weather_cache[city_id] = fresh
+        _city_weather_cache_ts[city_id] = now_ts
+        return fresh
+    except Exception as exc:
+        logger.warning("grounding: weather fetch failed for %s (%s) — using cached/default", city_id, exc)
+        if cached:
+            return cached
+        return {
+            "condition": "conditions unavailable",
+            "temperature_f": None,
+            "wind_mph": None,
+            "wmo_code": None,
+            "description": "Current conditions are unavailable.",
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -193,9 +265,16 @@ def get_sf_news(max_items: int = 5) -> list[dict]:
     return _news_cache
 
 
-def get_sf_time_context() -> dict:
-    """Return current SF time as structured grounding context."""
-    now = _sf_now()
+def get_city_time_context(city_id: str) -> dict:
+    """Return current local time and honest weather for one city pack."""
+    manifest, weather_config = _city_config(city_id)
+    timezone_name = str(weather_config.get("timezone") or "UTC")
+    try:
+        city_timezone = ZoneInfo(timezone_name)
+    except Exception:
+        city_timezone = ZoneInfo("UTC")
+        timezone_name = "UTC"
+    now = datetime.now(city_timezone)
     hour = now.hour
     minute = now.minute
     month = now.month
@@ -228,9 +307,13 @@ def get_sf_time_context() -> dict:
     day_name = now.strftime("%A")
     datetime_str = f"{day_name}, {month_name} {day} at {hour_12}:{minute:02d} {ampm}"
 
-    weather = get_sf_weather()
+    weather = get_city_weather(city_id)
 
     return {
+        "city": str(manifest.get("city") or weather_config.get("city") or city_id.replace("_", " ").title()),
+        "city_id": city_id,
+        "fictional": bool(manifest.get("fictional", weather_config.get("fictional", False))),
+        "timezone": timezone_name,
         "datetime_str": datetime_str,  # "Wednesday, March 11 at 2:34 PM"
         "day_of_week": day_name,  # "Wednesday"
         "time_of_day": time_of_day,  # "afternoon"
@@ -241,3 +324,8 @@ def get_sf_time_context() -> dict:
         "temperature_f": weather["temperature_f"],  # 57
         "weather_description": weather["description"],  # "foggy, 57°F"
     }
+
+
+def get_sf_time_context() -> dict:
+    """Backward-compatible San Francisco grounding entrypoint."""
+    return get_city_time_context("san_francisco")
