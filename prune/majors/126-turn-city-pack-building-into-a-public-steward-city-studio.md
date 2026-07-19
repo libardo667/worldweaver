@@ -12,6 +12,12 @@ to remain byte-for-byte unchanged, refuses active resident agents, makes a full 
 backend. This closes the manual-copy gap found while testing Alderbank, but it is not the missing draft
 editor or a general city-pack publication workflow.
 
+City-pack assembly is now extracted from the command-line script. The reusable service accepts a city
+configuration and optional source records, then returns validated pack files and the generated map entirely
+in memory. It does not make network requests, touch the filesystem, or mutate the draft configuration. The
+existing CLI handles optional OpenStreetMap retrieval and file output around that service. A fixed timestamp
+makes the shared builder deterministic in tests, and Alderbank still produces the exact same map artifact.
+
 ## Goal
 
 Give a steward a browser tool for building and reviewing a city before anyone inhabits it. City packs stay
@@ -19,15 +25,13 @@ portable files that can be exchanged and hosted without approval from a central 
 
 ## Build next
 
-1. Extract remaining reusable work from `build_city_pack.py` so the CLI and browser call the same builder
-   and validator.
-2. Add a node-local draft store outside the published pack directories.
-3. Let a steward create, import, edit, validate, and preview a draft on a geographic or generated fictional
+1. Add a node-local draft store outside the published pack directories.
+2. Let a steward create, import, edit, validate, and preview a draft on a geographic or generated fictional
    map. Major 131 owns the deterministic field and section compiler used by that preview.
-4. Export and import an immutable, versioned pack artifact.
-5. Add a first-publication operation that refuses to overwrite a seeded or inhabited node.
-6. Keep replacement of an inhabited pack blocked until a separate migration contract exists.
-7. Document the tool publicly while keeping write access to a hosted node authenticated.
+3. Export and import an immutable, versioned pack artifact.
+4. Add a first-publication operation that refuses to overwrite a seeded or inhabited node.
+5. Keep replacement of an inhabited pack blocked until a separate migration contract exists.
+6. Document the tool publicly while keeping write access to a hosted node authenticated.
 
 ## Pack rules
 
@@ -54,7 +58,8 @@ portable files that can be exchanged and hosted without approval from a central 
 - [x] Packs have schema and pack versions, validated travel hubs, and route hub IDs.
 - [x] Real and fictional packs use the same core builder and preview shape.
 - [x] The CLI supports reproducible noninteractive builds.
-- [ ] The CLI and browser use one extracted build implementation rather than duplicated rules.
+- [ ] City-pack assembly and validation now have one extracted implementation used by the CLI. This becomes
+  complete when the browser calls it too rather than duplicating its rules.
 - [ ] A steward can save and preview a draft without touching a live pack.
 - [ ] Packs can be imported and exported without a central catalog.
 - [ ] First publication refuses a seeded or inhabited target.

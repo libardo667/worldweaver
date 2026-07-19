@@ -32,7 +32,9 @@ For a repeatable build without network enrichment:
 ```
 
 The builder validates identifiers, coordinates, adjacency, paths, travel hubs, entry points, and stoop
-shells before writing the pack.
+shells before writing the pack. Its command-line layer only retrieves optional source data and writes the
+result. Pack assembly, fictional-map compilation, and validation run through the same in-memory service that
+the planned City Studio will use.
 
 ## Preview before habitation
 

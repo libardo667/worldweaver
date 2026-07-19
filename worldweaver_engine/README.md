@@ -29,8 +29,12 @@ belong to `../ww_agent/` and the resident's hearth.
 - `src/models/`: database records
 - `client-public/`: normal participant client
 - `client/`: retired combined client, available only through `client-legacy` while useful operations are separated
-- `scripts/`: city building, seeding, and maintenance commands
+- `scripts/`: city-source retrieval, city-pack file output, seeding, and maintenance commands
 - `tests/`: engine contract tests
+
+`src/services/city_pack_builder.py` is the shared in-memory city builder. The command-line builder handles
+optional OpenStreetMap requests and filesystem output, then calls that service. City Studio must call the
+same service rather than grow a second set of city rules.
 
 ## Develop from the repository root
 

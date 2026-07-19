@@ -49,43 +49,15 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import sys
 import time
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 ENGINE_ROOT = Path(__file__).resolve().parent.parent
 if str(ENGINE_ROOT) not in sys.path:
     sys.path.insert(0, str(ENGINE_ROOT))
 
-from src.services.city_pack_validation import require_valid_city_pack  # noqa: E402
-from src.services.map_generation import compile_fictional_map  # noqa: E402
-
-# ---------------------------------------------------------------------------
-# Geometry helpers
-# ---------------------------------------------------------------------------
-
-
-def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Great-circle distance in kilometres."""
-    r = 6371.0
-    dlat = math.radians(lat2 - lat1)
-    dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
-    return r * 2 * math.asin(math.sqrt(a))
-
-
-def _slugify(name: str) -> str:
-    """Simple slug: lowercase, spaces → hyphens, drop punctuation."""
-    import re
-
-    s = name.lower().strip()
-    s = re.sub(r"['\"/]", "", s)
-    s = re.sub(r"[^a-z0-9]+", "-", s)
-    return s.strip("-")
-
+from src.services.city_pack_builder import assemble_city_pack  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Overpass API client
@@ -295,271 +267,6 @@ out center;
 
 
 # ---------------------------------------------------------------------------
-# Adjacency computation
-# ---------------------------------------------------------------------------
-
-
-def _compute_neighborhood_adjacency(
-    neighborhoods: list[dict],
-    threshold_km: float = 1.8,
-) -> dict[str, list[str]]:
-    """
-    Build adjacency graph by centroid proximity.
-    Two neighborhoods are 'adjacent' if centroids are within threshold_km.
-    We use 1.8km — generous enough to connect most real neighbors.
-    """
-    adjacency: dict[str, list[str]] = {n["id"]: [] for n in neighborhoods}
-    for i, a in enumerate(neighborhoods):
-        for j, b in enumerate(neighborhoods):
-            if i >= j:
-                continue
-            dist = _haversine_km(a["lat"], a["lon"], b["lat"], b["lon"])
-            if dist < threshold_km:
-                adjacency[a["id"]].append(b["id"])
-                adjacency[b["id"]].append(a["id"])
-    return adjacency
-
-
-def _assign_landmark_neighborhoods(landmarks: list[dict], neighborhoods: list[dict]) -> list[dict]:
-    """Assign each landmark to its nearest neighborhood by centroid distance."""
-    for lm in landmarks:
-        if lm.get("neighborhood"):
-            continue  # already assigned
-        best, best_dist = None, float("inf")
-        for n in neighborhoods:
-            d = _haversine_km(lm["lat"], lm["lon"], n["lat"], n["lon"])
-            if d < best_dist:
-                best_dist = d
-                best = n["id"]
-        lm["neighborhood"] = best
-    return landmarks
-
-
-def _assign_transit_neighborhoods(stations: list[dict], neighborhoods: list[dict]) -> list[dict]:
-    """Assign each transit station to its nearest neighborhood."""
-    for s in stations:
-        if s.get("neighborhood") and any(n["id"] == s["neighborhood"] for n in neighborhoods):
-            continue
-        best, best_dist = None, float("inf")
-        for n in neighborhoods:
-            d = _haversine_km(s["lat"], s["lon"], n["lat"], n["lon"])
-            if d < best_dist:
-                best_dist = d
-                best = n["id"]
-        s["neighborhood"] = best
-    return stations
-
-
-# ---------------------------------------------------------------------------
-# Merge Overpass data into curated baseline
-# ---------------------------------------------------------------------------
-
-
-def _merge_osm_neighborhoods(curated: list[dict], osm: list[dict]) -> list[dict]:
-    """Add OSM-discovered neighborhoods not in the curated list (by distance check)."""
-    existing_coords = [(n["lat"], n["lon"]) for n in curated]
-    added = 0
-    for osm_n in osm:
-        # Skip if too close to an existing curated entry
-        too_close = any(_haversine_km(osm_n["lat"], osm_n["lon"], lat, lon) < 0.5 for lat, lon in existing_coords)
-        if not too_close and osm_n["name"]:
-            curated.append(
-                {
-                    "name": osm_n["name"],
-                    "lat": osm_n["lat"],
-                    "lon": osm_n["lon"],
-                    "vibe": "",  # Overpass doesn't give vibes
-                    "region": "other",
-                    "source": "osm",
-                }
-            )
-            existing_coords.append((osm_n["lat"], osm_n["lon"]))
-            added += 1
-    if added:
-        print(f"  Merged {added} additional neighborhoods from Overpass")
-    return curated
-
-
-def _merge_osm_landmarks(curated: list[dict], osm: list[dict]) -> list[dict]:
-    """Add significant OSM landmarks not already in curated list."""
-    existing_names = {lm["name"].lower() for lm in curated}
-    added = 0
-    for osm_lm in osm:
-        name = osm_lm.get("name", "")
-        if not name or name.lower() in existing_names:
-            continue
-        # Skip very generic/small things
-        if len(name) < 4:
-            continue
-        curated.append(
-            {
-                "name": name,
-                "lat": osm_lm["lat"],
-                "lon": osm_lm["lon"],
-                "type": osm_lm.get("type", "landmark"),
-                "neighborhood": None,  # will be assigned below
-                "description": "",
-                "source": "osm",
-            }
-        )
-        existing_names.add(name.lower())
-        added += 1
-    if added:
-        print(f"  Merged {added} additional landmarks from Overpass")
-    return curated
-
-
-def _merge_osm_transit(curated_stations: list[dict], osm_stations: list[dict]) -> list[dict]:
-    """Enrich curated transit data with OSM coordinates where better."""
-    by_name = {s["name"].lower(): s for s in curated_stations}
-    for osm_s in osm_stations:
-        key = osm_s["name"].lower()
-        if key in by_name:
-            # Use OSM coordinates if they differ (OSM tends to be precise)
-            existing = by_name[key]
-            osm_dist = _haversine_km(existing["lat"], existing["lon"], osm_s["lat"], osm_s["lon"])
-            if osm_dist > 0.05:  # more than 50m off
-                existing["lat"] = osm_s["lat"]
-                existing["lon"] = osm_s["lon"]
-                existing["osm_id"] = osm_s.get("osm_id")
-    return curated_stations
-
-
-# ---------------------------------------------------------------------------
-# Build final pack structures
-# ---------------------------------------------------------------------------
-
-
-def _build_neighborhoods(raw: list[dict], *, default_grounding: str = "grounded_geo") -> list[dict]:
-    """Finalize neighborhood records with IDs and adjacency."""
-    # Deduplicate by name
-    seen = {}
-    for n in raw:
-        key = n["name"].lower()
-        if key not in seen:
-            seen[key] = n
-    deduped = list(seen.values())
-
-    # Assign IDs
-    for n in deduped:
-        n["id"] = _slugify(n["name"])
-        n.setdefault("grounding", default_grounding)
-        n.setdefault("vibe", "")
-        n.setdefault("region", "other")
-
-    # Compute adjacency
-    adjacency = _compute_neighborhood_adjacency(deduped)
-    for n in deduped:
-        explicit = n.get("adjacent_to")
-        n["adjacent_to"] = sorted({str(item).strip() for item in explicit if str(item).strip()}) if isinstance(explicit, list) else sorted(adjacency[n["id"]])
-
-    return sorted(deduped, key=lambda n: n["name"])
-
-
-def _build_transit_graph(
-    config_systems: list[dict],
-    processed_stations: dict[str, list[dict]],
-    neighborhoods: list[dict],
-    *,
-    default_grounding: str = "grounded_geo",
-) -> dict:
-    """Build the transit graph structure for all systems."""
-    graph = {}
-
-    for system in config_systems:
-        sys_id = system["id"]
-        stations = processed_stations.get(sys_id, [])
-        stations = _assign_transit_neighborhoods(stations, neighborhoods)
-
-        # Build sequential connections (assume stations listed in order if trunk)
-        # This is a bit simplistic but preserves existing BART functionality
-        sys_connections: dict[str, list[str]] = {}
-        station_ids = [_slugify(f"{sys_id}-{s['name']}") for s in stations]
-
-        for i, s in enumerate(stations):
-            sid = station_ids[i]
-            conns = []
-            if i > 0:
-                conns.append(station_ids[i - 1])
-            if i < len(stations) - 1:
-                conns.append(station_ids[i + 1])
-            # Merge with explicitly defined connects_to if they existed in config
-            if "connects_to" in s:
-                conns = list(set(conns + s["connects_to"]))  # dedup
-            sys_connections[sid] = conns
-
-        final_stations = []
-        for i, s in enumerate(stations):
-            sid = station_ids[i]
-            st = {
-                "id": sid,
-                "name": s["name"],
-                "grounding": s.get("grounding", default_grounding),
-                "system": system["name"],
-                "lines": s.get("lines", []),
-                "lat": s["lat"],
-                "lon": s["lon"],
-                "neighborhood": s.get("neighborhood"),
-                "notes": s.get("notes", ""),
-            }
-            if sys_connections[sid]:
-                st["connects_to"] = sys_connections[sid]
-            final_stations.append(st)
-
-        graph[sys_id] = {"description": system.get("description", ""), "fare_zone": system.get("fare_zone", system.get("fare", "")), "frequency": system.get("frequency", ""), "stations": final_stations}
-        if "lines" in system:
-            graph[sys_id]["lines"] = system["lines"]
-
-    return graph
-
-
-def _build_landmarks(
-    raw: list[dict],
-    neighborhoods: list[dict],
-    *,
-    default_grounding: str = "grounded_geo",
-) -> list[dict]:
-    """Finalize landmark records."""
-    raw = _assign_landmark_neighborhoods(raw, neighborhoods)
-    result = []
-    seen = set()
-    for lm in raw:
-        name = lm.get("name", "")
-        if not name or name in seen:
-            continue
-        seen.add(name)
-        result.append(
-            {
-                "id": _slugify(name),
-                "name": name,
-                "grounding": lm.get("grounding", default_grounding),
-                "type": lm.get("type", "landmark"),
-                "neighborhood": lm.get("neighborhood"),
-                "lat": lm.get("lat"),
-                "lon": lm.get("lon"),
-                "description": lm.get("description", ""),
-            }
-        )
-    return sorted(result, key=lambda x: x["name"])
-
-
-def _build_corridors(raw: list[dict], *, default_grounding: str = "grounded_geo") -> list[dict]:
-    result = []
-    for c in raw:
-        result.append(
-            {
-                "id": _slugify(c["name"]),
-                "name": c["name"],
-                "grounding": c.get("grounding", default_grounding),
-                "type": c.get("type", "commercial"),
-                "neighborhoods": c.get("neighborhoods", []),
-                "vibe": c.get("vibe", ""),
-            }
-        )
-    return result
-
-
-# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -576,11 +283,9 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
         sys.exit(1)
 
     city_name = config.get("city_name") or config.get("city", "Unknown City")
-    city_id = config.get("city_id", "unknown_city")
     default_bbox = config.get("bboxes", {}).get("default", "")
     fictional = bool(config.get("fictional", False))
     import_osm = bool(config.get("import_osm", True)) and not fictional
-    default_grounding = "fictional" if fictional else "grounded_geo"
 
     output_dir.mkdir(parents=True, exist_ok=True)
     print(f"Building {city_name} city pack → {output_dir}")
@@ -618,129 +323,39 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
         reason = "fictional/curated mode" if not import_osm else "offline mode"
         print(f"{reason.capitalize()} — using curated baseline only")
 
-    # --- 2. Merge OSM into curated baseline ---
-    print("Merging data...")
-    all_neighborhoods = _merge_osm_neighborhoods(config.get("curated_neighborhoods", []), osm_neighborhoods)
-    all_landmarks = _merge_osm_landmarks(config.get("curated_landmarks", []), osm_landmarks)
-
-    processed_transit = {}
-    total_transit_stations = 0
-    for system in config.get("transit_systems", []):
-        sys_id = system["id"]
-        curated = system.get("stations", [])
-        osm_stations = osm_transit.get(sys_id, [])
-        processed = _merge_osm_transit(curated, osm_stations)
-        processed_transit[sys_id] = processed
-        total_transit_stations += len(processed)
-
-    # --- 3. Build final structures ---
-    print("Building neighborhood graph...")
-    neighborhoods = _build_neighborhoods(
-        all_neighborhoods,
-        default_grounding=default_grounding,
+    print("Assembling and validating pack...")
+    built = assemble_city_pack(
+        config,
+        osm_neighborhoods=osm_neighborhoods,
+        osm_landmarks=osm_landmarks,
+        osm_transit=osm_transit,
     )
-    print(f"  {len(neighborhoods)} neighborhoods with adjacency")
-
-    print("Building transit graph...")
-    transit_graph = _build_transit_graph(
-        config.get("transit_systems", []),
-        processed_transit,
-        neighborhoods,
-        default_grounding=default_grounding,
-    )
-    print(f"  {total_transit_stations} total transit stations processed")
-
-    print("Building landmarks...")
-    landmarks = _build_landmarks(
-        all_landmarks,
-        neighborhoods,
-        default_grounding=default_grounding,
-    )
-    print(f"  {len(landmarks)} landmarks")
-
-    print("Building street corridors...")
-    corridors = _build_corridors(
-        config.get("street_corridors", []),
-        default_grounding=default_grounding,
-    )
-    print(f"  {len(corridors)} corridors")
-
-    compiled_map = None
-    if fictional and isinstance(config.get("fictional_map"), dict):
-        print("Compiling fictional terrain fields...")
-        compiled_map = compile_fictional_map(config, neighborhoods=neighborhoods, landmarks=landmarks)
-        print(f"  {len(compiled_map.artifact['sections'])} independently seeded sections")
-
-    travel_hubs = config.get("travel_hubs", [])
-    inter_city = config.get("inter_city", [])
-    stoops = config.get("stoops", [])
-
-    # --- 4. Write files ---
-    bbox_parts = default_bbox.split(",")
-    bounds = {}
-    if len(bbox_parts) == 4:
-        bounds = {"south": float(bbox_parts[0]), "west": float(bbox_parts[1]), "north": float(bbox_parts[2]), "east": float(bbox_parts[3])}
-
-    manifest: dict[str, Any] = {
-        "city": city_name,
-        "city_id": city_id,
-        "schema_version": "1.1.0",
-        "version": str(config.get("pack_version") or "1.0.0"),
-        "built_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-        "bounds": bounds,
-        "source": str(config.get("source") or ("WorldWeaver curated fictional geography" if fictional else "openstreetmap.org + curated")),
-        "license": str(config.get("license") or ("Original fictional pack data; repository license applies" if fictional else "ODbL (openstreetmap.org/copyright) for OSM-derived data")),
-        "fictional": fictional,
-        "counts": {
-            "neighborhoods": len(neighborhoods),
-            "transit_stations": total_transit_stations,
-            "landmarks": len(landmarks),
-            "corridors": len(corridors),
-            "travel_hubs": len(travel_hubs),
-            "inter_city_routes": len(inter_city),
-            "stoops": len(stoops),
-            "map_sections": len(compiled_map.artifact["sections"]) if compiled_map else 0,
-        },
-    }
-    if compiled_map:
-        manifest["generated_map"] = {
-            "schema_version": compiled_map.artifact["schema_version"],
-            "generator": dict(compiled_map.artifact["generator"]),
-            "artifact_sha256": compiled_map.artifact["artifact_sha256"],
-        }
-
-    files: dict[str, Any] = {
-        "manifest.json": manifest,
-        "neighborhoods.json": neighborhoods,
-        "transit_graph.json": transit_graph,
-        "landmarks.json": landmarks,
-        "street_corridors.json": corridors,
-        "travel_hubs.json": travel_hubs,
-        "inter_city.json": inter_city,
-        "stoops.json": stoops,
-        "weather_config.json": config.get("weather_config", {}),
-        "transit_config.json": config.get("transit_config", {}),
-    }
-    if compiled_map:
-        files["generated_map.json"] = compiled_map.artifact
-
-    report = require_valid_city_pack({filename.removesuffix(".json"): data for filename, data in files.items()})
-    for issue in report.warnings:
+    counts = built.files["manifest.json"]["counts"]
+    print(f"  {counts['neighborhoods']} neighborhoods with adjacency")
+    print(f"  {counts['transit_stations']} total transit stations processed")
+    print(f"  {counts['landmarks']} landmarks")
+    print(f"  {counts['corridors']} corridors")
+    if counts["map_sections"]:
+        print(f"  {counts['map_sections']} independently seeded sections")
+    for issue in built.validation.warnings:
         print(f"  [warn] {issue.path}: {issue.message}", file=sys.stderr)
 
-    for filename, data in files.items():
+    for filename, data in built.files.items():
         path = output_dir / filename
         path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
         size_kb = path.stat().st_size / 1024
         print(f"  Wrote {filename} ({size_kb:.1f} KB)")
 
-    if compiled_map:
+    if built.generated_map_svg is not None:
         svg_path = output_dir / "generated_map.svg"
-        svg_path.write_text(compiled_map.svg, encoding="utf-8")
+        svg_path.write_text(built.generated_map_svg, encoding="utf-8")
         print(f"  Wrote generated_map.svg ({svg_path.stat().st_size / 1024:.1f} KB)")
 
     print(f"\nDone. City pack written to {output_dir}")
-    output_filenames = [*files, *(["generated_map.svg"] if compiled_map else [])]
+    output_filenames = [
+        *built.files,
+        *(["generated_map.svg"] if built.generated_map_svg is not None else []),
+    ]
     print(f"  Total: {sum((output_dir / filename).stat().st_size for filename in output_filenames) / 1024:.1f} KB")
 
 

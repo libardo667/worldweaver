@@ -6,15 +6,22 @@ from pathlib import Path
 
 import pytest
 
-from scripts.build_city_pack import _build_landmarks, _build_neighborhoods
+from src.services.city_pack_builder import build_landmarks, build_neighborhoods
 from src.services.map_generation import compile_fictional_map, edit_section
 
 
 def _alderbank_inputs() -> tuple[dict, list[dict], list[dict]]:
     engine_root = Path(__file__).resolve().parents[2]
     config = json.loads((engine_root / "scripts" / "city_configs" / "alderbank.json").read_text(encoding="utf-8"))
-    neighborhoods = _build_neighborhoods(copy.deepcopy(config["curated_neighborhoods"]), default_grounding="fictional")
-    landmarks = _build_landmarks(copy.deepcopy(config["curated_landmarks"]), neighborhoods, default_grounding="fictional")
+    neighborhoods = build_neighborhoods(
+        copy.deepcopy(config["curated_neighborhoods"]),
+        default_grounding="fictional",
+    )
+    landmarks = build_landmarks(
+        copy.deepcopy(config["curated_landmarks"]),
+        neighborhoods,
+        default_grounding="fictional",
+    )
     return config, neighborhoods, landmarks
 
 
