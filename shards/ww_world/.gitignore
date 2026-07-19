@@ -2,3 +2,4 @@ db/
 data/
 residents/
 *.env
+identity/node.key

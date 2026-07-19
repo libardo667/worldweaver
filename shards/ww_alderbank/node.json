@@ -1,0 +1,8 @@
+{
+  "city_id": "alderbank",
+  "node_id": "ww_alderbank",
+  "public_key": "zT6DTfy7Kj4IuR4G2pxiuQsop4qo5MKpLz0Xc5m6bk4",
+  "schema": "worldweaver.node",
+  "schema_version": 1,
+  "shard_type": "city"
+}

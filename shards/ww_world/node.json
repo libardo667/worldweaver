@@ -1,0 +1,7 @@
+{
+  "node_id": "ww_world",
+  "public_key": "xFHnKz-es2fi6yEO0cm7KYk1Mn7t1ly2Kztkw9Rnf9k",
+  "schema": "worldweaver.node",
+  "schema_version": 1,
+  "shard_type": "world"
+}

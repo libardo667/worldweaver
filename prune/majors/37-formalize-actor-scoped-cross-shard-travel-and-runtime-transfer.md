@@ -43,23 +43,29 @@ New shard folders now generate their own Ed25519 signing key and safe-to-share p
 federation requests sign the method, path, exact body, timestamp, and a one-time nonce. The world root binds
 a node ID to its first registered public key, rejects later impersonation, prevents replay, and checks that
 the signed caller is the node named by registration, pulses, travel transitions, mail, and account origin.
-Existing local folders still use the shared token until they are deliberately migrated and verified.
+The active Alderbank, Portland, and San Francisco folders have been migrated, their keys are bound at the
+local world root, and the shared token has been removed from those folders and the root. Live startup pulses
+were accepted under all three identities while an unsigned private-directory request was rejected. The
+stopped Portland variant folders still share one legacy registry ID and are not eligible to join as separate
+nodes until that old naming collision is resolved.
 
 ## Build next
 
-1. Migrate the existing local shard folders to generated node identities, verify signed registration,
-   pulses, account routing, and travel, and then remove their shared-token fallback.
-2. Define explicit first-registration and key-recovery policy before accepting unknown nodes on a public
+1. Exercise signed account routing and a complete signed Portland-to-San-Francisco travel and return on the
+   migrated local nodes, including an attempted wrong-node transition.
+2. Resolve or retire the stopped Portland variant folders; folders that may run independently need distinct
+   node IDs rather than a shared city-name fallback.
+3. Define explicit first-registration and key-recovery policy before accepting unknown nodes on a public
    directory; continuity of a key proves node identity but does not establish community trust by itself.
-3. Run the folder against published, versioned images so it does not reach into a neighboring source tree.
-4. Give a steward one plain setup/check/start/stop/update/backup workflow that operates only on that folder
+4. Run the folder against published, versioned images so it does not reach into a neighboring source tree.
+5. Give a steward one plain setup/check/start/stop/update/backup workflow that operates only on that folder
    and does not print or copy private credentials.
-5. Put two independently created node folders behind real HTTPS addresses on different computers or trust
+6. Put two independently created node folders behind real HTTPS addresses on different computers or trust
    domains.
-6. Prove that a resident can remain hosted at their hearth, visit a remote city, and return without copying
+7. Prove that a resident can remain hosted at their hearth, visit a remote city, and return without copying
    the complete hearth to that city.
-7. Configure and verify a real public-client URL for each independently hosted destination.
-8. Test directory outage, destination outage, interrupted departure, interrupted arrival, and replay across
+8. Configure and verify a real public-client URL for each independently hosted destination.
+9. Test directory outage, destination outage, interrupted departure, interrupted arrival, and replay across
    independently operated nodes.
 
 ## Rules

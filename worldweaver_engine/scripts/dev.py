@@ -991,6 +991,19 @@ def _ordered_unique_city_shards(shards: list[ShardSpec]) -> list[ShardSpec]:
 def _registration_needs_refresh(entry: dict[str, object] | None, shard: ShardSpec) -> bool:
     if entry is None or str(entry.get("status") or "").strip() not in {"healthy", "degraded"}:
         return True
+    env_values = _shard_env(shard)
+    configured_key = str(env_values.get("WW_NODE_PRIVATE_KEY_PATH") or "").strip()
+    if configured_key:
+        key_path = Path(configured_key)
+        if not key_path.is_absolute():
+            key_path = shard.shard_dir / key_path
+        if key_path.is_file():
+            if str(ROOT) not in sys.path:
+                sys.path.insert(0, str(ROOT))
+            from src.services.federation_node_auth import public_key_for_private_key
+
+            if str(entry.get("public_key") or "").strip() != public_key_for_private_key(key_path):
+                return True
     registered_api = str(entry.get("shard_url") or "").rstrip("/")
     registered_client = str(entry.get("client_url") or "").rstrip("/")
     return registered_api != _docker_host_backend_url(shard).rstrip("/") or registered_client != _shard_client_url(shard).rstrip("/")

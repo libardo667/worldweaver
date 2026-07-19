@@ -1,0 +1,8 @@
+{
+  "city_id": "san_francisco",
+  "node_id": "san_francisco",
+  "public_key": "B1TRNhkAHd4_ggJG2NWlQ66_MWT-PN-QVPs5xwyWjkI",
+  "schema": "worldweaver.node",
+  "schema_version": 1,
+  "shard_type": "city"
+}

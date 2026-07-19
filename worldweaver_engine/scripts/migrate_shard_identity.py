@@ -73,7 +73,11 @@ def _with_private_key_ignored(text: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-def migrate_shard_identity(shard_dir: Path) -> dict[str, object]:
+def migrate_shard_identity(
+    shard_dir: Path,
+    *,
+    drop_legacy_token: bool = False,
+) -> dict[str, object]:
     shard_dir = shard_dir.resolve()
     env_path = shard_dir / ".env"
     compose_path = shard_dir / "docker-compose.yml"
@@ -81,12 +85,9 @@ def migrate_shard_identity(shard_dir: Path) -> dict[str, object]:
     if not env_path.is_file() or not compose_path.is_file():
         raise ValueError("Shard folder must contain .env and docker-compose.yml.")
     env = _load_env(env_path)
-    node_id = str(env.get("SHARD_ID") or env.get("CITY_ID") or "").strip()
+    node_id = str(env.get("SHARD_ID") or env.get("CITY_ID") or shard_dir.name).strip()
     shard_type = str(env.get("SHARD_TYPE") or "city").strip()
     city_id = str(env.get("CITY_ID") or "").strip() or None
-    if not node_id:
-        raise ValueError("Shard folder has no SHARD_ID or CITY_ID.")
-
     configured_path = str(env.get(_KEY_SETTING) or _KEY_RELATIVE_PATH).strip()
     private_key_path = Path(configured_path)
     if private_key_path.is_absolute():
@@ -113,10 +114,10 @@ def migrate_shard_identity(shard_dir: Path) -> dict[str, object]:
             city_id=city_id,
         )
 
-    env_path.write_text(
-        _set_env_value(env_path.read_text(encoding="utf-8"), _KEY_SETTING, configured_path),
-        encoding="utf-8",
-    )
+    env_text = _set_env_value(env_path.read_text(encoding="utf-8"), _KEY_SETTING, configured_path)
+    if drop_legacy_token:
+        env_text = _set_env_value(env_text, "FEDERATION_TOKEN", "")
+    env_path.write_text(env_text, encoding="utf-8")
     env_path.chmod(0o600)
     compose_path.write_text(
         _with_backend_identity_mount(compose_path.read_text(encoding="utf-8")),
@@ -130,9 +131,17 @@ def migrate_shard_identity(shard_dir: Path) -> dict[str, object]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("shard_dir", type=Path, help="Existing shard folder")
+    parser.add_argument(
+        "--drop-legacy-token",
+        action="store_true",
+        help="Clear FEDERATION_TOKEN after this node's public key is bound at its directory",
+    )
     args = parser.parse_args()
     try:
-        descriptor = migrate_shard_identity(args.shard_dir)
+        descriptor = migrate_shard_identity(
+            args.shard_dir,
+            drop_legacy_token=args.drop_legacy_token,
+        )
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
     print(

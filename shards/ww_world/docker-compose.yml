@@ -30,6 +30,7 @@ services:
     volumes:
       - ../../worldweaver_engine:/app
       - ./data:/app/data
+      - ./identity:/app/identity:ro
     env_file: .env
     environment:
       WW_DB_HOST: ${WW_DB_HOST:-db}

@@ -73,6 +73,27 @@ def test_registration_refreshes_when_human_client_url_is_stale(tmp_path):
     assert dev._registration_needs_refresh(current, city) is False
 
 
+def test_registration_refreshes_when_folder_key_is_not_bound(tmp_path):
+    city = _shard(tmp_path, "ww_sfo", shard_type="city", city_id="san_francisco", shard_id="bay-node-1")
+    generate_node_identity(
+        private_key_path=city.shard_dir / "identity" / "node.key",
+        descriptor_path=city.shard_dir / "node.json",
+        node_id="bay-node-1",
+        shard_type="city",
+        city_id="san_francisco",
+    )
+    with city.env_file.open("a", encoding="utf-8") as env_file:
+        env_file.write("\nWW_NODE_PRIVATE_KEY_PATH=identity/node.key\n")
+    current = {
+        "status": "healthy",
+        "shard_url": "http://host.docker.internal:8002",
+        "client_url": "http://localhost:5174/ww-sfo",
+        "public_key": None,
+    }
+
+    assert dev._registration_needs_refresh(current, city) is True
+
+
 def test_client_routes_keep_browser_traffic_off_runtime_only_node_urls(tmp_path):
     canonical = _shard(tmp_path, "ww_pdx", shard_type="city", city_id="portland")
     duplicate = _shard(tmp_path, "ww_pdx_variant", shard_type="city", city_id="portland")
