@@ -30,6 +30,7 @@ export function usePlace(name: string | null, stoopRefreshKey = 0): PlaceDetails
       return;
     }
     let live = true;
+    setStoops([]);
 
     if (contextCache.has(name)) {
       setContext(contextCache.get(name) ?? null);
@@ -60,7 +61,7 @@ export function usePlace(name: string | null, stoopRefreshKey = 0): PlaceDetails
         if (live) setStoops(result.stoops ?? []);
       })
       .catch(() => {
-        // A shard without stoop capabilities simply shows none.
+        if (live) setStoops([]);
       });
 
     return () => {

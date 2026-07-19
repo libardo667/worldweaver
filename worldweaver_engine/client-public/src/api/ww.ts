@@ -120,8 +120,8 @@ export function getTerms(): Promise<{ terms: string }> {
   return getJson("/api/auth/terms");
 }
 
-export function postRegister(input: { email: string; username: string; display_name: string; password: string }): Promise<AuthResponse> {
-  return postJson("/api/auth/register", { ...input, pass_type: "citizen", terms_accepted: true });
+export function postRegister(input: { email: string; username: string; display_name: string; password: string; terms_accepted: boolean }): Promise<AuthResponse> {
+  return postJson("/api/auth/register", { ...input, pass_type: "citizen" });
 }
 
 export function postLogin(identifier: string, password: string): Promise<AuthResponse> {

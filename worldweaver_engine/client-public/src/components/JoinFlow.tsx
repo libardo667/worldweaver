@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Levi Banks
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { getTerms, postLogin, postRegister, postSessionBootstrap } from "../api/ww";
 import type { EntryInfo } from "../api/types";
@@ -30,17 +30,34 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose }: Props) {
   const [identifier, setIdentifier] = useState(getPlayer()?.username ?? "");
   const [termsText, setTermsText] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsLoading, setTermsLoading] = useState(true);
+  const [termsError, setTermsError] = useState("");
   const [place, setPlace] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const entryPlaces = entry?.locations ?? [];
 
-  useEffect(() => {
-    getTerms()
-      .then((result) => setTermsText(result.terms))
-      .catch(() => setTermsText(""));
+  const loadTerms = useCallback(async () => {
+    setTermsLoading(true);
+    setTermsError("");
+    setTermsAccepted(false);
+    try {
+      const result = await getTerms();
+      const terms = String(result.terms ?? "").trim();
+      if (!terms) throw new Error("The shard returned empty terms.");
+      setTermsText(terms);
+    } catch {
+      setTermsText("");
+      setTermsError("This shard's terms could not be loaded. Registration is paused until you can read them.");
+    } finally {
+      setTermsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadTerms();
+  }, [loadTerms]);
 
   useEffect(() => {
     if (place) return;
@@ -56,11 +73,13 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose }: Props) {
     if (busy || !entry || !place) return;
     setBusy(true);
     setError("");
+    let newlyRegisteredUsername = "";
     try {
       const auth =
         mode === "register"
-          ? await postRegister({ email, username, display_name: displayName, password })
+          ? await postRegister({ email, username, display_name: displayName, password, terms_accepted: termsAccepted })
           : await postLogin(identifier, password);
+      if (mode === "register") newlyRegisteredUsername = auth.username;
       setJwt(auth.token);
       setPlayer({
         actor_id: auth.actor_id,
@@ -73,13 +92,19 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose }: Props) {
       setStandingPlace(place);
       onJoined(place, auth.display_name);
     } catch (err) {
-      setError(err instanceof Error && err.message ? err.message : "That didn't work — try again.");
+      if (newlyRegisteredUsername) {
+        setMode("login");
+        setIdentifier(newlyRegisteredUsername);
+        setError("Your account was created, but the shard did not let you enter. Try again under Coming back.");
+      } else {
+        setError(err instanceof Error && err.message ? err.message : "That didn't work — try again.");
+      }
     } finally {
       setBusy(false);
     }
   }
 
-  const registerReady = email && username && displayName && password.length >= 8 && termsAccepted;
+  const registerReady = email && username && displayName && password.length >= 8 && termsText && termsAccepted && !termsLoading && !termsError;
   const loginReady = identifier && password;
 
   return (
@@ -102,7 +127,16 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose }: Props) {
               <input placeholder="username" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
               <input placeholder="name people will see" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
               <input type="password" placeholder="password (8+ characters)" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
-              {termsText && (
+              {termsLoading && <p className="place-empty">Loading this shard's terms…</p>}
+              {termsError && (
+                <div>
+                  <p className="join-error">{termsError}</p>
+                  <button type="button" className="btn btn-quiet" onClick={() => void loadTerms()}>
+                    Try loading them again
+                  </button>
+                </div>
+              )}
+              {!termsLoading && !termsError && termsText && (
                 <label className="join-terms">
                   <input type="checkbox" checked={termsAccepted} onChange={(e) => setTermsAccepted(e.target.checked)} />
                   <span>{termsText}</span>
