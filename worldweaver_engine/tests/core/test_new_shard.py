@@ -37,6 +37,46 @@ def test_new_shard_keeps_node_identity_separate_from_city_pack(tmp_path: Path) -
     assert "COMPOSE_PROJECT_NAME=rose-city-coop-1\n" in env_text
 
 
+def test_new_world_directory_is_closed_and_has_folder_local_trust_commands(tmp_path: Path) -> None:
+    script = Path(__file__).resolve().parents[2] / "scripts" / "new_shard.py"
+    subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "world",
+            "--type",
+            "world",
+            "--base-dir",
+            str(tmp_path),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    shard = tmp_path / "ww_world"
+    generated_env = _read_env(shard / ".env")
+    assert generated_env["SHARD_TYPE"] == "world"
+    assert generated_env["WW_FEDERATION_ADMISSION_MODE"] == "closed"
+    checked = subprocess.run(
+        [sys.executable, str(shard / "ww.py"), "check", "--offline"],
+        cwd=shard,
+        capture_output=True,
+        text=True,
+    )
+    node_help = subprocess.run(
+        [sys.executable, str(shard / "ww.py"), "node", "--help"],
+        cwd=shard,
+        capture_output=True,
+        text=True,
+    )
+    assert checked.returncode == 0, checked.stderr
+    assert node_help.returncode == 0, node_help.stderr
+    assert "admit" in node_help.stdout
+    assert "revoke" in node_help.stdout
+    assert "recover" in node_help.stdout
+
+
 def test_new_shards_receive_separate_secure_local_secrets(tmp_path: Path) -> None:
     city_pack = tmp_path / "pack"
     city_pack.mkdir()

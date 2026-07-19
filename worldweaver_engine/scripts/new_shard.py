@@ -101,6 +101,7 @@ WW_ENGINE_IMAGE={engine_image}
 SHARD_ID={shard_id}
 BACKEND_PORT={port}
 SHARD_TYPE=world
+WW_FEDERATION_ADMISSION_MODE=closed
 WW_SHARD_EXPERIENCE_PATH=
 FEDERATION_TOKEN={token}
 WW_NODE_PRIVATE_KEY_PATH=identity/node.key
@@ -236,7 +237,7 @@ services:
       WW_DB_PASSWORD: ${{WW_DB_PASSWORD:-postgres}}
       WW_DATABASE_URL: ${{WW_DATABASE_URL:-}}
     ports:
-      - "${BACKEND_PORT}:8000"
+      - "${{BACKEND_PORT}}:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -281,6 +282,19 @@ python ww.py start --agents  # city nodes only; wakes residents deliberately
 python ww.py backup
 python ww.py stop
 ```
+
+On a federation directory, admit a city by receiving its safe-to-share
+`node.json` file and recording why it is joining:
+
+```bash
+python ww.py node admit ../new-city/node.json --reason "Known steward joining the commons"
+python ww.py node list
+python ww.py node history new-city-node-id
+```
+
+`node revoke` stops an admitted node from using private federation routes.
+Changing a node key requires `node revoke` followed by `node recover` with the
+replacement `node.json`. These commands are only available on a world node.
 
 `update` accepts explicit versioned image references. `restore` requires a full
 backup made by this command surface and an explicit `--yes`. Backups contain the

@@ -174,6 +174,12 @@ def collect_problems(*, offline: bool = False) -> tuple[list[str], list[str]]:
             errors.append(f"{key} is missing from .env.")
     if env.get("SHARD_TYPE") != "world" and not env.get("WW_AGENT_IMAGE"):
         errors.append("WW_AGENT_IMAGE is missing from this city node.")
+    if env.get("SHARD_TYPE") == "world":
+        admission_mode = env.get("WW_FEDERATION_ADMISSION_MODE", "")
+        if admission_mode not in {"closed", "open"}:
+            errors.append("WW_FEDERATION_ADMISSION_MODE must be 'closed' or 'open' on a federation directory.")
+        elif admission_mode == "open":
+            warnings.append("This federation directory admits any new node that can sign its registration request.")
 
     for key in ("WW_ENGINE_IMAGE", "WW_AGENT_IMAGE"):
         if env.get(key) and not _is_immutable_image(env[key]):
@@ -500,6 +506,65 @@ def command_restore(args: argparse.Namespace) -> int:
     return 0
 
 
+def _public_node_descriptor(path_value: str) -> dict[str, str]:
+    path = Path(path_value).expanduser()
+    if not path.is_absolute():
+        path = ROOT / path
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise OperatorError(f"Could not read public node descriptor {path}: {exc}") from exc
+    if raw.get("schema") != "worldweaver.node" or raw.get("schema_version") != 1:
+        raise OperatorError("The public node descriptor uses an unsupported format.")
+    node_id = str(raw.get("node_id") or "").strip()
+    shard_type = str(raw.get("shard_type") or "").strip()
+    public_key = str(raw.get("public_key") or "").strip()
+    city_id = str(raw.get("city_id") or "").strip()
+    if not node_id or len(node_id) > 80 or any(character.isspace() for character in node_id):
+        raise OperatorError("The public node descriptor has an invalid node ID.")
+    if shard_type not in {"city", "world", "neighborhood"}:
+        raise OperatorError("The public node descriptor has an invalid shard type.")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{43}", public_key):
+        raise OperatorError("The public node descriptor does not contain a valid Ed25519 public key.")
+    return {
+        "node_id": node_id,
+        "shard_type": shard_type,
+        "public_key": public_key,
+        "city_id": city_id,
+    }
+
+
+def command_node(args: argparse.Namespace) -> int:
+    if _read_env().get("SHARD_TYPE") != "world":
+        raise OperatorError("Node admission is managed by a federation directory, not a city node.")
+    if "backend" not in _services(running_only=True):
+        raise OperatorError("Start the federation directory before managing admitted nodes.")
+
+    command = ["exec", "-T", "backend", "python", "scripts/federation_nodes.py", args.node_action]
+    if args.node_action in {"admit", "recover"}:
+        descriptor = _public_node_descriptor(args.descriptor)
+        command.extend(
+            [
+                "--node-id",
+                descriptor["node_id"],
+                "--public-key",
+                descriptor["public_key"],
+                "--shard-type",
+                descriptor["shard_type"],
+                "--city-id",
+                descriptor["city_id"],
+                "--reason",
+                args.reason,
+            ]
+        )
+    elif args.node_action == "revoke":
+        command.extend([args.node_id, "--reason", args.reason])
+    elif args.node_action == "history":
+        command.append(args.node_id)
+    _compose(*command)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Operate this WorldWeaver node folder.")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -539,6 +604,22 @@ def build_parser() -> argparse.ArgumentParser:
     restore.add_argument("archive")
     restore.add_argument("--yes", action="store_true", help="confirm replacement of current private node state")
     restore.set_defaults(handler=command_restore)
+
+    node = commands.add_parser("node", help="manage nodes trusted by this federation directory")
+    node_commands = node.add_subparsers(dest="node_action", required=True)
+    node_commands.add_parser("list", help="list admitted and revoked nodes")
+    history = node_commands.add_parser("history", help="show the trust history for one node")
+    history.add_argument("node_id")
+    admit = node_commands.add_parser("admit", help="admit a safe-to-share node.json descriptor")
+    admit.add_argument("descriptor")
+    admit.add_argument("--reason", required=True)
+    revoke = node_commands.add_parser("revoke", help="block a known node from private federation routes")
+    revoke.add_argument("node_id")
+    revoke.add_argument("--reason", required=True)
+    recover = node_commands.add_parser("recover", help="replace the key for a previously revoked node")
+    recover.add_argument("descriptor")
+    recover.add_argument("--reason", required=True)
+    node.set_defaults(handler=command_node)
     return parser
 
 
