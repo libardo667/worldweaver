@@ -18,7 +18,8 @@ portable files that can be exchanged and hosted without approval from a central 
 1. Extract remaining reusable work from `build_city_pack.py` so the CLI and browser call the same builder
    and validator.
 2. Add a node-local draft store outside the published pack directories.
-3. Let a steward create, import, edit, validate, and preview a draft on a geographic or schematic map.
+3. Let a steward create, import, edit, validate, and preview a draft on a geographic or generated fictional
+   map. Major 131 owns the deterministic field and section compiler used by that preview.
 4. Export and import an immutable, versioned pack artifact.
 5. Add a first-publication operation that refuses to overwrite a seeded or inhabited node.
 6. Keep replacement of an inhabited pack blocked until a separate migration contract exists.
@@ -30,6 +31,8 @@ portable files that can be exchanged and hosted without approval from a central 
   publication.
 - Ambiguous geography produces an error or warning; the builder does not silently invent a repair.
 - A fictional pack never claims OpenStreetMap as its source.
+- Generated fictional maps record their seed, compiler version, rule-library version, source licenses, and
+  locked section boundaries.
 - A destination city owns the mapping from its travel hub ID to its local entry place.
 - Drafts remain local until deliberately exported or published.
 - The federation may advertise a live pack version but does not own pack source or approve publication.

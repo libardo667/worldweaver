@@ -27,7 +27,8 @@ The project now has:
 Make `client-public` the normal participant interface. Keep the older combined client only for justified
 steward/debug functions or retire it. Do not copy resident telemetry into the public client. Close the
 remaining ordinary-action gaps: correspondence, safe encounter targets for direct gifts, and deliberate
-human creation of temporary sublocations.
+human creation of temporary sublocations. Make the current place and its verb palette the default view;
+keep the map as an optional full-screen orientation and destination surface.
 
 ### 2. Add artifact stoops
 
@@ -44,8 +45,9 @@ HTTPS ingress, publish the first `world-weaver.org` directory/node, and prove tr
 
 ### 4. Finish City Studio
 
-Build a browser editor over the existing city-pack builder and validator. Support drafts, preview, export,
-and deliberate publication before habitation. Do not mutate an inhabited pack without a migration plan.
+Build a browser editor over the existing city-pack builder and validator. Support drafts, deterministic
+field-and-section map generation from Major 131, preview, export, and deliberate publication before
+habitation. Do not mutate an inhabited pack without a migration plan.
 
 ### 5. Finish resident portability and recovery
 

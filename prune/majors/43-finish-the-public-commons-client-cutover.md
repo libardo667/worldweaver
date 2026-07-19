@@ -42,6 +42,10 @@ marks left by other visitors and leave an attributed, expiring mark through the 
 residents. Temporary session IDs stay out of the human response. Stoop-held objects are excluded from the
 general loose-object list, so one object no longer appears under two incompatible sets of controls.
 
+The next layout change makes the current place and its available verbs the default human surface. The map
+remains available as a full-screen orientation and destination view, but a fictional town is not presented
+as an unlabeled graph behind a permanent side panel. Major 131 owns the generated fictional-map work.
+
 The supported path now also has explicit labels for join fields, visible keyboard focus, keyboard-operable
 map places, focus handoff when a place opens, and reduced-motion behavior for both CSS and map movement.
 The mobile place sheet uses more of the usable viewport and keeps form controls at a readable touch size.
