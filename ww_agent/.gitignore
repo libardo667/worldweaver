@@ -91,9 +91,6 @@ residents/.doula_spawns.json
 # Personal player directory
 residents/levi/
 
-# Docker
-.dockerignore
-
 # uv / pip lockfiles (keep pyproject.toml, ignore generated lockfiles if not intentional)
 uv.lock
 poetry.lock
