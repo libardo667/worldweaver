@@ -5,7 +5,9 @@ import { useState } from "react";
 import type { MapEdge, MapNode } from "../api/types";
 import { usePlace } from "../hooks/usePlace";
 import { findNodeBySlug, slugifyPlace } from "../lib/places";
+import { MakeHere } from "./MakeHere";
 import { NearbyLandmarks } from "./NearbyLandmarks";
+import { ObjectsHere } from "./ObjectsHere";
 import { Overheard } from "./Overheard";
 import { PresenceHere } from "./PresenceHere";
 import { SpeakBar } from "./SpeakBar";
@@ -35,10 +37,14 @@ function prettifySlug(slug: string): string {
 /** The place you are looking at, side-loaded over the map. */
 export function PlacePanel({ slug, node, nodes, edges, me, onWalk, onTravel, onClose }: Props) {
   const name = node?.name ?? prettifySlug(slug);
-  const details = usePlace(node?.name ?? null);
+  // Bumped whenever a verb changes the world here (made/took/left/moved a
+  // thing) so stoop counts and object lists refetch together.
+  const [worldBump, setWorldBump] = useState(0);
+  const details = usePlace(node?.name ?? null, worldBump);
   const [spokeCount, setSpokeCount] = useState(0);
 
   const standingHere = me != null && node != null && me.place === node.name;
+  const bumpWorld = () => setWorldBump((count) => count + 1);
 
   return (
     <aside className="place-panel" aria-label={`At ${name}`}>
@@ -64,7 +70,19 @@ export function PlacePanel({ slug, node, nodes, edges, me, onWalk, onTravel, onC
         <PresenceHere node={node} />
         {node && <Overheard location={node.name} refreshKey={spokeCount} />}
         {node && (
-          <StoopHere location={node.name} stoops={details.stoops} takerSessionId={standingHere ? me.sessionId : null} />
+          <StoopHere
+            location={node.name}
+            stoops={details.stoops}
+            takerSessionId={standingHere ? me.sessionId : null}
+            refreshKey={worldBump}
+            onTook={bumpWorld}
+          />
+        )}
+        {standingHere && (
+          <>
+            <ObjectsHere location={node.name} sessionId={me.sessionId} stoops={details.stoops} refreshKey={worldBump} onChanged={bumpWorld} />
+            <MakeHere location={node.name} sessionId={me.sessionId} onMade={bumpWorld} />
+          </>
         )}
         <WalkTargets node={node} nodes={nodes} edges={edges} onWalk={standingHere ? onTravel : onWalk} />
         <NearbyLandmarks

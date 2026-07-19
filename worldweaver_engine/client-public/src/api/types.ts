@@ -119,6 +119,37 @@ export type StoopBrowse = {
 
 export type StoopList = { location: string; stoops: StoopShell[]; count: number };
 
+export type MakingMaterial = {
+  material_id: string;
+  title?: string;
+  available_units: number;
+};
+
+export type MakingRecipe = {
+  recipe_id: string;
+  title: string;
+  description: string;
+  inputs: Record<string, number>;
+  output: { name?: string; description?: string; object_kind?: string };
+  can_make: boolean;
+  missing_units: Record<string, number>;
+};
+
+export type MakingCatalog = {
+  location: string;
+  materials: MakingMaterial[];
+  recipes: MakingRecipe[];
+};
+
+export type DurableObjectView = {
+  object_id: string;
+  name: string;
+  description: string;
+  object_kind: string;
+  status: string;
+  attachment: { kind: "custody"; actor_id: string } | { kind: "place"; location: string };
+};
+
 export type AuthResponse = {
   token: string;
   actor_id: string;

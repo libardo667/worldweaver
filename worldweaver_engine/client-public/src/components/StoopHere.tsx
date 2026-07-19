@@ -10,13 +10,17 @@ type Props = {
   stoops: StoopShell[];
   /** Session of a participant standing at this exact place; enables taking. */
   takerSessionId?: string | null;
+  /** Bumped by the parent when the world changed elsewhere in the panel. */
+  refreshKey?: number;
+  /** Called after taking so sibling views (carried objects) can refresh. */
+  onTook?: () => void;
 };
 
 /**
  * Things people left for whoever comes next. Browsing is an explicit act —
  * a stoop announces itself but never spills its contents into the view.
  */
-export function StoopHere({ location, stoops, takerSessionId }: Props) {
+export function StoopHere({ location, stoops, takerSessionId, refreshKey = 0, onTook }: Props) {
   const [openStoopId, setOpenStoopId] = useState<string | null>(null);
   const [browse, setBrowse] = useState<StoopBrowse | null>(null);
   const [refreshCount, setRefreshCount] = useState(0);
@@ -43,7 +47,7 @@ export function StoopHere({ location, stoops, takerSessionId }: Props) {
     return () => {
       live = false;
     };
-  }, [openStoopId, location, refreshCount]);
+  }, [openStoopId, location, refreshCount, refreshKey]);
 
   async function takeEntry(entryId: string) {
     if (!takerSessionId || takingEntryId) return;
@@ -51,6 +55,7 @@ export function StoopHere({ location, stoops, takerSessionId }: Props) {
     try {
       await postTakeStoopEntry(entryId, takerSessionId);
       setRefreshCount((n) => n + 1);
+      onTook?.();
     } catch {
       // The entry may have just been taken by someone else; refresh shows truth.
       setRefreshCount((n) => n + 1);

@@ -16,7 +16,7 @@ export type PlaceDetails = {
   stoops: StoopShell[];
 };
 
-export function usePlace(name: string | null): PlaceDetails {
+export function usePlace(name: string | null, stoopRefreshKey = 0): PlaceDetails {
   const [context, setContext] = useState<PlaceContext | null>(null);
   const [landmarks, setLandmarks] = useState<Landmark[]>([]);
   const [stoops, setStoops] = useState<StoopShell[]>([]);
@@ -54,7 +54,6 @@ export function usePlace(name: string | null): PlaceDetails {
         .catch(() => landmarkCache.set(name, []));
     }
 
-    setStoops([]);
     getStoopsAt(name)
       .then((result) => {
         if (live) setStoops(result.stoops ?? []);
@@ -66,7 +65,7 @@ export function usePlace(name: string | null): PlaceDetails {
     return () => {
       live = false;
     };
-  }, [name]);
+  }, [name, stoopRefreshKey]);
 
   return { context, landmarks, stoops };
 }

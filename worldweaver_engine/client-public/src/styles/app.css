@@ -706,6 +706,51 @@ button {
   font-size: 0.9rem;
 }
 
+.make-materials {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+}
+
+.make-recipe {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.make-recipe-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.make-recipe-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.make-recipe-desc {
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.make-recipe-inputs {
+  font-size: 0.76rem;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+.object-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
 .stoop-take {
   margin-top: 6px;
   align-self: flex-start;

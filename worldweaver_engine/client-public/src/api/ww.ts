@@ -9,9 +9,11 @@
 import type {
   AuthResponse,
   ChatMessage,
+  DurableObjectView,
   EntryInfo,
   Grounding,
   Landmark,
+  MakingCatalog,
   MapQueryResult,
   MoveResponse,
   PlaceContext,
@@ -151,5 +153,47 @@ export function postTakeStoopEntry(entryId: string, sessionId: string): Promise<
   return postJson(`/api/world/stoops/entries/${encodeURIComponent(entryId)}/take`, {
     session_id: sessionId,
     idempotency_key: `take-${entryId}-${sessionId}`,
+  });
+}
+
+function freshKey(verb: string): string {
+  return `${verb}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function getMakingCatalog(sessionId: string): Promise<MakingCatalog> {
+  return getJson("/api/world/making", { session_id: sessionId });
+}
+
+export function postMake(sessionId: string, recipeId: string): Promise<{ object?: { object_id: string } }> {
+  return postJson("/api/world/make", {
+    session_id: sessionId,
+    recipe_id: recipeId,
+    idempotency_key: freshKey("make"),
+  });
+}
+
+export function getMyObjects(sessionId: string): Promise<{ objects: DurableObjectView[]; count: number }> {
+  return getJson("/api/world/objects", { session_id: sessionId });
+}
+
+export function postPickUpObject(objectId: string, sessionId: string): Promise<unknown> {
+  return postJson(`/api/world/objects/${encodeURIComponent(objectId)}/pick-up`, {
+    session_id: sessionId,
+    idempotency_key: freshKey("pickup"),
+  });
+}
+
+export function postPutDownObject(objectId: string, sessionId: string): Promise<unknown> {
+  return postJson(`/api/world/objects/${encodeURIComponent(objectId)}/place`, {
+    session_id: sessionId,
+    idempotency_key: freshKey("place"),
+  });
+}
+
+export function postLeaveOnStoop(stoopId: string, objectId: string, sessionId: string): Promise<unknown> {
+  return postJson(`/api/world/stoops/${encodeURIComponent(stoopId)}/leave`, {
+    session_id: sessionId,
+    object_id: objectId,
+    idempotency_key: freshKey("stoopleave"),
   });
 }
