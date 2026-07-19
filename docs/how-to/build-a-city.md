@@ -22,13 +22,13 @@ itself fictional and state the source and license for its authored material.
 ## Build one pack
 
 ```bash
-.venv/bin/python worldweaver_engine/scripts/build_city_pack.py --city CITY_ID
+python dev.py run worldweaver_engine/scripts/build_city_pack.py --city CITY_ID
 ```
 
 For a repeatable build without network enrichment:
 
 ```bash
-.venv/bin/python worldweaver_engine/scripts/build_city_pack.py --city CITY_ID --offline
+python dev.py run worldweaver_engine/scripts/build_city_pack.py --city CITY_ID --offline
 ```
 
 The builder validates identifiers, coordinates, adjacency, paths, travel hubs, entry points, and stoop
@@ -50,8 +50,30 @@ placed over real map tiles.
 A generated fictional map is split into local sections. Each section records its own seed, revision, lock
 state, and decorative details. Shared seam records—not either section—own river and path crossings plus the
 terrain and region values along the border. Lock reviewed sections before export. The low-level section edit
-helper exists now; the browser controls for previewing and rerolling sections are still planned for City
-Studio.
+helper exists now; the browser controls are still planned for City Studio.
+
+## Work in a private draft
+
+Create a validated draft without changing `data/cities` or a running shard:
+
+```bash
+python dev.py city-draft create --city alderbank
+python dev.py city-draft inspect alderbank
+python dev.py city-draft preview alderbank
+```
+
+Draft files live in the ignored, node-local `worldweaver_engine/data/city_drafts/` directory. The preview
+command prints the full generated SVG path. You can also inspect or revise one map section:
+
+```bash
+python dev.py city-draft preview alderbank --section section-0-0
+python dev.py city-draft section alderbank section-0-0 unlock
+python dev.py city-draft section alderbank section-0-0 reroll
+python dev.py city-draft section alderbank section-0-0 lock
+```
+
+A reroll is refused while the section is locked. Every successful edit rebuilds and validates the private
+preview. These commands do not publish a pack; first publication remains a separate future operation.
 
 ## Create a local shard
 

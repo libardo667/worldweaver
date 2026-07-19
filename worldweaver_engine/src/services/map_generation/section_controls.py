@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import copy
+import re
 from typing import Any, Mapping
 
 
@@ -61,3 +62,20 @@ def edit_section(config: Mapping[str, Any], *, section_id: str, action: str) -> 
         locked = False
     overrides[section_id] = {"revision": revision, "locked": locked}
     return edited
+
+
+def section_preview_svg(svg: str, section: Mapping[str, Any]) -> str:
+    """Crop one compiler-owned SVG to a section without regenerating the map."""
+    coordinates = tuple(section.get(field) for field in ("x", "y", "width", "height"))
+    if any(not isinstance(value, int) or isinstance(value, bool) or value <= 0 for value in coordinates[2:]) or any(not isinstance(value, int) or isinstance(value, bool) or value < 0 for value in coordinates[:2]):
+        raise ValueError("map section needs non-negative coordinates and positive dimensions")
+    x, y, width, height = coordinates
+    cropped, replacements = re.subn(
+        r'viewBox="[^"]+"',
+        f'viewBox="{x} {y} {width} {height}"',
+        svg,
+        count=1,
+    )
+    if replacements != 1:
+        raise ValueError("generated map SVG has no root viewBox")
+    return cropped

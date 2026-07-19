@@ -779,6 +779,8 @@ def _help() -> None:
                                         assign one reviewed place without waking its controller
   python dev.py new-shard CITY [options]
                                         create an isolated, folder-operated node
+  python dev.py city-draft create --city CITY
+                                        build a private draft and preview outside published packs
   python dev.py run <script> [args...]  run a repository Python script
 
 Other commands are passed to worldweaver_engine/scripts/dev.py, so commands such as
@@ -814,6 +816,8 @@ def main() -> int:
         return _space_policy(rest)
     if command == "new-shard":
         return _run([sys.executable, "scripts/new_shard.py", *rest], cwd=ENGINE_DIR)
+    if command == "city-draft":
+        return _run([sys.executable, "scripts/city_draft.py", *rest], cwd=ENGINE_DIR)
     if command == "agent":
         return _run([sys.executable, "-m", "src.main", *rest], cwd=AGENT_DIR)
     if command == "engine":

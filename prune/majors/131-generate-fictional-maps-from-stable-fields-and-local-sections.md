@@ -25,9 +25,9 @@ to non-map city files or publication while residents run; makes a full backup; a
 The third map slice makes the 4-by-3 grid real rather than descriptive metadata. Each of Alderbank's twelve
 sections now has its own revision, seed, lock state, and local decorative details. Seventeen shared seam
 records carry elevation bands, region changes, and river or path crossings to both neighboring sections.
-All existing sections ship locked. A shared edit helper can unlock, reroll, and relock one section without
-changing the physical fields, canonical routes, required places, seams, or any neighboring section. A human
-preview and controls in City Studio are still needed before section editing is considered complete.
+All existing sections ship locked. A shared edit helper and local draft command can preview, unlock, reroll,
+and relock one section without changing the physical fields, canonical routes, required places, seams, or
+any neighboring section. Browser controls in City Studio are still needed.
 
 Alderbank is the project's experiment town. On 2026-07-19, the project owner explicitly approved using the
 inhabited Alderbank shard for this work. That approval is narrow: the generated drawing may change while we
@@ -131,7 +131,8 @@ for every interaction.
 - [x] The same compiler inputs produce byte-stable or canonically equivalent artifacts.
 - [x] Alderbank preview shows a river, terrain regions, typed paths, named landmarks, and stable labels while
   preserving its current movement graph.
-- [ ] Each section can be previewed, rerolled, and locked independently without moving locked neighbors.
+- [x] Each section can be previewed, rerolled, and locked independently in a private draft without moving
+  locked neighbors. City Studio still needs to expose these controls in a browser.
 - [x] Section seams match for routes, waterways, elevation bands, and region edges.
 - [x] Every visible interactive route is backed by a canonical engine fact. Doorway drawing remains future
   work; current doors are exposed through the place controls rather than drawn on the map.

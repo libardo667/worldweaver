@@ -18,6 +18,12 @@ in memory. It does not make network requests, touch the filesystem, or mutate th
 existing CLI handles optional OpenStreetMap retrieval and file output around that service. A fixed timestamp
 makes the shared builder deterministic in tests, and Alderbank still produces the exact same map artifact.
 
+The first private draft store is also in place. `python dev.py city-draft` can create, list, inspect, and
+preview a draft, then unlock, reroll, and relock one fictional-map section. Drafts live under ignored
+`data/city_drafts`, outside published packs. Each save assembles and validates a complete preview in a
+temporary directory before replacing the prior draft, and every section gets its own cropped SVG preview.
+There is deliberately no public HTTP write route yet; browser access still needs a local steward boundary.
+
 ## Goal
 
 Give a steward a browser tool for building and reviewing a city before anyone inhabits it. City packs stay
@@ -25,7 +31,7 @@ portable files that can be exchanged and hosted without approval from a central 
 
 ## Build next
 
-1. Add a node-local draft store outside the published pack directories.
+1. Put the private draft operations behind a local steward browser boundary.
 2. Let a steward create, import, edit, validate, and preview a draft on a geographic or generated fictional
    map. Major 131 owns the deterministic field and section compiler used by that preview.
 3. Export and import an immutable, versioned pack artifact.
@@ -60,7 +66,8 @@ portable files that can be exchanged and hosted without approval from a central 
 - [x] The CLI supports reproducible noninteractive builds.
 - [ ] City-pack assembly and validation now have one extracted implementation used by the CLI. This becomes
   complete when the browser calls it too rather than duplicating its rules.
-- [ ] A steward can save and preview a draft without touching a live pack.
+- [x] A steward can save and preview a draft with the local command, without touching a live pack. Browser
+  controls remain to be built.
 - [ ] Packs can be imported and exported without a central catalog.
 - [ ] First publication refuses a seeded or inhabited target.
 - [ ] Replacing an inhabited city remains impossible without an explicit migration workflow.

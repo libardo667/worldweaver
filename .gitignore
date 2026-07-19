@@ -24,6 +24,7 @@ shards/*/.env.*
 shards/*/db/
 shards/*/data/
 shards/*/residents/
+worldweaver_engine/data/city_drafts/
 # Frozen experiment + resident archives: kept on disk for restore, never tracked source
 shards/*/_*frozen*/
 
