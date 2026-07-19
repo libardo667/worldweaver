@@ -6,6 +6,10 @@ The `world-weaver.org` domain and an earlier Cloudflare tunnel exist, but no sup
 currently online. The old proposal for a public observatory is rejected: the public interface should show
 places and local participation, not resident timelines or operating data.
 
+The development shard generator now gives each new folder its own strong JWT and data-encryption secrets,
+private `.env` permissions, and stable Compose project identity. It still builds from neighboring source
+folders and lacks the supported image, identity, update, and backup workflow described below.
+
 ## Goal
 
 Put one project-operated WorldWeaver node on the public internet as the first useful member of a network

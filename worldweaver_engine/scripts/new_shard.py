@@ -34,7 +34,11 @@ Examples:
 from __future__ import annotations
 
 import argparse
+import base64
 import json
+import os
+import re
+import secrets
 import shutil
 import sys
 from pathlib import Path
@@ -44,6 +48,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 _ENV_CITY = """\
+COMPOSE_PROJECT_NAME={compose_project_name}
 CITY_ID={city_id}
 SHARD_ID={shard_id}
 BACKEND_PORT={port}
@@ -62,8 +67,8 @@ WW_DB_USER=postgres
 WW_DB_PASSWORD=postgres
 WW_DATABASE_URL=
 WW_CITY_TIMEZONE={city_timezone}
-WW_JWT_SECRET=CHANGE_ME
-WW_DATA_ENCRYPTION_KEY=CHANGE_ME
+WW_JWT_SECRET={jwt_secret}
+WW_DATA_ENCRYPTION_KEY={data_encryption_key}
 RESEND_API_KEY=
 RESEND_FROM_EMAIL=noreply@worldweaver.example.com
 OPENROUTER_API_KEY=
@@ -78,6 +83,7 @@ WW_DOULA_MODEL=
 """
 
 _ENV_WORLD = """\
+COMPOSE_PROJECT_NAME={compose_project_name}
 SHARD_ID={shard_id}
 BACKEND_PORT={port}
 SHARD_TYPE=world
@@ -92,8 +98,8 @@ WW_DB_NAME=worldweaver_world
 WW_DB_USER=postgres
 WW_DB_PASSWORD=postgres
 WW_DATABASE_URL=
-WW_JWT_SECRET=CHANGE_ME
-WW_DATA_ENCRYPTION_KEY=CHANGE_ME
+WW_JWT_SECRET={jwt_secret}
+WW_DATA_ENCRYPTION_KEY={data_encryption_key}
 RESEND_API_KEY=
 RESEND_FROM_EMAIL=noreply@worldweaver.example.com
 OPENROUTER_API_KEY=
@@ -259,6 +265,7 @@ _GITIGNORE = """\
 db/
 data/
 residents/
+.env
 *.env
 """
 
@@ -266,6 +273,17 @@ residents/
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
+
+def _compose_project_name(shard_id: str) -> str:
+    """Return a stable Compose project name owned by this shard folder."""
+    normalized = re.sub(r"[^a-z0-9_-]+", "-", shard_id.lower()).strip("-_")
+    return normalized or "worldweaver-shard"
+
+
+def _new_data_encryption_key() -> str:
+    """Generate a Fernet-compatible key without importing runtime packages."""
+    return base64.urlsafe_b64encode(os.urandom(32)).decode("ascii")
 
 
 def _city_pack_timezone(city_pack_src: Path | None) -> str:
@@ -398,12 +416,18 @@ def main() -> None:
 
     # Build file contents
     db_external_port = int(args.db_port) if args.db_port is not None else int(args.port) + 7431
+    compose_project_name = _compose_project_name(shard_id)
+    jwt_secret = secrets.token_urlsafe(48)
+    data_encryption_key = _new_data_encryption_key()
     if args.shard_type == "world":
         env_content = _ENV_WORLD.format(
             shard_id=shard_id,
             port=args.port,
             token=args.token,
             db_external_port=db_external_port,
+            compose_project_name=compose_project_name,
+            jwt_secret=jwt_secret,
+            data_encryption_key=data_encryption_key,
         )
         compose_content = _COMPOSE_WORLD.format(db_external_port=db_external_port)
     else:
@@ -417,6 +441,9 @@ def main() -> None:
             federation_url=args.federation,
             runtime_federation_url=args.runtime_federation,
             token=args.token,
+            compose_project_name=compose_project_name,
+            jwt_secret=jwt_secret,
+            data_encryption_key=data_encryption_key,
         )
         compose_content = _COMPOSE_CITY.format(
             city_id=city_id,
@@ -474,6 +501,7 @@ def main() -> None:
         (d / ".gitkeep").write_text("")
     for path, content in files.items():
         path.write_text(content, encoding="utf-8")
+    (shard_dir / ".env").chmod(0o600)
 
     # Copy city pack into shard data dir
     if city_pack_src is not None:
