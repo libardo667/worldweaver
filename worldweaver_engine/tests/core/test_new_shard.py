@@ -1,5 +1,6 @@
 import subprocess
 import sys
+import json
 from pathlib import Path
 
 
@@ -64,6 +65,10 @@ def test_new_shards_receive_separate_secure_local_secrets(tmp_path: Path) -> Non
         env_path = base_dir / "ww_pdx" / ".env"
         generated.append(_read_env(env_path))
         assert env_path.stat().st_mode & 0o077 == 0
+        assert (base_dir / "ww_pdx" / "identity" / "node.key").stat().st_mode & 0o077 == 0
+        descriptor = json.loads((base_dir / "ww_pdx" / "node.json").read_text(encoding="utf-8"))
+        assert descriptor["node_id"] == shard_id
+        assert descriptor["city_id"] == "portland"
 
     first, second = generated
     assert first["COMPOSE_PROJECT_NAME"] == "river-coop-1"
@@ -72,6 +77,7 @@ def test_new_shards_receive_separate_secure_local_secrets(tmp_path: Path) -> Non
     assert len(first["WW_DATA_ENCRYPTION_KEY"]) == 44
     assert first["WW_JWT_SECRET"] != second["WW_JWT_SECRET"]
     assert first["WW_DATA_ENCRYPTION_KEY"] != second["WW_DATA_ENCRYPTION_KEY"]
+    assert first["WW_NODE_PRIVATE_KEY_PATH"] == "identity/node.key"
     assert "CHANGE_ME" not in first["WW_JWT_SECRET"]
 
 

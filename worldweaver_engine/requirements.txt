@@ -27,6 +27,7 @@ httpx[http2]>=0.28,<1
 
 # Auth
 bcrypt>=4.3,<6
+cryptography>=46,<50
 python-jose[cryptography]>=3.3,<4
 resend>=2.4,<3
 email-validator>=2.1,<3

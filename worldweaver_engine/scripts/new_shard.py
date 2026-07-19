@@ -43,6 +43,12 @@ import shutil
 import sys
 from pathlib import Path
 
+ENGINE_ROOT = Path(__file__).resolve().parent.parent
+if str(ENGINE_ROOT) not in sys.path:
+    sys.path.insert(0, str(ENGINE_ROOT))
+
+from src.services.federation_node_auth import generate_node_identity  # noqa: E402
+
 # ---------------------------------------------------------------------------
 # Templates
 # ---------------------------------------------------------------------------
@@ -57,6 +63,7 @@ WW_SHARD_EXPERIENCE_PATH={experience_path}
 FEDERATION_URL={federation_url}
 WW_RUNTIME_FEDERATION_URL={runtime_federation_url}
 FEDERATION_TOKEN={token}
+WW_NODE_PRIVATE_KEY_PATH=identity/node.key
 WW_PUBLIC_URL=http://localhost:{port}
 WW_CLIENT_URL=
 WW_DB_HOST=db
@@ -89,6 +96,7 @@ BACKEND_PORT={port}
 SHARD_TYPE=world
 WW_SHARD_EXPERIENCE_PATH=
 FEDERATION_TOKEN={token}
+WW_NODE_PRIVATE_KEY_PATH=identity/node.key
 WW_PUBLIC_URL=http://localhost:{port}
 WW_CLIENT_URL=
 WW_DB_HOST=db
@@ -143,6 +151,7 @@ services:
       - ../../worldweaver_engine:/app
       - ./data:/app/data
       - ./residents:/app/residents
+      - ./identity:/app/identity:ro
     env_file: .env
     environment:
       WW_DB_HOST: ${{WW_DB_HOST:-db}}
@@ -228,6 +237,7 @@ services:
     volumes:
       - ../../worldweaver_engine:/app
       - ./data:/app/data
+      - ./identity:/app/identity:ro
     env_file: .env
     environment:
       WW_DB_HOST: ${{WW_DB_HOST:-db}}
@@ -267,6 +277,7 @@ data/
 residents/
 .env
 *.env
+identity/node.key
 """
 
 
@@ -458,6 +469,7 @@ def main() -> None:
     }
     dirs = [
         shard_dir / "data",
+        shard_dir / "identity",
         shard_dir / "residents",
     ]
 
@@ -502,6 +514,13 @@ def main() -> None:
     for path, content in files.items():
         path.write_text(content, encoding="utf-8")
     (shard_dir / ".env").chmod(0o600)
+    generate_node_identity(
+        private_key_path=shard_dir / "identity" / "node.key",
+        descriptor_path=shard_dir / "node.json",
+        node_id=shard_id,
+        shard_type=args.shard_type,
+        city_id=city_id if args.shard_type != "world" else None,
+    )
 
     # Copy city pack into shard data dir
     if city_pack_src is not None:
