@@ -72,6 +72,10 @@ WW_NODE_PRIVATE_KEY_PATH=identity/node.key
 WW_ENABLE_DEV_RESET=true
 WW_PUBLIC_URL=http://localhost:{port}
 WW_CLIENT_URL=
+WW_CORS_ORIGINS=*
+WW_INGRESS_PROVIDER=
+WW_TRUST_CLOUDFLARE_PROXY=false
+WW_AUTH_RATE_LIMIT_PER_MINUTE=30
 WW_DB_HOST=db
 WW_DB_PORT=5432
 WW_DB_EXTERNAL_PORT={db_external_port}
@@ -108,6 +112,10 @@ WW_NODE_PRIVATE_KEY_PATH=identity/node.key
 WW_ENABLE_DEV_RESET=false
 WW_PUBLIC_URL=http://localhost:{port}
 WW_CLIENT_URL=
+WW_CORS_ORIGINS=*
+WW_INGRESS_PROVIDER=
+WW_TRUST_CLOUDFLARE_PROXY=false
+WW_AUTH_RATE_LIMIT_PER_MINUTE=30
 WW_DB_HOST=db
 WW_DB_PORT=5432
 WW_DB_EXTERNAL_PORT={db_external_port}
@@ -171,7 +179,7 @@ services:
       WW_CLIENT_URL: ${{WW_CLIENT_URL:-}}
       FEDERATION_URL: ${{WW_RUNTIME_FEDERATION_URL:-${{FEDERATION_URL}}}}
     ports:
-      - "${{BACKEND_PORT}}:8000"
+      - "127.0.0.1:${{BACKEND_PORT}}:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -237,7 +245,7 @@ services:
       WW_DB_PASSWORD: ${{WW_DB_PASSWORD:-postgres}}
       WW_DATABASE_URL: ${{WW_DATABASE_URL:-}}
     ports:
-      - "${{BACKEND_PORT}}:8000"
+      - "127.0.0.1:${{BACKEND_PORT}}:8000"
     depends_on:
       db:
         condition: service_healthy

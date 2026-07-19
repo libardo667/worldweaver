@@ -64,6 +64,13 @@ class Settings(BaseSettings):
     node_private_key_path: Optional[str] = Field(default=None, validation_alias="WW_NODE_PRIVATE_KEY_PATH")
     public_url: Optional[str] = Field(default=None, validation_alias="WW_PUBLIC_URL")
     client_url: Optional[str] = Field(default=None, validation_alias="WW_CLIENT_URL")
+    cors_origins: str = Field(default="*", validation_alias="WW_CORS_ORIGINS")
+    trust_cloudflare_proxy: bool = Field(default=False, validation_alias="WW_TRUST_CLOUDFLARE_PROXY")
+    auth_rate_limit_per_minute: int = Field(
+        default=30,
+        ge=0,
+        validation_alias="WW_AUTH_RATE_LIMIT_PER_MINUTE",
+    )
     shard_experience_path: Optional[str] = Field(
         default=None,
         validation_alias="WW_SHARD_EXPERIENCE_PATH",
@@ -73,6 +80,11 @@ class Settings(BaseSettings):
     def get_effective_api_key(self) -> Optional[str]:
         """Return the most specific API key available."""
         return os.environ.get("OPENROUTER_API_KEY") or os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY") or self.openrouter_api_key or self.llm_api_key or self.openai_api_key
+
+    def get_cors_origins(self) -> list[str]:
+        """Return the steward-configured browser origins without guessing."""
+        values = [value.strip() for value in str(self.cors_origins or "").split(",")]
+        return [value for value in values if value]
 
     def is_runtime_ready(self) -> bool:
         """Check if both an API key and a model are configured."""

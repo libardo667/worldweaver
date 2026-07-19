@@ -58,6 +58,7 @@ def test_new_world_directory_is_closed_and_has_folder_local_trust_commands(tmp_p
     generated_env = _read_env(shard / ".env")
     assert generated_env["SHARD_TYPE"] == "world"
     assert generated_env["WW_FEDERATION_ADMISSION_MODE"] == "closed"
+    assert '"127.0.0.1:${BACKEND_PORT}:8000"' in (shard / "docker-compose.yml").read_text(encoding="utf-8")
     checked = subprocess.run(
         [sys.executable, str(shard / "ww.py"), "check", "--offline"],
         cwd=shard,
@@ -169,6 +170,7 @@ def test_new_game_shard_copies_versioned_experience_and_uses_readable_name(tmp_p
     assert "ww_dev_federation" not in compose_text
     assert "image: ${WW_ENGINE_IMAGE}" in compose_text
     assert "image: ${WW_AGENT_IMAGE}" in compose_text
+    assert '"127.0.0.1:${BACKEND_PORT}:8000"' in compose_text
 
     generated_env = _read_env(shard / ".env")
     assert generated_env["WW_ENGINE_IMAGE"].startswith("ghcr.io/libardo667/worldweaver-engine:sha-")

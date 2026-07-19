@@ -200,6 +200,13 @@ def collect_problems(*, offline: bool = False) -> tuple[list[str], list[str]]:
         if problem:
             errors.append(problem)
 
+    public_url = env.get("WW_PUBLIC_URL", "")
+    if public_url.startswith("https://"):
+        if env.get("WW_CORS_ORIGINS", "*") == "*":
+            warnings.append("Public HTTPS is configured but browser CORS still allows every origin.")
+        if env.get("WW_TRUST_CLOUDFLARE_PROXY", "false").lower() in {"1", "true", "yes"} and env.get("WW_INGRESS_PROVIDER", "").lower() != "cloudflare":
+            errors.append("Cloudflare visitor headers may only be trusted when WW_INGRESS_PROVIDER=cloudflare.")
+
     try:
         backend_port = int(env.get("BACKEND_PORT", "0"))
         db_port = int(env.get("WW_DB_EXTERNAL_PORT", "0"))

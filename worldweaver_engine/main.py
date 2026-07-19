@@ -16,6 +16,7 @@ from alembic.config import Config as AlembicConfig
 from alembic import command as alembic_command
 
 from src.config import settings
+from src.services.request_limits import AUTH_RATE_LIMITED_PATHS, FixedWindowRateLimiter
 from src.services import runtime_metrics
 from src.services.llm_client import reset_trace_id, set_trace_id
 from src.api import game
@@ -103,14 +104,38 @@ async def lifespan(app: FastAPI):
 # FastAPI Setup
 app = FastAPI(title="WorldWeaver Backend", version="0.1", lifespan=lifespan)
 
-# CORS middleware for local development
+# Browser origins are permissive for local development and explicit in public folders.
+cors_origins = settings.get_cors_origins()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_auth_rate_limiter = FixedWindowRateLimiter()
+
+
+@app.middleware("http")
+async def limit_public_account_entry(request, call_next):
+    """Slow password and account probing without affecting ordinary world actions."""
+    if request.url.path in AUTH_RATE_LIMITED_PATHS:
+        remote = request.client.host if request.client else "unknown"
+        if settings.trust_cloudflare_proxy:
+            remote = str(request.headers.get("CF-Connecting-IP") or remote).strip()
+        allowed, retry_after = _auth_rate_limiter.allow(
+            f"{request.url.path}:{remote}",
+            limit=settings.auth_rate_limit_per_minute,
+        )
+        if not allowed:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Too many account requests. Try again shortly."},
+                headers={"Retry-After": str(retry_after)},
+            )
+    return await call_next(request)
+
 
 # Include routers
 app.include_router(game.router, prefix="/api", tags=["game"])

@@ -50,6 +50,20 @@ def test_env_override(monkeypatch):
     assert new_settings.llm_temperature == 0.9
 
 
+def test_cors_origins_are_explicit_and_trimmed(monkeypatch):
+    monkeypatch.setenv(
+        "WW_CORS_ORIGINS",
+        "https://world-weaver.org, https://steward.example ,",
+    )
+
+    configured = Settings()
+
+    assert configured.get_cors_origins() == [
+        "https://world-weaver.org",
+        "https://steward.example",
+    ]
+
+
 if __name__ == "__main__":
     # Simple monkeypatch implementation for standalone script
     class MonkeyPatch:

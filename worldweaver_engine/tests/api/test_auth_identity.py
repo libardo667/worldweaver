@@ -5,6 +5,7 @@ from jose import jwt
 from src.config import settings
 from src.models import FederationActor, FederationActorAuth, Player, SessionVars
 from src.services.auth_service import ALGORITHM
+from src.services.request_limits import FixedWindowRateLimiter
 
 
 def test_register_creates_actor_identity_and_local_projection(client, db_session, monkeypatch):
@@ -346,3 +347,17 @@ def test_password_reset_updates_federation_auth_and_allows_login(client, db_sess
     )
     assert login.status_code == 200
     assert login.json()["actor_id"] == actor_id
+
+
+def test_account_entry_rate_limit_returns_retry_after(client, monkeypatch):
+    monkeypatch.setattr("main.settings.auth_rate_limit_per_minute", 2)
+    monkeypatch.setattr("main._auth_rate_limiter", FixedWindowRateLimiter())
+
+    first = client.post("/api/auth/login", json={"identifier": "missing", "password": "incorrect"})
+    second = client.post("/api/auth/login", json={"identifier": "missing", "password": "incorrect"})
+    limited = client.post("/api/auth/login", json={"identifier": "missing", "password": "incorrect"})
+
+    assert first.status_code == 401
+    assert second.status_code == 401
+    assert limited.status_code == 429
+    assert int(limited.headers["Retry-After"]) >= 1
