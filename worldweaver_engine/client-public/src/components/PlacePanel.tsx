@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Levi Banks
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MapEdge, MapNode } from "../api/types";
 import { usePlace } from "../hooks/usePlace";
 import { findNodeBySlug, slugifyPlace } from "../lib/places";
 import { MakeHere } from "./MakeHere";
+import { AccessHere } from "./AccessHere";
 import { NearbyLandmarks } from "./NearbyLandmarks";
 import { ObjectsHere } from "./ObjectsHere";
 import { Overheard } from "./Overheard";
@@ -42,6 +43,19 @@ export function PlacePanel({ slug, node, nodes, edges, me, onWalk, onTravel, onC
   const [worldBump, setWorldBump] = useState(0);
   const details = usePlace(node?.name ?? null, worldBump);
   const [spokeCount, setSpokeCount] = useState(0);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, [slug]);
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
 
   const standingHere = me != null && node != null && me.place === node.name;
   const bumpWorld = () => setWorldBump((count) => count + 1);
@@ -51,7 +65,7 @@ export function PlacePanel({ slug, node, nodes, edges, me, onWalk, onTravel, onC
       <header className="place-header">
         <div>
           <p className="place-kicker">{standingHere ? "You are standing at" : "You are looking at"}</p>
-          <h2 className="place-name">{name}</h2>
+          <h2 ref={headingRef} tabIndex={-1} className="place-name">{name}</h2>
         </div>
         <button className="place-close" onClick={onClose} title="Back to the map" aria-label="Close place panel">
           ✕
@@ -66,6 +80,8 @@ export function PlacePanel({ slug, node, nodes, edges, me, onWalk, onTravel, onC
             Walk here from {me.place}
           </button>
         )}
+
+        {me && node && <AccessHere location={node.name} sessionId={me.sessionId} />}
 
         <PresenceHere node={node} />
         {node && <Overheard location={node.name} refreshKey={spokeCount} />}

@@ -109,13 +109,13 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose }: Props) {
 
   return (
     <div className="threshold">
-      <div className="threshold-card join-card">
-        <h1 className="threshold-title">Join the world</h1>
-        <div className="join-tabs" role="tablist">
-          <button role="tab" aria-selected={mode === "register"} className={mode === "register" ? "is-active" : ""} onClick={() => setMode("register")}>
+      <div className="threshold-card join-card" role="dialog" aria-labelledby="join-title">
+        <h1 id="join-title" className="threshold-title">Join the world</h1>
+        <div className="join-tabs" aria-label="Choose how to join">
+          <button type="button" aria-pressed={mode === "register"} className={mode === "register" ? "is-active" : ""} onClick={() => setMode("register")}>
             New here
           </button>
-          <button role="tab" aria-selected={mode === "login"} className={mode === "login" ? "is-active" : ""} onClick={() => setMode("login")}>
+          <button type="button" aria-pressed={mode === "login"} className={mode === "login" ? "is-active" : ""} onClick={() => setMode("login")}>
             Coming back
           </button>
         </div>
@@ -123,14 +123,18 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose }: Props) {
         <form onSubmit={submit} className="join-form">
           {mode === "register" ? (
             <>
-              <input type="email" placeholder="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
-              <input placeholder="username" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
-              <input placeholder="name people will see" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-              <input type="password" placeholder="password (8+ characters)" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+              <label className="sr-only" htmlFor="join-email">Email</label>
+              <input id="join-email" type="email" placeholder="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+              <label className="sr-only" htmlFor="join-username">Username</label>
+              <input id="join-username" placeholder="username" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
+              <label className="sr-only" htmlFor="join-display-name">Name people will see</label>
+              <input id="join-display-name" placeholder="name people will see" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+              <label className="sr-only" htmlFor="join-new-password">Password, at least 8 characters</label>
+              <input id="join-new-password" type="password" placeholder="password (8+ characters)" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
               {termsLoading && <p className="place-empty">Loading this shard's terms…</p>}
               {termsError && (
                 <div>
-                  <p className="join-error">{termsError}</p>
+                  <p className="join-error" role="alert">{termsError}</p>
                   <button type="button" className="btn btn-quiet" onClick={() => void loadTerms()}>
                     Try loading them again
                   </button>
@@ -145,8 +149,10 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose }: Props) {
             </>
           ) : (
             <>
-              <input placeholder="username or email" value={identifier} onChange={(e) => setIdentifier(e.target.value)} autoComplete="username" />
-              <input type="password" placeholder="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+              <label className="sr-only" htmlFor="join-identifier">Username or email</label>
+              <input id="join-identifier" placeholder="username or email" value={identifier} onChange={(e) => setIdentifier(e.target.value)} autoComplete="username" />
+              <label className="sr-only" htmlFor="join-password">Password</label>
+              <input id="join-password" type="password" placeholder="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
             </>
           )}
 
@@ -163,7 +169,7 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose }: Props) {
             </div>
           )}
 
-          {error && <p className="join-error">{error}</p>}
+          {error && <p className="join-error" role="alert">{error}</p>}
 
           <div className="threshold-actions">
             <button type="submit" className="btn btn-primary" disabled={busy || !place || !(mode === "register" ? registerReady : loginReady)}>

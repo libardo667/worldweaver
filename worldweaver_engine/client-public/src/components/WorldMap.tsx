@@ -156,6 +156,18 @@ export function WorldMap({ nodes, edges, mapStyle, focusKey, onNodeClick, onView
         marker.bindTooltip(node.name, { direction: "top" });
         marker.on("click", () => onNodeClickRef.current?.(node));
         marker.addTo(markers);
+        const element = marker.getElement();
+        if (element && onNodeClickRef.current && isVisitableMapNode(node)) {
+          element.setAttribute("tabindex", "0");
+          element.setAttribute("role", "button");
+          element.setAttribute("aria-label", `Look at ${node.name}`);
+          element.addEventListener("keydown", (event) => {
+            const key = (event as KeyboardEvent).key;
+            if (key !== "Enter" && key !== " ") return;
+            event.preventDefault();
+            onNodeClickRef.current?.(node);
+          });
+        }
       }
 
       // Ease over to a newly focused place.
@@ -163,7 +175,12 @@ export function WorldMap({ nodes, edges, mapStyle, focusKey, onNodeClick, onView
         lastFocusRef.current = focusKey;
         const node = byKey.get(focusKey);
         if (node) {
-          map.flyTo([node.lat as number, node.lon as number], Math.max(map.getZoom(), 15), { duration: 0.9 });
+          const target: [number, number] = [node.lat as number, node.lon as number];
+          if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+            map.setView(target, Math.max(map.getZoom(), 15), { animate: false });
+          } else {
+            map.flyTo(target, Math.max(map.getZoom(), 15), { duration: 0.9 });
+          }
         }
       }
       if (!focusKey) lastFocusRef.current = null;
@@ -184,5 +201,9 @@ export function WorldMap({ nodes, edges, mapStyle, focusKey, onNodeClick, onView
     };
   }, []);
 
-  return <div ref={containerRef} className={`world-map world-map--${mapStyle ?? "loading"}`} />;
+  return <div ref={containerRef} className={`world-map world-map--${mapStyle ?? "loading"}`} role="region" aria-label="Town map" />;
+}
+
+function isVisitableMapNode(node: MapNode): boolean {
+  return node.node_type === "location" || node.node_type === "landmark" || node.node_type === "sublocation";
 }

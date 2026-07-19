@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Levi Banks
 
+import { useEffect, useRef } from "react";
 import type { EntryInfo, Grounding, MapNode, ShardExperience } from "../api/types";
 
 type Props = {
@@ -24,11 +25,16 @@ export function townName(experience: ShardExperience | null): string {
 export function ThresholdOverlay({ experience, entry, grounding, onLookAround, onJoin }: Props) {
   const summary = experience?.entry_disclosure?.summary ?? "";
   const hasWorld = entry != null;
+  const firstActionRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (hasWorld) firstActionRef.current?.focus();
+  }, [hasWorld]);
 
   return (
     <div className="threshold">
-      <div className="threshold-card">
-        <h1 className="threshold-title">{townName(experience)}</h1>
+      <div className="threshold-card" role="dialog" aria-labelledby="threshold-title">
+        <h1 id="threshold-title" className="threshold-title">{townName(experience)}</h1>
         {grounding && (
           <p className="threshold-weather">
             {grounding.datetime_str} · {grounding.weather_description}
@@ -36,7 +42,7 @@ export function ThresholdOverlay({ experience, entry, grounding, onLookAround, o
         )}
         {summary && <p className="threshold-summary">{summary}</p>}
         <div className="threshold-actions">
-          <button className="btn btn-primary" onClick={onLookAround} disabled={!hasWorld}>
+          <button ref={firstActionRef} className="btn btn-primary" onClick={onLookAround} disabled={!hasWorld}>
             Look around
           </button>
           <button className="btn btn-quiet" onClick={onJoin} disabled={!hasWorld}>

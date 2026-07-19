@@ -64,7 +64,7 @@ export function MakeHere({ location, sessionId, onMade }: Props) {
           {catalog.materials.map((m) => `${m.material_id.replace(/[_-]+/g, " ")}: ${m.available_units}`).join(" · ")}
         </p>
       )}
-      {error && <p className="join-error">{error}</p>}
+      {error && <p className="join-error" role="alert">{error}</p>}
       {catalog.recipes.map((recipe) => (
         <div key={recipe.recipe_id} className="make-recipe">
           <div className="make-recipe-info">

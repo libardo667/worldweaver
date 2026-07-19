@@ -22,6 +22,8 @@ import type {
   ShardInfo,
   ObjectExchangeCommand,
   ObjectExchanges,
+  PendingSpaceAccessRequests,
+  SpaceAccessStatus,
   StoopBrowse,
   StoopList,
 } from "./types";
@@ -250,5 +252,54 @@ export function postExchangeDecision(
   return postJson(`/api/world/exchanges/${encodeURIComponent(exchangeId)}/${decision}`, {
     session_id: sessionId,
     idempotency_key: freshKey(`exchange-${decision}`),
+  });
+}
+
+// --- One exact doorway ----------------------------------------------------
+
+export function getSpaceAccess(sessionId: string, location: string): Promise<{ access: SpaceAccessStatus }> {
+  return getJson("/api/world/access", { session_id: sessionId, location });
+}
+
+export function getPendingSpaceAccessRequests(
+  sessionId: string,
+  location: string,
+): Promise<PendingSpaceAccessRequests> {
+  return getJson("/api/world/access/requests", { session_id: sessionId, location });
+}
+
+export function postSpaceAccessRequest(sessionId: string, location: string, note: string): Promise<unknown> {
+  return postJson("/api/world/access/requests", {
+    session_id: sessionId,
+    location,
+    note,
+    idempotency_key: freshKey("access-request"),
+  });
+}
+
+export function postResolveSpaceAccessRequest(
+  requestId: string,
+  sessionId: string,
+  decision: "admitted" | "denied",
+): Promise<unknown> {
+  return postJson(`/api/world/access/requests/${encodeURIComponent(requestId)}/resolve`, {
+    session_id: sessionId,
+    decision,
+    idempotency_key: freshKey(`access-${decision}`),
+  });
+}
+
+export function postSpaceMode(
+  sessionId: string,
+  location: string,
+  mode: "public" | "requestable" | "private" | "closed",
+  note: string,
+): Promise<unknown> {
+  return postJson("/api/world/access/mode", {
+    session_id: sessionId,
+    location,
+    mode,
+    note,
+    idempotency_key: freshKey("access-mode"),
   });
 }

@@ -4,8 +4,7 @@
 
 The new `client-public` already provides the intended front door: `look around` or `join the world`, a
 sessionless walkabout, native registration and login, a place-centered map, concrete movement and object
-actions, local presence, and an optional activity log. Its API intentionally omits shard-wide resident
-telemetry.
+actions, and local presence. Its API intentionally omits shard-wide resident telemetry.
 
 The remaining work is to make this the normal human interface and retire the old combined client as a
 public product.
@@ -19,7 +18,7 @@ temporarily available as the explicitly named local `client-legacy` command whil
 sorted from the telemetry and obsolete controls.
 
 The action inventory found real participant gaps still to review: password recovery, correspondence,
-giving and exchange, ordinary room access, stoop withdrawal, and human cross-node travel. Their presence in
+direct invitations and revocation with a safe encounter target, and human cross-node travel. Their presence in
 the old client does not automatically mean every old interaction should be copied. Each should use the
 current typed engine contract and fit the place-centered interface.
 
@@ -30,17 +29,27 @@ offer. Sessionless looking still exposes no custody controls. The public client 
 session roster merely to make recipient selection convenient; giving to a co-present person who carries
 nothing still needs a safer encounter-target contract.
 
+The next slice brings ordinary door rules into the same place panel. A visitor looking at a controlled
+place can read its note and knock when requests are allowed. The controller can change that one door's
+rule and answer pending knocks. This is deliberately not a town-wide
+permissions screen. Pending knocks now remain pending in the typed status response, so refreshing the page
+does not offer a duplicate request.
+
+The supported path now also has explicit labels for join fields, visible keyboard focus, keyboard-operable
+map places, focus handoff when a place opens, and reduced-motion behavior for both CSS and map movement.
+The mobile place sheet uses more of the usable viewport and keeps form controls at a readable touch size.
+
 ## Build next
 
-1. Inventory actions still available only in the old client.
-2. Port only ordinary participant actions that fit the place-centered design, including correspondence and
+1. Port only ordinary participant actions that fit the place-centered design, including correspondence and
    cross-node travel when those contracts are ready.
-3. Decide whether any old-client view has a justified steward use. Move such functions behind the private
+2. Decide whether any old-client view has a justified steward use. Move such functions behind the private
    operations boundary in Major 71.
-4. Remove or archive the remaining guild, observer-dashboard, narrator, model-setting, and resident
+3. Remove or archive the remaining guild, observer-dashboard, narrator, model-setting, and resident
    telemetry UI rather than carrying it forward.
-5. Make the root development command, deployment docs, and public node serve `client-public` by default.
-6. Add keyboard, screen-reader, mobile, and low-motion checks to the supported path.
+4. Add browser-level accessibility checks once the public client has a browser test harness; source-contract
+   guards and the production TypeScript build cover the current keyboard, labeling, mobile, and low-motion
+   implementation in the meantime.
 
 ## Boundaries
 
@@ -59,4 +68,5 @@ nothing still needs a safer encounter-target contract.
 - [ ] All supported ordinary participant actions are available in `client-public`.
 - [ ] The old combined client is either removed or limited to named steward-only functions.
 - [x] Root commands and deployment serve the public client as the default human surface.
-- [ ] Accessibility and mobile checks cover the supported entry and place flows.
+- [ ] Accessibility and mobile checks cover the supported entry and place flows. Static guards exist;
+  browser and screen-reader checks do not yet.

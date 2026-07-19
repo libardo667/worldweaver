@@ -6,7 +6,9 @@ everything else side-loading over it. A stranger lands on the threshold
 (place panels: who's here, what's overheard, what's on the stoop, where you
 can walk), and can join natively (register/login → session bootstrap) to
 speak, walk, make and carry objects, give or exchange them with someone present,
-and leave, take, or reclaim them from stoops. Place URLs (`/place/mill-reach`)
+leave, take, or reclaim them from stoops, and knock at controlled doors. A
+place controller can answer knocks and change that exact door's rule without
+receiving a town-wide access dashboard. Place URLs (`/place/mill-reach`)
 are shareable deep links.
 
 ## Run

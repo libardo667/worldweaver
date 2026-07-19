@@ -69,6 +69,13 @@ def test_access_request_opens_real_movement_and_revocation_never_traps(
         },
     )
     request_id = requested.json()["receipt"]["result"]["request"]["request_id"]
+    waiting = client.get(
+        "/api/world/access",
+        params={"session_id": "visitor", "location": "Workshop"},
+    )
+    assert waiting.status_code == 200
+    assert waiting.json()["access"]["request_pending"] is True
+    assert waiting.json()["access"]["can_request"] is False
     reviewed = client.get(
         "/api/world/access/requests",
         params={"session_id": "controller", "location": "Workshop"},

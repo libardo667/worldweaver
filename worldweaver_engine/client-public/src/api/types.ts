@@ -195,6 +195,35 @@ export type ObjectExchangeCommand = {
   receipt: { receipt_id: string; operation: string; exchange_id: string };
 };
 
+export type SpaceAccessStatus = {
+  location: string;
+  mode: "public" | "requestable" | "private" | "closed" | string;
+  note: string;
+  revision: number;
+  is_controller: boolean;
+  admitted: boolean;
+  can_enter: boolean;
+  can_request: boolean;
+  entry_reason: string;
+  request_pending: boolean;
+  active_grants: { actor_id: string; session_id: string }[];
+};
+
+export type SpaceAccessRequest = {
+  request_id: string;
+  requester_actor_id: string;
+  requester_session_id: string;
+  note: string;
+  status: string;
+  created_at: string | null;
+};
+
+export type PendingSpaceAccessRequests = {
+  location: string;
+  requests: SpaceAccessRequest[];
+  count: number;
+};
+
 export type AuthResponse = {
   token: string;
   actor_id: string;

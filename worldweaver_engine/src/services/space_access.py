@@ -203,10 +203,24 @@ def access_status(db: Session, *, session_id: str, location: str) -> dict[str, A
             "can_enter": True,
             "can_request": False,
             "entry_reason": "no_restriction",
+            "request_pending": False,
             "active_grants": [],
         }
     admitted = _active_grant(db, location=normalized, actor_id=context.actor_id) is not None
     payload = _policy_payload(row, actor_id=context.actor_id, admitted=admitted)
+    pending = (
+        db.query(SpaceAccessRequest.request_id)
+        .filter(
+            SpaceAccessRequest.location == normalized,
+            SpaceAccessRequest.requester_actor_id == context.actor_id,
+            SpaceAccessRequest.status == "pending",
+        )
+        .first()
+        is not None
+    )
+    payload["request_pending"] = pending
+    if pending:
+        payload["can_request"] = False
     payload["active_grants"] = []
     if payload["is_controller"]:
         grants = (
