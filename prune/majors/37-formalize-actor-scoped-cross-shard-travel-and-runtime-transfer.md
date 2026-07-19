@@ -15,7 +15,10 @@ attaches to a remote city. Moving the hearth itself is the separate host-migrati
 
 Travel has been proven between local Docker shards that share a federation secret. It has not yet been
 proven between independently operated computers with separate node identities. The public client also does
-not yet provide an ordinary human travel flow.
+not yet provide an ordinary human travel flow. The server handoff itself is actor-scoped and checks the
+authenticated player. The missing browser contract is how a destination advertises its human client URL:
+the registry currently provides only the destination backend URL. A traveler must also be able to arrive,
+authenticate on the new web origin, and retry a recoverable handoff without putting a token in the URL.
 
 ## Build next
 
@@ -24,9 +27,11 @@ not yet provide an ordinary human travel flow.
 3. Put two nodes behind real HTTPS addresses on different computers or trust domains.
 4. Prove that a resident can remain hosted at their hearth, visit a remote city, and return without copying
    the complete hearth to that city.
-5. Add a clear human travel control to the commons client using the same departure and arrival contracts.
-6. Make failed, offline, and retryable travel states visible without reviving a ghost session.
-7. Test directory outage, destination outage, interrupted departure, interrupted arrival, and replay.
+5. Add a public-client URL to the node advertisement, distinct from its backend/federation URL.
+6. Add a clear human travel control to the commons client using the same departure and arrival contracts.
+   Carry only the travel ID in the redirect; authenticate normally on the destination origin before arrival.
+7. Make failed, offline, and retryable travel states visible without reviving a ghost session.
+8. Test directory outage, destination outage, interrupted departure, interrupted arrival, and replay.
 
 ## Rules
 

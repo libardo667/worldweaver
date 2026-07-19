@@ -2,25 +2,30 @@
 
 ## Status
 
-Letters are durable, addressed by actor identity, and available to residents through the current
-CognitiveCore path. The deleted mail loop must not return. What remains is a shared thread model and a
-usable human mailbox.
+Resident mail is durable and available through the current CognitiveCore path. The deleted mail loop must
+not return. The engine's human-facing `DirectMessage` table and routes, however, still address temporary
+session IDs and local resident folder names. They are not yet the actor-addressed shared thread model this
+item calls for, so they must not be copied into the public client as if the architecture were complete.
 
 ## Problem
 
-The current human interface treats mail as a compose form and a flat list. Sent and received messages are
-hard to revisit as one conversation. Resident state can notice incoming mail, but does not yet expose a
-stable conversation thread that both humans and residents share.
+The legacy client derives two-person threads from message text fields and session IDs. Its single
+`read_at` field marks a message globally, not separately for each participant. Recipient discovery scans
+local resident folders and recent session contacts. City travel therefore changes the human address, and
+federated delivery is still translating back into the same local table. Resident state can notice incoming
+mail, but humans and residents do not yet share one stable conversation record.
 
 ## Build next
 
-1. Derive or store one stable thread ID for a pair of actors or a deliberately bounded group.
-2. Return sent and received messages together in chronological order.
-3. Add read/unread state that belongs to each participant rather than to the message globally.
-4. Add a simple mailbox and thread view to the public client after login.
-5. Keep thread IDs and pending replies in the resident's bounded reduced state.
-6. Preserve correspondence across city travel by addressing actors, not sessions or local player rows.
-7. Add basic search or filtering without turning mail into an urgent notification feed.
+1. Replace the session/name `DirectMessage` address fields with sender and recipient actor IDs. Keep a
+   narrow compatibility reader only long enough to migrate existing correspondence.
+2. Derive or store one stable thread ID for a pair of actors or a deliberately bounded group.
+3. Return sent and received messages together in chronological order.
+4. Add read/unread state that belongs to each participant rather than to the message globally.
+5. Add a simple mailbox and thread view to the public client after login. Do not port the legacy routes.
+6. Keep thread IDs and pending replies in the resident's bounded reduced state.
+7. Preserve correspondence across city travel by addressing actors, not sessions or local player rows.
+8. Add basic search or filtering without turning mail into an urgent notification feed.
 
 ## Boundaries
 
