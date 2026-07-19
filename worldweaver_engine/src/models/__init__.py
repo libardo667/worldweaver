@@ -53,7 +53,7 @@ class SessionVars(Base):
 
 
 class ResidentIdentityGrowth(Base):
-    """Actor-scoped mutable identity growth and note evidence."""
+    """Legacy city-held identity data retained for hearth migration."""
 
     __tablename__ = "resident_identity_growth"
 

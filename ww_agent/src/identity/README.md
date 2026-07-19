@@ -135,7 +135,7 @@ transfer; those require the later node-trust and recovery design, not a central 
 
 - Where the resident's identity signing/recovery material lives and how it can be recovered without making
   one steward or federation root the owner.
-- How accepted identity growth moves out of city authority while preserving the existing proposal gate.
+- How a resident considers and adopts private self-edit proposals now that growth is hearth-owned.
 - Which correspondence records are resident-owned versus city/federation delivery projections.
 - Which private diagnostics a resident chooses to carry during host migration.
 - How a lost host is replaced after orderly migration works; this is not permission to invent automatic

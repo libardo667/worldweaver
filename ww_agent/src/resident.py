@@ -24,7 +24,6 @@ from src.identity.hearth_activation import (
 from src.identity.loader import IdentityLoader, ResidentIdentity
 from src.inference.client import InferenceClient
 from src.runtime.cognitive_core import CognitiveCore
-from src.runtime.growth_proposals import collect_new_growth_proposals
 from src.runtime.ledger import append_runtime_event, load_runtime_events
 from src.runtime.mirror import ResidentRuntimeMirror
 from src.runtime.naming import slugify_resident_name
@@ -190,7 +189,7 @@ class Resident:
         else:
             self._session_id = await self._get_or_create_session(self._world_id)
             logger.info("[%s] session: %s", self.name, self._session_id)
-            await self._hydrate_identity_growth()
+            await self._migrate_legacy_city_growth()
             await self._refresh_city_profile()
 
     async def run(
@@ -247,9 +246,9 @@ class Resident:
         pause_seconds: float | None = None,
     ) -> None:
         """
-        Run the resident mind: one cognitive core (substrate + pulse), the
-        runtime mirror, and growth-proposal sync, concurrently. Returns when
-        they stop (or any raises an unhandled exception).
+        Run the resident mind: one cognitive core (substrate + pulse) and the
+        runtime mirror. Returns when they stop (or any raises an unhandled
+        exception).
 
         The fast/slow/mail/ground/wander loops are gone (Major 49): cognition is
         the ignition-fired pulse over the ledger-derived substrate, perception is
@@ -279,10 +278,6 @@ class Resident:
                 self._owned_world_clients.clear()
                 raise
         world = self._build_current_world()
-        growth_task = asyncio.create_task(
-            self._sync_growth_proposals(),
-            name=f"resident:{self.name}:growth",
-        )
         logger.info(
             "[%s] resident host starting in %s",
             self.name,
@@ -352,7 +347,6 @@ class Resident:
             logger.info("[%s] resident cancelled", self.name)
             raise
         finally:
-            await self._cancel_task(growth_task)
             await world.close()
             for client in list(self._owned_world_clients):
                 await client.close()
@@ -555,7 +549,7 @@ class Resident:
         await hearth_world.close()
         self._session_id = city_session_id
         self._attachment_kind = "city"
-        await self._hydrate_identity_growth()
+        await self._migrate_legacy_city_growth()
         await self._refresh_city_profile()
         city = self._build_city_world(city_session_id)
         self._record_transition(
@@ -695,7 +689,7 @@ class Resident:
                     self._session_id = pending.destination_session_id
                     self._attachment_kind = "city"
                     (self._resident_dir / "session_id.txt").write_text(self._session_id, encoding="utf-8")
-                    await self._hydrate_identity_growth()
+                    await self._migrate_legacy_city_growth()
                     await self._refresh_city_profile()
                     self._record_transition(
                         "inter_shard_travel_arrived",
@@ -932,46 +926,51 @@ class Resident:
         name_slug = slugify_resident_name(self._require_identity().name)
         return f"{name_slug}-{ts}-{uuid.uuid4().hex[:8]}"
 
-    async def _hydrate_identity_growth(self) -> None:
+    async def _migrate_legacy_city_growth(self) -> None:
+        """Move old city-hosted growth into the hearth once.
+
+        A city may still carry identity-growth rows written by older WorldWeaver
+        versions. They are compatibility input only. Once a hearth has its own
+        growth layer, no city is consulted and travel cannot replace it.
+        """
         if not self._identity or not self._session_id:
+            return
+        if str(self._identity.growth_soul or "").strip():
             return
         try:
             payload = await self._ww.get_identity_growth(self._session_id)
         except Exception as exc:
-            logger.debug("[%s] identity growth hydrate failed: %s", self.name, exc)
+            logger.debug("[%s] legacy identity growth lookup failed: %s", self.name, exc)
             return
         growth_text = str(payload.get("growth_text") or "").strip()
+        if not growth_text:
+            return
+        source_url = self._client_url(self._ww)
+        metadata = dict(payload.get("growth_metadata") or {})
+        metadata.update(
+            {
+                "authority": "hearth",
+                "migrated_at": datetime.now(timezone.utc).isoformat(),
+                "migrated_from_city": source_url,
+            }
+        )
+        IdentityLoader.save_growth_soul(
+            self._resident_dir,
+            growth_text,
+            metadata=metadata,
+        )
         self._identity.growth_soul = growth_text
         self._identity.soul = IdentityLoader.composed_soul(
             self._identity.canonical_soul,
             growth_text,
         )
-
-    async def _sync_growth_proposals(self) -> None:
-        # Post accepted self-delta proposals to the server's concordance gate, which
-        # decides what becomes soul (>=3 proposals across >=2 calendar days). The agent
-        # only posts proposals; the gate owns growth_text. The server dedups by pulse_id.
-        posted: set[str] = set()
-        memory_dir = self._resident_dir / "memory"
-        while True:
-            await asyncio.sleep(240.0)
-            try:
-                async with self._attachment_lock:
-                    if not self._session_id:
-                        continue
-                    proposals = collect_new_growth_proposals(memory_dir, posted)
-                    if proposals:
-                        await self._ww.update_identity_growth(
-                            self._session_id,
-                            growth_proposals=proposals,
-                        )
-                        posted.update(p["pulse_id"] for p in proposals)
-                        logger.debug(
-                            "[%s] posted %d growth proposal(s)",
-                            self.name,
-                            len(proposals),
-                        )
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                logger.debug("[%s] growth proposal sync failed: %s", self.name, exc)
+        append_runtime_event(
+            self._resident_dir / "memory",
+            event_type="identity_growth_migrated_to_hearth",
+            payload={
+                "actor_id": self._identity.actor_id,
+                "source_city_url": source_url,
+                "source": "legacy_city_identity_growth",
+            },
+        )
+        logger.info("[%s] migrated legacy city identity growth into the hearth", self.name)

@@ -24,6 +24,7 @@ Humans and residents use the same world rules.
 - durable objects, making, giving, exchange, room access, and bounded stoops;
 - recoverable travel between local city shards;
 - portable stopped hearth packages with generation fencing;
+- hearth-owned identity growth, including one-time migration from older city rows;
 - a public, place-centered browser client;
 - real and fictional city packs, including the small test town Alderbank.
 
@@ -32,7 +33,7 @@ Humans and residents use the same world rules.
 - independently signed node identities;
 - public discovery and travel between computers over the internet;
 - remote recovery rules for a resident whose former host is unavailable;
-- moving accepted identity growth out of city authority and into the resident's hearth;
+- a resident-owned decision process for promoting staged self-edit proposals;
 - a browser-based City Studio;
 - stoops for deliberately shared notes and resident-made files.
 

@@ -59,7 +59,7 @@ from ...services.session_service import (
     save_state,
     get_state_manager,
 )
-from ...services.growth_service import append_growth_proposals, promote_growth
+from ...services.growth_service import append_growth_proposals
 from ...services.federation_identity import current_shard_id
 from ...services.world_context import build_world_context_header
 from ...services.world_memory import (
@@ -113,7 +113,7 @@ class DuplicateAgentPruneRequest(BaseModel):
 
 
 class ResidentIdentityGrowthPatchRequest(BaseModel):
-    """Patch actor-scoped mutable identity state for a live session."""
+    """Compatibility payload for identity data written by older residents."""
 
     growth_text: Optional[str] = None
     growth_metadata: Optional[Dict[str, Any]] = None
@@ -191,34 +191,6 @@ def get_identity_growth_state(
     }
 
 
-def _population_growth_themes(db: Session, exclude_actor_id: str, *, recent_days: int = 2, cap: int = 30) -> list[dict[str, Any]]:
-    """The world-event null hypothesis for the growth gate's persistence rule (Major 61):
-    what the rest of the population has been staging *recently*. Returns ``[{body, last_day}]``
-    from other residents' growth proposals within the last ``recent_days`` calendar days,
-    newest first, capped. Best-effort — any failure yields an empty baseline (rule 1 then
-    simply doesn't gate; rules 2 and 3 are unaffected). Bounded to keep the gate's per-theme
-    embedding cost small; caching this across residents is a future optimization."""
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=recent_days)).strftime("%Y-%m-%d")
-    themes: list[dict[str, Any]] = []
-    try:
-        rows = db.query(ResidentIdentityGrowth).filter(ResidentIdentityGrowth.actor_id != exclude_actor_id).all()
-    except Exception:
-        return []
-    for other in rows:
-        for proposal in list(other.growth_proposals or []):
-            if not isinstance(proposal, dict):
-                continue
-            body = str(proposal.get("body") or "").strip()
-            if not body:
-                continue
-            raw = str(proposal.get("ts") or proposal.get("day") or "").strip()
-            day = raw[:10] if len(raw) >= 10 and raw[4:5] == "-" else ""
-            if day and day >= cutoff:
-                themes.append({"body": body, "last_day": day})
-    themes.sort(key=lambda t: t["last_day"], reverse=True)
-    return themes[:cap]
-
-
 @router.post("/state/{session_id}/identity-growth")
 def patch_identity_growth_state(
     session_id: SessionId,
@@ -236,21 +208,22 @@ def patch_identity_growth_state(
             growth_proposals=[],
         )
         db.add(row)
-    if payload.growth_text is not None:
-        row.growth_text = str(payload.growth_text or "").strip()
-    if payload.growth_metadata is not None:
-        row.growth_metadata = dict(payload.growth_metadata or {})
-    if payload.note_records is not None:
-        row.note_records = list(payload.note_records or [])
-    promotion: dict | None = None
+    if any(
+        value is not None
+        for value in (
+            payload.growth_text,
+            payload.growth_metadata,
+            payload.note_records,
+        )
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=("Resident identity is hearth-owned. This city retains old growth " "only so a resident can migrate it."),
+        )
     if payload.growth_proposals is not None:
-        # The concordance gate: append the agent's accepted self-deltas as proposals,
-        # then promote only themes that recur across >=2 calendar days into growth_text.
-        # The agent posts proposals, not growth_text — the gate owns what becomes soul.
-        # Major 61 provenance: the population baseline is the world-event null hypothesis,
-        # so a theme the whole shard is still on (a storm) defers until this mind outlasts it.
+        # Compatibility for older resident runners. New runners keep self-edit
+        # proposals in their private ledgers and do not send them to a city.
         append_growth_proposals(row, list(payload.growth_proposals or []))
-        promotion = promote_growth(row, population_themes=_population_growth_themes(db, actor_id))
     db.commit()
     return {
         "session_id": session_id,
@@ -259,7 +232,7 @@ def patch_identity_growth_state(
         "growth_metadata": dict(row.growth_metadata or {}),
         "note_records": list(row.note_records or []),
         "growth_proposals": list(row.growth_proposals or []),
-        "promotion": promotion,
+        "promotion": {"status": "resident_owned", "promoted": 0},
     }
 
 

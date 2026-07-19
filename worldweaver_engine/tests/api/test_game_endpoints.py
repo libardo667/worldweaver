@@ -69,7 +69,12 @@ class TestGameEndpoints:
         assert bootstrap_event.embedding is not None
         assert bootstrap_event.world_state_delta["__action_meta__"]["surface"] == "session_bootstrap"
 
-    def test_identity_growth_round_trip_uses_actor_scoped_row(self, seeded_client, seeded_world_id, db_session):
+    def test_identity_growth_endpoint_preserves_legacy_data_without_rewriting_identity(
+        self,
+        seeded_client,
+        seeded_world_id,
+        db_session,
+    ):
         session_id = "resident-growth-session"
         actor_id = "resident-growth-actor"
 
@@ -86,43 +91,63 @@ class TestGameEndpoints:
         )
         assert response.status_code == 200
 
-        patch_response = seeded_client.post(
+        db_session.add(
+            ResidentIdentityGrowth(
+                actor_id=actor_id,
+                growth_text="Steadier under pressure.",
+                growth_metadata={"promoted_at": "2026-03-18T12:00:00+00:00"},
+                note_records=[
+                    {
+                        "ts": "2026-03-18T04:00:00+00:00",
+                        "note": "I kept my footing.",
+                    }
+                ],
+                growth_proposals=[],
+            )
+        )
+        db_session.commit()
+
+        rejected_rewrite = seeded_client.post(
             f"/api/state/{session_id}/identity-growth",
             json={
-                "growth_text": "Steadier under pressure.",
-                "growth_metadata": {"promoted_at": "2026-03-18T12:00:00+00:00"},
-                "note_records": [{"ts": "2026-03-18T04:00:00+00:00", "note": "I kept my footing."}],
+                "growth_text": "The city says I am someone else.",
+            },
+        )
+        assert rejected_rewrite.status_code == 409
+
+        proposal_response = seeded_client.post(
+            f"/api/state/{session_id}/identity-growth",
+            json={
                 "growth_proposals": [
                     {
-                        "proposal_key": "follow_through:positive",
-                        "dimension": "follow_through",
-                        "summary": "Shows a recurring pattern of carrying commitments through.",
-                        "status": "proposed",
+                        "pulse_id": "legacy-pulse-1",
+                        "body": "A proposal retained during an upgrade.",
                     }
                 ],
             },
         )
-        assert patch_response.status_code == 200
-        payload = patch_response.json()
+        assert proposal_response.status_code == 200
+        payload = proposal_response.json()
         assert payload["actor_id"] == actor_id
         assert payload["growth_text"] == "Steadier under pressure."
         assert payload["growth_metadata"]["promoted_at"] == "2026-03-18T12:00:00+00:00"
         assert payload["note_records"][0]["note"] == "I kept my footing."
-        assert payload["growth_proposals"][0]["proposal_key"] == "follow_through:positive"
+        assert payload["growth_proposals"][0]["pulse_id"] == "legacy-pulse-1"
+        assert payload["promotion"] == {"status": "resident_owned", "promoted": 0}
 
         fetch_response = seeded_client.get(f"/api/state/{session_id}/identity-growth")
         assert fetch_response.status_code == 200
         fetched = fetch_response.json()
         assert fetched["actor_id"] == actor_id
         assert fetched["growth_text"] == "Steadier under pressure."
-        assert fetched["growth_proposals"][0]["dimension"] == "follow_through"
+        assert fetched["growth_proposals"][0]["body"] == "A proposal retained during an upgrade."
 
         row = db_session.get(ResidentIdentityGrowth, actor_id)
         assert row is not None
         assert row.growth_text == "Steadier under pressure."
         assert row.growth_metadata["promoted_at"] == "2026-03-18T12:00:00+00:00"
         assert row.note_records[0]["note"] == "I kept my footing."
-        assert row.growth_proposals[0]["proposal_key"] == "follow_through:positive"
+        assert row.growth_proposals[0]["pulse_id"] == "legacy-pulse-1"
 
     def test_session_bootstrap_prunes_stale_duplicate_agent_sessions(self, seeded_client, seeded_world_id, db_session):
         stale_session_id = "test_resident-20260317-010101"

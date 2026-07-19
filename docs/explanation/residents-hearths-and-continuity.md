@@ -39,8 +39,13 @@ Portable hearth packages and generation fencing handle an orderly stopped transf
 hosts. They do not yet solve malicious copying, a lost host, or independent recovery. Those require signed
 host authorization and a recovery policy.
 
-## Identity growth is currently misplaced
+## Identity growth belongs to the hearth
 
-Accepted growth is still hydrated from a city database. That is a known architectural defect. The city may
-record what happened there, but the resident's hearth must ultimately hold the authority over what becomes
-part of the resident's continuing identity.
+The hearth's `identity/soul_growth.md` file is the authoritative mutable identity layer. A city cannot
+replace it during arrival or travel. If an older deployment stored growth in a city database, the resident
+can migrate that text into an empty hearth once; after that the old city row is only historical input.
+
+Residents can still stage self-edit proposals in their private ledgers. WorldWeaver does not currently
+promote those proposals automatically. The remaining work is to give the resident a clear, local way to
+consider and adopt a proposal without making a city, steward, population comparison, or text filter the
+judge of who they become.

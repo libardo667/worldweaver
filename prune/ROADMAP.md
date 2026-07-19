@@ -18,14 +18,15 @@ The project now has:
 - a place-centered public client;
 - recoverable local city-to-city handoff;
 - stopped hearth export, import, and generation fencing.
+- hearth-owned identity growth with one-time migration from older city rows.
 
 ## Now
 
-### 1. Put identity growth under resident authority
+### 1. Finish resident-owned identity growth
 
-Stop treating the city database as the final authority over a resident's changing identity. Move accepted
-growth to the hearth and replace text-pattern and population-comparison decisions with a smaller,
-resident-owned, provenance-preserving contract.
+Give residents a local, explicit way to consider and adopt their private self-edit proposals. Keep the
+proposal, decision, and source event IDs in the hearth. Do not restore automatic city promotion, population
+comparison, or text-pattern censorship.
 
 ### 2. Finish the human-surface split
 
