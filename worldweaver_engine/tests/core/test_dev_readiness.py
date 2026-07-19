@@ -43,6 +43,27 @@ def test_registry_identity_matches_the_engine_legacy_fallback(tmp_path):
     assert dev._registry_shard_id(explicit) == "rose-city-coop-1"
 
 
+def test_all_city_start_uses_one_canonical_directory_per_registry_identity(tmp_path):
+    canonical = _shard(tmp_path, "ww_pdx", shard_type="city", city_id="portland")
+    duplicate = _shard(tmp_path, "ww_pdx_variant", shard_type="city", city_id="portland")
+    alderbank = _shard(tmp_path, "ww_alderbank", shard_type="city", city_id="alderbank", shard_id="ww_alderbank")
+
+    assert dev._ordered_unique_city_shards([duplicate, alderbank, canonical]) == [alderbank, canonical]
+
+
+def test_registration_refreshes_when_human_client_url_is_stale(tmp_path):
+    city = _shard(tmp_path, "ww_sfo", shard_type="city", city_id="san_francisco")
+    current = {
+        "status": "healthy",
+        "shard_url": "http://host.docker.internal:8002",
+        "client_url": "",
+    }
+
+    assert dev._registration_needs_refresh(current, city) is True
+    current["client_url"] = "http://localhost:5174/ww-sfo"
+    assert dev._registration_needs_refresh(current, city) is False
+
+
 def test_client_routes_keep_browser_traffic_off_runtime_only_node_urls(tmp_path):
     canonical = _shard(tmp_path, "ww_pdx", shard_type="city", city_id="portland")
     duplicate = _shard(tmp_path, "ww_pdx_variant", shard_type="city", city_id="portland")

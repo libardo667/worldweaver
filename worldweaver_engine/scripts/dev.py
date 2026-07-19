@@ -923,6 +923,31 @@ def _ordered_city_shards(shards: list[ShardSpec]) -> list[ShardSpec]:
     )
 
 
+def _ordered_unique_city_shards(shards: list[ShardSpec]) -> list[ShardSpec]:
+    """Return one canonical runnable shard for each federation identity."""
+
+    unique: list[ShardSpec] = []
+    seen: set[str] = set()
+    for shard in _ordered_city_shards(shards):
+        registry_id = _registry_shard_id(shard)
+        if registry_id in seen:
+            continue
+        seen.add(registry_id)
+        unique.append(shard)
+    return unique
+
+
+def _registration_needs_refresh(entry: dict[str, object] | None, shard: ShardSpec) -> bool:
+    if entry is None or str(entry.get("status") or "").strip() not in {"healthy", "degraded"}:
+        return True
+    registered_api = str(entry.get("shard_url") or "").rstrip("/")
+    registered_client = str(entry.get("client_url") or "").rstrip("/")
+    return (
+        registered_api != _docker_host_backend_url(shard).rstrip("/")
+        or registered_client != _shard_client_url(shard).rstrip("/")
+    )
+
+
 def run_install() -> int:
     pip_rc = _run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
     if pip_rc != 0:
@@ -1195,7 +1220,7 @@ def run_weave_up(
         _print_result("FAIL", f"city shard not found{requested} under {SHARDS_ROOT}")
         return 1
 
-    city_targets = _ordered_city_shards(shards) if all_cities else [city_shard]
+    city_targets = _ordered_unique_city_shards(shards) if all_cities else [city_shard]
 
     failures = 0
     failures += _validate_shard_spec(world_shard, label="world shard")
@@ -1287,10 +1312,7 @@ def run_weave_up(
             _print_result("WARN", f"could not determine seeded state for {target.dir_name}; skipping auto-seed")
 
         registry_entry = _registered_shard_entry(world_shard, target)
-        registry_status = str(registry_entry.get("status") or "").strip() if registry_entry is not None else ""
-        registered_url = str(registry_entry.get("shard_url") or "").rstrip("/") if registry_entry is not None else ""
-        expected_url = _docker_host_backend_url(target).rstrip("/")
-        if registry_entry is None or registry_status not in {"healthy", "degraded"} or registered_url != expected_url:
+        if _registration_needs_refresh(registry_entry, target):
             if not _register_city_shard(world_shard, target, dry_run=False):
                 _print_result("FAIL", f"agents remain stopped because registration failed: {target.dir_name}")
                 return 1
