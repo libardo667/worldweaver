@@ -22,8 +22,9 @@ authenticate on the new web origin, and retry a recoverable handoff without putt
 
 Node registration, pulses, route discovery, and source-side recovery records now carry an optional human
 client URL separately from the shard API URL. Password-reset mail uses the same human URL when configured.
-Existing local nodes leave it blank rather than falsely advertising the one shared development client as
-the front door to every city.
+The commons client can serve local destinations honestly from one origin: `/ww-sfo`, `/ww-pdx`, and other
+generated shard prefixes keep their API traffic on the matching same-origin proxy. Local node registration
+advertises its prefix automatically; a deployed steward can override it with `WW_CLIENT_URL`.
 
 ## Build next
 

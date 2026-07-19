@@ -15,6 +15,8 @@ Registration, login, and password recovery use the shard's actor-auth service. P
 open the reset form directly; delivery requires the node to configure its email provider.
 Federated hosts should set `WW_CLIENT_URL` to this human-facing origin. `WW_PUBLIC_URL` remains the shard
 API address; travel discovery and reset mail no longer have to pretend those are the same endpoint.
+One client origin can serve several shards through prefixes such as `/ww-sfo` and `/ww-pdx`; each prefix
+keeps its API calls on the same browser origin and the unprefixed root remains the selected default shard.
 
 ## Run
 

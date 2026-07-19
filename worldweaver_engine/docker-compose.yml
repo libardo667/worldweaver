@@ -7,6 +7,7 @@ services:
     environment:
       VITE_PROXY_TARGET: ${VITE_PROXY_TARGET:-http://ww_sfo-backend:8000}
       VITE_WW_WORLD_URL: ${VITE_WW_WORLD_URL:-http://ww_world-backend:8000}
+      VITE_WW_SHARD_ROUTES: ${VITE_WW_SHARD_ROUTES:-}
     ports:
       - "5174:5174"
     volumes:

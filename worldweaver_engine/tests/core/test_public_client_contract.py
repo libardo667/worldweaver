@@ -4,6 +4,7 @@ ENGINE_ROOT = Path(__file__).resolve().parents[2]
 PUBLIC_API = ENGINE_ROOT / "client-public" / "src" / "api" / "ww.ts"
 PUBLIC_COMPONENTS = ENGINE_ROOT / "client-public" / "src" / "components"
 PUBLIC_STYLES = ENGINE_ROOT / "client-public" / "src" / "styles" / "app.css"
+PUBLIC_VITE = ENGINE_ROOT / "client-public" / "vite.config.ts"
 
 
 def test_public_client_wraps_current_typed_participant_custody_actions():
@@ -66,3 +67,14 @@ def test_public_client_keeps_keyboard_and_reduced_motion_guards():
     assert 'className="sr-only"' in join
     assert "prefers-reduced-motion: reduce" in styles
     assert ":focus-visible" in styles
+
+
+def test_public_client_can_keep_shard_api_traffic_under_a_same_origin_prefix():
+    api = PUBLIC_API.read_text(encoding="utf-8")
+    base = (ENGINE_ROOT / "client-public" / "src" / "api" / "base.ts").read_text(encoding="utf-8")
+    vite = PUBLIC_VITE.read_text(encoding="utf-8")
+
+    assert "localShardPath(path)" in api
+    assert "currentShardBase" in base
+    assert "VITE_WW_SHARD_ROUTES" in vite
+    assert "shardProxyEntries" in vite

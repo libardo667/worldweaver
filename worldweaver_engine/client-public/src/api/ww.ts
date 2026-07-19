@@ -28,6 +28,7 @@ import type {
   StoopList,
 } from "./types";
 import { getJwt } from "../session/store";
+import { localShardPath } from "./base";
 
 export class ApiError extends Error {
   status: number;
@@ -43,7 +44,7 @@ async function getJson<T>(path: string, params?: Record<string, string | number 
     if (v !== undefined) qs.set(k, String(v));
   }
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
-  const resp = await fetch(`${path}${suffix}`, { headers: { Accept: "application/json" } });
+  const resp = await fetch(`${localShardPath(path)}${suffix}`, { headers: { Accept: "application/json" } });
   if (!resp.ok) {
     throw new ApiError(resp.status, `${path} -> ${resp.status}`);
   }
@@ -109,7 +110,7 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json", Accept: "application/json" };
   const jwt = getJwt();
   if (jwt) headers.Authorization = `Bearer ${jwt}`;
-  const resp = await fetch(path, { method: "POST", headers, body: JSON.stringify(body) });
+  const resp = await fetch(localShardPath(path), { method: "POST", headers, body: JSON.stringify(body) });
   if (!resp.ok) {
     let detail = "";
     try {

@@ -3,14 +3,18 @@
 
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { Router } from "wouter";
 import { App } from "./App";
+import { currentShardBase } from "./api/base";
 import { ThemeProvider } from "./theme/ThemeProvider";
 import "./styles/app.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ThemeProvider>
-      <App />
+      <Router base={currentShardBase()}>
+        <App />
+      </Router>
     </ThemeProvider>
   </React.StrictMode>,
 );

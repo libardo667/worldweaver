@@ -406,6 +406,11 @@ def _docker_network_backend_url(shard: ShardSpec) -> str:
     return f"http://{shard.dir_name}-backend:8000"
 
 
+def _client_shard_prefix(shard: ShardSpec) -> str:
+    suffix = shard.dir_name.removeprefix("ww_").replace("_", "-")
+    return f"/ww-{suffix}"
+
+
 def _client_shard_routes(
     shards: list[ShardSpec],
     *,
@@ -423,8 +428,7 @@ def _client_shard_routes(
         # silently steal the browser route.
         if registry_id in routes:
             continue
-        suffix = shard.dir_name.removeprefix("ww_").replace("_", "-")
-        prefix = f"/ww-{suffix}"
+        prefix = _client_shard_prefix(shard)
         routes[registry_id] = {
             "prefix": prefix,
             "target": target_for(shard),
@@ -559,7 +563,10 @@ def _shard_public_url(shard: ShardSpec) -> str:
 def _shard_client_url(shard: ShardSpec) -> str:
     """Return an explicitly advertised human client URL, if this node has one."""
 
-    return str(_shard_env(shard).get("WW_CLIENT_URL", "")).strip()
+    configured = str(_shard_env(shard).get("WW_CLIENT_URL", "")).strip()
+    if configured:
+        return configured
+    return f"http://localhost:{PUBLIC_CLIENT_PORT}{_client_shard_prefix(shard)}"
 
 
 def _federation_token(world_shard: ShardSpec, city_shard: ShardSpec) -> str:
