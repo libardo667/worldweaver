@@ -75,8 +75,10 @@ def test_new_shards_receive_separate_secure_local_secrets(tmp_path: Path) -> Non
     assert second["COMPOSE_PROJECT_NAME"] == "river-coop-2"
     assert len(first["WW_JWT_SECRET"]) >= 48
     assert len(first["WW_DATA_ENCRYPTION_KEY"]) == 44
+    assert len(first["WW_DB_PASSWORD"]) >= 32
     assert first["WW_JWT_SECRET"] != second["WW_JWT_SECRET"]
     assert first["WW_DATA_ENCRYPTION_KEY"] != second["WW_DATA_ENCRYPTION_KEY"]
+    assert first["WW_DB_PASSWORD"] != second["WW_DB_PASSWORD"]
     assert first["WW_NODE_PRIVATE_KEY_PATH"] == "identity/node.key"
     assert "CHANGE_ME" not in first["WW_JWT_SECRET"]
 
@@ -122,5 +124,21 @@ def test_new_game_shard_copies_versioned_experience_and_uses_readable_name(tmp_p
     assert "WW_RUNTIME_FEDERATION_URL=http://ww_world-backend:8000\n" in env_text
     assert (shard / "data" / "rulesets" / "alderbank.game.json").read_text(encoding="utf-8") == experience.read_text(encoding="utf-8")
     compose_text = (shard / "docker-compose.yml").read_text(encoding="utf-8")
-    assert "name: ww_dev_federation" in compose_text
-    assert "- ww_alderbank-backend" in compose_text
+    assert "../../worldweaver_engine" not in compose_text
+    assert "../../ww_agent" not in compose_text
+    assert "ww_dev_federation" not in compose_text
+    assert "image: ${WW_ENGINE_IMAGE}" in compose_text
+    assert "image: ${WW_AGENT_IMAGE}" in compose_text
+
+    generated_env = _read_env(shard / ".env")
+    assert generated_env["WW_ENGINE_IMAGE"].startswith("ghcr.io/libardo667/worldweaver-engine:sha-")
+    assert generated_env["WW_AGENT_IMAGE"].startswith("ghcr.io/libardo667/worldweaver-agent:sha-")
+    assert (shard / "ww.py").is_file()
+    checked = subprocess.run(
+        [sys.executable, str(shard / "ww.py"), "check", "--offline"],
+        cwd=shard,
+        capture_output=True,
+        text=True,
+    )
+    assert checked.returncode == 0, checked.stderr
+    assert "Node folder check passed" in checked.stdout

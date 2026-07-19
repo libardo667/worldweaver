@@ -40,6 +40,7 @@ import os
 import re
 import secrets
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -49,12 +50,16 @@ if str(ENGINE_ROOT) not in sys.path:
 
 from src.services.federation_node_auth import generate_node_identity  # noqa: E402
 
+OPERATOR_SOURCE = Path(__file__).resolve().with_name("shard_operator.py")
+
 # ---------------------------------------------------------------------------
 # Templates
 # ---------------------------------------------------------------------------
 
 _ENV_CITY = """\
 COMPOSE_PROJECT_NAME={compose_project_name}
+WW_ENGINE_IMAGE={engine_image}
+WW_AGENT_IMAGE={agent_image}
 CITY_ID={city_id}
 SHARD_ID={shard_id}
 BACKEND_PORT={port}
@@ -64,6 +69,7 @@ FEDERATION_URL={federation_url}
 WW_RUNTIME_FEDERATION_URL={runtime_federation_url}
 FEDERATION_TOKEN={token}
 WW_NODE_PRIVATE_KEY_PATH=identity/node.key
+WW_ENABLE_DEV_RESET=true
 WW_PUBLIC_URL=http://localhost:{port}
 WW_CLIENT_URL=
 WW_DB_HOST=db
@@ -71,7 +77,7 @@ WW_DB_PORT=5432
 WW_DB_EXTERNAL_PORT={db_external_port}
 WW_DB_NAME=worldweaver_{city_id}
 WW_DB_USER=postgres
-WW_DB_PASSWORD=postgres
+WW_DB_PASSWORD={db_password}
 WW_DATABASE_URL=
 WW_CITY_TIMEZONE={city_timezone}
 WW_JWT_SECRET={jwt_secret}
@@ -91,12 +97,14 @@ WW_DOULA_MODEL=
 
 _ENV_WORLD = """\
 COMPOSE_PROJECT_NAME={compose_project_name}
+WW_ENGINE_IMAGE={engine_image}
 SHARD_ID={shard_id}
 BACKEND_PORT={port}
 SHARD_TYPE=world
 WW_SHARD_EXPERIENCE_PATH=
 FEDERATION_TOKEN={token}
 WW_NODE_PRIVATE_KEY_PATH=identity/node.key
+WW_ENABLE_DEV_RESET=false
 WW_PUBLIC_URL=http://localhost:{port}
 WW_CLIENT_URL=
 WW_DB_HOST=db
@@ -104,7 +112,7 @@ WW_DB_PORT=5432
 WW_DB_EXTERNAL_PORT={db_external_port}
 WW_DB_NAME=worldweaver_world
 WW_DB_USER=postgres
-WW_DB_PASSWORD=postgres
+WW_DB_PASSWORD={db_password}
 WW_DATABASE_URL=
 WW_JWT_SECRET={jwt_secret}
 WW_DATA_ENCRYPTION_KEY={data_encryption_key}
@@ -143,12 +151,9 @@ services:
       start_period: 10s
 
   backend:
-    build:
-      context: ../../worldweaver_engine
-      dockerfile: Dockerfile
+    image: ${{WW_ENGINE_IMAGE}}
     command: python -m uvicorn main:app --host 0.0.0.0 --port 8000
     volumes:
-      - ../../worldweaver_engine:/app
       - ./data:/app/data
       - ./residents:/app/residents
       - ./identity:/app/identity:ro
@@ -169,11 +174,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    networks:
-      default:
-      federation:
-        aliases:
-          - {shard_id}-backend
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
       interval: 10s
@@ -182,11 +182,8 @@ services:
       start_period: 15s
 
   agent:
-    build:
-      context: ../../ww_agent
-      dockerfile: Dockerfile
+    image: ${{WW_AGENT_IMAGE}}
     volumes:
-      - ../../ww_agent:/app
       - ./residents:/app/residents
     env_file: .env
     environment:
@@ -198,11 +195,6 @@ services:
 
 volumes:
   postgres_data:
-
-networks:
-  federation:
-    external: true
-    name: ww_dev_federation
 """
 
 _COMPOSE_WORLD = """\
@@ -231,11 +223,8 @@ services:
       start_period: 10s
 
   backend:
-    build:
-      context: ../../worldweaver_engine
-      dockerfile: Dockerfile
+    image: ${{WW_ENGINE_IMAGE}}
     volumes:
-      - ../../worldweaver_engine:/app
       - ./data:/app/data
       - ./identity:/app/identity:ro
     env_file: .env
@@ -251,11 +240,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    networks:
-      default:
-      federation:
-        aliases:
-          - ww_world-backend
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
       interval: 10s
@@ -265,19 +249,46 @@ services:
 
 volumes:
   postgres_data:
-
-networks:
-  federation:
-    name: ww_dev_federation
 """
 
 _GITIGNORE = """\
 db/
 data/
 residents/
+backups/
 .env
+.env.*
 *.env
 identity/node.key
+"""
+
+_README = """\
+# WorldWeaver node folder
+
+This folder is one independently operated WorldWeaver node. Its container images
+are replaceable software. Its `.env`, `identity/`, `data/`, `residents/`, and
+`backups/` are private node state.
+
+Run every operator command from this folder:
+
+```bash
+python ww.py setup
+python ww.py check
+python ww.py start
+python ww.py seed   # new city nodes only; also closes the reset endpoint
+python ww.py status
+python ww.py start --agents  # city nodes only; wakes residents deliberately
+python ww.py backup
+python ww.py stop
+```
+
+`update` accepts explicit versioned image references. `restore` requires a full
+backup made by this command surface and an explicit `--yes`. Backups contain the
+node signing key, credentials, database, and private resident state; protect them
+like the live folder.
+
+This folder does not need a Worldweaver source checkout or Python environment.
+It needs Docker Compose and a system Python interpreter to run `ww.py`.
 """
 
 
@@ -295,6 +306,29 @@ def _compose_project_name(shard_id: str) -> str:
 def _new_data_encryption_key() -> str:
     """Generate a Fernet-compatible key without importing runtime packages."""
     return base64.urlsafe_b64encode(os.urandom(32)).decode("ascii")
+
+
+def _current_image_tag() -> str:
+    """Use the immutable image tag published for this exact source commit."""
+    try:
+        commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=ENGINE_ROOT.parent,
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        return ""
+    return f"sha-{commit}" if re.fullmatch(r"[0-9a-f]{40}", commit) else ""
+
+
+def _image_reference(*, explicit: str, registry: str, image: str, tag: str) -> str:
+    configured = str(explicit or "").strip()
+    if configured:
+        return configured
+    if not tag:
+        raise ValueError("An immutable --image-tag is required outside a Git checkout.")
+    return f"{registry.rstrip('/')}/{image}:{tag}"
 
 
 def _city_pack_timezone(city_pack_src: Path | None) -> str:
@@ -328,6 +362,18 @@ def main() -> None:
         help="Federation URL used inside Docker when it differs from the host-side URL",
     )
     parser.add_argument("--token", default="", help="Shared federation secret (FEDERATION_TOKEN)")
+    parser.add_argument(
+        "--image-registry",
+        default=os.environ.get("WW_IMAGE_REGISTRY", "ghcr.io/libardo667"),
+        help="Container registry namespace used for default engine and agent images",
+    )
+    parser.add_argument(
+        "--image-tag",
+        default=os.environ.get("WW_IMAGE_TAG", ""),
+        help="Immutable image tag (default: sha-<current Git commit>)",
+    )
+    parser.add_argument("--engine-image", default="", help="Explicit immutable engine image reference")
+    parser.add_argument("--agent-image", default="", help="Explicit immutable agent image reference")
     parser.add_argument("--base-dir", default="..", help="Parent directory (default: ..)")
     parser.add_argument(
         "--city-pack-dir",
@@ -341,6 +387,27 @@ def main() -> None:
     )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+
+    image_tag = str(args.image_tag or "").strip() or _current_image_tag()
+    try:
+        engine_image = _image_reference(
+            explicit=args.engine_image,
+            registry=args.image_registry,
+            image="worldweaver-engine",
+            tag=image_tag,
+        )
+        agent_image = (
+            _image_reference(
+                explicit=args.agent_image,
+                registry=args.image_registry,
+                image="worldweaver-agent",
+                tag=image_tag,
+            )
+            if args.shard_type != "world"
+            else ""
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
 
     if args.shard_type == "world" and args.experience:
         parser.error("--experience applies only to city or neighborhood shards")
@@ -430,8 +497,10 @@ def main() -> None:
     compose_project_name = _compose_project_name(shard_id)
     jwt_secret = secrets.token_urlsafe(48)
     data_encryption_key = _new_data_encryption_key()
+    db_password = secrets.token_urlsafe(32)
     if args.shard_type == "world":
         env_content = _ENV_WORLD.format(
+            engine_image=engine_image,
             shard_id=shard_id,
             port=args.port,
             token=args.token,
@@ -439,10 +508,13 @@ def main() -> None:
             compose_project_name=compose_project_name,
             jwt_secret=jwt_secret,
             data_encryption_key=data_encryption_key,
+            db_password=db_password,
         )
         compose_content = _COMPOSE_WORLD.format(db_external_port=db_external_port)
     else:
         env_content = _ENV_CITY.format(
+            engine_image=engine_image,
+            agent_image=agent_image,
             city_id=city_id,
             shard_id=shard_id,
             port=args.port,
@@ -455,6 +527,7 @@ def main() -> None:
             compose_project_name=compose_project_name,
             jwt_secret=jwt_secret,
             data_encryption_key=data_encryption_key,
+            db_password=db_password,
         )
         compose_content = _COMPOSE_CITY.format(
             city_id=city_id,
@@ -466,6 +539,8 @@ def main() -> None:
         shard_dir / ".env": env_content,
         shard_dir / "docker-compose.yml": compose_content,
         shard_dir / ".gitignore": _GITIGNORE,
+        shard_dir / "README.md": _README,
+        shard_dir / "ww.py": OPERATOR_SOURCE.read_text(encoding="utf-8"),
     }
     dirs = [
         shard_dir / "data",
@@ -480,6 +555,9 @@ def main() -> None:
     if args.shard_type != "world":
         print(f"  city_id   : {city_id}")
     print(f"  port      : {args.port}")
+    print(f"  engine    : {engine_image}")
+    if args.shard_type != "world":
+        print(f"  agent     : {agent_image}")
     if args.federation:
         print(f"  federation: {args.federation}")
     if args.runtime_federation:
@@ -514,6 +592,7 @@ def main() -> None:
     for path, content in files.items():
         path.write_text(content, encoding="utf-8")
     (shard_dir / ".env").chmod(0o600)
+    (shard_dir / "ww.py").chmod(0o755)
     generate_node_identity(
         private_key_path=shard_dir / "identity" / "node.key",
         descriptor_path=shard_dir / "node.json",
@@ -536,15 +615,18 @@ def main() -> None:
     print()
     if args.shard_type == "world":
         print("Next steps:")
-        print(f"  docker compose -p ww_world -f {shard_dir}/docker-compose.yml up -d")
+        print(f"  cd {shard_dir}")
+        print("  python ww.py setup")
+        print("  python ww.py start")
         print()
         print("Then register city shards against this world root.")
     else:
         print("Next steps:")
-        print(f"  1. Add residents to {shard_dir}/residents/")
-        print(f"  2. Start backend:  docker compose -p {shard_dir_name} -f {shard_dir}/docker-compose.yml up -d backend")
-        print(f"  3. Seed world:     python scripts/seed_world.py --shard-dir {shard_dir}")
-        print(f"  4. Start agents:   docker compose -p {shard_dir_name} -f {shard_dir}/docker-compose.yml up -d agent")
+        print(f"  cd {shard_dir}")
+        print("  python ww.py setup")
+        print("  python ww.py start")
+        print("  python ww.py seed")
+        print("  # When ready to wake residents: python ww.py start --agents")
 
 
 if __name__ == "__main__":

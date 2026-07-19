@@ -777,6 +777,8 @@ def _help() -> None:
                                         aggregate public speech without printing it
   python dev.py space-policy --city CITY --location PLACE --controller-resident NAME
                                         assign one reviewed place without waking its controller
+  python dev.py new-shard CITY [options]
+                                        create an isolated, folder-operated node
   python dev.py run <script> [args...]  run a repository Python script
 
 Other commands are passed to worldweaver_engine/scripts/dev.py, so commands such as
@@ -810,6 +812,8 @@ def main() -> int:
         return _conversation_health(rest)
     if command == "space-policy":
         return _space_policy(rest)
+    if command == "new-shard":
+        return _run([sys.executable, "scripts/new_shard.py", *rest], cwd=ENGINE_DIR)
     if command == "agent":
         return _run([sys.executable, "-m", "src.main", *rest], cwd=AGENT_DIR)
     if command == "engine":
