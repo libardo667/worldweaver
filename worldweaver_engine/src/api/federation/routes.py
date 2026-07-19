@@ -23,6 +23,7 @@ from ...database import get_db
 from ...models import (
     FederationMessage,
     FederationActor,
+    FederationNodeTrustEvent,
     FederationRequestNonce,
     FederationResident,
     FederationShard,
@@ -76,6 +77,8 @@ async def _require_node(
         raise HTTPException(status_code=401, detail="Missing signed node identity.")
 
     shard = db.get(FederationShard, node_id)
+    if shard is not None and shard.admission_state != "approved":
+        raise HTTPException(status_code=403, detail="Node identity is revoked or not admitted.")
     supplied_public_key = str(x_ww_node_public_key or "").strip() or None
     public_key = str(shard.public_key or "").strip() if shard is not None else ""
     if not public_key:
@@ -320,8 +323,25 @@ def register_shard(
     _require_claimed_node(authenticated_node, payload.shard_id, action="register this identity")
     shard = db.get(FederationShard, payload.shard_id)
     if shard is None:
-        shard = FederationShard(shard_id=payload.shard_id)
+        if settings.federation_admission_mode.strip().lower() != "open":
+            raise HTTPException(status_code=403, detail="Node is not admitted by this directory.")
+        now = datetime.now(timezone.utc)
+        shard = FederationShard(
+            shard_id=payload.shard_id,
+            admission_state="approved",
+            admitted_at=now,
+        )
         db.add(shard)
+        db.add(
+            FederationNodeTrustEvent(
+                node_id=payload.shard_id,
+                event_type="admitted_open",
+                public_key=authenticated_node.public_key if authenticated_node is not None else None,
+                reason="Directory was configured for open node admission.",
+            )
+        )
+    elif shard.admission_state != "approved":
+        raise HTTPException(status_code=403, detail="Node identity is revoked or not admitted.")
     if authenticated_node is not None and authenticated_node.node_id:
         if shard.public_key and shard.public_key != authenticated_node.public_key:
             raise HTTPException(status_code=409, detail="Node identity is already bound to another key.")
@@ -452,9 +472,11 @@ def start_travel(
     actor = db.get(FederationActor, actor_id)
     if actor is None:
         raise HTTPException(status_code=404, detail=f"Actor '{actor_id}' not found.")
-    if db.get(FederationShard, source_shard) is None:
+    source_node = db.get(FederationShard, source_shard)
+    destination_node = db.get(FederationShard, destination_shard)
+    if source_node is None or source_node.admission_state != "approved":
         raise HTTPException(status_code=404, detail=f"Source node '{source_shard}' is not registered.")
-    if db.get(FederationShard, destination_shard) is None:
+    if destination_node is None or destination_node.admission_state != "approved":
         raise HTTPException(status_code=404, detail=f"Destination node '{destination_shard}' is not registered.")
     if actor.current_shard != source_shard:
         raise HTTPException(
@@ -724,8 +746,8 @@ def receive_pulse(
 
 @router.get("/shards")
 def list_shards(db: Session = Depends(get_db)) -> Dict[str, Any]:
-    """List all registered shards with computed health status."""
-    shards = db.query(FederationShard).order_by(FederationShard.shard_id).all()
+    """List admitted shards with computed health status."""
+    shards = db.query(FederationShard).filter(FederationShard.admission_state == "approved").order_by(FederationShard.shard_id).all()
     interval = settings.federation_pulse_interval
     return {
         "shards": [

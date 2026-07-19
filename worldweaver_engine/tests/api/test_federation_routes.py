@@ -34,6 +34,7 @@ from src.services.federation_node_auth import (
     generate_node_identity,
     signed_request_headers,
 )
+from src.services.federation_node_trust import admit_node, revoke_node
 
 
 def _request(method: str, path: str, body: bytes) -> Request:
@@ -115,6 +116,7 @@ def _seed_travel_nodes_and_actor(db_session):
 @pytest.mark.asyncio
 async def test_signed_registration_binds_node_key_and_rejects_replay(db_session, monkeypatch, tmp_path):
     monkeypatch.setattr("src.api.federation.routes.settings.federation_token", "")
+    monkeypatch.setattr("src.api.federation.routes.settings.federation_admission_mode", "open")
     private_key = tmp_path / "identity" / "node.key"
     descriptor = generate_node_identity(
         private_key_path=private_key,
@@ -171,8 +173,119 @@ async def test_signed_registration_binds_node_key_and_rejects_replay(db_session,
     assert "already used" in str(replay.value.detail)
 
 
+@pytest.mark.asyncio
+async def test_closed_directory_requires_steward_admission_before_registration(db_session, monkeypatch, tmp_path):
+    monkeypatch.setattr("src.api.federation.routes.settings.federation_token", "")
+    monkeypatch.setattr("src.api.federation.routes.settings.federation_admission_mode", "closed")
+    private_key = tmp_path / "identity" / "node.key"
+    descriptor = generate_node_identity(
+        private_key_path=private_key,
+        descriptor_path=tmp_path / "node.json",
+        node_id="invited-node-1",
+        shard_type="city",
+        city_id="alderbank",
+    )
+    payload_data = {
+        "shard_id": "invited-node-1",
+        "shard_url": "https://alderbank.example",
+        "shard_type": "city",
+        "city_id": "alderbank",
+    }
+    body = json.dumps(payload_data).encode("utf-8")
+    headers = signed_request_headers(
+        node_id="invited-node-1",
+        private_key_path=private_key,
+        method="POST",
+        path="/api/federation/register",
+        body=body,
+        include_public_key=True,
+    )
+    principal = await _authenticate_signed_request(
+        db_session,
+        method="POST",
+        path="/api/federation/register",
+        body=body,
+        headers=headers,
+    )
+
+    with pytest.raises(HTTPException) as closed:
+        register_shard(RegisterShardRequest(**payload_data), db_session, principal)
+    assert closed.value.status_code == 403
+    assert db_session.get(FederationShard, "invited-node-1") is None
+
+    admit_node(
+        db_session,
+        node_id="invited-node-1",
+        public_key=descriptor["public_key"],
+        shard_type="city",
+        city_id="alderbank",
+        reason="Known steward is joining the test commons.",
+    )
+    admitted_headers = signed_request_headers(
+        node_id="invited-node-1",
+        private_key_path=private_key,
+        method="POST",
+        path="/api/federation/register",
+        body=body,
+        include_public_key=True,
+    )
+    admitted_principal = await _authenticate_signed_request(
+        db_session,
+        method="POST",
+        path="/api/federation/register",
+        body=body,
+        headers=admitted_headers,
+    )
+    response = register_shard(RegisterShardRequest(**payload_data), db_session, admitted_principal)
+
+    assert response["registered"] is True
+    assert db_session.get(FederationShard, "invited-node-1").shard_url == "https://alderbank.example"
+
+
+@pytest.mark.asyncio
+async def test_revoked_node_is_hidden_and_cannot_make_signed_calls(db_session, monkeypatch, tmp_path):
+    monkeypatch.setattr("src.api.federation.routes.settings.federation_token", "")
+    private_key = tmp_path / "identity" / "node.key"
+    descriptor = generate_node_identity(
+        private_key_path=private_key,
+        descriptor_path=tmp_path / "node.json",
+        node_id="revoked-node-1",
+        shard_type="city",
+        city_id="alderbank",
+    )
+    admit_node(
+        db_session,
+        node_id="revoked-node-1",
+        public_key=descriptor["public_key"],
+        shard_type="city",
+        city_id="alderbank",
+        reason="Temporary admission for revocation test.",
+    )
+    revoke_node(db_session, node_id="revoked-node-1", reason="The steward retired this node.")
+    headers = signed_request_headers(
+        node_id="revoked-node-1",
+        private_key_path=private_key,
+        method="GET",
+        path="/api/federation/residents",
+        body=b"",
+    )
+
+    with pytest.raises(HTTPException) as revoked:
+        await _authenticate_signed_request(
+            db_session,
+            method="GET",
+            path="/api/federation/residents",
+            body=b"",
+            headers=headers,
+        )
+
+    assert revoked.value.status_code == 403
+    assert list_shards(db_session)["shards"] == []
+
+
 def test_signed_registration_and_replay_guard_work_through_http(db_session, monkeypatch, tmp_path):
     monkeypatch.setattr("src.api.federation.routes.settings.federation_token", "")
+    monkeypatch.setattr("src.api.federation.routes.settings.federation_admission_mode", "open")
     private_key = tmp_path / "identity" / "node.key"
     descriptor = generate_node_identity(
         private_key_path=private_key,
@@ -323,7 +436,8 @@ def test_receive_pulse_upserts_existing_resident_without_duplicate(db_session):
     assert residents[0].last_location == "Inner Richmond"
 
 
-def test_registry_keeps_api_and_human_client_urls_separate(db_session):
+def test_registry_keeps_api_and_human_client_urls_separate(db_session, monkeypatch):
+    monkeypatch.setattr("src.api.federation.routes.settings.federation_admission_mode", "open")
     registered = register_shard(
         RegisterShardRequest(
             shard_id="alderbank-node",

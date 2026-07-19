@@ -583,9 +583,28 @@ class FederationShard(Base):
     city_id = Column(String(80), nullable=True)
     public_key = Column(String(80), nullable=True)
     identity_bound_at = Column(DateTime, nullable=True)
+    admission_state = Column(String(20), nullable=False, default="approved", server_default="approved")
+    admitted_at = Column(DateTime, nullable=True)
+    revoked_at = Column(DateTime, nullable=True)
+    revocation_reason = Column(String(255), nullable=True)
+    key_recovered_at = Column(DateTime, nullable=True)
     last_pulse_ts = Column(DateTime, nullable=True)
     last_pulse_seq = Column(Integer, nullable=True, default=0)
     registered_at = Column(DateTime, server_default=func.now())
+
+
+class FederationNodeTrustEvent(Base):
+    """Steward-auditable changes to one directory's node trust decisions."""
+
+    __tablename__ = "federation_node_trust_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    node_id = Column(String(80), nullable=False, index=True)
+    event_type = Column(String(30), nullable=False)
+    previous_public_key = Column(String(80), nullable=True)
+    public_key = Column(String(80), nullable=True)
+    reason = Column(String(255), nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
 
 
 class FederationRequestNonce(Base):

@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     federation_pulse_interval: int = Field(default=300, validation_alias="FEDERATION_PULSE_INTERVAL_SECONDS")
     city_db_file: str = Field(default="worldweaver.db", validation_alias="CITY_DB_FILE")
     federation_token: Optional[str] = Field(default=None, validation_alias="FEDERATION_TOKEN")
+    federation_admission_mode: str = Field(
+        default="closed",
+        validation_alias="WW_FEDERATION_ADMISSION_MODE",
+    )
     node_private_key_path: Optional[str] = Field(default=None, validation_alias="WW_NODE_PRIVATE_KEY_PATH")
     public_url: Optional[str] = Field(default=None, validation_alias="WW_PUBLIC_URL")
     client_url: Optional[str] = Field(default=None, validation_alias="WW_CLIENT_URL")
