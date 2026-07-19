@@ -160,6 +160,24 @@ export type DurableObjectView = {
   object_kind: string;
   status: string;
   attachment: { kind: "custody"; actor_id: string } | { kind: "place"; location: string };
+  relation: "carried" | "here";
+  can_pick_up: boolean;
+};
+
+export type WorldTrace = {
+  trace_id: string;
+  author_name: string;
+  location: string;
+  target: string;
+  body: string;
+  created_at: string | null;
+  expires_at: string | null;
+};
+
+export type LocalWorldTraces = {
+  location: string;
+  traces: WorldTrace[];
+  count: number;
 };
 
 export type ObjectExchange = {

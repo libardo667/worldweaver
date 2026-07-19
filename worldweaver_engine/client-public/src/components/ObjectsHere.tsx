@@ -221,17 +221,21 @@ export function ObjectsHere({ location, sessionId, stoops, refreshKey, onChanged
               <span className="stoop-entry-name">{object.name}</span>
               {object.description && <span className="stoop-entry-desc">{object.description}</span>}
               <div className="object-actions">
-                <button
-                  className="stoop-take"
-                  disabled={busyKey != null}
-                  onClick={() => void act(
-                    `pickup:${object.object_id}`,
-                    () => postPickUpObject(object.object_id, sessionId),
-                    `You picked up ${object.name}.`,
-                  )}
-                >
-                  Pick it up
-                </button>
+                {object.can_pick_up ? (
+                  <button
+                    className="stoop-take"
+                    disabled={busyKey != null}
+                    onClick={() => void act(
+                      `pickup:${object.object_id}`,
+                      () => postPickUpObject(object.object_id, sessionId),
+                      `You picked up ${object.name}.`,
+                    )}
+                  >
+                    Pick it up
+                  </button>
+                ) : (
+                  <span className="stoop-entry-desc">Only the person who put this down can pick it back up.</span>
+                )}
               </div>
             </div>
           ))}

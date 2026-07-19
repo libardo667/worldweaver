@@ -2905,6 +2905,32 @@ class LeaveWorldTraceRequest(BaseModel):
     target: str = Field(default="", max_length=200)
 
 
+@router.get("/world/traces")
+def get_world_traces(
+    session_id: str = Query(..., min_length=1, max_length=64),
+    db: Session = Depends(get_db),
+):
+    """Show another visitor's active public marks at the caller's exact place."""
+    normalized_session_id = str(session_id or "").strip()
+    if not _SAFE_SESSION_RE.match(normalized_session_id):
+        raise HTTPException(status_code=400, detail="Invalid session_id format.")
+
+    session_row = db.get(SessionVars, normalized_session_id)
+    if session_row is None:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    vars_payload = _session_variables_payload(session_row.vars)
+    location = _session_location_from_vars(vars_payload)
+    if not location:
+        raise HTTPException(status_code=409, detail="Session has no current location.")
+
+    traces = _active_world_traces(db, location=location, viewer_session_id=normalized_session_id)
+    for trace in traces:
+        # Humans need authorship, not the temporary transport identifier the
+        # resident runtime uses to connect local observations.
+        trace.pop("author_session_id", None)
+    return {"location": location, "traces": traces, "count": len(traces)}
+
+
 @router.post("/world/traces")
 def post_world_trace(
     payload: LeaveWorldTraceRequest,

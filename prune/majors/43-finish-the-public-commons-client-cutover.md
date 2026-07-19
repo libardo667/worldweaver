@@ -17,10 +17,12 @@ combined interface is no longer launched by a normal development or deployment c
 temporarily available as the explicitly named local `client-legacy` command while the useful parts are
 sorted from the telemetry and obsolete controls.
 
-The action inventory found real participant gaps still to review: correspondence, direct invitations and
-revocation with a safe encounter target, and human cross-node travel. Their presence in
-the old client does not automatically mean every old interaction should be copied. Each should use the
-current typed engine contract and fit the place-centered interface.
+The action inventory found real participant gaps still to review. Correspondence has no public-client
+surface. Direct giving works when the other person carries an exchangeable object, but a safe encounter
+target is still needed for giving to an empty-handed person. Residents may create a temporary sublocation
+by naming a plausible nearby spot; humans may enter one after it appears on the map but cannot create one.
+Private resident workshop writing, elective information sources, and hearth travel are not human-world
+actions and should not be copied into the client.
 
 The first parity slice now covers the complete typed stoop custody loop and witnessed exchange. A person at
 the exact place can reclaim an object they left, give a carried object to a co-present recipient already
@@ -35,6 +37,11 @@ rule and answer pending knocks. This is deliberately not a town-wide
 permissions screen. Pending knocks now remain pending in the typed status response, so refreshing the page
 does not offer a duplicate request.
 
+The local physical-trace contract now also reaches the public client. A person standing at a place can read
+marks left by other visitors and leave an attributed, expiring mark through the same engine records used by
+residents. Temporary session IDs stay out of the human response. Stoop-held objects are excluded from the
+general loose-object list, so one object no longer appears under two incompatible sets of controls.
+
 The supported path now also has explicit labels for join fields, visible keyboard focus, keyboard-operable
 map places, focus handoff when a place opens, and reduced-motion behavior for both CSS and map movement.
 The mobile place sheet uses more of the usable viewport and keeps form controls at a readable touch size.
@@ -46,8 +53,8 @@ its optional email provider.
 
 ## Build next
 
-1. Port only ordinary participant actions that fit the place-centered design, including correspondence and
-   cross-node travel when those contracts are ready.
+1. Port only ordinary participant actions that fit the place-centered design. Correspondence, safe
+   encounter targets for direct gifts, and deliberate human sublocation creation are the known gaps.
 2. Decide whether any old-client view has a justified steward use. Move such functions behind the private
    operations boundary in Major 71.
 3. Remove or archive the remaining guild, observer-dashboard, narrator, model-setting, and resident
@@ -68,7 +75,8 @@ its optional email provider.
 
 - [x] The first screen offers only `look around` and `join the world`.
 - [x] A visitor can inspect places without an account or shard-wide telemetry.
-- [x] A participant can register, log in, bootstrap a session, move, speak, make, and use object stoops.
+- [x] A participant can register, log in, bootstrap a session, move, speak, leave and read local marks,
+  make, use objects, exchange objects, use stoops, manage one doorway, and travel to another known city.
 - [x] The map and current place are primary; activity history is optional.
 - [ ] All supported ordinary participant actions are available in `client-public`.
 - [ ] The old combined client is either removed or limited to named steward-only functions.

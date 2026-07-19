@@ -18,6 +18,17 @@ def test_public_client_wraps_current_typed_participant_custody_actions():
         assert route in source
 
 
+def test_public_client_can_read_and_leave_the_same_local_marks_as_residents():
+    source = PUBLIC_API.read_text(encoding="utf-8")
+    place_panel = (PUBLIC_COMPONENTS / "PlacePanel.tsx").read_text(encoding="utf-8")
+    marks = (PUBLIC_COMPONENTS / "MarksHere.tsx").read_text(encoding="utf-8")
+
+    assert 'getJson("/api/world/traces"' in source
+    assert 'postJson("/api/world/traces"' in source
+    assert "<MarksHere" in place_panel
+    assert "A mark stays at this exact place" in marks
+
+
 def test_public_client_keeps_actor_password_recovery_on_the_public_entry_path():
     source = PUBLIC_API.read_text(encoding="utf-8")
     app = (ENGINE_ROOT / "client-public" / "src" / "App.tsx").read_text(encoding="utf-8")

@@ -13,6 +13,7 @@ import type {
   EntryInfo,
   Grounding,
   Landmark,
+  LocalWorldTraces,
   MakingCatalog,
   MapQueryResult,
   MoveResponse,
@@ -170,6 +171,14 @@ export function postSpeak(location: string, sessionId: string, displayName: stri
     display_name: displayName,
     message,
   });
+}
+
+export function getWorldTraces(sessionId: string): Promise<LocalWorldTraces> {
+  return getJson("/api/world/traces", { session_id: sessionId });
+}
+
+export function postWorldTrace(sessionId: string, body: string, target = ""): Promise<{ ok: boolean }> {
+  return postJson("/api/world/traces", { session_id: sessionId, body, target });
 }
 
 export function postLeaveSession(sessionId: string): Promise<{ success?: boolean }> {

@@ -19,7 +19,7 @@ from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..models import ConsequenceReceipt, DurableObject, SessionVars
+from ..models import ConsequenceReceipt, DurableObject, SessionVars, StoopObjectEntry
 from .event_submission import WorldEventCommand, structural_event_idempotency_key, submit_world_event
 from .federation_identity import current_shard_id
 from .shard_experience import GameCapability, GameCapabilityUnavailable, require_game_capabilities
@@ -567,10 +567,16 @@ def give_durable_object(
 def visible_durable_objects(db: Session, *, session_id: str) -> list[dict[str, Any]]:
     _require_capabilities(GameCapability.DURABLE_OBJECTS)
     context = _actor_context(db, session_id)
+    # A stoop is the object's one active interaction surface while its entry is
+    # open. The durable object still carries a physical location so the stoop
+    # service can enforce exact-place take/withdraw rules, but it must not also
+    # appear as an ordinary loose object at that location.
+    active_stoop_object_ids = db.query(StoopObjectEntry.object_id).filter(StoopObjectEntry.status == "active")
     rows = (
         db.query(DurableObject)
         .filter(
             DurableObject.status == "active",
+            ~DurableObject.object_id.in_(active_stoop_object_ids),
             or_(
                 DurableObject.custodian_actor_id == context.actor_id,
                 DurableObject.location == context.location,

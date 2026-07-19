@@ -879,6 +879,49 @@ button {
   font: inherit;
 }
 
+.mark-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.mark-entry {
+  display: grid;
+  gap: 0.15rem;
+  border-left: 2px solid var(--line);
+  padding-left: 0.7rem;
+}
+
+.mark-form {
+  margin-top: 0.75rem;
+}
+
+.mark-form form {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.6rem;
+}
+
+.mark-form label {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+
+.mark-form input,
+.mark-form textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: inherit;
+  padding: 0.55rem 0.65rem;
+}
+
+.mark-form textarea {
+  min-height: 5rem;
+  resize: vertical;
+}
+
 .access-summary,
 .access-note {
   margin: 0 0 8px;

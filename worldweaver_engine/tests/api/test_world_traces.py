@@ -56,6 +56,32 @@ def test_trace_derives_author_and_location_without_entering_event_feed(db_sessio
     assert get_agent_scene(author_id, db_session)["traces_here"] == []
 
 
+def test_human_trace_view_uses_the_same_local_marks_without_session_ids(client, db_session):
+    author_id = "test_resident-20260714-120000"
+    viewer_id = "human_player-20260719-120000"
+    db_session.add_all([_session(author_id), _session(viewer_id)])
+    db_session.commit()
+
+    posted = client.post(
+        "/api/world/traces",
+        json={"session_id": author_id, "body": "three blue chalk lines", "target": "the bakery lintel"},
+    )
+    assert posted.status_code == 200
+
+    response = client.get("/api/world/traces", params={"session_id": viewer_id})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["location"] == "Chinatown"
+    assert payload["count"] == 1
+    assert payload["traces"][0]["body"] == "three blue chalk lines"
+    assert payload["traces"][0]["target"] == "the bakery lintel"
+    assert "author_session_id" not in payload["traces"][0]
+
+    own_view = client.get("/api/world/traces", params={"session_id": author_id})
+    assert own_view.status_code == 200
+    assert own_view.json()["traces"] == []
+
+
 def test_trace_visibility_is_location_bounded_and_expiry_bounded(db_session):
     author_id = "test_resident-20260714-120000"
     viewer_id = "test_resident_two-20260714-120000"

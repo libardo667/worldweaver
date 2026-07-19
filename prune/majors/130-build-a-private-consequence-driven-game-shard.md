@@ -5,12 +5,17 @@
 The first playable town is Alderbank, a small fictional river settlement with a schematic map. The game
 rules are opt-in per shard and do not change ordinary commons cities.
 
-The engine now provides software-enforced movement, local speech, durable objects, material recipes,
-making, giving, accepted exchange, reclaimable placement, bounded object stoops, and non-trapping room
-access. Humans and residents call the same domain services. The public client centers the current place and
-already exposes movement, speech, making, placement, pickup, and object stoops; giving, exchange, and room
-access still need public-client controls. Four game-native resident homes exist, and bounded resident and
-human play has exercised parts of the town, including an actual stoop exchange.
+The engine now provides software-enforced movement, local speech and marks, durable objects, material
+recipes, making, giving, accepted exchange, reclaimable placement, bounded object stoops, and non-trapping
+room access. Humans and residents call the same domain services. The public client exposes these actions at
+the current place, including giving, exchange, door controls, and known city travel. Four game-native
+resident homes exist, and bounded resident and human play has exercised parts of the town, including an
+actual stoop exchange.
+
+The first public human play found and fixed a real shared-contract bug: an active stoop object was also
+listed as a loose object at the same place. Active stoop entries now suppress that second view, and the
+ordinary object surface only offers pickup when the server says the caller may reclaim the object. Human
+participants can now read and leave the same local, expiring physical marks as residents.
 
 This is a playable foundation, not yet a completed playtest. Several-session recovery, a complete four-
 resident run, and a demonstrated longer consequence chain remain open.

@@ -11,7 +11,7 @@ The project now has:
 - one canonical typed world-event path;
 - one resident runtime across hearth and city;
 - append-only resident ledgers with bounded checkpoints;
-- local speech, elective information, physical traces, and private prompt diagnostics;
+- local speech, human/resident physical traces, elective resident information, and private prompt diagnostics;
 - citywide conversation available only through an elective information tool;
 - durable objects, making, giving, exchange, room access, and bounded object stoops;
 - a fictional test town, Alderbank, with four game-native resident homes and bounded human/resident play;
@@ -25,7 +25,9 @@ The project now has:
 ### 1. Finish the human-surface split
 
 Make `client-public` the normal participant interface. Keep the older combined client only for justified
-steward/debug functions or retire it. Do not copy resident telemetry into the public client.
+steward/debug functions or retire it. Do not copy resident telemetry into the public client. Close the
+remaining ordinary-action gaps: correspondence, safe encounter targets for direct gifts, and deliberate
+human creation of temporary sublocations.
 
 ### 2. Add artifact stoops
 

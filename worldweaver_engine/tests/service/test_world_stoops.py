@@ -12,7 +12,7 @@ from src.models import (
     WorldNode,
     WorldStoop,
 )
-from src.services.consequence_objects import ConsequenceDomainError, found_durable_object
+from src.services.consequence_objects import ConsequenceDomainError, found_durable_object, visible_durable_objects
 from src.services.world_stoops import (
     browse_world_stoop,
     found_world_stoop,
@@ -97,6 +97,8 @@ def test_leave_is_voluntary_and_take_is_first_claim_atomic(db_session, game_rule
     assert object_row.location == "Lantern Square"
     assert left["entry"]["can_withdraw"] is True
     assert "left_by_actor_id" not in left["entry"]
+    assert visible_durable_objects(db_session, session_id="maker") == []
+    assert visible_durable_objects(db_session, session_id="visitor") == []
 
     browsed = browse_world_stoop(db_session, session_id="visitor", stoop_id="lantern-stoop")
     assert browsed["count"] == 1
@@ -121,6 +123,7 @@ def test_leave_is_voluntary_and_take_is_first_claim_atomic(db_session, game_rule
     assert replay["replayed"] is True
     assert db_session.get(DurableObject, object_id).custodian_actor_id == "actor-visitor"
     assert db_session.get(StoopObjectEntry, entry_id).status == "taken"
+    assert visible_durable_objects(db_session, session_id="visitor")[0]["relation"] == "carried"
     assert db_session.query(StoopReceipt).count() == 2
     assert [row.event_type for row in db_session.query(WorldEvent).order_by(WorldEvent.id).all()][-2:] == [
         "stoop_object_left",
@@ -191,6 +194,7 @@ def test_only_depositor_can_withdraw_an_available_entry(db_session, game_rules):
     )
     assert withdrawn["entry"]["status"] == "withdrawn"
     assert db_session.get(DurableObject, object_id).custodian_actor_id == "actor-maker"
+    assert visible_durable_objects(db_session, session_id="maker")[0]["relation"] == "carried"
 
 
 def test_stoop_requires_exact_location_for_browse_and_commands(db_session, game_rules):

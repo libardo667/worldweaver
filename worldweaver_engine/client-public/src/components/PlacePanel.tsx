@@ -7,6 +7,7 @@ import type { PendingDeparture } from "../session/store";
 import { usePlace } from "../hooks/usePlace";
 import { findNodeBySlug, slugifyPlace } from "../lib/places";
 import { MakeHere } from "./MakeHere";
+import { MarksHere } from "./MarksHere";
 import { AccessHere } from "./AccessHere";
 import { NearbyLandmarks } from "./NearbyLandmarks";
 import { ObjectsHere } from "./ObjectsHere";
@@ -106,6 +107,7 @@ export function PlacePanel({ slug, node, nodes, edges, me, onWalk, onTravel, onC
               onDeparted={onCrossCityTravel}
               onDeparturePending={onCrossCityTravelPending}
             />
+            <MarksHere location={node.name} sessionId={me.sessionId} />
             <ObjectsHere location={node.name} sessionId={me.sessionId} stoops={details.stoops} refreshKey={worldBump} onChanged={bumpWorld} />
             <MakeHere location={node.name} sessionId={me.sessionId} onMade={bumpWorld} />
           </>
