@@ -70,6 +70,8 @@ export type EntryNode = { name: string; key: string; lat: number | null; lon: nu
 export type EntryInfo = {
   world_id: string;
   snapshot: string;
+  fictional: boolean;
+  map_style: "schematic" | "geographic";
   locations: string[];
   entry_nodes: EntryNode[];
 };

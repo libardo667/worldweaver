@@ -164,6 +164,8 @@ export function App() {
     <div className="app-shell" data-phase={atmosphere.phase} data-haze={atmosphere.hazy ? "true" : "false"}>
       <WorldMap
         nodes={nodes}
+        edges={edges}
+        mapStyle={entry?.map_style ?? null}
         focusKey={focusNode?.key ?? null}
         onNodeClick={handleNodeClick}
         onViewportChange={handleViewportChange}

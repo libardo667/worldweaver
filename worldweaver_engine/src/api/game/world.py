@@ -1719,6 +1719,8 @@ def get_world_entry(
     return {
         "world_id": world_id,
         "snapshot": snapshot,
+        "fictional": bool(manifest.get("fictional", False)),
+        "map_style": "schematic" if bool(manifest.get("fictional", False)) else "geographic",
         "cards": [],
         "locations": dropdown_locations,
         "entry_nodes": entry_nodes,

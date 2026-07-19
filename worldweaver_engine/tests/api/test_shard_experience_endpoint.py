@@ -91,6 +91,8 @@ def test_alderbank_entry_uses_pack_and_rule_disclosure_not_generated_scenario_ca
     assert response.status_code == 200
     payload = response.json()
     assert payload["cards"] == []
+    assert payload["fictional"] is True
+    assert payload["map_style"] == "schematic"
     assert payload["snapshot"].startswith("Alderbank. This is an explicitly game-shaped WorldWeaver shard.")
     assert "machinery" not in payload["snapshot"].lower()
     assert "engineer" not in str(payload).lower()

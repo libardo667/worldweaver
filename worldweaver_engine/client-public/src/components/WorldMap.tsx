@@ -3,13 +3,16 @@
 
 import { useEffect, useRef } from "react";
 import type * as Leaflet from "leaflet";
-import type { MapNode } from "../api/types";
+import type { MapEdge, MapNode } from "../api/types";
 import "leaflet/dist/leaflet.css";
 
 export type MapBounds = { north: number; south: number; east: number; west: number };
 
 type Props = {
   nodes: MapNode[];
+  edges: MapEdge[];
+  /** Fictional packs are drawn as their own schematic, never over a real town. */
+  mapStyle: "schematic" | "geographic" | null;
   /** Key of the place the viewer is currently at/looking at; drawn as "here". */
   focusKey?: string | null;
   onNodeClick?: (node: MapNode) => void;
@@ -36,10 +39,11 @@ function markerRadius(node: MapNode, isFocus: boolean): number {
   return node.node_type !== "location" ? 4 : 7;
 }
 
-export function WorldMap({ nodes, focusKey, onNodeClick, onViewportChange, frame }: Props) {
+export function WorldMap({ nodes, edges, mapStyle, focusKey, onNodeClick, onViewportChange, frame }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Leaflet.Map | null>(null);
   const markersRef = useRef<Leaflet.LayerGroup | null>(null);
+  const tileLayerRef = useRef<Leaflet.TileLayer | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const onViewportChangeRef = useRef(onViewportChange);
   const onNodeClickRef = useRef(onNodeClick);
@@ -65,10 +69,6 @@ export function WorldMap({ nodes, focusKey, onNodeClick, onViewportChange, frame
           zoomControl: false,
         });
         L.control.zoom({ position: "bottomright" }).addTo(map);
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          attribution: "© <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a>",
-          maxZoom: 19,
-        }).addTo(map);
         markersRef.current = L.layerGroup().addTo(map);
         mapRef.current = map;
 
@@ -97,6 +97,16 @@ export function WorldMap({ nodes, focusKey, onNodeClick, onViewportChange, frame
       const markers = markersRef.current;
       if (!map || !markers) return;
 
+      if (mapStyle === "geographic" && !tileLayerRef.current) {
+        tileLayerRef.current = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: "© <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a>",
+          maxZoom: 19,
+        }).addTo(map);
+      } else if (mapStyle === "schematic" && tileLayerRef.current) {
+        map.removeLayer(tileLayerRef.current);
+        tileLayerRef.current = null;
+      }
+
       // One-shot framing (entry bounds) the first time it arrives.
       if (frame && !framedRef.current) {
         framedRef.current = true;
@@ -110,6 +120,18 @@ export function WorldMap({ nodes, focusKey, onNodeClick, onViewportChange, frame
       const byKey = new Map(georef.map((n) => [n.key, n]));
 
       markers.clearLayers();
+      for (const edge of edges) {
+        const from = byKey.get(edge.from);
+        const to = byKey.get(edge.to);
+        if (from?.lat == null || from.lon == null || to?.lat == null || to.lon == null) continue;
+        L.polyline(
+          [
+            [from.lat, from.lon],
+            [to.lat, to.lon],
+          ],
+          { className: "map-path", interactive: false },
+        ).addTo(markers);
+      }
       // Fan out markers sharing one coordinate so none hides another.
       const buckets = new Map<string, MapNode[]>();
       for (const node of georef) {
@@ -150,7 +172,7 @@ export function WorldMap({ nodes, focusKey, onNodeClick, onViewportChange, frame
     return () => {
       active = false;
     };
-  }, [nodes, focusKey, frame]);
+  }, [nodes, edges, mapStyle, focusKey, frame]);
 
   useEffect(() => {
     return () => {
@@ -158,8 +180,9 @@ export function WorldMap({ nodes, focusKey, onNodeClick, onViewportChange, frame
       resizeObserverRef.current = null;
       mapRef.current?.remove();
       mapRef.current = null;
+      tileLayerRef.current = null;
     };
   }, []);
 
-  return <div ref={containerRef} className="world-map" />;
+  return <div ref={containerRef} className={`world-map world-map--${mapStyle ?? "loading"}`} />;
 }

@@ -44,6 +44,19 @@ button {
   background: var(--bg);
 }
 
+.world-map--schematic {
+  background:
+    radial-gradient(ellipse at 58% 48%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 42%),
+    linear-gradient(145deg, var(--bg), var(--surface-raised));
+}
+
+.map-path {
+  stroke: var(--ink-soft);
+  stroke-width: 2;
+  stroke-opacity: 0.34;
+  stroke-linecap: round;
+}
+
 .leaflet-tile-pane {
   filter: var(--map-filter);
 }
