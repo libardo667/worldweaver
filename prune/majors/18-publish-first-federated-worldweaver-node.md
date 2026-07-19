@@ -14,6 +14,11 @@ shared federation token. A public directory still needs an explicit first-regist
 policy. Generated folders also still build from neighboring source folders and lack the supported image,
 update, and backup workflow described below.
 
+The signed local network has also completed a real Portland-to-San-Francisco session handoff and return with
+a throwaway actor. Each source retired its session before the destination created one, and the wrong signing
+identity could not claim the destination transition. Public HTTPS and source-independent packaging remain
+unproven.
+
 ## Goal
 
 Put one project-operated WorldWeaver node on the public internet as the first useful member of a network

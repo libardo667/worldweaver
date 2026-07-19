@@ -50,21 +50,27 @@ stopped Portland deal/grow/keep variants were research runtimes, not future publ
 moved out of `shards/` into the private artifact store, so their old shared registry ID can no longer collide
 with live-node discovery.
 
+On 2026-07-19, a throwaway agent actor made a live Portland-to-San-Francisco trip and returned through the
+ordinary city session endpoints. Portland retired its local session before San Francisco created one at
+Embarcadero; San Francisco then retired that session before Portland recreated one at Pearl District. Checks
+at both ends found exactly one active local session. A Portland-signed request attempting to confirm the San
+Francisco arrival was rejected with HTTP 403. Both travel records reached `arrived`, the actor finished active
+in Portland, and all probe rows were removed afterward. This proves the local multi-node path and its separate
+signing identities; it is not yet the required two-computer HTTPS proof.
+
 ## Build next
 
-1. Exercise signed account routing and a complete signed Portland-to-San-Francisco travel and return on the
-   migrated local nodes, including an attempted wrong-node transition.
-2. Define explicit first-registration and key-recovery policy before accepting unknown nodes on a public
+1. Define explicit first-registration and key-recovery policy before accepting unknown nodes on a public
    directory; continuity of a key proves node identity but does not establish community trust by itself.
-3. Run the folder against published, versioned images so it does not reach into a neighboring source tree.
-4. Give a steward one plain setup/check/start/stop/update/backup workflow that operates only on that folder
+2. Run the folder against published, versioned images so it does not reach into a neighboring source tree.
+3. Give a steward one plain setup/check/start/stop/update/backup workflow that operates only on that folder
    and does not print or copy private credentials.
-5. Put two independently created node folders behind real HTTPS addresses on different computers or trust
+4. Put two independently created node folders behind real HTTPS addresses on different computers or trust
    domains.
-6. Prove that a resident can remain hosted at their hearth, visit a remote city, and return without copying
+5. Prove that a resident can remain hosted at their hearth, visit a remote city, and return without copying
    the complete hearth to that city.
-7. Configure and verify a real public-client URL for each independently hosted destination.
-8. Test directory outage, destination outage, interrupted departure, interrupted arrival, and replay across
+6. Configure and verify a real public-client URL for each independently hosted destination.
+7. Test directory outage, destination outage, interrupted departure, interrupted arrival, and replay across
    independently operated nodes.
 
 ## Rules
