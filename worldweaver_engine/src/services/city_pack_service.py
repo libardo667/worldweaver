@@ -300,6 +300,32 @@ def find_travel_hub(hub_id: str, city_id: str = "san_francisco") -> dict | None:
     )
 
 
+def resolve_travel_hub_entry(hub_id: str, city_id: str = "san_francisco") -> dict | None:
+    """Return a hub with its entry point resolved to the map's place name."""
+    pack = get_pack(city_id)
+    hub = find_travel_hub(hub_id, city_id)
+    if not pack or hub is None:
+        return None
+
+    raw_entry = str(hub.get("entry_location") or "").strip()
+    neighborhoods = [item for item in pack.get("neighborhoods", []) if isinstance(item, dict)]
+    place_name = next(
+        (
+            str(item.get("name") or "").strip()
+            for item in neighborhoods
+            if raw_entry
+            and (
+                str(item.get("id") or "").strip().casefold() == raw_entry.casefold()
+                or str(item.get("name") or "").strip().casefold() == raw_entry.casefold()
+            )
+        ),
+        "",
+    )
+    if not place_name:
+        return None
+    return {**hub, "entry_location": place_name}
+
+
 # ---------------------------------------------------------------------------
 # Map summary — compressed geographic context for LLM prompts
 # ---------------------------------------------------------------------------

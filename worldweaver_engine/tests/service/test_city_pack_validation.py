@@ -25,6 +25,15 @@ def test_published_city_packs_have_valid_local_travel_hubs():
         assert city_pack_service.find_travel_hub(expected_hub, city_id) is not None
 
 
+def test_travel_hub_entry_resolves_to_the_map_place_name():
+    city_pack_service._PACK_CACHE.pop("portland", None)
+
+    hub = city_pack_service.resolve_travel_hub_entry("portland-union-station", "portland")
+
+    assert hub is not None
+    assert hub["entry_location"] == "Pearl District"
+
+
 def test_validation_returns_structured_broken_reference_errors():
     report = validate_city_pack(
         {

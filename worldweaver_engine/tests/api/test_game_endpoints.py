@@ -235,6 +235,7 @@ class TestGameEndpoints:
                 "actor_id": "actor-cross-node-departure",
                 "player_role": "Traveling Resident",
                 "world_id": seeded_world_id,
+                "entry_location": "Embarcadero",
             },
         )
         assert bootstrap.status_code == 200
@@ -244,16 +245,16 @@ class TestGameEndpoints:
                 "registry": {"reachable": True},
                 "destinations": [
                     {
-                        "route_id": "pdx-sf",
-                        "departure_hub_id": "portland-union-station",
-                        "departure_hub": "Portland Union Station",
-                        "arrival_hub_id": "emeryville-sf-transfer",
-                        "arrival_hub": "Emeryville",
+                        "route_id": "sf-pdx",
+                        "departure_hub_id": "emeryville-sf-transfer",
+                        "departure_hub": "Emeryville / San Francisco transfer",
+                        "arrival_hub_id": "portland-union-station",
+                        "arrival_hub": "Portland Union Station",
                         "nodes": [
                             {
-                                "shard_id": "bay-commons-1",
-                                "shard_url": "https://bay.example",
-                                "client_url": "https://play.bay.example",
+                                "shard_id": "rose-city-coop-1",
+                                "shard_url": "https://rose.example",
+                                "client_url": "https://play.rose.example",
                                 "status": "healthy",
                             }
                         ],
@@ -274,8 +275,8 @@ class TestGameEndpoints:
         request = {
             "travel_id": "trip-local-001",
             "session_id": session_id,
-            "route_id": "pdx-sf",
-            "destination_shard": "bay-commons-1",
+            "route_id": "sf-pdx",
+            "destination_shard": "rose-city-coop-1",
             "reason": "visit",
         }
 
@@ -284,19 +285,19 @@ class TestGameEndpoints:
 
         assert response.status_code == 200
         assert response.json()["handoff"]["status"] == "traveling"
-        assert response.json()["handoff"]["destination_url"] == "https://bay.example"
-        assert response.json()["handoff"]["destination_client_url"] == "https://play.bay.example"
+        assert response.json()["handoff"]["destination_url"] == "https://rose.example"
+        assert response.json()["handoff"]["destination_client_url"] == "https://play.rose.example"
         assert repeated.status_code == 200
         assert repeated.json()["idempotent"] is True
         assert len(starts) == 1
-        assert starts[0]["departure_hub_id"] == "portland-union-station"
-        assert starts[0]["arrival_hub_id"] == "emeryville-sf-transfer"
+        assert starts[0]["departure_hub_id"] == "emeryville-sf-transfer"
+        assert starts[0]["arrival_hub_id"] == "portland-union-station"
         assert len(departures) == 1
         assert db_session.get(SessionVars, session_id) is None
         handoff = db_session.get(ShardTravelHandoff, "trip-local-001")
         assert handoff is not None and handoff.status == "traveling"
-        assert handoff.departure_hub_id == "portland-union-station"
-        assert handoff.arrival_hub_id == "emeryville-sf-transfer"
+        assert handoff.departure_hub_id == "emeryville-sf-transfer"
+        assert handoff.arrival_hub_id == "portland-union-station"
         departure_events = db_session.query(WorldEvent).filter(WorldEvent.event_type == "cross_shard_departure").all()
         assert len(departure_events) == 1
 
@@ -315,6 +316,7 @@ class TestGameEndpoints:
                 "actor_id": "actor-recovering-departure",
                 "player_role": "Recovering Traveler",
                 "world_id": seeded_world_id,
+                "entry_location": "Embarcadero",
             },
         )
         assert bootstrap.status_code == 200
@@ -324,12 +326,12 @@ class TestGameEndpoints:
                 "registry": {"reachable": True},
                 "destinations": [
                     {
-                        "route_id": "pdx-sf",
-                        "departure_hub_id": "portland-union-station",
-                        "departure_hub": "Portland Union Station",
-                        "arrival_hub_id": "emeryville-sf-transfer",
-                        "arrival_hub": "Emeryville",
-                        "nodes": [{"shard_id": "bay-commons-1", "shard_url": "https://bay.example", "client_url": "https://play.bay.example", "status": "healthy"}],
+                        "route_id": "sf-pdx",
+                        "departure_hub_id": "emeryville-sf-transfer",
+                        "departure_hub": "Emeryville / San Francisco transfer",
+                        "arrival_hub_id": "portland-union-station",
+                        "arrival_hub": "Portland Union Station",
+                        "nodes": [{"shard_id": "rose-city-coop-1", "shard_url": "https://rose.example", "client_url": "https://play.rose.example", "status": "healthy"}],
                     }
                 ],
             },
@@ -351,8 +353,8 @@ class TestGameEndpoints:
             json={
                 "travel_id": "trip-local-002",
                 "session_id": session_id,
-                "route_id": "pdx-sf",
-                "destination_shard": "bay-commons-1",
+                "route_id": "sf-pdx",
+                "destination_shard": "rose-city-coop-1",
             },
         )
 
@@ -370,6 +372,64 @@ class TestGameEndpoints:
         assert retry.status_code == 200
         assert retry.json()["handoff"]["status"] == "traveling"
         assert db_session.get(ShardTravelHandoff, "trip-local-002").last_error is None
+
+    def test_session_travel_departure_requires_presence_at_the_route_hub(
+        self,
+        seeded_client,
+        seeded_world_id,
+        db_session,
+        monkeypatch,
+    ):
+        session_id = "resident-away-from-departure"
+        bootstrap = seeded_client.post(
+            "/api/session/bootstrap",
+            json={
+                "session_id": session_id,
+                "actor_id": "actor-away-from-departure",
+                "player_role": "Misplaced Traveler",
+                "world_id": seeded_world_id,
+                "entry_location": "Chinatown",
+            },
+        )
+        assert bootstrap.status_code == 200
+        monkeypatch.setattr(
+            "src.api.game.state.federation_discovery.get_travel_destinations",
+            lambda: {
+                "registry": {"reachable": True},
+                "destinations": [
+                    {
+                        "route_id": "sf-pdx",
+                        "departure_hub_id": "emeryville-sf-transfer",
+                        "departure_hub": "Emeryville / San Francisco transfer",
+                        "arrival_hub_id": "portland-union-station",
+                        "arrival_hub": "Portland Union Station",
+                        "nodes": [
+                            {
+                                "shard_id": "rose-city-coop-1",
+                                "shard_url": "https://rose.example",
+                                "client_url": "https://play.rose.example",
+                                "status": "healthy",
+                            }
+                        ],
+                    }
+                ],
+            },
+        )
+
+        response = seeded_client.post(
+            "/api/session/travel/depart",
+            json={
+                "travel_id": "trip-wrong-place",
+                "session_id": session_id,
+                "route_id": "sf-pdx",
+                "destination_shard": "rose-city-coop-1",
+            },
+        )
+
+        assert response.status_code == 409
+        assert "departs from Embarcadero" in response.json()["detail"]
+        assert db_session.get(SessionVars, session_id) is not None
+        assert db_session.get(ShardTravelHandoff, "trip-wrong-place") is None
 
     def test_session_travel_arrival_uses_destination_pack_and_preserves_actor_id(
         self,
@@ -416,7 +476,7 @@ class TestGameEndpoints:
         session = db_session.get(SessionVars, "arriving-resident-session")
         assert session is not None
         assert session.actor_id == "actor-arriving-resident"
-        assert session.vars["variables"]["location"] == "embarcadero"
+        assert session.vars["variables"]["location"] == "Embarcadero"
         events = db_session.query(WorldEvent).filter(WorldEvent.session_id == "arriving-resident-session").all()
         assert [event.event_type for event in events].count("session_bootstrap") == 1
         assert [event.event_type for event in events].count("cross_shard_arrival") == 1

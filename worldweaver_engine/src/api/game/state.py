@@ -323,13 +323,31 @@ def _resolve_destination_arrival(trip: Dict[str, Any]) -> Dict[str, Any]:
     arrival_hub_id = str(trip.get("arrival_hub_id") or "").strip()
     if not arrival_hub_id:
         raise HTTPException(status_code=409, detail="Travel has no stable destination hub ID and cannot be placed safely.")
-    hub = city_pack_service.find_travel_hub(arrival_hub_id, settings.city_id)
+    hub = city_pack_service.resolve_travel_hub_entry(arrival_hub_id, settings.city_id)
     if hub is None:
         raise HTTPException(
             status_code=409,
             detail=f"Arrival hub '{arrival_hub_id}' does not exist in city pack '{settings.city_id}'.",
         )
     return hub
+
+
+def _normalized_place(value: Any) -> str:
+    """Compare map names and stable pack IDs without confusing different places."""
+    return re.sub(r"[^a-z0-9]+", "-", str(value or "").strip().casefold()).strip("-")
+
+
+def _require_session_at_departure_hub(db: Session, session_id: str, departure_hub_id: str) -> None:
+    hub = city_pack_service.resolve_travel_hub_entry(departure_hub_id, settings.city_id)
+    if hub is None:
+        raise HTTPException(status_code=409, detail=f"Departure hub '{departure_hub_id}' does not resolve to a local place.")
+    required_place = str(hub.get("entry_location") or "").strip()
+    current_place = str(get_state_manager(session_id, db).get_variable("location") or "").strip()
+    if _normalized_place(current_place) != _normalized_place(required_place):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Travel on this route departs from {required_place}. You are currently at {current_place or 'an unknown place'}.",
+        )
 
 
 def _require_arriving_actor(trip: Dict[str, Any], player: Optional[Player]) -> str:
@@ -1126,6 +1144,7 @@ def depart_session_for_travel(
         raise HTTPException(status_code=409, detail="Session has no durable actor identity and cannot travel between nodes.")
 
     route = _resolve_departure_route(route_id, destination_shard)
+    _require_session_at_departure_hub(db, payload.session_id, route["departure_hub_id"])
     source_shard = current_shard_id()
     federation_travel.start_federated_travel(
         travel_id=travel_id,
