@@ -25,6 +25,7 @@ from typing import Any, Dict, Optional
 
 from ..config import settings
 from .federation_identity import current_shard_id
+from .federation_node_auth import signed_request_headers
 
 log = logging.getLogger(__name__)
 _MAX_PULSE_SEQ = 2_147_483_647
@@ -174,7 +175,17 @@ def _post_pulse_sync(url: str, payload: Dict[str, Any]) -> Optional[Dict[str, An
     """Synchronously POST pulse payload; returns parsed response or None on error."""
     data = json.dumps(payload).encode()
     headers: Dict[str, str] = {"Content-Type": "application/json"}
-    if settings.federation_token:
+    if settings.node_private_key_path:
+        headers.update(
+            signed_request_headers(
+                node_id=current_shard_id(),
+                private_key_path=settings.node_private_key_path,
+                method="POST",
+                path="/api/federation/pulse",
+                body=data,
+            )
+        )
+    elif settings.federation_token:
         headers["X-Federation-Token"] = settings.federation_token
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     try:

@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from scripts import dev
+from src.services.federation_node_auth import generate_node_identity, verify_signed_request
 
 
 def _shard(tmp_path: Path, name: str, *, shard_type: str, city_id: str = "", shard_id: str = "") -> dev.ShardSpec:
@@ -223,6 +224,40 @@ def test_local_registration_advertises_the_docker_host_address(tmp_path, monkeyp
     assert dev._register_city_shard(world, city, dry_run=False) is True
     assert requests[0][1]["payload"]["shard_url"] == "http://host.docker.internal:8002"
     assert requests[0][1]["payload"]["client_url"] == "http://localhost:5174/ww-sfo"
+
+
+def test_local_registration_prefers_the_shard_folder_signing_key(tmp_path, monkeypatch):
+    world = _shard(tmp_path, "ww_world", shard_type="world", shard_id="ww_world")
+    city = _shard(tmp_path, "ww_sfo", shard_type="city", city_id="san_francisco", shard_id="bay-node-1")
+    descriptor = generate_node_identity(
+        private_key_path=city.shard_dir / "identity" / "node.key",
+        descriptor_path=city.shard_dir / "node.json",
+        node_id="bay-node-1",
+        shard_type="city",
+        city_id="san_francisco",
+    )
+    with city.env_file.open("a", encoding="utf-8") as env_file:
+        env_file.write("\nWW_NODE_PRIVATE_KEY_PATH=identity/node.key\nFEDERATION_TOKEN=legacy-secret\n")
+    requests = []
+
+    def request_json(url, **kwargs):
+        requests.append((url, kwargs))
+        return {}
+
+    monkeypatch.setattr(dev, "_request_json", request_json)
+
+    assert dev._register_city_shard(world, city, dry_run=False) is True
+    request = requests[0]
+    headers = request[1]["headers"]
+    body = json.dumps(request[1]["payload"]).encode("utf-8")
+    assert "X-Federation-Token" not in headers
+    verify_signed_request(
+        public_key=str(descriptor["public_key"]),
+        method="POST",
+        path="/api/federation/register",
+        body=body,
+        headers=headers,
+    )
 
 
 def test_agent_start_keeps_the_local_backend_address_override(tmp_path, monkeypatch):

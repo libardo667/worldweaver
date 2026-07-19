@@ -10,6 +10,7 @@ import hashlib
 import json
 import secrets
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
@@ -26,6 +27,15 @@ DEFAULT_MAX_CLOCK_SKEW_SECONDS = 300
 
 class NodeSignatureError(ValueError):
     """A node identity or signed request is malformed or invalid."""
+
+
+@dataclass(frozen=True)
+class AuthenticatedNode:
+    """The node proven by a signed request, or a temporary legacy token."""
+
+    node_id: str | None
+    public_key: str | None
+    method: str
 
 
 def _encode(value: bytes) -> str:

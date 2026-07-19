@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import json
+
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 from src.api.federation.routes import (
     PulseRequest,
@@ -9,6 +13,7 @@ from src.api.federation.routes import (
     RegisterShardRequest,
     StartTravelRequest,
     TravelTransitionRequest,
+    _require_node,
     get_traveler_history,
     mark_travel_arrived,
     mark_travel_departed,
@@ -18,6 +23,56 @@ from src.api.federation.routes import (
     start_travel,
 )
 from src.models import FederationActor, FederationResident, FederationShard, FederationTraveler
+from src.database import get_db
+from src.services.federation_node_auth import (
+    NODE_ID_HEADER,
+    NODE_NONCE_HEADER,
+    NODE_PUBLIC_KEY_HEADER,
+    NODE_SIGNATURE_HEADER,
+    NODE_TIMESTAMP_HEADER,
+    AuthenticatedNode,
+    generate_node_identity,
+    signed_request_headers,
+)
+
+
+def _request(method: str, path: str, body: bytes) -> Request:
+    sent = False
+
+    async def receive():
+        nonlocal sent
+        if sent:
+            return {"type": "http.disconnect"}
+        sent = True
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    return Request(
+        {
+            "type": "http",
+            "method": method,
+            "path": path,
+            "raw_path": path.encode("ascii"),
+            "query_string": b"",
+            "headers": [],
+            "scheme": "https",
+            "server": ("directory.example", 443),
+            "client": ("127.0.0.1", 1234),
+        },
+        receive,
+    )
+
+
+async def _authenticate_signed_request(db_session, *, method, path, body, headers):
+    return await _require_node(
+        _request(method, path, body),
+        db_session,
+        None,
+        headers.get(NODE_ID_HEADER),
+        headers.get(NODE_TIMESTAMP_HEADER),
+        headers.get(NODE_NONCE_HEADER),
+        headers.get(NODE_SIGNATURE_HEADER),
+        headers.get(NODE_PUBLIC_KEY_HEADER),
+    )
 
 
 def _seed_travel_nodes_and_actor(db_session):
@@ -55,6 +110,164 @@ def _seed_travel_nodes_and_actor(db_session):
         ]
     )
     db_session.commit()
+
+
+@pytest.mark.asyncio
+async def test_signed_registration_binds_node_key_and_rejects_replay(db_session, monkeypatch, tmp_path):
+    monkeypatch.setattr("src.api.federation.routes.settings.federation_token", "")
+    private_key = tmp_path / "identity" / "node.key"
+    descriptor = generate_node_identity(
+        private_key_path=private_key,
+        descriptor_path=tmp_path / "node.json",
+        node_id="river-coop-1",
+        shard_type="city",
+        city_id="portland",
+    )
+    payload_data = {
+        "shard_id": "river-coop-1",
+        "shard_url": "https://portland.example",
+        "client_url": "https://play.portland.example",
+        "shard_type": "city",
+        "city_id": "portland",
+    }
+    body = json.dumps(payload_data).encode("utf-8")
+    headers = signed_request_headers(
+        node_id="river-coop-1",
+        private_key_path=private_key,
+        method="POST",
+        path="/api/federation/register",
+        body=body,
+        include_public_key=True,
+    )
+
+    principal = await _authenticate_signed_request(
+        db_session,
+        method="POST",
+        path="/api/federation/register",
+        body=body,
+        headers=headers,
+    )
+    response = register_shard(RegisterShardRequest(**payload_data), db_session, principal)
+    shard = db_session.get(FederationShard, "river-coop-1")
+
+    assert response["registered"] is True
+    assert principal == AuthenticatedNode(
+        node_id="river-coop-1",
+        public_key=descriptor["public_key"],
+        method="signature",
+    )
+    assert shard.public_key == descriptor["public_key"]
+    assert shard.identity_bound_at is not None
+
+    with pytest.raises(HTTPException) as replay:
+        await _authenticate_signed_request(
+            db_session,
+            method="POST",
+            path="/api/federation/register",
+            body=body,
+            headers=headers,
+        )
+    assert replay.value.status_code == 409
+    assert "already used" in str(replay.value.detail)
+
+
+def test_signed_registration_and_replay_guard_work_through_http(db_session, monkeypatch, tmp_path):
+    monkeypatch.setattr("src.api.federation.routes.settings.federation_token", "")
+    private_key = tmp_path / "identity" / "node.key"
+    descriptor = generate_node_identity(
+        private_key_path=private_key,
+        descriptor_path=tmp_path / "node.json",
+        node_id="http-node-1",
+        shard_type="city",
+        city_id="portland",
+    )
+    payload_data = {
+        "shard_id": "http-node-1",
+        "shard_url": "https://http-node.example",
+        "client_url": "https://play.http-node.example",
+        "shard_type": "city",
+        "city_id": "portland",
+    }
+    body = json.dumps(payload_data).encode("utf-8")
+    headers = signed_request_headers(
+        node_id="http-node-1",
+        private_key_path=private_key,
+        method="POST",
+        path="/api/federation/register",
+        body=body,
+        include_public_key=True,
+    )
+    app = FastAPI()
+    from src.api.federation.routes import router
+
+    app.include_router(router)
+    app.dependency_overrides[get_db] = lambda: db_session
+    attacker_key = tmp_path / "attacker" / "node.key"
+    generate_node_identity(
+        private_key_path=attacker_key,
+        descriptor_path=tmp_path / "attacker.json",
+        node_id="http-node-1",
+        shard_type="city",
+        city_id="portland",
+    )
+    attacker_headers = signed_request_headers(
+        node_id="http-node-1",
+        private_key_path=attacker_key,
+        method="POST",
+        path="/api/federation/register",
+        body=body,
+        include_public_key=True,
+    )
+
+    with TestClient(app) as client:
+        public_directory = client.get("/api/federation/shards")
+        private_residents = client.get("/api/federation/residents")
+        registered = client.post(
+            "/api/federation/register",
+            content=body,
+            headers={"Content-Type": "application/json", **headers},
+        )
+        impersonation = client.post(
+            "/api/federation/register",
+            content=body,
+            headers={"Content-Type": "application/json", **attacker_headers},
+        )
+        replay = client.post(
+            "/api/federation/register",
+            content=body,
+            headers={"Content-Type": "application/json", **headers},
+        )
+
+    assert public_directory.status_code == 200
+    assert private_residents.status_code == 401
+    assert registered.status_code == 200
+    assert registered.json()["registered"] is True
+    assert db_session.get(FederationShard, "http-node-1").public_key == descriptor["public_key"]
+    assert impersonation.status_code == 401
+    assert "signature is invalid" in impersonation.json()["detail"]
+    assert replay.status_code == 409
+    assert "already used" in replay.json()["detail"]
+
+
+def test_signed_node_cannot_report_for_another_node(db_session):
+    db_session.add(
+        FederationShard(
+            shard_id="victim-node",
+            shard_url="https://victim.example",
+            shard_type="city",
+            city_id="portland",
+        )
+    )
+    db_session.commit()
+    payload = PulseRequest(shard_id="victim-node", pulse_seq=1)
+
+    with pytest.raises(HTTPException) as forbidden:
+        receive_pulse(
+            payload,
+            db_session,
+            AuthenticatedNode(node_id="another-node", public_key="public", method="signature"),
+        )
+    assert forbidden.value.status_code == 403
 
 
 def test_receive_pulse_upserts_existing_resident_without_duplicate(db_session):

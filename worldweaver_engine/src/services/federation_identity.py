@@ -31,6 +31,7 @@ from ..models import (
     Player,
 )
 from .auth_service import hash_password, verify_password
+from .federation_node_auth import signed_request_headers
 
 log = logging.getLogger(__name__)
 
@@ -327,10 +328,21 @@ def _federation_request(method: str, path: str, payload: Optional[Dict[str, Any]
     url = f"{settings.federation_url.rstrip('/')}{path}"
     body: bytes | None = None
     headers = {"Content-Type": "application/json"}
-    if settings.federation_token:
-        headers["X-Federation-Token"] = settings.federation_token
     if payload is not None:
         body = json.dumps(payload).encode("utf-8")
+    if settings.node_private_key_path:
+        headers.update(
+            signed_request_headers(
+                node_id=current_shard_id(),
+                private_key_path=settings.node_private_key_path,
+                method=method,
+                path=path,
+                body=body or b"",
+                include_public_key=path == "/api/federation/register",
+            )
+        )
+    elif settings.federation_token:
+        headers["X-Federation-Token"] = settings.federation_token
     req = urllib.request.Request(url, data=body, headers=headers, method=method.upper())
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:

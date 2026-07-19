@@ -579,6 +579,39 @@ def _federation_token(world_shard: ShardSpec, city_shard: ShardSpec) -> str:
     return str(_shard_env(world_shard).get("FEDERATION_TOKEN", "")).strip()
 
 
+def _federation_auth_headers(
+    world_shard: ShardSpec,
+    city_shard: ShardSpec,
+    *,
+    method: str,
+    path: str,
+    payload: dict[str, object],
+    include_public_key: bool = False,
+) -> dict[str, str] | None:
+    """Prefer the city folder's node key, then fall back during migration."""
+    env_values = _shard_env(city_shard)
+    configured_key = str(env_values.get("WW_NODE_PRIVATE_KEY_PATH") or "").strip()
+    if configured_key:
+        key_path = Path(configured_key)
+        if not key_path.is_absolute():
+            key_path = city_shard.shard_dir / key_path
+        if key_path.is_file():
+            if str(ROOT) not in sys.path:
+                sys.path.insert(0, str(ROOT))
+            from src.services.federation_node_auth import signed_request_headers
+
+            return signed_request_headers(
+                node_id=_registry_shard_id(city_shard),
+                private_key_path=key_path,
+                method=method,
+                path=path,
+                body=json.dumps(payload).encode("utf-8"),
+                include_public_key=include_public_key,
+            )
+    token = _federation_token(world_shard, city_shard)
+    return {"X-Federation-Token": token} if token else None
+
+
 def _registry_shard_id(shard: ShardSpec) -> str:
     env_values = _shard_env(shard)
     return str(env_values.get("SHARD_ID") or shard.shard_id or env_values.get("CITY_ID") or shard.city_id or shard.dir_name).strip()
@@ -644,7 +677,7 @@ def _city_travel_readiness(city_shard: ShardSpec) -> TravelReadiness:
 
 def _register_city_shard(world_shard: ShardSpec, city_shard: ShardSpec, *, dry_run: bool) -> bool:
     registry_url = _world_registry_url(world_shard, city_shard)
-    token = _federation_token(world_shard, city_shard)
+    path = "/api/federation/register"
     payload = {
         "shard_id": _registry_shard_id(city_shard),
         "shard_url": _docker_host_backend_url(city_shard),
@@ -656,10 +689,17 @@ def _register_city_shard(world_shard: ShardSpec, city_shard: ShardSpec, *, dry_r
     if dry_run:
         _print_result("INFO", f"dry-run register payload: {json.dumps(payload, sort_keys=True)}")
         return True
-    headers = {"X-Federation-Token": token} if token else None
+    headers = _federation_auth_headers(
+        world_shard,
+        city_shard,
+        method="POST",
+        path=path,
+        payload=payload,
+        include_public_key=True,
+    )
     try:
         _request_json(
-            f"{registry_url}/api/federation/register",
+            f"{registry_url}{path}",
             method="POST",
             payload=payload,
             headers=headers,
@@ -696,16 +736,22 @@ def _wait_for_federation_registration(
 
 def _deregister_city_shard(world_shard: ShardSpec, city_shard: ShardSpec, *, dry_run: bool) -> bool:
     registry_url = _world_registry_url(world_shard, city_shard)
-    token = _federation_token(world_shard, city_shard)
+    path = "/api/federation/deregister"
     payload = {"shard_id": _registry_shard_id(city_shard)}
     _print_result("INFO", f"deregistering city shard from federation root: {registry_url}/api/federation/deregister")
     if dry_run:
         _print_result("INFO", f"dry-run deregister payload: {json.dumps(payload, sort_keys=True)}")
         return True
-    headers = {"X-Federation-Token": token} if token else None
+    headers = _federation_auth_headers(
+        world_shard,
+        city_shard,
+        method="POST",
+        path=path,
+        payload=payload,
+    )
     try:
         _request_json(
-            f"{registry_url}/api/federation/deregister",
+            f"{registry_url}{path}",
             method="POST",
             payload=payload,
             headers=headers,

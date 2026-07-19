@@ -32,6 +32,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import urllib.request
 import urllib.error
+import urllib.parse
 
 ROOT = Path(__file__).resolve().parent.parent
 WORKSPACE_ROOT = ROOT.parent
@@ -261,11 +262,33 @@ def _stop_shard_agent(shard_dir: Path | None, dry_run: bool) -> None:
         print("      warning: could not stop shard agent (not running?)")
 
 
-def _post_with_token(url: str, payload: dict, token: str | None) -> dict:
-    """POST JSON with optional X-Federation-Token header."""
+def _post_with_federation_auth(
+    url: str,
+    payload: dict,
+    token: str | None,
+    *,
+    node_id: str,
+    private_key_path: Path | None,
+) -> dict:
+    """POST JSON using a folder-owned node key, with legacy-token fallback."""
     data = json.dumps(payload).encode()
     headers = {"Content-Type": "application/json"}
-    if token:
+    if private_key_path is not None and private_key_path.is_file():
+        if str(ROOT) not in sys.path:
+            sys.path.insert(0, str(ROOT))
+        from src.services.federation_node_auth import signed_request_headers
+
+        headers.update(
+            signed_request_headers(
+                node_id=node_id,
+                private_key_path=private_key_path,
+                method="POST",
+                path=urllib.parse.urlsplit(url).path,
+                body=data,
+                include_public_key=True,
+            )
+        )
+    elif token:
         headers["X-Federation-Token"] = token
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     with urllib.request.urlopen(req, timeout=30) as resp:
@@ -313,6 +336,7 @@ def main() -> None:
     args = parser.parse_args()
 
     shard_path: Path | None = None
+    shard_env: dict[str, str] = {}
 
     if args.fast_city_pack:
         args.city_pack = True
@@ -451,10 +475,16 @@ def main() -> None:
             "city_id": args.city_id,
         }
         try:
-            reg_result = _post_with_token(
+            configured_key = str(shard_env.get("WW_NODE_PRIVATE_KEY_PATH") or "").strip()
+            private_key_path = Path(configured_key) if configured_key else None
+            if private_key_path is not None and not private_key_path.is_absolute() and shard_path is not None:
+                private_key_path = shard_path / private_key_path
+            reg_result = _post_with_federation_auth(
                 f"{fed_url}/api/federation/register",
                 reg_payload,
                 args.federation_token,
+                node_id=shard_id,
+                private_key_path=private_key_path,
             )
             print(f"      ok: {reg_result}")
         except urllib.error.HTTPError as e:

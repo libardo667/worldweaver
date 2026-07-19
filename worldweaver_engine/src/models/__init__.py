@@ -581,9 +581,24 @@ class FederationShard(Base):
     client_url = Column(String(255), nullable=True)
     shard_type = Column(String(20), nullable=False, default="city")  # city|world|neighborhood
     city_id = Column(String(80), nullable=True)
+    public_key = Column(String(80), nullable=True)
+    identity_bound_at = Column(DateTime, nullable=True)
     last_pulse_ts = Column(DateTime, nullable=True)
     last_pulse_seq = Column(Integer, nullable=True, default=0)
     registered_at = Column(DateTime, server_default=func.now())
+
+
+class FederationRequestNonce(Base):
+    """Short-lived replay guard for signed node requests."""
+
+    __tablename__ = "federation_request_nonces"
+    __table_args__ = (UniqueConstraint("node_id", "nonce", name="uq_federation_request_node_nonce"),)
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    node_id = Column(String(80), nullable=False, index=True)
+    nonce = Column(String(80), nullable=False)
+    signed_at = Column(DateTime, nullable=False)
+    received_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
 
 
 class FederationActor(Base):

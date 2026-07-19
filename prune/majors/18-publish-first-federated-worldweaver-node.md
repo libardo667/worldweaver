@@ -7,8 +7,11 @@ currently online. The old proposal for a public observatory is rejected: the pub
 places and local participation, not resident timelines or operating data.
 
 The development shard generator now gives each new folder its own strong JWT and data-encryption secrets,
-private `.env` permissions, and stable Compose project identity. It still builds from neighboring source
-folders and lacks the supported image, identity, update, and backup workflow described below.
+private `.env` permissions, stable Compose project identity, node signing key, and public descriptor. Signed
+requests now protect registration and private federation operations from alteration, impersonation after
+registration, and replay. Existing development nodes have not yet been migrated, and a public directory
+still needs an explicit first-registration and key-recovery policy. Generated folders also still build from
+neighboring source folders and lack the supported image, update, and backup workflow described below.
 
 ## Goal
 

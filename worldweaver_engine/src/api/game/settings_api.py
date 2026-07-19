@@ -4,6 +4,7 @@
 """Read-only shard readiness for the public client and steward diagnostics."""
 
 import os
+from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter
@@ -47,7 +48,13 @@ def get_settings_readiness():
     encryption_ready = bool(str(settings.data_encryption_key or "").strip())
     federation_url_ready = settings.shard_type != "city" or bool(str(settings.federation_url or "").strip())
     public_url_ready = settings.shard_type != "city" or bool(str(settings.public_url or "").strip())
-    federation_token_ready = settings.shard_type != "city" or bool(str(settings.federation_token or "").strip())
+    node_key_setting = str(settings.node_private_key_path or "").strip()
+    node_key_path = Path(node_key_setting).expanduser() if node_key_setting else None
+    node_key_exists = bool(node_key_path and node_key_path.is_file())
+    node_key_private = bool(node_key_exists and node_key_path is not None and node_key_path.stat().st_mode & 0o077 == 0)
+    node_identity_ready = not node_key_setting or (node_key_exists and node_key_private)
+    legacy_federation_token_ready = bool(str(settings.federation_token or "").strip())
+    federation_auth_ready = settings.shard_type != "city" or ((node_key_setting and node_identity_ready) or (not node_key_setting and legacy_federation_token_ready))
     resend_ready = bool(str(settings.resend_api_key or "").strip()) and bool(str(settings.resend_from_email or "").strip())
     agent_inference_key_ready = bool(str(os.environ.get("WW_INFERENCE_KEY") or "").strip() or str(os.environ.get("OPENROUTER_API_KEY") or "").strip() or str(settings.openrouter_api_key or "").strip())
     agent_inference_model_ready = bool(str(os.environ.get("WW_INFERENCE_MODEL") or "").strip() or str(settings.llm_model or "").strip())
@@ -62,6 +69,8 @@ def get_settings_readiness():
             runtime_missing.append("federation_url")
         if not public_url_ready:
             runtime_missing.append("public_url")
+        if not node_identity_ready:
+            runtime_missing.append("node_identity")
 
     checks = [
         ReadinessCheck(
@@ -93,11 +102,22 @@ def get_settings_readiness():
             message=("Not required on the world shard." if settings.shard_type != "city" else f"Public shard URL set to {settings.public_url}." if public_url_ready else "City shard has no public URL configured."),
         ),
         ReadinessCheck(
-            code="federation_token",
-            label="Federation token",
-            ok=federation_token_ready,
+            code="node_identity",
+            label="Node identity",
+            ok=node_identity_ready,
+            severity="error" if node_key_setting else "info",
+            message=("Folder-owned node signing key is configured with private permissions." if node_key_setting and node_identity_ready else "Configured node signing key is missing or readable by other users." if node_key_setting else "No folder-owned node signing key is configured."),
+        ),
+        ReadinessCheck(
+            code="federation_auth",
+            label="Federation authentication",
+            ok=bool(federation_auth_ready),
             severity="warn",
-            message=("Not required on the world shard." if settings.shard_type != "city" else "Federation auth token is configured." if federation_token_ready else "Federation auth token is missing."),
+            message=(
+                "Not required on the world shard."
+                if settings.shard_type != "city"
+                else "Signed node authentication is configured." if node_key_setting and node_identity_ready else "A legacy shared federation token is configured; migrate this folder to a node identity." if legacy_federation_token_ready else "Federation authentication is missing."
+            ),
         ),
         ReadinessCheck(
             code="email_delivery",

@@ -79,6 +79,7 @@ def test_settings_readiness_world_shard_marks_city_checks_not_required(monkeypat
     monkeypatch.setattr(settings, "federation_url", "")
     monkeypatch.setattr(settings, "public_url", "")
     monkeypatch.setattr(settings, "federation_token", "")
+    monkeypatch.setattr(settings, "node_private_key_path", None)
 
     response = client.get("/api/settings/readiness")
     assert response.status_code == 200
@@ -92,5 +93,25 @@ def test_settings_readiness_world_shard_marks_city_checks_not_required(monkeypat
     assert "Not required on the world shard" in checks["federation_url"]["message"]
     assert checks["public_url"]["ok"] is True
     assert "Not required on the world shard" in checks["public_url"]["message"]
-    assert checks["federation_token"]["ok"] is True
-    assert "Not required on the world shard" in checks["federation_token"]["message"]
+    assert checks["federation_auth"]["ok"] is True
+    assert "Not required on the world shard" in checks["federation_auth"]["message"]
+
+
+def test_configured_node_key_must_exist_and_be_private(monkeypatch, client, tmp_path):
+    key_path = tmp_path / "node.key"
+    key_path.write_text("not-secret-enough\n", encoding="utf-8")
+    key_path.chmod(0o644)
+    monkeypatch.setattr(settings, "shard_type", "city")
+    monkeypatch.setattr(settings, "node_private_key_path", str(key_path))
+    monkeypatch.setattr(settings, "jwt_secret", "test-secret")
+    monkeypatch.setattr(settings, "data_encryption_key", "enc-key")
+    monkeypatch.setattr(settings, "federation_url", "http://example.test")
+    monkeypatch.setattr(settings, "public_url", "http://shard.example.test")
+
+    data = client.get("/api/settings/readiness").json()
+    checks = {check["code"]: check for check in data["checks"]}
+
+    assert data["startup_ready"] is False
+    assert "node_identity" in data["runtime_missing"]
+    assert checks["node_identity"]["ok"] is False
+    assert "readable by other users" in checks["node_identity"]["message"]
