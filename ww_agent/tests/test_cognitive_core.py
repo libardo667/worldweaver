@@ -9,7 +9,7 @@ from src.inference.client import InferenceError
 from src.runtime.cognitive_core import CognitiveCore
 from src.runtime.effectors import WorldEffector
 from src.runtime.ledger import derive_packets, load_runtime_events
-from src.runtime.perception import OVERHEARD_FLOOR, perceive
+from src.runtime.perception import perceive
 from src.runtime.pulse import Act
 from src.runtime.pulse_engine import LLMPulseProducer, _pulse_contract
 from src.runtime.prompt_context import PulseContext, render_pulse_context
@@ -1005,9 +1005,7 @@ def test_perceive_does_not_repeat_utterance_as_world_event(tmp_path):
     assert [line["message"] for line in brief["heard"] if line["channel"] == "local"] == ["hello"]
 
 
-def test_legacy_pending_chat_is_not_replayed_or_allowed_to_block_fresh_overhearing(
-    tmp_path,
-):
+def test_legacy_pending_city_chat_is_not_replayed(tmp_path):
     packets = StimulusPacketQueue(tmp_path / "stimulus_packets.json")
     packets.emit(
         packet_type="city_chat_heard",
@@ -1026,39 +1024,21 @@ def test_legacy_pending_chat_is_not_replayed_or_allowed_to_block_fresh_overheari
 
     brief = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
 
-    overheard = [line for line in brief["heard"] if line.get("overheard")]
-    assert [line["message"] for line in overheard] == ["Fresh oranges at the corner."]
-    assert all(line["speaker"] != "Old Voice" for line in brief["heard"])
+    assert brief["heard"] == []
 
 
-# --- the unchosen channel: content-blind floor + traversal (Major 60) ---
+# --- citywide speech is elective -----------------------------------------
 
 
-def test_perceive_citywide_is_a_content_blind_floor_not_a_push(tmp_path):
-    # The old behavior pushed ALL citywide messages into every mind every tick (the
-    # topic-monoculture engine). A parked resident now overhears only a small,
-    # content-blind slice — but it still lights up social_pull (the node mapping is unchanged).
+def test_perceive_does_not_fetch_or_admit_citywide_speech(tmp_path):
     city = [_Chat(f"o{i}", f"Person{i}", f"citywide message number {i}") for i in range(12)]
     world = _StubWorld(_Scene(present=[_Person("Levi")]), city_chat=city)
     brief = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
 
-    overheard = [h for h in brief["heard"] if h.get("overheard")]
-    assert 0 < len(overheard) <= 3  # a small slice, never the whole 12-message feed
-    assert len(_packets_of_type(tmp_path, "city_chat_heard")) == OVERHEARD_FLOOR  # parked → the floor
+    assert brief["heard"] == []
+    assert not _packets_of_type(tmp_path, "city_chat_heard")
     stimulus = stimulus_from_substrate(tmp_path)
-    assert stimulus["self"].get("social_pull", 0.0) > 0.0
-
-
-def test_perceive_in_transit_overhears_more_of_the_unchosen(tmp_path):
-    # Traversal rations diversity: a moving resident (crossed to a new place since the
-    # last tick) overhears more of the un-chosen en route than a parked one.
-    city = [_Chat(f"o{i}", f"Person{i}", f"message number {i}") for i in range(12)]
-    world = _StubWorld(_Scene(location="Chinatown"), city_chat=city)
-    asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))  # establishes location
-    world._scene.location = "North Beach"  # crossed the city
-    brief2 = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
-    overheard2 = [h for h in brief2["heard"] if h.get("overheard")]
-    assert len(overheard2) > OVERHEARD_FLOOR  # in transit overhears more than the parked floor
+    assert stimulus["self"].get("social_pull", 0.0) == 0.0
 
 
 # --- pulse engine ---------------------------------------------------------

@@ -254,20 +254,13 @@ class CognitiveCore:
         *,
         now: Any = None,
         force_ignite: bool = False,
-        perception_seed: int | None = None,
     ) -> dict[str, Any]:
-        """Run one full perceive → integrate → (pulse → act) cycle.
-
-        ``perception_seed`` (research/replay only): seeds perception's content-blind
-        overheard draw from a caller-supplied value (a pure function of resident+tick),
-        decoupling it from the module-global RNG. Default None = production behaviour.
-        """
+        """Run one full perceive → integrate → (pulse → act) cycle."""
         self._memory_dir.mkdir(parents=True, exist_ok=True)
         await self._ensure_drive_vector()
-        # Incubation: seal a self-less new arrival from the citywide current — the two
-        # perception seams (overheard here; chatter on the world) and commons broadcast
-        # (the effector) — until it is grounded. Computed from its own ledger and set
-        # BEFORE perceive, so CityWorld drops the chatter source from this tick's scene.
+        # Incubation keeps a new arrival from deliberately listening to or broadcasting
+        # on the citywide channel until it has built some private history. Exact-place
+        # perception remains available. CityWorld reads this flag before building tools.
         events = load_runtime_events(self._memory_dir)
         incubating = self._incubation and is_incubating(events, now=now)
         self._effector.incubating = incubating
@@ -277,8 +270,6 @@ class CognitiveCore:
             session_id=self._session_id,
             memory_dir=self._memory_dir,
             identity=self._identity,
-            incubating=incubating,
-            overheard_seed=perception_seed,
         )
         reactivity = 1.0
         anchor_stimulus = None

@@ -1,8 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Levi Banks
 
-"""Incubation — an arrival quarantine so a new resident habituates before the
-citywide current can sweep it.
+"""Incubation: an optional quiet arrival period for a new resident.
 
 The convergence trials showed a *cold-started* cast — landed with only a backstory,
 no kept memories, no settled drives, no body of work — drifts onto the loudest shared
@@ -13,9 +12,9 @@ new arrival has nothing of its own to resist the current with. A resident with g
 being swept. ``the-stable`` is the natural experiment: those familiars ran *warm* (days
 of solitary making) and individuated; the city always tests *cold*.
 
-So a fresh arrival is sealed from the two citywide seams (the content-blind ``overheard``
-slice and the drive-filtered ``chatter`` pull) and from broadcasting into the commons,
-until it has built enough of a self. During incubation the settling/fervor gear and the
+So a fresh arrival cannot use the elective ``chatter`` tool or broadcast into the
+commons until it has built enough of a self. Exact-place speech still reaches it.
+During incubation the settling/fervor gear and the
 workshop still run — the impulse that would have gone to the commons becomes the
 resident's own making, which is exactly what accrues the groundedness that lifts the gate.
 

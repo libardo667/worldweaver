@@ -23,8 +23,8 @@ as success after the fact.
 | Minor 38 | Superseded. Do not refactor the old combined client as the normal public product. |
 | Minor 124 | Superseded. The familiar-adoption and Tauri premise no longer describes one resident with a hearth. |
 
-Major 60 remains active only until its compulsory citywide-input implementation is removed and tested. It
-then moves to history as a rejected design.
+Major 60 moved to history as a rejected design after the compulsory random citywide-input sampler was
+removed. Exact-place speech and the elective `chatter` tool remain.
 
 ## Moved to research
 

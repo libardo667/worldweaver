@@ -742,14 +742,12 @@ def _make_stoops_source(client: Any, session_id: str) -> InformationSource:
 
 
 # ---------------------------------------------------------------------------
-# chatter — the CHOSEN channel (Major 60): a drive-filtered pull on citywide chat
+# chatter: an elective, drive-filtered look at citywide public speech
 # ---------------------------------------------------------------------------
 # The city no longer pushes its chatter into every mind (that broadcast topology made
 # the topic-monoculture). Instead a resident *chooses* to listen, and what it hears is
 # ranked by resonance with its own soul — curiosity rationing focus. It can also follow
-# a specific resonant peer by name (the relational "we" is a curiosity subscription to a
-# mind, not a topic-feed). Content-blind diversity is the separate, unchosen channel
-# (perception's overheard floor + traversal); this is the chosen one.
+# a specific resident by name. There is no automatic citywide speech dose in perception.
 
 
 async def _drive_scores(drive: Any, texts: list[str]) -> list[float]:
