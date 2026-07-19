@@ -162,6 +162,39 @@ export type DurableObjectView = {
   attachment: { kind: "custody"; actor_id: string } | { kind: "place"; location: string };
 };
 
+export type ObjectExchange = {
+  exchange_id: string;
+  status: "open" | "completed" | "declined" | "cancelled" | string;
+  proposer_actor_id: string;
+  recipient_actor_id: string;
+  offered_object: DurableObjectView;
+  requested_object: DurableObjectView;
+  viewer_role: "proposer" | "recipient" | "observer";
+  counterpart_present: boolean;
+  can_accept: boolean;
+  can_decline: boolean;
+  can_cancel: boolean;
+};
+
+export type ObjectExchangeOfferOption = {
+  recipient_actor_id: string;
+  recipient_session_id: string;
+  requested_objects: DurableObjectView[];
+};
+
+export type ObjectExchanges = {
+  exchanges: ObjectExchange[];
+  count: number;
+  offer_options: ObjectExchangeOfferOption[];
+};
+
+export type ObjectExchangeCommand = {
+  ok: boolean;
+  replayed: boolean;
+  exchange: ObjectExchange;
+  receipt: { receipt_id: string; operation: string; exchange_id: string };
+};
+
 export type AuthResponse = {
   token: string;
   actor_id: string;

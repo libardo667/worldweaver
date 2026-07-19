@@ -20,6 +20,8 @@ import type {
   PlacePresence,
   ShardExperience,
   ShardInfo,
+  ObjectExchangeCommand,
+  ObjectExchanges,
   StoopBrowse,
   StoopList,
 } from "./types";
@@ -88,8 +90,11 @@ export function getStoopsAt(location: string): Promise<StoopList> {
   return getJson("/api/world/stoops", { location });
 }
 
-export function browseStoopAt(stoopId: string, location: string): Promise<StoopBrowse> {
-  return getJson(`/api/world/stoops/${encodeURIComponent(stoopId)}`, { location });
+export function browseStoopAt(stoopId: string, location: string, sessionId?: string | null): Promise<StoopBrowse> {
+  return getJson(
+    `/api/world/stoops/${encodeURIComponent(stoopId)}`,
+    sessionId ? { session_id: sessionId } : { location },
+  );
 }
 
 export function getShards(): Promise<{ shards: ShardInfo[] }> {
@@ -161,6 +166,13 @@ export function postTakeStoopEntry(entryId: string, sessionId: string): Promise<
   });
 }
 
+export function postWithdrawStoopEntry(entryId: string, sessionId: string): Promise<{ replayed?: boolean }> {
+  return postJson(`/api/world/stoops/entries/${encodeURIComponent(entryId)}/withdraw`, {
+    session_id: sessionId,
+    idempotency_key: freshKey("stoopwithdraw"),
+  });
+}
+
 function freshKey(verb: string): string {
   return `${verb}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -200,5 +212,43 @@ export function postLeaveOnStoop(stoopId: string, objectId: string, sessionId: s
     session_id: sessionId,
     object_id: objectId,
     idempotency_key: freshKey("stoopleave"),
+  });
+}
+
+export function getObjectExchanges(sessionId: string): Promise<ObjectExchanges> {
+  return getJson("/api/world/exchanges", { session_id: sessionId });
+}
+
+export function postGiveObject(objectId: string, sessionId: string, recipientSessionId: string): Promise<unknown> {
+  return postJson(`/api/world/objects/${encodeURIComponent(objectId)}/give`, {
+    session_id: sessionId,
+    recipient_session_id: recipientSessionId,
+    idempotency_key: freshKey("give"),
+  });
+}
+
+export function postExchangeOffer(
+  sessionId: string,
+  recipientSessionId: string,
+  offeredObjectId: string,
+  requestedObjectId: string,
+): Promise<ObjectExchangeCommand> {
+  return postJson("/api/world/exchanges", {
+    session_id: sessionId,
+    recipient_session_id: recipientSessionId,
+    offered_object_id: offeredObjectId,
+    requested_object_id: requestedObjectId,
+    idempotency_key: freshKey("exchange-offer"),
+  });
+}
+
+export function postExchangeDecision(
+  exchangeId: string,
+  sessionId: string,
+  decision: "accept" | "decline" | "cancel",
+): Promise<ObjectExchangeCommand> {
+  return postJson(`/api/world/exchanges/${encodeURIComponent(exchangeId)}/${decision}`, {
+    session_id: sessionId,
+    idempotency_key: freshKey(`exchange-${decision}`),
   });
 }

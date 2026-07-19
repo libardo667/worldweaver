@@ -23,6 +23,13 @@ giving and exchange, ordinary room access, stoop withdrawal, and human cross-nod
 the old client does not automatically mean every old interaction should be copied. Each should use the
 current typed engine contract and fit the place-centered interface.
 
+The first parity slice now covers the complete typed stoop custody loop and witnessed exchange. A person at
+the exact place can reclaim an object they left, give a carried object to a co-present recipient already
+identified by the exchange contract, make an exact swap offer, and accept, decline, or cancel an open
+offer. Sessionless looking still exposes no custody controls. The public client does not gain a general
+session roster merely to make recipient selection convenient; giving to a co-present person who carries
+nothing still needs a safer encounter-target contract.
+
 ## Build next
 
 1. Inventory actions still available only in the old client.

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Levi Banks
 
 import { useEffect, useState } from "react";
-import { browseStoopAt, postTakeStoopEntry } from "../api/ww";
+import { browseStoopAt, postTakeStoopEntry, postWithdrawStoopEntry } from "../api/ww";
 import type { StoopBrowse, StoopShell } from "../api/types";
 import { usePoll } from "../hooks/usePoll";
 
@@ -38,7 +38,7 @@ export function StoopHere({ location, stoops, takerSessionId, refreshKey = 0, on
       return;
     }
     let live = true;
-    browseStoopAt(openStoopId, location)
+    browseStoopAt(openStoopId, location, takerSessionId)
       .then((result) => {
         if (live) setBrowse(result);
       })
@@ -48,7 +48,7 @@ export function StoopHere({ location, stoops, takerSessionId, refreshKey = 0, on
     return () => {
       live = false;
     };
-  }, [openStoopId, location, refreshCount, refreshKey]);
+  }, [openStoopId, location, refreshCount, refreshKey, takerSessionId]);
 
   // An opened stoop is being watched: refetch its entries so someone else's
   // leave/take shows up without reopening.
@@ -65,6 +65,20 @@ export function StoopHere({ location, stoops, takerSessionId, refreshKey = 0, on
       onTook?.();
     } catch {
       // The entry may have just been taken by someone else; refresh shows truth.
+      setRefreshCount((n) => n + 1);
+    } finally {
+      setTakingEntryId(null);
+    }
+  }
+
+  async function withdrawEntry(entryId: string) {
+    if (!takerSessionId || takingEntryId) return;
+    setTakingEntryId(entryId);
+    try {
+      await postWithdrawStoopEntry(entryId, takerSessionId);
+      setRefreshCount((n) => n + 1);
+      onTook?.();
+    } catch {
       setRefreshCount((n) => n + 1);
     } finally {
       setTakingEntryId(null);
@@ -100,9 +114,14 @@ export function StoopHere({ location, stoops, takerSessionId, refreshKey = 0, on
                   <div key={entry.entry_id} className="stoop-entry">
                     <span className="stoop-entry-name">{entry.object.name}</span>
                     {entry.object.description && <span className="stoop-entry-desc">{entry.object.description}</span>}
-                    {takerSessionId && (
+                    {takerSessionId && entry.can_take && (
                       <button className="stoop-take" onClick={() => takeEntry(entry.entry_id)} disabled={takingEntryId != null}>
                         {takingEntryId === entry.entry_id ? "Taking…" : "Take it with you"}
+                      </button>
+                    )}
+                    {takerSessionId && entry.can_withdraw && (
+                      <button className="stoop-take" onClick={() => withdrawEntry(entry.entry_id)} disabled={takingEntryId != null}>
+                        {takingEntryId === entry.entry_id ? "Reclaiming…" : "Reclaim what you left"}
                       </button>
                     )}
                   </div>

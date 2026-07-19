@@ -5,8 +5,9 @@ everything else side-loading over it. A stranger lands on the threshold
 (`look around` / `join the world`), walks the town as a sessionless spectator
 (place panels: who's here, what's overheard, what's on the stoop, where you
 can walk), and can join natively (register/login → session bootstrap) to
-speak, walk, and take from stoops. Place URLs (`/place/mill-reach`) are
-shareable deep links.
+speak, walk, make and carry objects, give or exchange them with someone present,
+and leave, take, or reclaim them from stoops. Place URLs (`/place/mill-reach`)
+are shareable deep links.
 
 ## Run
 

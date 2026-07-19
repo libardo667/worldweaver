@@ -764,6 +764,57 @@ button {
   margin-top: 6px;
 }
 
+.object-notice,
+.object-error {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-small);
+  font-size: 0.82rem;
+}
+
+.object-notice {
+  background: var(--surface-raised);
+  color: var(--accent-ink);
+}
+
+.object-error {
+  border: 1px solid #d4564a;
+  color: #d4564a;
+}
+
+.object-exchange-offer {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--surface-raised);
+}
+
+.object-exchange-offer summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-size: 0.86rem;
+}
+
+.object-exchange-offer label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 8px;
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+}
+
+.object-exchange-offer select {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-small);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
 .stoop-take {
   margin-top: 6px;
   align-self: flex-start;
