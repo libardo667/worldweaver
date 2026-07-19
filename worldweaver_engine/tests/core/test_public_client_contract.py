@@ -99,6 +99,9 @@ def test_schematic_map_uses_a_precompiled_field_drawing_without_generating_in_th
     assert 'localShardPath("/api/world/map/generated.svg")' in api
     assert "L.imageOverlay(" in world_map
     assert "generatedLayerRef.current.bringToBack()" in world_map
+    assert "map.getBoundsZoom(sheetBounds, true)" in world_map
+    assert "map.setMaxBounds(sheetBounds)" in world_map
+    assert "maxBoundsViscosity: 1" in world_map
     assert "Math.random(" not in world_map
 
 

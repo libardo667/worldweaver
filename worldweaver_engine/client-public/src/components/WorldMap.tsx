@@ -59,6 +59,7 @@ export function WorldMap({ nodes, edges, mapStyle, focusKey, onNodeClick, onView
   const tileLayerRef = useRef<Leaflet.TileLayer | null>(null);
   const generatedLayerRef = useRef<Leaflet.ImageOverlay | null>(null);
   const generatedLayerUrlRef = useRef("");
+  const generatedBoundsRef = useRef<MapBounds | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const onViewportChangeRef = useRef(onViewportChange);
   const onNodeClickRef = useRef(onNodeClick);
@@ -68,6 +69,7 @@ export function WorldMap({ nodes, edges, mapStyle, focusKey, onNodeClick, onView
 
   onViewportChangeRef.current = onViewportChange;
   onNodeClickRef.current = onNodeClick;
+  generatedBoundsRef.current = mapStyle === "schematic" ? generatedMap?.bounds ?? null : null;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -76,12 +78,27 @@ export function WorldMap({ nodes, edges, mapStyle, focusKey, onNodeClick, onView
     import("leaflet").then((mod) => {
       if (!active || !containerRef.current) return;
       const L = mod.default;
+      const keepGeneratedSheetFilled = (map: Leaflet.Map, bounds: MapBounds) => {
+        const sheetBounds = L.latLngBounds(
+          [bounds.south, bounds.west],
+          [bounds.north, bounds.east],
+        );
+        // `inside: true` chooses the first zoom where the viewport fits inside
+        // the generated sheet. The town may crop at the edges on a wide or tall
+        // screen, but empty space can never surround it.
+        const coverZoom = map.getBoundsZoom(sheetBounds, true);
+        map.setMinZoom(coverZoom);
+        map.setMaxBounds(sheetBounds);
+        if (map.getZoom() < coverZoom) map.setZoom(coverZoom, { animate: false });
+        map.panInsideBounds(sheetBounds, { animate: false });
+      };
 
       if (!mapRef.current) {
         const map = L.map(containerRef.current, {
           center: [45.014, -122.0],
           zoom: 14,
           zoomControl: false,
+          maxBoundsViscosity: 1,
         });
         L.control.zoom({ position: "bottomright" }).addTo(map);
         markersRef.current = L.layerGroup().addTo(map);
@@ -98,7 +115,11 @@ export function WorldMap({ nodes, edges, mapStyle, focusKey, onNodeClick, onView
         map.on("moveend", emitViewport);
         map.on("zoomend", emitViewport);
         if (typeof ResizeObserver !== "undefined") {
-          const observer = new ResizeObserver(() => map.invalidateSize());
+          const observer = new ResizeObserver(() => {
+            map.invalidateSize();
+            const currentBounds = generatedBoundsRef.current;
+            if (currentBounds) keepGeneratedSheetFilled(map, currentBounds);
+          });
           observer.observe(containerRef.current);
           resizeObserverRef.current = observer;
         }
@@ -140,6 +161,7 @@ export function WorldMap({ nodes, edges, mapStyle, focusKey, onNodeClick, onView
           generatedLayerRef.current.bringToBack();
           generatedLayerUrlRef.current = generatedMapUrl;
         }
+        keepGeneratedSheetFilled(map, generatedBounds);
       } else if (generatedLayerRef.current) {
         map.removeLayer(generatedLayerRef.current);
         generatedLayerRef.current = null;
