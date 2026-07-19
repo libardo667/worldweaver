@@ -10,12 +10,20 @@ The development shard generator now gives each new folder its own strong JWT and
 private `.env` permissions, stable Compose project identity, node signing key, and public descriptor. Signed
 requests now protect registration and private federation operations from alteration, impersonation after
 registration, and replay. The three active development cities have been migrated and no longer use the
-shared federation token. A public directory still needs an explicit first-registration and key-recovery
-policy. Generated folders now use immutable engine and agent image references rather than neighboring source
+shared federation token.
+
+The directory now starts closed. A steward admits the safe-to-share `node.json` with an explicit reason
+before that node may register. Revocation removes a node from discovery and blocks its signed private calls.
+Replacing a key requires revoking the old identity first, then explicitly accepting a new descriptor and
+reason. Admit, revoke, and key-recovery decisions are append-only audit rows. The live directory kept its
+three existing cities approved after migration and rejected a correctly signed but uninvited node with HTTP
+403. This is one directory's local trust policy, not global ownership or permission to exist.
+
+Generated folders now use immutable engine and agent image references rather than neighboring source
 folders. Each carries a standard-library `ww.py` for checks, setup, start, one-time city seeding, stop, status,
-version updates, full backup, and same-identity restore. GitHub now publishes both images under the full commit
-SHA, and both were pulled back successfully from the registry. A clean-computer run still needs
-verification.
+version updates, full backup, same-identity restore, and directory-local node admission/revocation/recovery.
+GitHub now publishes both images under the full commit SHA, and both were pulled back successfully from the
+registry. A clean-computer run still needs verification.
 
 The signed local network has also completed a real Portland-to-San-Francisco session handoff and return with
 a throwaway actor. Each source retired its session before the destination created one, and the wrong signing
@@ -79,7 +87,7 @@ it does not mount or build from a neighboring source checkout.
 - [ ] The operator commands detect unsafe permissions, placeholder secrets, port conflicts, unreachable
   public URLs, and incompatible image or protocol versions before launch.
 - [ ] The public surface contains no resident-private or steward-only telemetry.
-- [ ] The node uses its own identity and credential rather than a network-wide shared secret.
+- [x] The node uses its own identity and credential rather than a network-wide shared secret.
 - [ ] CORS, rate limits, backup, recovery, and log-retention rules are explicit.
 - [ ] The node can publish a signed or otherwise authenticated descriptor to one or more directories.
 - [ ] Another node can discover it, and direct configuration remains possible without that directory.

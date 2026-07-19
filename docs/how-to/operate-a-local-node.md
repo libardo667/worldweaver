@@ -70,6 +70,19 @@ python ww.py stop
 and then disables the development seed/reset endpoint. `update` accepts versioned engine and agent image
 references. `restore BACKUP --yes` restores only a backup with the same node identity.
 
+On a generated federation directory, receive a city's public `node.json` through a channel where you can
+confirm who sent it, then run:
+
+```bash
+python ww.py node admit ../city-node/node.json --reason "Known steward joining the commons"
+python ww.py node list
+python ww.py node history city-node-id
+```
+
+To block a node, use `node revoke NODE_ID --reason "..."`. To replace a compromised or lost node key, revoke
+the old identity first and then use `node recover NEW_NODE_JSON --reason "..."`. These commands never require
+the other node's private key.
+
 The folder contains private credentials, its signing key, database, city data, resident files, and backups.
 Do not commit or casually copy it. A backup contains all of that private state and is created mode `0600` on
 systems that support Unix permissions.
@@ -79,7 +92,6 @@ systems that support Unix permissions.
 A real steward network still needs:
 
 - stable HTTPS ingress for each node;
-- a public first-registration, key-recovery, and revocation policy;
 - discovery that does not make one directory the owner of the network;
 - resident-host authorization and recovery rules.
 

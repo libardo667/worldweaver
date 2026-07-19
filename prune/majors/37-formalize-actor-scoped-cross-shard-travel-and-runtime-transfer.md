@@ -41,7 +41,7 @@ software; the shard folder is the local node.
 
 New shard folders now generate their own Ed25519 signing key and safe-to-share public descriptor. Private
 federation requests sign the method, path, exact body, timestamp, and a one-time nonce. The world root binds
-a node ID to its first registered public key, rejects later impersonation, prevents replay, and checks that
+a pre-admitted node ID to its registered public key, rejects later impersonation, prevents replay, and checks that
 the signed caller is the node named by registration, pulses, travel transitions, mail, and account origin.
 The active Alderbank, Portland, and San Francisco folders have been migrated, their keys are bound at the
 local world root, and the shared token has been removed from those folders and the root. Live startup pulses
@@ -67,17 +67,20 @@ That two-folder check now passes locally as well: disposable Portland and Alderb
 with different project names, ports, credentials, keys, networks, and database volumes. Neither mounted the
 monorepo or woke its agents. This still does not replace the two-computer HTTPS test.
 
+The directory trust gap is now closed by default. A steward must admit a public `node.json` and record a
+reason before a node can register. Revocation hides that node and blocks private federation calls. Key
+replacement requires revocation first and a separately reviewed replacement descriptor. Every change leaves
+an audit row. The migrated live directory retained its three known cities and rejected an uninvited signed
+registration with HTTP 403.
+
 ## Build next
 
-1. Define explicit first-registration and key-recovery policy before accepting unknown nodes on a public
-   directory; continuity of a key proves node identity but does not establish community trust by itself.
-2. Verify two independently generated folders use distinct credentials, projects, ports, volumes, and keys.
-3. Put two independently created node folders behind real HTTPS addresses on different computers or trust
+1. Put two independently created node folders behind real HTTPS addresses on different computers or trust
    domains.
-4. Prove that a resident can remain hosted at their hearth, visit a remote city, and return without copying
+2. Prove that a resident can remain hosted at their hearth, visit a remote city, and return without copying
    the complete hearth to that city.
-5. Configure and verify a real public-client URL for each independently hosted destination.
-6. Test directory outage, destination outage, interrupted departure, interrupted arrival, and replay across
+3. Configure and verify a real public-client URL for each independently hosted destination.
+4. Test directory outage, destination outage, interrupted departure, interrupted arrival, and replay across
    independently operated nodes.
 
 ## Rules

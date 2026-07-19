@@ -39,9 +39,14 @@ and travel transitions are signed and replay-protected. A live Portland-to-San-F
 also proved that the wrong node key cannot claim another node's transition. An open network still needs:
 
 1. HTTPS ingress and address rotation;
-2. first-registration, key-recovery, and revocation rules;
-3. resident-host authorization and recovery;
-4. discovery that tolerates more than one directory;
-5. a two-computer travel proof.
+2. resident-host authorization and recovery;
+3. discovery that tolerates more than one directory;
+4. a two-computer travel proof.
+
+The first directory trust policy is implemented. Directories start closed. A steward admits a safe-to-share
+public descriptor with a reason; revocation blocks private calls and removes the node from discovery; key
+recovery requires revocation followed by an explicitly reviewed replacement descriptor. Each directory makes
+and audits its own decision. Admission to one directory does not grant ownership of the node or forbid the
+node from using another directory or direct peer configuration.
 
 Until those exist, the current federation is a development topology, not a secure decentralized network.

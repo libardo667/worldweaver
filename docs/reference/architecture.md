@@ -55,5 +55,9 @@ after arrival succeeds.
 ## Current trust boundary
 
 The HTTP and database boundaries are real, and active local nodes authenticate with separate signing keys.
-The public federation trust model is still unfinished: unknown-node admission, key recovery, revocation, and
-two-computer HTTPS operation remain unproven. Do not describe the current topology as a secure open federation.
+A directory starts closed. Its steward admits a node's public descriptor before registration, can revoke that
+identity, and can accept a replacement key only after revocation. Those decisions record reasons in an
+append-only trust history. A revoked node disappears from discovery and cannot use private federation routes.
+
+This policy has been proven on the local directory, but two-computer HTTPS operation remains unproven. Do not
+describe the current topology as a secure public federation yet.
