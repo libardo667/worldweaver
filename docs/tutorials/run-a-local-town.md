@@ -48,7 +48,7 @@ python dev.py weave-status --city ww_alderbank --strict
 VITE_PROXY_TARGET=http://localhost:8004 python dev.py client-public
 ```
 
-Open <http://localhost:5174>. Choose **Look around** to browse without an account or **Join the world** to
+Open [http://localhost:5174](http://localhost:5174). Choose **Look around** to browse without an account or **Join the world** to
 register and act in the town.
 
 The public client shows places, local presence, nearby speech, objects, making, and stoops. It does not show
