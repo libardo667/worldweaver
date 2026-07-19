@@ -266,6 +266,13 @@ def _travel_handoff_payload(row: ShardTravelHandoff) -> Dict[str, Any]:
     }
 
 
+def _handoff_place(db: Session, row: ShardTravelHandoff) -> Optional[str]:
+    if not row.session_id or row.status not in {"session_booted", "arrived"}:
+        return None
+    place = str(get_state_manager(row.session_id, db).get_variable("location") or "").strip()
+    return place or None
+
+
 def _require_handoff_owner(row: ShardTravelHandoff, player: Optional[Player]) -> None:
     if row.owner_player_id and (player is None or player.id != row.owner_player_id):
         raise HTTPException(status_code=403, detail="Cannot manage travel owned by another player.")
@@ -370,7 +377,7 @@ def _finish_destination_arrival(
     trip: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any] | JSONResponse:
     if row.status == "arrived":
-        return {"success": True, "idempotent": True, "handoff": _travel_handoff_payload(row)}
+        return {"success": True, "idempotent": True, "place": _handoff_place(db, row), "handoff": _travel_handoff_payload(row)}
 
     if row.status == "prepared":
         try:
@@ -412,6 +419,7 @@ def _finish_destination_arrival(
                     "success": False,
                     "recoverable": True,
                     "message": "The destination has not finished booting this traveler. Retry this travel ID.",
+                    "place": _handoff_place(db, row) if row is not None else None,
                     "handoff": _travel_handoff_payload(row) if row is not None else None,
                 },
             )
@@ -434,6 +442,7 @@ def _finish_destination_arrival(
                 "success": False,
                 "recoverable": True,
                 "message": "The local session is ready, but the federation has not confirmed arrival yet. Retry this travel ID.",
+                "place": _handoff_place(db, row),
                 "handoff": _travel_handoff_payload(row),
             },
         )
@@ -468,6 +477,7 @@ def _finish_destination_arrival(
     return {
         "success": True,
         "idempotent": bool(federation_result.get("idempotent")),
+        "place": _handoff_place(db, row),
         "handoff": _travel_handoff_payload(row),
         "federation": federation_result,
     }

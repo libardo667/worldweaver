@@ -7,6 +7,11 @@ node records and retries departure, the destination validates its own arrival hu
 and the federation records `departing -> traveling -> arrived`. Residents can inspect available routes and
 request travel. Occupancy queries deduplicate by actor identity.
 
+The commons client now exposes the same local handoff to people. A route appears only at its actual local
+gateway. Departure removes the source presence, redirects with only a random travel ID, and lets the
+destination authenticate the actor and retry arrival. Browser session IDs and locations are separate for
+each shard even when several local shards share one client origin.
+
 The old plan said a resident's private runtime payload had to move with every city trip. That is no longer
 the design. A resident's hearth remains private and may keep running on its current host while the resident
 attaches to a remote city. Moving the hearth itself is the separate host-migration problem in Major 127.
@@ -14,11 +19,9 @@ attaches to a remote city. Moving the hearth itself is the separate host-migrati
 ## Remaining problem
 
 Travel has been proven between local Docker shards that share a federation secret. It has not yet been
-proven between independently operated computers with separate node identities. The public client also does
-not yet provide an ordinary human travel flow. The server handoff itself is actor-scoped and checks the
-authenticated player. The missing browser contract is how a destination advertises its human client URL:
-the registry currently provides only the destination backend URL. A traveler must also be able to arrive,
-authenticate on the new web origin, and retry a recoverable handoff without putting a token in the URL.
+proven between independently operated computers with separate node identities. The server handoff and
+browser flow are actor-scoped and check the authenticated player. The remaining gap is trust and
+reachability between independently operated computers, not the local human travel flow.
 
 Node registration, pulses, route discovery, and source-side recovery records now carry an optional human
 client URL separately from the shard API URL. Password-reset mail uses the same human URL when configured.
@@ -34,10 +37,8 @@ advertises its prefix automatically; a deployed steward can override it with `WW
 4. Prove that a resident can remain hosted at their hearth, visit a remote city, and return without copying
    the complete hearth to that city.
 5. Configure and verify a real public-client URL for each independently hosted destination.
-6. Add a clear human travel control to the commons client using the same departure and arrival contracts.
-   Carry only the travel ID in the redirect; authenticate normally on the destination origin before arrival.
-7. Make failed, offline, and retryable travel states visible without reviving a ghost session.
-8. Test directory outage, destination outage, interrupted departure, interrupted arrival, and replay.
+6. Test directory outage, destination outage, interrupted departure, interrupted arrival, and replay across
+   independently operated nodes.
 
 ## Rules
 
@@ -60,5 +61,5 @@ advertises its prefix automatically; a deployed steward can override it with `WW
 - [ ] Independently operated nodes authenticate travel with separate identities.
 - [ ] A two-computer HTTPS test completes city-to-city travel and return.
 - [ ] No tested failure leaves one actor active in both cities.
-- [ ] The public client offers the same travel contract to a human.
+- [x] The public client offers the same travel contract to a human.
 - [ ] Directory failure leaves local life intact and reports remote travel as unavailable.

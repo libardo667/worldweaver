@@ -20,6 +20,8 @@ type Props = {
   suggestedPlace: string | null;
   onJoined: (place: string, displayName: string) => void;
   onClose: () => void;
+  /** Authenticate an actor who already has a federation trip in progress. */
+  arrival?: { onAuthenticated: () => Promise<void> };
 };
 
 type Mode = "register" | "login" | "reset";
@@ -28,8 +30,8 @@ type Mode = "register" | "login" | "reset";
  * Native join: make or recall an identity, then step into the world at a
  * chosen entry place. One card, no ceremony; the terms are the shard's own.
  */
-export function JoinFlow({ entry, suggestedPlace, onJoined, onClose }: Props) {
-  const [mode, setMode] = useState<Mode>(getPlayer() ? "login" : "register");
+export function JoinFlow({ entry, suggestedPlace, onJoined, onClose, arrival }: Props) {
+  const [mode, setMode] = useState<Mode>(arrival || getPlayer() ? "login" : "register");
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -87,12 +89,12 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose }: Props) {
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (busy || !entry || !place) return;
+    if (busy || (!arrival && (!entry || !place))) return;
     setBusy(true);
     setError("");
     let newlyRegisteredUsername = "";
     try {
-      const auth = mode === "register"
+      const auth = mode === "register" && !arrival
         ? await postRegister({ email, username, display_name: displayName, password, terms_accepted: termsAccepted })
         : mode === "reset"
           ? await postResetPassword(resetToken, newPassword)
@@ -105,10 +107,14 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose }: Props) {
         username: auth.username,
         display_name: auth.display_name,
       });
+      if (arrival) {
+        await arrival.onAuthenticated();
+        return;
+      }
       const sessionId = mintSessionId();
-      await postSessionBootstrap(sessionId, entry.world_id, auth.display_name, place);
-      setStandingPlace(place);
-      onJoined(place, auth.display_name);
+      await postSessionBootstrap(sessionId, entry!.world_id, auth.display_name, place!);
+      setStandingPlace(place!);
+      onJoined(place!, auth.display_name);
     } catch (err) {
       if (newlyRegisteredUsername) {
         setMode("login");
@@ -144,11 +150,13 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose }: Props) {
   return (
     <div className="threshold">
       <div className="threshold-card join-card" role="dialog" aria-labelledby="join-title">
-        <h1 id="join-title" className="threshold-title">Join the world</h1>
+        <h1 id="join-title" className="threshold-title">{arrival ? "Sign in to finish your trip" : "Join the world"}</h1>
         <div className="join-tabs" aria-label="Choose how to join">
-          <button type="button" aria-pressed={mode === "register"} className={mode === "register" ? "is-active" : ""} onClick={() => setMode("register")}>
-            New here
-          </button>
+          {!arrival && (
+            <button type="button" aria-pressed={mode === "register"} className={mode === "register" ? "is-active" : ""} onClick={() => setMode("register")}>
+              New here
+            </button>
+          )}
           <button type="button" aria-pressed={mode === "login"} className={mode === "login" ? "is-active" : ""} onClick={() => setMode("login")}>
             Coming back
           </button>
@@ -206,7 +214,7 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose }: Props) {
             </>
           )}
 
-          {entryPlaces.length > 0 && (
+          {!arrival && entryPlaces.length > 0 && (
             <div className="join-places">
               <p className="join-places-label">You'll arrive at</p>
               <div className="walk-targets">
@@ -222,11 +230,11 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose }: Props) {
           {error && <p className="join-error" role="alert">{error}</p>}
 
           <div className="threshold-actions">
-            <button type="submit" className="btn btn-primary" disabled={busy || !place || !(mode === "register" ? registerReady : mode === "reset" ? resetReady : loginReady)}>
-              {busy ? "Stepping in…" : mode === "reset" ? "Reset and step into the world" : "Step into the world"}
+            <button type="submit" className="btn btn-primary" disabled={busy || (!arrival && !place) || !(mode === "register" ? registerReady : mode === "reset" ? resetReady : loginReady)}>
+              {busy ? "Checking…" : arrival ? (mode === "reset" ? "Reset and finish the trip" : "Sign in and finish the trip") : mode === "reset" ? "Reset and step into the world" : "Step into the world"}
             </button>
             <button type="button" className="btn btn-quiet" onClick={onClose}>
-              Just look around instead
+              {arrival ? "Return to the map" : "Just look around instead"}
             </button>
           </div>
         </form>

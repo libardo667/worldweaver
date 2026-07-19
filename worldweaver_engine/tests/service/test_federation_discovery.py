@@ -61,7 +61,21 @@ def test_destination_response_keeps_city_pack_available_without_federation(monke
     monkeypatch.setattr(
         federation_discovery,
         "get_pack",
-        lambda _city_id: {"inter_city": [{"id": "pdx-sea", "from": "portland", "to": "seattle"}]},
+        lambda _city_id: {
+            "inter_city": [
+                {
+                    "id": "pdx-sea",
+                    "from": "portland",
+                    "to": "seattle",
+                    "departure_hub_id": "portland-union-station",
+                }
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        federation_discovery,
+        "resolve_travel_hub_entry",
+        lambda _hub_id, _city_id: {"entry_location": "Pearl District"},
     )
 
     response = federation_discovery.get_travel_destinations()
@@ -69,3 +83,4 @@ def test_destination_response_keeps_city_pack_available_without_federation(monke
     assert response["source"] == {"shard_id": "rose-city-coop", "city_id": "portland"}
     assert response["registry"] == {"configured": False, "reachable": False}
     assert response["destinations"][0]["availability"] == "unknown"
+    assert response["destinations"][0]["departure_place"] == "Pearl District"

@@ -9,11 +9,24 @@ import { JoinFlow } from "./components/JoinFlow";
 import { PlacePanel } from "./components/PlacePanel";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { ThresholdOverlay } from "./components/ThresholdOverlay";
+import { TravelArrival } from "./components/TravelArrival";
+import { TravelDepartureRecovery } from "./components/TravelDepartureRecovery";
 import { WorldMap, type MapBounds } from "./components/WorldMap";
 import { useGrounding } from "./hooks/useGrounding";
 import { usePoll } from "./hooks/usePoll";
 import { findNodeBySlug, isVisitablePlace, slugifyPlace } from "./lib/places";
-import { clearParticipant, getJwt, getPlayer, getSessionId, getStandingPlace, setStandingPlace } from "./session/store";
+import {
+  clearLocalIncarnation,
+  clearParticipant,
+  clearPendingDeparture,
+  getJwt,
+  getPendingDeparture,
+  getPlayer,
+  getSessionId,
+  getStandingPlace,
+  setStandingPlace,
+  type PendingDeparture,
+} from "./session/store";
 
 /** A participant: someone standing in the world, not just looking at it. */
 type Me = { sessionId: string; displayName: string; place: string };
@@ -63,11 +76,14 @@ export function App() {
   // closed for client-side navigation within this load.
   const [thresholdOpen, setThresholdOpen] = useState(true);
   const [me, setMe] = useState<Me | null>(rememberedMe);
+  const [pendingDeparture, setPendingDepartureState] = useState<PendingDeparture | null>(getPendingDeparture);
   const viewportRef = useRef<MapBounds | null>(null);
   const atmosphere = useGrounding();
   const [, navigate] = useLocation();
   const [, placeParams] = useRoute("/place/:slug");
+  const [arrivalRoute] = useRoute("/travel/arrive");
   const search = useSearch();
+  const travelId = arrivalRoute ? new URLSearchParams(search).get("travel_id") : null;
 
   // Password-reset emails point at the public root. Carry their one-time token
   // into the join card instead of making the person dismiss the town threshold.
@@ -77,6 +93,17 @@ export function App() {
     setThresholdOpen(false);
     navigate(`/join?reset_token=${encodeURIComponent(resetToken)}`, { replace: true });
   }, [navigate, placeParams, search]);
+
+  useEffect(() => {
+    if (travelId) setThresholdOpen(false);
+  }, [travelId]);
+
+  useEffect(() => {
+    if (!pendingDeparture) return;
+    clearLocalIncarnation();
+    setMe(null);
+    setThresholdOpen(false);
+  }, [pendingDeparture]);
 
   useEffect(() => {
     getShardExperience().then(setExperience).catch(() => setExperience(null));
@@ -164,6 +191,18 @@ export function App() {
     void refreshMap();
   }, [me, refreshMap]);
 
+  const finishDeparture = useCallback((destinationClientUrl: string, departingTravelId: string) => {
+    clearPendingDeparture();
+    setPendingDepartureState(null);
+    clearLocalIncarnation();
+    setMe(null);
+    const destination = new URL(destinationClientUrl, window.location.origin);
+    destination.pathname = `${destination.pathname.replace(/\/$/, "")}/travel/arrive`;
+    destination.search = "";
+    destination.searchParams.set("travel_id", departingTravelId);
+    window.location.assign(destination.toString());
+  }, []);
+
   const suggestedJoinPlace = useMemo(() => {
     const slug = new URLSearchParams(search).get("place");
     return slug ? (findNodeBySlug(nodes, slug)?.name ?? null) : null;
@@ -192,10 +231,27 @@ export function App() {
             me={me}
             onWalk={handleNodeClick}
             onTravel={walkTo}
+            onCrossCityTravel={finishDeparture}
+            onCrossCityTravelPending={setPendingDepartureState}
             onClose={() => navigate("/")}
           />
         )}
       </Route>
+      {travelId && (
+        <TravelArrival
+          travelId={travelId}
+          entry={entry}
+          onArrived={(place) => {
+            setMe(rememberedMe());
+            void refreshMap();
+            navigate(`/place/${slugifyPlace(place)}`, { replace: true });
+          }}
+          onClose={() => navigate("/", { replace: true })}
+        />
+      )}
+      {pendingDeparture && !travelId && (
+        <TravelDepartureRecovery pending={pendingDeparture} onDeparted={finishDeparture} />
+      )}
       <Route path="/join">
         {me ? (
           <div className="threshold">

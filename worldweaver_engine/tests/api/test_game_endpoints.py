@@ -469,6 +469,7 @@ class TestGameEndpoints:
         assert response.status_code == 200
         assert response.json()["handoff"]["status"] == "arrived"
         assert response.json()["handoff"]["arrival_hub_id"] == "emeryville-sf-transfer"
+        assert response.json()["place"] == "Embarcadero"
         assert repeated.status_code == 200
         assert repeated.json()["idempotent"] is True
         assert confirmations == [{"travel_id": "trip-arrival-001", "destination_shard": "bay-commons-1"}]

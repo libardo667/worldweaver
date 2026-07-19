@@ -83,3 +83,15 @@ def test_public_client_can_keep_shard_api_traffic_under_a_same_origin_prefix():
     store = (ENGINE_ROOT / "client-public" / "src" / "session" / "store.ts").read_text(encoding="utf-8")
     assert "localKey(SESSION_KEY)" in store
     assert "localKey(PLACE_KEY)" in store
+
+
+def test_public_client_travel_redirect_carries_only_a_recoverable_trip_id():
+    app = (ENGINE_ROOT / "client-public" / "src" / "App.tsx").read_text(encoding="utf-8")
+    arrival = (PUBLIC_COMPONENTS / "TravelArrival.tsx").read_text(encoding="utf-8")
+    recovery = (PUBLIC_COMPONENTS / "TravelDepartureRecovery.tsx").read_text(encoding="utf-8")
+
+    assert 'destination.pathname = `${destination.pathname.replace(/\\/$/, "")}/travel/arrive`' in app
+    assert 'destination.searchParams.set("travel_id", departingTravelId)' in app
+    assert 'searchParams.set("token"' not in app
+    assert "postTravelArrival(travelId, sessionId)" in arrival
+    assert "postRetryTravelDeparture(pending.travel_id)" in recovery

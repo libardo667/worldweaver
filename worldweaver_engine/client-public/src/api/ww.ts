@@ -26,6 +26,8 @@ import type {
   SpaceAccessStatus,
   StoopBrowse,
   StoopList,
+  TravelDiscovery,
+  TravelResponse,
 } from "./types";
 import { getJwt } from "../session/store";
 import { localShardPath } from "./base";
@@ -104,6 +106,10 @@ export function getShards(): Promise<{ shards: ShardInfo[] }> {
   return getJson("/ww-world/api/federation/shards");
 }
 
+export function getTravelDestinations(): Promise<TravelDiscovery> {
+  return getJson("/api/world/travel/destinations");
+}
+
 // --- Participant verbs (the join-the-world half) ---------------------------
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {
@@ -168,6 +174,32 @@ export function postSpeak(location: string, sessionId: string, displayName: stri
 
 export function postLeaveSession(sessionId: string): Promise<{ success?: boolean }> {
   return postJson("/api/session/leave", { session_id: sessionId });
+}
+
+export function postTravelDeparture(
+  sessionId: string,
+  routeId: string,
+  destinationShard: string,
+  travelId: string,
+): Promise<TravelResponse> {
+  return postJson("/api/session/travel/depart", {
+    session_id: sessionId,
+    route_id: routeId,
+    destination_shard: destinationShard,
+    travel_id: travelId,
+  });
+}
+
+export function postRetryTravelDeparture(travelId: string): Promise<TravelResponse> {
+  return postJson(`/api/session/travel/${encodeURIComponent(travelId)}/retry-departure`, {});
+}
+
+export function postTravelArrival(travelId: string, sessionId: string): Promise<TravelResponse> {
+  return postJson("/api/session/travel/arrive", { travel_id: travelId, session_id: sessionId });
+}
+
+export function postRetryTravelArrival(travelId: string): Promise<TravelResponse> {
+  return postJson(`/api/session/travel/${encodeURIComponent(travelId)}/retry-arrival`, {});
 }
 
 export function postTakeStoopEntry(entryId: string, sessionId: string): Promise<{ replayed?: boolean }> {

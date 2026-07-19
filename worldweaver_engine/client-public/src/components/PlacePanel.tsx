@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { MapEdge, MapNode } from "../api/types";
+import type { PendingDeparture } from "../session/store";
 import { usePlace } from "../hooks/usePlace";
 import { findNodeBySlug, slugifyPlace } from "../lib/places";
 import { MakeHere } from "./MakeHere";
@@ -13,6 +14,7 @@ import { Overheard } from "./Overheard";
 import { PresenceHere } from "./PresenceHere";
 import { SpeakBar } from "./SpeakBar";
 import { StoopHere } from "./StoopHere";
+import { TravelHere } from "./TravelHere";
 import { WalkTargets } from "./WalkTargets";
 
 type Me = { sessionId: string; displayName: string; place: string };
@@ -28,6 +30,8 @@ type Props = {
   onWalk: (node: MapNode) => void;
   /** Physically walk the participant there, hop by hop. */
   onTravel: (node: MapNode) => void;
+  onCrossCityTravel: (destinationClientUrl: string, travelId: string) => void;
+  onCrossCityTravelPending: (pending: PendingDeparture) => void;
   onClose: () => void;
 };
 
@@ -36,7 +40,7 @@ function prettifySlug(slug: string): string {
 }
 
 /** The place you are looking at, side-loaded over the map. */
-export function PlacePanel({ slug, node, nodes, edges, me, onWalk, onTravel, onClose }: Props) {
+export function PlacePanel({ slug, node, nodes, edges, me, onWalk, onTravel, onCrossCityTravel, onCrossCityTravelPending, onClose }: Props) {
   const name = node?.name ?? prettifySlug(slug);
   // Bumped whenever a verb changes the world here (made/took/left/moved a
   // thing) so stoop counts and object lists refetch together.
@@ -96,6 +100,12 @@ export function PlacePanel({ slug, node, nodes, edges, me, onWalk, onTravel, onC
         )}
         {standingHere && (
           <>
+            <TravelHere
+              location={node.name}
+              sessionId={me.sessionId}
+              onDeparted={onCrossCityTravel}
+              onDeparturePending={onCrossCityTravelPending}
+            />
             <ObjectsHere location={node.name} sessionId={me.sessionId} stoops={details.stoops} refreshKey={worldBump} onChanged={bumpWorld} />
             <MakeHere location={node.name} sessionId={me.sessionId} onMade={bumpWorld} />
           </>

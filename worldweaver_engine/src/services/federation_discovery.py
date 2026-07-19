@@ -12,7 +12,7 @@ import urllib.request
 from typing import Any, Optional
 
 from ..config import settings
-from .city_pack_service import get_pack
+from .city_pack_service import get_pack, resolve_travel_hub_entry
 from .federation_identity import current_shard_id
 
 log = logging.getLogger(__name__)
@@ -108,6 +108,14 @@ def get_travel_destinations() -> dict[str, Any]:
     raw_routes = pack.get("inter_city")
     routes = [item for item in raw_routes if isinstance(item, dict)] if isinstance(raw_routes, list) else []
     registry_shards = _fetch_registry_shards()
+    destinations = resolve_inter_city_routes(
+        city_id=city_id,
+        routes=routes,
+        registry_shards=registry_shards,
+    )
+    for destination in destinations:
+        hub = resolve_travel_hub_entry(str(destination.get("departure_hub_id") or ""), city_id)
+        destination["departure_place"] = str((hub or {}).get("entry_location") or "").strip()
     return {
         "source": {
             "shard_id": current_shard_id(),
@@ -117,9 +125,5 @@ def get_travel_destinations() -> dict[str, Any]:
             "configured": bool(str(settings.federation_url or "").strip()),
             "reachable": registry_shards is not None,
         },
-        "destinations": resolve_inter_city_routes(
-            city_id=city_id,
-            routes=routes,
-            registry_shards=registry_shards,
-        ),
+        "destinations": destinations,
     }

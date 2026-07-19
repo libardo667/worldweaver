@@ -249,3 +249,55 @@ export type ShardInfo = {
   city_id: string;
   status: "healthy" | "degraded" | "stale" | "offline" | string;
 };
+
+export type TravelNode = {
+  shard_id: string;
+  shard_url: string;
+  client_url?: string | null;
+  status: string;
+};
+
+export type TravelRoute = {
+  route_id: string;
+  from_city_id: string;
+  to_city_id: string;
+  mode: string;
+  operator: string;
+  duration_hours: number | null;
+  departure_hub_id: string;
+  departure_hub: string;
+  departure_place: string;
+  arrival_hub_id: string;
+  arrival_hub: string;
+  notes: string;
+  availability: "available" | "unhosted" | "offline" | "unknown" | string;
+  nodes: TravelNode[];
+};
+
+export type TravelDiscovery = {
+  source: { shard_id: string; city_id: string };
+  registry: { configured: boolean; reachable: boolean };
+  destinations: TravelRoute[];
+};
+
+export type TravelHandoff = {
+  travel_id: string;
+  actor_id: string;
+  session_id: string;
+  source_shard: string;
+  destination_shard: string;
+  destination_client_url?: string | null;
+  route_id?: string | null;
+  departure_hub?: string | null;
+  arrival_hub?: string | null;
+  status: string;
+  last_error?: string | null;
+};
+
+export type TravelResponse = {
+  success: boolean;
+  recoverable?: boolean;
+  message?: string;
+  place?: string | null;
+  handoff: TravelHandoff;
+};

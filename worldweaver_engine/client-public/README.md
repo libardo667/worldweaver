@@ -20,6 +20,12 @@ keeps its API calls on the same browser origin and the unprefixed root remains t
 The actor login is shared across those paths, while the temporary session ID and standing place are stored
 per shard. Opening Portland can therefore never reuse an Alderbank incarnation by accident.
 
+Available inter-city routes appear only while a participant is standing at that route's local gateway.
+Departure retires the source presence before redirecting to the destination client. The redirect carries
+only a random travel ID; the destination uses the normal actor login and can safely retry an interrupted
+arrival. A shared-origin local setup keeps one actor login across its city prefixes, while separately hosted
+sites ask the traveler to sign in again.
+
 ## Run
 
 ```bash
