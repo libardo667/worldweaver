@@ -1,20 +1,27 @@
 # Alderbank development shard
 
-`ww_alderbank` hosts the small fictional Alderbank pack on local port `8004`. It is the first private
-consequence-driven game-town node, not a replacement for the Portland or San Francisco commons shards.
+`ww_alderbank` hosts the original fictional Alderbank pack on local port `8004`. It is a small private test
+town for understandable objects, access, exchange, making, stoops, and other opt-in game consequences.
 
-The tracked files are only reproducible node scaffolding. The local `.env`, copied pack/rules data,
-Postgres volume, and future resident workspaces remain untracked machine state.
+The tracked directory contains reproducible node scaffolding. Its `.env`, copied pack and rules data,
+Postgres volume, resident hearths, and live world history are local machine state.
 
-The first dormant seed was verified on 2026-07-18 with:
+Current checkpoint:
 
-- 13 exact places and no person sessions;
-- one bounded stoop at Alderbank Commons;
-- two replenishing non-essential material pools at Alderbank Workshop;
-- the constructive game-rules disclosure active;
-- the published pack preview valid and marked schematic/fictional;
-- federation discovery through the local world root; and
-- no resident files or running agent service.
+- 13 connected schematic places;
+- a bounded object stoop at Alderbank Commons;
+- two replenishing, non-essential material pools at Alderbank Workshop;
+- constructive game rules with harmful stakes disabled;
+- working human entry through the public client;
+- a four-resident cohort used for bounded runtime checks;
+- federation discovery through the local directory node.
 
-Do not start the `agent` service merely because the backend is healthy. Add the situated player surface and
-CognitiveCore consequence tools, run the pre-resident smoke test, then create a new dormant cast deliberately.
+Start the town without residents:
+
+```bash
+python dev.py weave-up --city ww_alderbank
+```
+
+Wake residents deliberately with the commands in
+[`docs/how-to/run-residents.md`](../../docs/how-to/run-residents.md). Their private runtime data is not a
+test fixture and should not be inspected by ordinary automated tests.

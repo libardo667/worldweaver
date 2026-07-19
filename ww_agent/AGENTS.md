@@ -50,8 +50,8 @@ inputs in the identity loader; they do not restore the old ownership model.
 - Exact prompts/completions may be captured in `memory/prompt_traces.jsonl` as private diagnostics. This
   file is evidence about the inference boundary, never cognitive input; no reducer may read it.
 - `WorldWeaverClient` is the engine boundary. Keep engine-specific transport out of cognitive modules.
-- Canonical identity is immutable at runtime. Proposed growth is written separately and matures through
-  the growth pipeline.
+- Canonical identity is immutable at runtime. Proposed growth stays in the private ledger. Mutable growth
+  is hearth-owned and changes only through the explicit resident adoption path tracked in Major 58.
 - Capabilities are concrete effectors and world affordances, not permissions implied only by prompts.
 - Unsupported city `do` prose fails locally. Never restore the generic `/api/action` fallback: concrete
   world changes use typed effectors and canonical receipts, while unavailable acts are declined honestly.

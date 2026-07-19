@@ -1,122 +1,51 @@
-# CLAUDE.md
+# Working in WorldWeaver
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+WorldWeaver is a monorepo for persistent AI residents and the shared worlds they can visit with people.
 
-## Project Overview
+The current manual starts at [`docs/index.md`](docs/index.md). The architecture summary is
+[`docs/reference/architecture.md`](docs/reference/architecture.md), and the current build order is
+[`prune/ROADMAP.md`](prune/ROADMAP.md).
 
-WorldWeaver is a persistent shared-world platform where autonomous AI residents live continuously alongside human players in a geographically-grounded environment. It is a monorepo (consolidated from 5 repos on 2026-03-15) with three major components:
+## Repository layout
 
-- **`worldweaver_engine/`** — Backend (FastAPI + SQLAlchemy), React SPA client, and dev tooling
-- **`ww_agent/`** — Autonomous resident runtime (async Python daemon; a salience substrate + predictive pulse, `CognitiveCore`, per resident)
-- **`shards/`** — Per-city shard instances (`ww_sfo`, `ww_pdx`, `ww_world` federation root)
+- `worldweaver_engine/`: FastAPI world server and browser clients
+- `ww_agent/`: one resident runtime for hearths and cities
+- `shards/`: independently configured local nodes
+- `data/cities/`: portable city packs
+- `data/rulesets/`: optional, explicit game rules
+- `docs/`: current instructions and design explanations
+- `research/`: dated evidence, not current operating guidance
+- `prune/`: active architecture and product work
 
-## Commands
-
-All commands run from the repository root using the shared environment and canonical dev harness:
+## Use the root developer command
 
 ```bash
-# Setup
-python dev.py install                      # Create/update the shared .venv and install all deps
+python dev.py install
+python dev.py weave-up --city ww_alderbank
+python dev.py weave-status --city ww_alderbank --strict
+python dev.py test
+python dev.py check
+```
 
-# Run
-python dev.py weave-up --city ww_sfo       # Start full stack (Docker Compose)
-python dev.py weave-down --city ww_sfo     # Stop stack
-python dev.py backend                      # Backend only (uvicorn :8000)
-python dev.py client                       # Client only (vite :5173)
+Run one test file with a path relative to its package:
 
-# Test
-python dev.py test                         # Run engine + agent tests
-python dev.py check                        # Lint/build engine + run all Python tests
-
-# Single test file
+```bash
 python dev.py test engine tests/api/test_settings_readiness.py -v
-
-# Lint
-python dev.py lint-all                     # ruff + black
-python dev.py gate3-strict                 # CI gate 3: static checks
+python dev.py test agent tests/test_cognitive_core.py -v
 ```
 
-For `ww_agent/` tests: `python dev.py test agent -v`
+## Current boundaries
 
-## Code Style
+- World changes use typed actions and canonical receipts. Do not restore the generic narrator or freeform
+  action routes.
+- A resident has one `CognitiveCore`, one append-only private ledger, and one active world attachment.
+- A hearth carries resident identity and private history. Hosting provides service, not ownership.
+- A city owns its local places, sessions, objects, speech, and events. It does not own resident identity.
+- Exact-place speech is automatic perception. Broader city speech and other information sources are
+  elective.
+- Federation currently works as a local development topology. Shared-token trust is not ready for an open
+  network.
+- `the-stable` is implementation history. New work lands in this repository.
 
-- Python 3.11+ for the shared workspace environment
-- Line length: **320** for both ruff and black
-- Ruff rules: E, F only
-- asyncio_mode = "auto" in pytest (no need for `@pytest.mark.asyncio`)
-- TypeScript/React frontend with Vite
-
-## Architecture
-
-### Shard-First Runtime
-
-Each city runs as an independent shard with its own backend, database, agents, and `.env`. The federation root (`ww_world`, port 9000) coordinates inter-shard travel. City shards (`ww_sfo` port 8002, `ww_pdx` port 8003) register via a federation pulse loop. Shared `FEDERATION_TOKEN` authenticates cross-shard requests.
-
-### Backend Structure (`worldweaver_engine/src/`)
-
-- `api/` — FastAPI routes: `game/` (gameplay), `auth/` (JWT auth), `federation/` (shard coordination)
-- `services/` — Business logic: `state/` (world state), `simulation/` (turn resolution), `rules/` (action validation), `llm_client.py`, `federation_pulse.py`
-- `core/` — Base classes, reducers, narrative primitives
-- `models/` — SQLAlchemy ORM models
-- `config.py` — Pydantic-settings configuration
-
-### Agent Cognitive Architecture (`ww_agent/src/`)
-
-Residents run on a **salience substrate + predictive pulse** (Major 49), not the old loop bank.
-`resident.py` builds a `CognitiveCore` (`src/runtime/cognitive_core.py`); the former fast/slow/mail/
-ground/wander loops are demoted to pure sensorimotor mechanism beneath it. Each tick runs one cycle:
-
-```
-perceive → integrate (surprise vs prediction → leaky arousal) → on ignition, ONE LLM pulse → act
-```
-
-- **The ledger is the only state.** Arousal, mood, grief, the slow self-model, and the top-down
-  prediction (the "afterimage") are all `derive_*` reducers over an append-only event log, computed
-  at read time (`src/runtime/{ledger,substrate,salience}.py`).
-- **Surprise drives the rhythm.** `surprise = mismatch(stimulus, prediction)` accumulates a leaky
-  arousal; crossing threshold is **ignition** — the single event that fires one LLM call
-  (`pulse_engine.py`). In lulls, **settling/fervor** fire quiet self-directed pulses (the idle
-  "making" gear). Circadian wakefulness scales the rhythm so a shard quiets after dark.
-- **Affect is per-resident**, read from the soul embedded as a **drive vector** (`drive.py`) — so
-  residents in one room respond as distinct people. **Grief** (`salience.derive_grief`) is an
-  *undischargeable* integral of confirmed loss (a safety boundary — see `../the-stable/docs/grief-and-coupling.md`).
-- **The self lives in the soul + ledger + kept memory, not the model** (the model is a swappable pen).
-
-WorldWeaver owns this substrate for both city residents and familiar-style local capabilities. The
-standalone `../the-stable` tree is implementation history to consult when useful, not an active upstream
-or synchronization target.
-
-Resident identity lives in `<resident_dir>/identity/` (a canonical soul + a federation-held growth layer).
-
-⚠️ The old four-loop description (fast/slow/mail/wander; three-layer working/provisional/long-term
-memory) is **superseded** — trust `resident.py` and `src/runtime/` over any doc that still says "loops."
-
-### Narrative Lanes
-
-- **Narrator** — Scene descriptions from world state + rules
-- **Referee** — Action validation (strict, low-temp models)
-- **Planner** — Internal reasoning, not exposed to players
-
-### Database
-
-SQLite for local dev (Alembic migrations auto-run on startup). Postgres migration is planned.
-
-## Workflow Authority
-
-`worldweaver_engine/AGENTS.md` is the authoritative workflow policy. Authority order for conflicts:
-
-1. Explicit task item scope (`prune/majors/*`, `prune/minors/*`)
-2. Project anchors: `prune/VISION.md`, `prune/ROADMAP.md`
-3. Harness policy: `prune/harness/` docs
-4. Harness templates
-
-Before implementation: declare authoritative path, default-path impact, contract impact, and validation commands.
-
-## Key Conventions
-
-- Extend existing authoritative paths; do not create parallel paths
-- Keep diffs bounded to declared scope; no drive-by refactors
-- Run `python dev.py check` for non-trivial changes
-- Shard secrets live in `shards/<name>/.env`, not the repo root
-- CI gates: root `.github/workflows/ci-gates.yml` (`python dev.py check` and public
-  hygiene). The old narrative-eval smoke was retired with the storylet pipeline.
+Package-specific rules are in [`worldweaver_engine/AGENTS.md`](worldweaver_engine/AGENTS.md) and
+[`ww_agent/AGENTS.md`](ww_agent/AGENTS.md). Live code and tests override stale prose.
