@@ -3,8 +3,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Route, useLocation, useRoute, useSearch } from "wouter";
-import { getEntry, getShardExperience, postLeaveSession, postMove, queryMap } from "./api/ww";
-import type { EntryInfo, MapEdge, MapNode, ShardExperience } from "./api/types";
+import { generatedMapSvgUrl, getEntry, getGeneratedMap, getShardExperience, postLeaveSession, postMove, queryMap } from "./api/ww";
+import type { EntryInfo, GeneratedMapArtifact, MapEdge, MapNode, ShardExperience } from "./api/types";
 import { JoinFlow } from "./components/JoinFlow";
 import { PlacePanel } from "./components/PlacePanel";
 import { ThemeToggle } from "./components/ThemeToggle";
@@ -71,6 +71,7 @@ export function App() {
   const [entry, setEntry] = useState<EntryInfo | null>(null);
   const [nodes, setNodes] = useState<MapNode[]>([]);
   const [edges, setEdges] = useState<MapEdge[]>([]);
+  const [generatedMap, setGeneratedMap] = useState<GeneratedMapArtifact | null>(null);
   // The threshold greets every fresh page load, whatever the URL — deep links
   // included. It closes on an explicit choice (or walking off) and stays
   // closed for client-side navigation within this load.
@@ -108,6 +109,7 @@ export function App() {
   useEffect(() => {
     getShardExperience().then(setExperience).catch(() => setExperience(null));
     getEntry().then(setEntry).catch(() => setEntry(null));
+    getGeneratedMap().then((result) => setGeneratedMap(result.available ? result.artifact : null)).catch(() => setGeneratedMap(null));
   }, []);
 
   const refreshMap = useCallback(async () => {
@@ -218,6 +220,8 @@ export function App() {
         onNodeClick={handleNodeClick}
         onViewportChange={handleViewportChange}
         frame={entryFrame(entry)}
+        generatedMap={generatedMap}
+        generatedMapUrl={generatedMap ? generatedMapSvgUrl(generatedMap.svg.sha256) : null}
       />
       <div className="sky-tint" aria-hidden="true" />
 

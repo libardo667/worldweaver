@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, or_
@@ -3152,8 +3152,8 @@ def _location_map_context_payload(location: str) -> dict[str, Any]:
     }
 
 
-# Declared before /world/map/{session_id} so the literal "context" segment is
-# never captured as a session id.
+# Declared before /world/map/{session_id} so literal public-map resource names
+# are never captured as session IDs.
 @router.get("/world/map/context")
 def get_public_location_map_context(
     location: str = Query(..., description="Location name to build context for"),
@@ -3162,6 +3162,46 @@ def get_public_location_map_context(
     view of a place. Same payload as /world/map/{session_id}/context, whose
     session path segment was never actually used."""
     return _location_map_context_payload(location)
+
+
+@router.get("/world/map/generated")
+def get_public_generated_map():
+    """Return the small public descriptor for a precompiled fictional map."""
+    from ...services.city_pack_service import get_generated_map_artifact
+
+    artifact = get_generated_map_artifact(settings.city_id)
+    if artifact is None:
+        return {"available": False, "city_id": settings.city_id, "artifact": None}
+    return {
+        "available": True,
+        "city_id": settings.city_id,
+        "artifact": {
+            "schema_version": artifact.get("schema_version"),
+            "artifact_sha256": artifact.get("artifact_sha256"),
+            "generator": artifact.get("generator"),
+            "bounds": artifact.get("bounds"),
+            "grid": artifact.get("grid"),
+            "svg": artifact.get("svg"),
+            "section_count": len(artifact.get("sections") or []),
+        },
+    }
+
+
+@router.get("/world/map/generated.svg", response_class=Response)
+def get_public_generated_map_svg():
+    """Serve a precompiled SVG; generation never runs in a participant request."""
+    from ...services.city_pack_service import get_generated_map_artifact, get_generated_map_svg
+
+    artifact = get_generated_map_artifact(settings.city_id)
+    svg = get_generated_map_svg(settings.city_id)
+    if artifact is None or svg is None:
+        raise HTTPException(status_code=404, detail="This shard has no compiled fictional map.")
+    svg_meta = artifact.get("svg") if isinstance(artifact.get("svg"), dict) else {}
+    digest = str(svg_meta.get("sha256") or "").strip()
+    headers = {"Cache-Control": "public, max-age=300"}
+    if digest:
+        headers["ETag"] = f'"{digest}"'
+    return Response(content=svg, media_type="image/svg+xml", headers=headers)
 
 
 @router.get("/world/map/{session_id}")

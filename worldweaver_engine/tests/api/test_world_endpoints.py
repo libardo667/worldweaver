@@ -693,6 +693,27 @@ class TestNeighborhoodVitalityEndpoint:
 
 
 class TestWorldMapQueryEndpoint:
+    def test_alderbank_serves_a_small_generated_map_descriptor_and_verified_svg(self, client, monkeypatch):
+        from src.config import settings
+        from src.services import city_pack_service
+
+        monkeypatch.setattr(settings, "city_id", "alderbank")
+        city_pack_service._PACK_CACHE.pop("alderbank", None)
+
+        descriptor_response = client.get("/api/world/map/generated")
+        assert descriptor_response.status_code == 200
+        descriptor = descriptor_response.json()
+        assert descriptor["available"] is True
+        assert descriptor["artifact"]["generator"]["id"] == "worldweaver.field-map"
+        assert descriptor["artifact"]["section_count"] == 12
+        assert "fields" not in descriptor["artifact"]
+
+        svg_response = client.get("/api/world/map/generated.svg")
+        assert svg_response.status_code == 200
+        assert svg_response.headers["content-type"].startswith("image/svg+xml")
+        assert svg_response.headers["etag"].strip('"') == descriptor["artifact"]["svg"]["sha256"]
+        assert svg_response.text.startswith('<?xml version="1.0"')
+
     def test_world_map_query_returns_occupied_landmark_with_parent_edge(self, client, db_session):
         from src.services.world_memory import seed_location_graph
         from src.services import world_memory as world_memory_module

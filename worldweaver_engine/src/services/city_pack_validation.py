@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
@@ -107,6 +109,83 @@ def _check_unique_ids(
     return found
 
 
+def _check_generated_map(
+    issues: list[CityPackIssue],
+    *,
+    artifact: Mapping[str, Any],
+    fictional: bool,
+    city_id: str,
+) -> None:
+    path = "generated_map"
+    if not fictional:
+        _issue(issues, "error", "generated_map_requires_fictional_pack", path, "Generated field maps are currently limited to declared fictional packs.")
+    if _stable_id(artifact.get("schema_version")) != "1.0.0":
+        _issue(issues, "error", "unsupported_generated_map_schema", f"{path}.schema_version", "Generated maps must use schema version 1.0.0.")
+
+    generator = artifact.get("generator") if isinstance(artifact.get("generator"), Mapping) else {}
+    for field in ("id", "version", "seed"):
+        if not _stable_id(generator.get(field)):
+            _issue(issues, "error", "missing_generated_map_generator", f"{path}.generator.{field}", f"Generated map generator {field} is required.")
+
+    source = artifact.get("source") if isinstance(artifact.get("source"), Mapping) else {}
+    if city_id and _stable_id(source.get("city_id")) != city_id:
+        _issue(issues, "error", "generated_map_city_mismatch", f"{path}.source.city_id", "Generated map source city must match the pack city.")
+
+    grid = artifact.get("grid") if isinstance(artifact.get("grid"), Mapping) else {}
+    width = grid.get("width")
+    height = grid.get("height")
+    section_size = grid.get("section_size")
+    if not isinstance(width, int) or isinstance(width, bool) or not 24 <= width <= 192:
+        _issue(issues, "error", "invalid_generated_map_grid", f"{path}.grid.width", "Generated map width must be an integer between 24 and 192.")
+    if not isinstance(height, int) or isinstance(height, bool) or not 24 <= height <= 192:
+        _issue(issues, "error", "invalid_generated_map_grid", f"{path}.grid.height", "Generated map height must be an integer between 24 and 192.")
+    if not isinstance(section_size, int) or isinstance(section_size, bool) or not 8 <= section_size <= 48:
+        _issue(issues, "error", "invalid_generated_map_section_size", f"{path}.grid.section_size", "Generated map section size must be an integer between 8 and 48.")
+
+    fields = artifact.get("fields") if isinstance(artifact.get("fields"), Mapping) else {}
+    required_fields = {"elevation", "slope", "water_flow", "wetness", "soil", "region"}
+    for field_name in sorted(required_fields):
+        field = fields.get(field_name) if isinstance(fields.get(field_name), Mapping) else {}
+        rows = field.get("rows")
+        if not isinstance(rows, list) or (isinstance(height, int) and len(rows) != height):
+            _issue(issues, "error", "invalid_generated_map_field", f"{path}.fields.{field_name}.rows", f"Field '{field_name}' must contain one encoded row per grid row.")
+        if not re.fullmatch(r"[a-f0-9]{64}", _stable_id(field.get("sha256"))):
+            _issue(issues, "error", "missing_generated_map_field_hash", f"{path}.fields.{field_name}.sha256", f"Field '{field_name}' needs a SHA-256 hash.")
+        elif isinstance(rows, list) and all(isinstance(row, str) for row in rows):
+            expected_hash = hashlib.sha256("\n".join(rows).encode("utf-8")).hexdigest()
+            if field.get("sha256") != expected_hash:
+                _issue(issues, "error", "generated_map_field_hash_mismatch", f"{path}.fields.{field_name}.sha256", f"Field '{field_name}' does not match its SHA-256 hash.")
+
+        if isinstance(rows, list) and isinstance(width, int):
+            expected_length = width * 2 if field_name in {"elevation", "slope", "water_flow", "wetness"} else width
+            if any(not isinstance(row, str) or len(row) != expected_length or not re.fullmatch(r"[a-f0-9]+", row) for row in rows):
+                _issue(issues, "error", "invalid_generated_map_field_encoding", f"{path}.fields.{field_name}.rows", f"Field '{field_name}' contains a malformed encoded row.")
+
+    sections = _items(artifact.get("sections"))
+    _check_unique_ids(issues, records=sections, path=f"{path}.sections")
+    if not sections:
+        _issue(issues, "error", "missing_generated_map_sections", f"{path}.sections", "A generated map needs at least one independently seeded section.")
+    for index, section in enumerate(sections):
+        if not _stable_id(section.get("seed")):
+            _issue(issues, "error", "missing_generated_map_section_seed", f"{path}.sections[{index}].seed", "Each map section needs a stable seed.")
+        connectors = section.get("connectors")
+        if not isinstance(connectors, list):
+            _issue(issues, "error", "invalid_generated_map_connectors", f"{path}.sections[{index}].connectors", "Section connectors must be a list.")
+
+    anchors = _items(artifact.get("anchors"))
+    if not anchors or not all(bool(item.get("required")) for item in anchors):
+        _issue(issues, "error", "missing_generated_map_anchors", f"{path}.anchors", "Every compiled city-pack anchor must be recorded as required.")
+    claimed_hash = _stable_id(artifact.get("artifact_sha256"))
+    if not re.fullmatch(r"[a-f0-9]{64}", claimed_hash):
+        _issue(issues, "error", "missing_generated_map_hash", f"{path}.artifact_sha256", "The generated map artifact needs a SHA-256 hash.")
+    else:
+        hash_payload = dict(artifact)
+        hash_payload.pop("artifact_sha256", None)
+        expected_hash = hashlib.sha256(json.dumps(hash_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
+        if claimed_hash != expected_hash:
+            _issue(issues, "error", "generated_map_hash_mismatch", f"{path}.artifact_sha256", "The generated map artifact does not match its SHA-256 hash.")
+
+
 def validate_city_pack(pack: Mapping[str, Any]) -> CityPackValidationReport:
     """Return UI-ready errors and warnings without changing the supplied pack."""
     issues: list[CityPackIssue] = []
@@ -126,6 +205,10 @@ def validate_city_pack(pack: Mapping[str, Any]) -> CityPackValidationReport:
     if fictional and "openstreetmap" in _stable_id(manifest.get("source")).lower():
         _issue(issues, "error", "fictional_osm_source", "manifest.source", "A fictional pack must not claim OpenStreetMap as its geography source.")
     place_reference_level = "error" if fictional is True else "warning"
+
+    generated_map = pack.get("generated_map") if isinstance(pack.get("generated_map"), Mapping) else None
+    if generated_map is not None:
+        _check_generated_map(issues, artifact=generated_map, fictional=fictional is True, city_id=city_id)
 
     neighborhoods = _items(pack.get("neighborhoods"))
     if not neighborhoods:

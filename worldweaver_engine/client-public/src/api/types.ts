@@ -22,6 +22,22 @@ export type MapEdge = { from: string; to: string; kind: "path" | "contains" | st
 
 export type MapQueryResult = { nodes: MapNode[]; edges: MapEdge[] };
 
+export type GeneratedMapArtifact = {
+  schema_version: string;
+  artifact_sha256: string;
+  bounds: { north: number; south: number; east: number; west: number };
+  grid: { width: number; height: number; section_size: number };
+  generator: { id: string; version: string; seed: string };
+  svg: { filename: string; sha256: string };
+  section_count: number;
+};
+
+export type GeneratedMapResponse = {
+  available: boolean;
+  city_id: string;
+  artifact: GeneratedMapArtifact | null;
+};
+
 export type PlacePresence = {
   location: string;
   present_count: number;

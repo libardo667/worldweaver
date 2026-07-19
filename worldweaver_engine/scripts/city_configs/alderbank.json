@@ -9,6 +9,43 @@
   "bboxes": {
     "default": "45.0000,-122.0200,45.0300,-121.9800"
   },
+  "fictional_map": {
+    "seed": "alderbank-fields-v1",
+    "grid": {
+      "width": 72,
+      "height": 54,
+      "section_size": 18
+    },
+    "terrain": {
+      "base_elevation": 0.43,
+      "relief": 0.34,
+      "noise_scale": 15,
+      "west_rise": 0.2,
+      "north_rise": 0.1
+    },
+    "waterways": [
+      {
+        "id": "alder-river",
+        "name": "Alder River",
+        "kind": "river",
+        "width_cells": 2.4,
+        "meander": 0.055,
+        "points": [
+          [0.0, 0.58],
+          [0.45, 0.56],
+          [0.68, 0.36],
+          [1.0, 0.43]
+        ]
+      }
+    ],
+    "anchor_region_radius": 8,
+    "anchor_regions": {
+      "commons-bank": "village",
+      "mill-reach": "working",
+      "orchard-row": "cultivated",
+      "pineward-edge": "woodland"
+    }
+  },
   "transit_systems": [],
   "curated_neighborhoods": [
     {

@@ -12,6 +12,7 @@ import type {
   DurableObjectView,
   EntryInfo,
   Grounding,
+  GeneratedMapResponse,
   Landmark,
   LocalWorldTraces,
   MakingCatalog,
@@ -70,6 +71,15 @@ export function queryMap(bounds: { north: number; south: number; east: number; w
     west: bounds.west,
     include_landmarks: includeLandmarks ? "true" : "false",
   });
+}
+
+export function getGeneratedMap(): Promise<GeneratedMapResponse> {
+  return getJson("/api/world/map/generated");
+}
+
+export function generatedMapSvgUrl(version: string): string {
+  const path = localShardPath("/api/world/map/generated.svg");
+  return `${path}?v=${encodeURIComponent(version.slice(0, 16))}`;
 }
 
 export function getLocationChat(location: string, since?: string, limit = 50): Promise<{ location: string; messages: ChatMessage[] }> {

@@ -114,12 +114,19 @@ def test_fictional_builder_skips_osm_and_keeps_explicit_small_town_paths(tmp_pat
     neighborhoods = json.loads((output / "neighborhoods.json").read_text(encoding="utf-8"))
     landmarks = json.loads((output / "landmarks.json").read_text(encoding="utf-8"))
     stoops = json.loads((output / "stoops.json").read_text(encoding="utf-8"))
+    generated_map = json.loads((output / "generated_map.json").read_text(encoding="utf-8"))
+    generated_svg = (output / "generated_map.svg").read_text(encoding="utf-8")
     by_id = {item["id"]: item for item in neighborhoods}
 
     assert manifest["fictional"] is True
     assert "openstreetmap" not in manifest["source"].lower()
     assert manifest["version"] == "0.1.0"
     assert manifest["counts"]["stoops"] == 1
+    assert manifest["counts"]["map_sections"] == 12
+    assert manifest["generated_map"]["artifact_sha256"] == generated_map["artifact_sha256"]
+    assert generated_map["generator"]["id"] == "worldweaver.field-map"
+    assert generated_map["svg"]["sha256"]
+    assert generated_svg.startswith('<?xml version="1.0"')
     assert by_id["mill-reach"]["adjacent_to"] == ["commons-bank"]
     assert by_id["commons-bank"]["adjacent_to"] == ["mill-reach", "orchard-row", "pineward-edge"]
     assert {item["grounding"] for item in neighborhoods + landmarks} == {"fictional"}
@@ -132,3 +139,26 @@ def test_fictional_builder_skips_osm_and_keeps_explicit_small_town_paths(tmp_pat
             "capacity": 8,
         }
     ]
+
+    city_pack_service._PACK_CACHE.clear()
+    monkeypatch.setattr(city_pack_service, "_CITIES_DIR", tmp_path)
+    assert city_pack_service.get_generated_map_artifact("alderbank") == generated_map
+    assert city_pack_service.get_generated_map_svg("alderbank") == generated_svg
+
+
+def test_city_pack_validation_rejects_changed_generated_map_rows(tmp_path):
+    engine_root = Path(__file__).resolve().parents[2]
+    config = engine_root / "scripts" / "city_configs" / "alderbank.json"
+    output = tmp_path / "alderbank"
+    build_pack(config, output, offline=True)
+
+    pack = {path.stem: json.loads(path.read_text(encoding="utf-8")) for path in output.glob("*.json")}
+    pack["generated_map"]["fields"]["elevation"]["rows"][0] = "00" + pack["generated_map"]["fields"]["elevation"]["rows"][0][2:]
+
+    report = validate_city_pack(pack)
+
+    assert report.valid is False
+    assert {issue.code for issue in report.errors} >= {
+        "generated_map_field_hash_mismatch",
+        "generated_map_hash_mismatch",
+    }

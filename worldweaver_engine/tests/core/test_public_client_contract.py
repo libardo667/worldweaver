@@ -91,6 +91,17 @@ def test_schematic_map_keeps_layout_stable_and_does_not_draw_containment_as_a_pa
     assert "<ThemeToggle inline />" in place_panel
 
 
+def test_schematic_map_uses_a_precompiled_field_drawing_without_generating_in_the_browser():
+    world_map = (PUBLIC_COMPONENTS / "WorldMap.tsx").read_text(encoding="utf-8")
+    api = PUBLIC_API.read_text(encoding="utf-8")
+
+    assert 'getJson("/api/world/map/generated")' in api
+    assert 'localShardPath("/api/world/map/generated.svg")' in api
+    assert "L.imageOverlay(" in world_map
+    assert "generatedLayerRef.current.bringToBack()" in world_map
+    assert "Math.random(" not in world_map
+
+
 def test_public_client_can_keep_shard_api_traffic_under_a_same_origin_prefix():
     api = PUBLIC_API.read_text(encoding="utf-8")
     base = (ENGINE_ROOT / "client-public" / "src" / "api" / "base.ts").read_text(encoding="utf-8")

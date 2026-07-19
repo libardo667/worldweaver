@@ -16,6 +16,8 @@ What it produces:
     inter_city.json        connections to other cities by mode/operator
     weather_config.json    NWS zone + Open-Meteo coordinates for grounding daemon
     transit_config.json    GTFS-rt feed URLs for grounding daemon
+    generated_map.json     deterministic physical fields and section seams for fictional maps
+    generated_map.svg      precompiled fictional terrain drawing for clients and City Studio
 
 City-agnostic design
 --------------------
@@ -59,6 +61,7 @@ if str(ENGINE_ROOT) not in sys.path:
     sys.path.insert(0, str(ENGINE_ROOT))
 
 from src.services.city_pack_validation import require_valid_city_pack  # noqa: E402
+from src.services.map_generation import compile_fictional_map  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Geometry helpers
@@ -662,6 +665,12 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
     )
     print(f"  {len(corridors)} corridors")
 
+    compiled_map = None
+    if fictional and isinstance(config.get("fictional_map"), dict):
+        print("Compiling fictional terrain fields...")
+        compiled_map = compile_fictional_map(config, neighborhoods=neighborhoods, landmarks=landmarks)
+        print(f"  {len(compiled_map.artifact['sections'])} independently seeded sections")
+
     travel_hubs = config.get("travel_hubs", [])
     inter_city = config.get("inter_city", [])
     stoops = config.get("stoops", [])
@@ -690,8 +699,15 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
             "travel_hubs": len(travel_hubs),
             "inter_city_routes": len(inter_city),
             "stoops": len(stoops),
+            "map_sections": len(compiled_map.artifact["sections"]) if compiled_map else 0,
         },
     }
+    if compiled_map:
+        manifest["generated_map"] = {
+            "schema_version": compiled_map.artifact["schema_version"],
+            "generator": dict(compiled_map.artifact["generator"]),
+            "artifact_sha256": compiled_map.artifact["artifact_sha256"],
+        }
 
     files: dict[str, Any] = {
         "manifest.json": manifest,
@@ -705,6 +721,8 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
         "weather_config.json": config.get("weather_config", {}),
         "transit_config.json": config.get("transit_config", {}),
     }
+    if compiled_map:
+        files["generated_map.json"] = compiled_map.artifact
 
     report = require_valid_city_pack({filename.removesuffix(".json"): data for filename, data in files.items()})
     for issue in report.warnings:
@@ -716,8 +734,14 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
         size_kb = path.stat().st_size / 1024
         print(f"  Wrote {filename} ({size_kb:.1f} KB)")
 
+    if compiled_map:
+        svg_path = output_dir / "generated_map.svg"
+        svg_path.write_text(compiled_map.svg, encoding="utf-8")
+        print(f"  Wrote generated_map.svg ({svg_path.stat().st_size / 1024:.1f} KB)")
+
     print(f"\nDone. City pack written to {output_dir}")
-    print(f"  Total: {sum((output_dir / f).stat().st_size for f in files) / 1024:.1f} KB")
+    output_filenames = [*files, *(["generated_map.svg"] if compiled_map else [])]
+    print(f"  Total: {sum((output_dir / filename).stat().st_size for filename in output_filenames) / 1024:.1f} KB")
 
 
 def main() -> None:

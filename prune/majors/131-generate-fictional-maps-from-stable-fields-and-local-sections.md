@@ -8,8 +8,15 @@ movement but does not communicate a river town. It also exposed three concrete c
 places could trade visual positions when presence changed, containment links looked like walking paths, and
 the theme button covered the place panel's close button.
 
-The first cleanup slice fixes those three failures. The larger map compiler described here is not yet built.
-It will begin as a City Studio preview and must not regenerate inhabited Alderbank in place.
+The first cleanup slice fixed those three failures. The first map compiler is now built and published as an
+additive drawing over Alderbank's existing movement graph. It produces stable terrain fields, a river,
+region cover, required place anchors, canonical routes, twelve independently seeded sections, typed section
+connectors, a hashed JSON artifact, and a hashed SVG.
+
+Alderbank is the project's experiment town. On 2026-07-19, the project owner explicitly approved using the
+inhabited Alderbank shard for this work. That approval is narrow: the generated drawing may change while we
+learn, but accounts, objects, marks, doors, named places, and movement edges remain canonical engine state
+and must survive each deployment.
 
 ## Problem
 
@@ -57,14 +64,14 @@ for every interaction.
    deliberately without changing the participant's location.
 3. Define a small generator input schema and compiled-map artifact. Start with elevation, river/watershed,
    region, required-anchor, and route layers.
-4. Build a deterministic Alderbank preview using authored constraints and simple procedural rules before
-   adding WFC.
+4. Build a deterministic Alderbank map using authored constraints and simple procedural rules before adding
+   WFC. **Done for the first field-map version.**
 5. Add section manifests, stable per-section seeds, boundary connectors, local reroll, and lock controls.
 6. Add an optional WFC detail pass using project-owned or license-compatible rule libraries. OSM-derived
    pattern libraries require recorded source, attribution, and an explicit ODbL review.
 7. Integrate generation, validation, preview, reroll, locking, and export into City Studio.
-8. Test first publication on a new empty shard. Any inhabited-city replacement requires a separate explicit
-   migration contract.
+8. Publish the additive map layer to the explicitly approved Alderbank experiment shard. Replacing canonical
+   inhabited-city geometry still requires a separate migration contract.
 
 ## Files affected
 
@@ -89,8 +96,8 @@ for every interaction.
 - Weather and seasons may change presentation but do not regenerate permanent geography.
 - Environmental fields shape maps without automatically creating hunger, injury, deprivation, or resident
   scoring.
-- Draft generation happens before habitation. Published inhabited geometry is immutable until a reviewed
-  migration exists.
+- Draft generation normally happens before habitation. Alderbank is the explicit experiment exception, but
+  its canonical inhabited state remains immutable until a reviewed migration exists.
 - OSM may inform morphology or provide licensed source data, but fictional maps never claim to be real OSM
   places and always retain required attribution and source records.
 
@@ -104,15 +111,15 @@ for every interaction.
   the map to remain open.
 - [ ] A fictional-map source schema declares seeds, physical fields, required anchors, section boundaries,
   and rule-library versions.
-- [ ] The same compiler inputs produce byte-stable or canonically equivalent artifacts.
+- [x] The same compiler inputs produce byte-stable or canonically equivalent artifacts.
 - [ ] Alderbank preview shows a river, terrain regions, typed paths, named landmarks, and stable labels while
   preserving its current movement graph.
 - [ ] Each section can be previewed, rerolled, and locked independently without moving locked neighbors.
 - [ ] Section seams match for routes, waterways, elevation bands, and region edges.
 - [ ] Every visible interactive route and doorway is backed by a canonical engine fact.
 - [ ] City Studio can export a validated versioned map artifact without mutating an inhabited shard.
-- [ ] A new empty shard can publish and serve the generated artifact without running the generator at page
-  load.
+- [x] The approved Alderbank experiment shard can publish and serve the generated artifact without running
+  the generator at page load.
 
 ## Risks and rollback
 

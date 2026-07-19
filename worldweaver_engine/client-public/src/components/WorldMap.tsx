@@ -3,7 +3,7 @@
 
 import { useEffect, useRef } from "react";
 import type * as Leaflet from "leaflet";
-import type { MapEdge, MapNode } from "../api/types";
+import type { GeneratedMapArtifact, MapEdge, MapNode } from "../api/types";
 import "leaflet/dist/leaflet.css";
 
 export type MapBounds = { north: number; south: number; east: number; west: number };
@@ -19,6 +19,8 @@ type Props = {
   onViewportChange?: (bounds: MapBounds) => void;
   /** One-shot framing applied when it first becomes available. */
   frame?: MapBounds | null;
+  generatedMap?: GeneratedMapArtifact | null;
+  generatedMapUrl?: string | null;
 };
 
 function occupancyClass(node: MapNode): string {
@@ -50,11 +52,13 @@ function stableOffsetAngle(key: string): number {
   return ((hash >>> 0) / 0xffffffff) * Math.PI * 2;
 }
 
-export function WorldMap({ nodes, edges, mapStyle, focusKey, onNodeClick, onViewportChange, frame }: Props) {
+export function WorldMap({ nodes, edges, mapStyle, focusKey, onNodeClick, onViewportChange, frame, generatedMap, generatedMapUrl }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Leaflet.Map | null>(null);
   const markersRef = useRef<Leaflet.LayerGroup | null>(null);
   const tileLayerRef = useRef<Leaflet.TileLayer | null>(null);
+  const generatedLayerRef = useRef<Leaflet.ImageOverlay | null>(null);
+  const generatedLayerUrlRef = useRef("");
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const onViewportChangeRef = useRef(onViewportChange);
   const onNodeClickRef = useRef(onNodeClick);
@@ -116,6 +120,30 @@ export function WorldMap({ nodes, edges, mapStyle, focusKey, onNodeClick, onView
       } else if (mapStyle === "schematic" && tileLayerRef.current) {
         map.removeLayer(tileLayerRef.current);
         tileLayerRef.current = null;
+      }
+
+      const generatedBounds = generatedMap?.bounds;
+      if (mapStyle === "schematic" && generatedBounds && generatedMapUrl) {
+        if (generatedLayerRef.current && generatedLayerUrlRef.current !== generatedMapUrl) {
+          map.removeLayer(generatedLayerRef.current);
+          generatedLayerRef.current = null;
+        }
+        if (!generatedLayerRef.current) {
+          generatedLayerRef.current = L.imageOverlay(
+            generatedMapUrl,
+            L.latLngBounds(
+              [generatedBounds.south, generatedBounds.west],
+              [generatedBounds.north, generatedBounds.east],
+            ),
+            { opacity: 0.94, interactive: false, className: "generated-map-layer" },
+          ).addTo(map);
+          generatedLayerRef.current.bringToBack();
+          generatedLayerUrlRef.current = generatedMapUrl;
+        }
+      } else if (generatedLayerRef.current) {
+        map.removeLayer(generatedLayerRef.current);
+        generatedLayerRef.current = null;
+        generatedLayerUrlRef.current = "";
       }
 
       // One-shot framing (entry bounds) the first time it arrives.
@@ -213,7 +241,7 @@ export function WorldMap({ nodes, edges, mapStyle, focusKey, onNodeClick, onView
     return () => {
       active = false;
     };
-  }, [nodes, edges, mapStyle, focusKey, frame]);
+  }, [nodes, edges, mapStyle, focusKey, frame, generatedMap, generatedMapUrl]);
 
   useEffect(() => {
     return () => {
@@ -222,6 +250,8 @@ export function WorldMap({ nodes, edges, mapStyle, focusKey, onNodeClick, onView
       mapRef.current?.remove();
       mapRef.current = null;
       tileLayerRef.current = null;
+      generatedLayerRef.current = null;
+      generatedLayerUrlRef.current = "";
     };
   }, []);
 

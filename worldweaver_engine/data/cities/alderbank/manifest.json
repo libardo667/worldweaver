@@ -3,7 +3,7 @@
   "city_id": "alderbank",
   "schema_version": "1.1.0",
   "version": "0.1.0",
-  "built_at": "2026-07-18T13:46:51.714952Z",
+  "built_at": "2026-07-19T21:45:25.953790Z",
   "bounds": {
     "south": 45.0,
     "west": -122.02,
@@ -20,6 +20,16 @@
     "corridors": 2,
     "travel_hubs": 1,
     "inter_city_routes": 0,
-    "stoops": 1
+    "stoops": 1,
+    "map_sections": 12
+  },
+  "generated_map": {
+    "schema_version": "1.0.0",
+    "generator": {
+      "id": "worldweaver.field-map",
+      "version": "0.1.0",
+      "seed": "alderbank-fields-v1"
+    },
+    "artifact_sha256": "a7d13b408fface08fb3b6ee77ea16aa8fd245418b3b3382eef87fd97e5a997df"
   }
 }

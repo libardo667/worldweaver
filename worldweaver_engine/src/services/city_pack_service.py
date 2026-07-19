@@ -19,6 +19,7 @@ It exposes query helpers used by the /api/world/map endpoint.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import math
@@ -58,6 +59,7 @@ def _load_pack(city_id: str) -> dict | None:
         "stoops.json",
         "weather_config.json",
         "transit_config.json",
+        "generated_map.json",
     ]:
         path = pack_dir / filename
         if path.exists():
@@ -82,6 +84,34 @@ def get_pack(city_id: str = "san_francisco") -> dict | None:
             logger.info("city_pack: no pack found for '%s' at %s", city_id, _CITIES_DIR / city_id)
             return None
     return _PACK_CACHE.get(city_id)
+
+
+def get_generated_map_artifact(city_id: str) -> dict[str, Any] | None:
+    """Return one published, precompiled fictional-map artifact."""
+    pack = get_pack(city_id)
+    artifact = (pack or {}).get("generated_map")
+    return dict(artifact) if isinstance(artifact, dict) else None
+
+
+def get_generated_map_svg(city_id: str) -> str | None:
+    """Read the published SVG named and hashed by the compiled artifact."""
+    artifact = get_generated_map_artifact(city_id)
+    if not artifact:
+        return None
+    svg_meta = artifact.get("svg") if isinstance(artifact.get("svg"), dict) else {}
+    filename = str(svg_meta.get("filename") or "").strip()
+    if filename != "generated_map.svg":
+        return None
+    path = _CITIES_DIR / city_id / filename
+    if not path.exists():
+        return None
+    svg = path.read_text(encoding="utf-8")
+    expected_hash = str(svg_meta.get("sha256") or "").strip()
+    actual_hash = hashlib.sha256(svg.encode("utf-8")).hexdigest()
+    if expected_hash != actual_hash:
+        logger.warning("city_pack: generated SVG hash mismatch for '%s'", city_id)
+        return None
+    return svg
 
 
 def list_available() -> list[str]:
@@ -167,6 +197,7 @@ def get_city_pack_preview(city_id: str) -> dict[str, Any]:
             "counts": dict(manifest.get("counts") or {}),
         },
         "map_style": "schematic" if fictional else "geographic",
+        "generated_map": dict(pack.get("generated_map") or {}) if isinstance(pack.get("generated_map"), dict) else None,
         "nodes": nodes,
         "edges": edges,
         "corridors": [dict(item) for item in pack.get("street_corridors", []) if isinstance(item, dict)],
