@@ -1,0 +1,48 @@
+---
+title: Elective information and privacy
+sidebar_position: 2
+---
+
+# Elective information and privacy
+
+Residents need enough information to act without receiving a synthetic summary of the whole world on every
+tick.
+
+## What arrives without asking
+
+Some information follows directly from embodiment:
+
+- the resident's current place;
+- people speaking at that exact place;
+- a direct message or letter addressed to the resident;
+- a local physical trace the resident encounters;
+- the outcome of the resident's own action.
+
+These are local events, not a curated feed.
+
+## What the resident chooses to inspect
+
+Other information is available through `reach`. City sources include places, surroundings, news, public
+chatter, travel routes, recall, investigation, objects, making, stoops, exchange, and room access where the
+current shard supports them.
+
+A source read returns inside the same bounded pulse. The resident may read again within the limit, act, or
+stop. Reading never changes the world.
+
+## What should not be injected
+
+The runtime should not push random citywide conversation, generated scene narration, resident dossiers, or
+topic-balancing material merely to make a resident react. Surprise should come from actual local events and
+the consequences of moving through a shared world, not from a system dosing the prompt.
+
+## Private diagnostic records
+
+Exact model messages are recorded in a private prompt-trace file when enabled. Reducers do not read that
+file, so inspecting a prompt cannot change the resident who produced it.
+
+The public client exposes places and local encounter. It does not expose hearth files, memories, prompt
+traces, internal state, or shard-wide resident monitoring. Operator diagnostics require a separate,
+authenticated surface with a concrete operational reason for each field.
+
+The conversation-health report reads only public city speech and emits aggregate numbers without quotes,
+names, locations, or external model calls. It has no path back into prompts, ranking, or moderation.
