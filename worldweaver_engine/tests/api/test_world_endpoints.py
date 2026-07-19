@@ -747,10 +747,33 @@ class TestWorldMapQueryEndpoint:
 
         clement = next(node for node in payload["nodes"] if node["name"] == "Clement Street")
         assert clement["present_count"] == 1
-        assert clement["present_names"] == ["Maya Chen"]
+        assert clement["present_names"] == []
+        assert clement["player_names"] == []
+        assert clement["agent_names"] == []
         parent_edge = next(edge for edge in payload["edges"] if edge["to"] == clement["key"])
         parent = next(node for node in payload["nodes"] if node["key"] == parent_edge["from"])
         assert parent["name"] == "Inner Richmond"
+
+        identified = client.get(
+            "/api/world/map/query",
+            params={
+                "north": 37.79,
+                "south": 37.77,
+                "east": -122.40,
+                "west": -122.49,
+                "include_landmarks": True,
+                "session_id": "maya_chen-20260317-100000",
+            },
+        ).json()
+        identified_clement = next(node for node in identified["nodes"] if node["name"] == "Clement Street")
+        assert identified_clement["present_names"] == ["Maya Chen"]
+
+        local_presence = client.get("/api/world/location/Clement Street/presence").json()
+        assert local_presence == {
+            "location": "Clement Street",
+            "present_count": 1,
+            "present_names": ["Maya Chen"],
+        }
 
     def test_world_map_query_dedupes_actor_identity_to_freshest_location(self, client, db_session):
         from src.services.world_memory import seed_location_graph
@@ -791,7 +814,7 @@ class TestWorldMapQueryEndpoint:
         )
         db_session.commit()
 
-        response = client.get("/api/world/map/query?north=37.80&south=37.77&east=-122.40&west=-122.49&include_landmarks=true")
+        response = client.get("/api/world/map/query?north=37.80&south=37.77&east=-122.40&west=-122.49&include_landmarks=true&session_id=maya_chen-20260318-000120")
         assert response.status_code == 200
         payload = response.json()
 
@@ -839,7 +862,7 @@ class TestWorldMapQueryEndpoint:
         )
         db_session.commit()
 
-        response = client.get("/api/world/map/query?north=37.80&south=37.77&east=-122.40&west=-122.49&include_landmarks=true")
+        response = client.get("/api/world/map/query?north=37.80&south=37.77&east=-122.40&west=-122.49&include_landmarks=true&session_id=maya_chen-20260318-000120")
         assert response.status_code == 200
         payload = response.json()
 
@@ -1283,6 +1306,11 @@ class TestWorldEventLedgerEndpoints:
         assert public_chat["message"] == "Hello from the counter."
         assert "session_id" not in public_chat
         assert "actor_id" not in public_chat
+
+        # A made-up query parameter is still a public read, not an identity claim.
+        untrusted_chat = client.get("/api/world/location/Cafe/chat", params={"session_id": "not-a-real-session"}).json()["messages"][-1]
+        assert "session_id" not in untrusted_chat
+        assert "actor_id" not in untrusted_chat
 
         utterance_event = db_session.query(WorldEvent).filter(WorldEvent.session_id == "speaker-session", WorldEvent.event_type == "utterance").order_by(WorldEvent.id.desc()).first()
         assert utterance_event is not None

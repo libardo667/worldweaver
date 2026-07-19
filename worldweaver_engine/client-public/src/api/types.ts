@@ -22,6 +22,12 @@ export type MapEdge = { from: string; to: string };
 
 export type MapQueryResult = { nodes: MapNode[]; edges: MapEdge[] };
 
+export type PlacePresence = {
+  location: string;
+  present_count: number;
+  present_names: string[];
+};
+
 /** Public chat shape: sessionless readers get no speaker session/actor ids. */
 export type ChatMessage = {
   id: number;

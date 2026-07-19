@@ -17,6 +17,7 @@ import type {
   MapQueryResult,
   MoveResponse,
   PlaceContext,
+  PlacePresence,
   ShardExperience,
   ShardInfo,
   StoopBrowse,
@@ -65,6 +66,10 @@ export function queryMap(bounds: { north: number; south: number; east: number; w
 
 export function getLocationChat(location: string, since?: string, limit = 50): Promise<{ location: string; messages: ChatMessage[] }> {
   return getJson(`/api/world/location/${encodeURIComponent(location)}/chat`, { since, limit });
+}
+
+export function getLocationPresence(location: string): Promise<PlacePresence> {
+  return getJson(`/api/world/location/${encodeURIComponent(location)}/presence`);
 }
 
 export function getPlaceContext(location: string): Promise<PlaceContext> {

@@ -772,10 +772,11 @@ def _build_map_node_payload(
     is_player: bool,
     parent_location: Optional[str],
     presence: Dict[str, Any],
+    include_presence_names: bool = True,
 ) -> Dict[str, Any]:
     human_count = int(presence["human_counts"].get(name, 0))
     agent_count = int(presence["agent_counts"].get(name, 0))
-    present_names = list(presence["present_names"].get(name, []))
+    present_names = list(presence["present_names"].get(name, [])) if include_presence_names else []
     return {
         "key": key,
         "name": name,
@@ -784,8 +785,8 @@ def _build_map_node_payload(
         "agent_count": agent_count,
         "present_count": human_count + agent_count,
         "present_names": present_names,
-        "player_names": list(presence["player_names"].get(name, [])),
-        "agent_names": list(presence["agent_names"].get(name, [])),
+        "player_names": list(presence["player_names"].get(name, [])) if include_presence_names else [],
+        "agent_names": list(presence["agent_names"].get(name, [])) if include_presence_names else [],
         "is_player": is_player,
         "lat": _coerce_coordinate(lat),
         "lon": _coerce_coordinate(lon),
@@ -2137,7 +2138,11 @@ def query_world_map(
         raise HTTPException(status_code=422, detail="south cannot be greater than north")
 
     normalized_query = str(query or "").strip()
-    presence = _load_live_presence_maps(db, requested_session_id=session_id)
+    identified_session = db.get(SessionVars, str(session_id or "").strip()) if session_id else None
+    presence = _load_live_presence_maps(
+        db,
+        requested_session_id=str(identified_session.session_id) if identified_session is not None else None,
+    )
     requested_location = str(presence.get("requested_location") or "").strip()
     base_graph = get_location_graph(db)
     base_nodes_by_name = {str(node["name"]): node for node in base_graph.get("nodes", [])}
@@ -2161,6 +2166,7 @@ def query_world_map(
             is_player=name == requested_location,
             parent_location=name,
             presence=presence,
+            include_presence_names=identified_session is not None,
         )
 
     for name, base in base_nodes_by_name.items():
@@ -2287,6 +2293,7 @@ def query_world_map(
             is_player=is_player_location,
             parent_location=parent_location,
             presence=presence,
+            include_presence_names=identified_session is not None,
         )
 
     filtered_nodes: Dict[str, Dict[str, Any]] = {}
@@ -2976,9 +2983,8 @@ def get_location_chat(
 ):
     """Return recent chat messages at a location, optionally filtered by timestamp.
 
-    Speaker session/actor identifiers are included only for callers that identify
-    themselves with a session_id; sessionless (public) readers get display names,
-    text, and timestamps only.
+    Speaker session/actor identifiers are included only for a caller presenting an
+    existing session_id; public readers get display names, text, and timestamps only.
     """
     q = db.query(LocationChat).filter(LocationChat.location == location)
     if since:
@@ -2991,7 +2997,8 @@ def get_location_chat(
             pass
     rows = q.order_by(LocationChat.created_at.desc()).limit(limit).all()
     rows = list(reversed(rows))  # oldest first
-    include_speaker_ids = bool(str(session_id or "").strip())
+    requested_session_id = str(session_id or "").strip()
+    include_speaker_ids = bool(requested_session_id and db.get(SessionVars, requested_session_id) is not None)
     actor_ids_by_session: dict[str, str] = {}
     if include_speaker_ids:
         session_ids = {str(row.session_id or "").strip() for row in rows if str(row.session_id or "").strip()}
@@ -3009,6 +3016,27 @@ def get_location_chat(
             entry["actor_id"] = actor_ids_by_session.get(str(r.session_id or "").strip(), "")
         messages.append(entry)
     return {"location": location, "messages": messages}
+
+
+@router.get("/world/location/{location}/presence")
+def get_location_presence(
+    location: str,
+    db: Session = Depends(get_db),
+):
+    """Return public, current presence for one place.
+
+    The town map exposes counts only. Names become visible when a visitor opens
+    one particular place, keeping this an encounter rather than a town roster.
+    """
+    normalized_location = str(location or "").strip()
+    presence = _load_live_presence_maps(db)
+    names = list(presence["present_names"].get(normalized_location, []))
+    return {
+        "location": normalized_location,
+        "present_count": int(presence["human_counts"].get(normalized_location, 0))
+        + int(presence["agent_counts"].get(normalized_location, 0)),
+        "present_names": names,
+    }
 
 
 @router.post("/world/location/{location}/chat")

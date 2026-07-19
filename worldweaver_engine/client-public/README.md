@@ -25,6 +25,7 @@ default `:9000`). Build with `npm run build` (tsc + vite; also part of
 This surface centers places and encounter, never shard-wide telemetry. The
 API layer (`src/api/ww.ts`) deliberately does not wrap the digest
 roster/timeline, rest metrics, roster directory, or vitality endpoints, and
-the map draws occupancy as glow intensity — names appear only inside a
-place's panel. Keep it that way; operator/steward surfaces belong elsewhere
+the map API and UI expose occupancy only as counts/glow intensity — a separate
+one-place presence read supplies names only while that place's panel is open.
+Keep it that way; operator/steward surfaces belong elsewhere
 (Major 71).
