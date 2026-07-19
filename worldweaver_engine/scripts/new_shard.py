@@ -286,6 +286,7 @@ python ww.py check
 python ww.py start
 python ww.py seed   # new city nodes only; also closes the reset endpoint
 python ww.py status
+python ww.py public-config --help  # reviewed HTTPS settings; does not publish DNS
 python ww.py start --agents  # city nodes only; wakes residents deliberately
 python ww.py backup
 python ww.py stop

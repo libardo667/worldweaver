@@ -143,6 +143,18 @@ def _url_problem(label: str, value: str) -> str | None:
     return None
 
 
+def _https_url(value: str, label: str, *, origin_only: bool = False) -> str:
+    from urllib.parse import urlparse
+
+    normalized = str(value or "").strip().rstrip("/")
+    parsed = urlparse(normalized)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise OperatorError(f"{label} must be a complete HTTPS URL.")
+    if origin_only and (parsed.path not in {"", "/"} or parsed.query or parsed.fragment):
+        raise OperatorError(f"{label} must be an origin without a path, query, or fragment.")
+    return normalized
+
+
 def collect_problems(*, offline: bool = False) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -572,6 +584,53 @@ def command_node(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_public_config(args: argparse.Namespace) -> int:
+    env = _read_env()
+    if env.get("SHARD_TYPE") != "world" and env.get("WW_ENABLE_DEV_RESET", "").lower() in {"1", "true", "yes"}:
+        raise OperatorError("Seed the city and close its reset endpoint before configuring public ingress.")
+    if args.ingress_provider == "cloudflare":
+        compose = COMPOSE_FILE.read_text(encoding="utf-8")
+        if not re.search(r"127\.0\.0\.1:\$\{BACKEND_PORT(?::-[0-9]+)?\}:8000", compose):
+            raise OperatorError("Cloudflare ingress requires the backend port to bind only to 127.0.0.1.")
+
+    api_url = _https_url(args.api_url, "API URL")
+    client_url = _https_url(args.client_url, "client URL") if args.client_url else ""
+    cors_origins = [_https_url(value, "CORS origin", origin_only=True) for value in args.cors_origin]
+    if not cors_origins:
+        raise OperatorError("At least one exact --cors-origin is required for public ingress.")
+    updates = {
+        "WW_PUBLIC_URL": api_url,
+        "WW_CLIENT_URL": client_url,
+        "WW_CORS_ORIGINS": ",".join(cors_origins),
+        "WW_INGRESS_PROVIDER": args.ingress_provider,
+        "WW_TRUST_CLOUDFLARE_PROXY": "true" if args.ingress_provider == "cloudflare" else "false",
+    }
+    if env.get("SHARD_TYPE") != "world":
+        federation_url = _https_url(args.federation_url, "federation URL")
+        updates["FEDERATION_URL"] = federation_url
+        updates["WW_RUNTIME_FEDERATION_URL"] = federation_url
+
+    original = {key: env.get(key, "") for key in updates}
+    was_running = _docker_available() and "backend" in _services(running_only=True)
+    _write_env_values(updates)
+    try:
+        if command_check(argparse.Namespace(offline=not _docker_available())):
+            raise OperatorError("Public configuration did not pass the node folder safety check.")
+        if was_running:
+            _compose("up", "-d", "--no-deps", "--force-recreate", "backend")
+            if not _wait_for_backend():
+                raise OperatorError("Backend did not become healthy after applying public configuration.")
+    except Exception:
+        _write_env_values(original)
+        if was_running:
+            _compose("up", "-d", "--no-deps", "--force-recreate", "backend", check=False)
+            _wait_for_backend()
+        raise
+    print("Public node configuration saved.")
+    print("This command did not create DNS records or start an ingress tunnel.")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Operate this WorldWeaver node folder.")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -627,6 +686,14 @@ def build_parser() -> argparse.ArgumentParser:
     recover.add_argument("descriptor")
     recover.add_argument("--reason", required=True)
     node.set_defaults(handler=command_node)
+
+    public = commands.add_parser("public-config", help="set reviewed HTTPS and browser-origin configuration")
+    public.add_argument("--api-url", required=True, help="public HTTPS API address for this node")
+    public.add_argument("--client-url", default="", help="public HTTPS human client address")
+    public.add_argument("--federation-url", default="", help="public HTTPS directory address (required for city nodes)")
+    public.add_argument("--cors-origin", action="append", default=[], help="exact HTTPS browser origin; may be repeated")
+    public.add_argument("--ingress-provider", required=True, choices=("cloudflare", "reverse-proxy"))
+    public.set_defaults(handler=command_public_config)
     return parser
 
 

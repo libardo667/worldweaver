@@ -71,11 +71,20 @@ def test_new_world_directory_is_closed_and_has_folder_local_trust_commands(tmp_p
         capture_output=True,
         text=True,
     )
+    public_help = subprocess.run(
+        [sys.executable, str(shard / "ww.py"), "public-config", "--help"],
+        cwd=shard,
+        capture_output=True,
+        text=True,
+    )
     assert checked.returncode == 0, checked.stderr
     assert node_help.returncode == 0, node_help.stderr
     assert "admit" in node_help.stdout
     assert "revoke" in node_help.stdout
     assert "recover" in node_help.stdout
+    assert public_help.returncode == 0, public_help.stderr
+    assert "--cors-origin" in public_help.stdout
+    assert "--ingress-provider" in public_help.stdout
 
 
 def test_new_shards_receive_separate_secure_local_secrets(tmp_path: Path) -> None:
