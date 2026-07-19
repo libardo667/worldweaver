@@ -330,6 +330,11 @@ class CognitiveCore:
             refractory_seconds=self._refractory_seconds,
             action_tendency=self._action_tendency,
         )
+        if bool((result.get("act_executed") or {}).get("identity_growth_adopted")):
+            # The shared ResidentIdentity already gives the next prompt the adopted
+            # text. Rebuild the optional semantic drive on the next tick as well.
+            self._producer.drive_vector = None
+            self._drive_built = False
         # A packet becomes observed only after it was actually assembled into the
         # LLM prompt. Merely polling the HTTP feed is not cognitive delivery.
         prompted_packet_ids = self._producer.take_prompted_packet_ids()

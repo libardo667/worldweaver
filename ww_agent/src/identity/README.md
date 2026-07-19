@@ -7,8 +7,9 @@ facts. It renders only facts the world reports; missing affordances stay silent 
 prompt folklore.
 
 The identity seam distinguishes immutable canonical soul text from separately recorded growth. Runtime
-cognition may propose growth, but it does not rewrite canon in place. See `runtime/growth_proposals.py`
-and the identity tests for the maturation contract.
+cognition may propose growth, but it does not rewrite canon in place. `growth.py` lets a resident inspect
+one accepted `soul_edit` proposal at their hearth and adopt its exact wording through a later explicit
+action. The proposal, inspection, and adoption event IDs remain in the private resident ledger.
 
 `LoopTuning` and loop-shaped keys in `tuning.json` remain compatibility inputs for existing resident
 directories. Current consumers translate those values into pulse, rest, incubation, grounding, and
@@ -64,7 +65,7 @@ Physical deployment still violates or obscures the intended boundary:
 - `ww_agent/src/main.py` boots every resident under one directory against one initial city client;
 - `session_id.txt` sits at the resident root even though it is a disposable city-local handle;
 - engine `home_shard` fields currently mean an origin or home city, not a resident hearth;
-- mutable identity growth is currently hydrated from a city database;
+- older city-hosted identity growth may migrate once into an otherwise empty hearth;
 - `hearth.json` can contain host-specific grants and absolute file roots;
 - the federation uses one shared token and stores coordination rows described in some older code as
   canonical identity.
@@ -135,7 +136,7 @@ transfer; those require the later node-trust and recovery design, not a central 
 
 - Where the resident's identity signing/recovery material lives and how it can be recovered without making
   one steward or federation root the owner.
-- How a resident considers and adopts private self-edit proposals now that growth is hearth-owned.
+- Whether adopted growth ever needs a resident-controlled, reversible compaction process.
 - Which correspondence records are resident-owned versus city/federation delivery projections.
 - Which private diagnostics a resident chooses to carry during host migration.
 - How a lost host is replaced after orderly migration works; this is not permission to invent automatic

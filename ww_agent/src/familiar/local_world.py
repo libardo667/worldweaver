@@ -29,9 +29,12 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable
 
+from src.identity.growth import adopt_growth_candidate, read_growth_candidate
+from src.identity.loader import ResidentIdentity
 from src.runtime.information import (
     InformationSource,
     InformationSourceRegistry,
+    PROVENANCE_SELF_MEMORY,
     PROVENANCE_SCOPED_READING,
     resident_information_sources,
 )
@@ -161,6 +164,7 @@ class LocalWorld:
         vision: bool = False,
         gifts_enabled: bool = False,
         city_names: set[str] | None = None,
+        identity: ResidentIdentity | None = None,
     ) -> None:
         self.home_dir = Path(home_dir)
         self.home_dir.mkdir(parents=True, exist_ok=True)
@@ -183,6 +187,7 @@ class LocalWorld:
             self._given_dir.mkdir(parents=True, exist_ok=True)
             self._gift_scope = FileScope(read_roots=[self._given_dir])
         self._city_names = {str(name).strip().lower() for name in (city_names or set()) if str(name).strip()}
+        self._identity = identity
         self._pending_travel: TravelRequest | None = None
         self._reads: list[dict[str, Any]] = []
         self._weather = weather_provider
@@ -337,6 +342,19 @@ class LocalWorld:
     def information_sources(self) -> InformationSourceRegistry:
         """Current hearth-contributed sources on the shared resident registry seam."""
         sources = resident_information_sources(self.home_dir / "memory")
+        if self._identity is not None:
+            sources.append(
+                InformationSource(
+                    name="growth",
+                    description=("inspect one of your own pending identity proposals before deciding whether " "to adopt it; query blank for the latest or use an exact proposal event ID"),
+                    run=lambda arg: read_growth_candidate(self.home_dir / "memory", arg),
+                    provenance=PROVENANCE_SELF_MEMORY,
+                    freshness="remembered",
+                    locality="self",
+                    visibility="private",
+                    selection_mode="latest",
+                )
+            )
         if self._gifts_enabled:
             sources.append(
                 InformationSource(
@@ -572,6 +590,12 @@ class LocalWorld:
     async def access_information(self, *, kind: str, source: str, query: str = "") -> dict[str, Any]:
         """Resolve a hearth source privately inside the current ignition."""
         return await self.information_sources().read(source, query)
+
+    async def adopt_identity_growth(self, candidate_id: str) -> dict[str, Any]:
+        """Adopt one inspected proposal; unavailable without the live resident identity."""
+        if self._identity is None:
+            return {"ok": False, "reason": "identity_growth_unavailable"}
+        return adopt_growth_candidate(self.home_dir, self._identity, candidate_id)
 
     def _read_scoped_file(self, query: str) -> dict[str, Any]:
         """Provider implementation for one authorized file or folder read."""

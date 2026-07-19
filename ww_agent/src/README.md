@@ -26,8 +26,10 @@
   lifecycle change without running cognition between nodes.
 - `runtime/memory.py`, `drive.py`, `anchors.py`, `incubation.py`, `circadian.py` — supporting substrate
   state. These are modules inside the unified runtime, not independent schedulers.
-- `runtime/growth_proposals.py`, `workshop.py`, `doula.py` — identity growth, private making, and optional
-  birth/proposal support. Workshop entries use machine-written ISO timestamp boundaries; Markdown headings
+- `identity/growth.py`, `runtime/workshop.py`, `runtime/doula.py` — resident-controlled identity growth,
+  private making, and optional birth support. Growth proposals remain private and change identity only
+  after the resident inspects and explicitly adopts one at their hearth. Workshop entries use
+  machine-written ISO timestamp boundaries; Markdown headings
   inside a resident's prose remain part of that entry. The doula records each birth in the new resident's
   ledger and shared process settings in its separate administrative ledger before the resident boots.
   A fixed steward-requested batch can instead stop with a hearth manifest in the dormant state; it does

@@ -145,6 +145,8 @@ def test_hearth_growth_is_not_replaced_by_a_city(tmp_path):
 def test_confirmed_city_departure_enters_private_hearth_with_same_home(tmp_path):
     client = _FakeCityClient()
     resident = _resident(tmp_path, client)
+    resident._identity.growth_soul = "I carry this change between worlds."
+    growth_before = resident._identity.growth_soul
     city = resident._build_city_world(resident._active_session_id())
 
     hearth = asyncio.run(resident._apply_travel_request(city, TravelRequest("hearth")))
@@ -153,6 +155,7 @@ def test_confirmed_city_departure_enters_private_hearth_with_same_home(tmp_path)
     assert hearth.home_dir == resident._resident_dir
     assert resident._attachment_kind == "hearth"
     assert resident._session_id is None
+    assert resident._identity.growth_soul == growth_before
     assert client.left == ["test-resident-city-session"]
     assert not (resident._resident_dir / "session_id.txt").exists()
     assert _event_types(resident)[-2:] == [
@@ -222,6 +225,8 @@ def test_hearth_return_bootstraps_a_fresh_city_session_for_same_actor(
     )
     client = _FakeCityClient()
     resident = _resident(tmp_path, client)
+    resident._identity.growth_soul = "I carry this change between worlds."
+    growth_before = resident._identity.growth_soul
     resident._attachment_kind = "hearth"
     resident._session_id = None
     (resident._resident_dir / "session_id.txt").unlink(missing_ok=True)
@@ -240,6 +245,7 @@ def test_hearth_return_bootstraps_a_fresh_city_session_for_same_actor(
     assert resident._session_id
     assert resident._session_id != retired_session_id
     assert resident._session_id == client.bootstrapped[0]["session_id"]
+    assert resident._identity.growth_soul == growth_before
     assert client.bootstrapped[0]["actor_id"] == "actor-test-resident"
     assert client.bootstrapped[0]["world_id"] == "test-world"
     assert _event_types(resident)[-2:] == [
@@ -259,6 +265,8 @@ def test_city_to_city_travel_retires_source_then_swaps_one_host_to_destination(t
         travel_retry_seconds=0,
     )
     resident._identity = _identity()
+    resident._identity.growth_soul = "I carry this change between cities."
+    growth_before = resident._identity.growth_soul
     resident._world_id = "source-world"
     resident._session_id = "source-session"
     resident._attachment_kind = "city"
@@ -280,6 +288,7 @@ def test_city_to_city_travel_retires_source_then_swaps_one_host_to_destination(t
     assert resident._ww is destination
     assert resident._attachment_kind == "city"
     assert resident._session_id == destination.arrivals[0]["session_id"]
+    assert resident._identity.growth_soul == growth_before
     assert (resident._resident_dir / "session_id.txt").read_text(encoding="utf-8") == resident._session_id
     assert _event_types(resident)[-3:] == [
         "inter_shard_travel_started",
@@ -473,7 +482,7 @@ def test_world_swap_rebuilds_world_sources_without_city_leakage(tmp_path):
     assert "chatter" in city._sources.names
     assert "chatter" not in hearth.information_sources().names
     assert "eats" not in hearth.information_sources().names
-    assert {"recall", "measure"} <= set(hearth.information_sources().names)
+    assert {"recall", "measure", "growth"} <= set(hearth.information_sources().names)
     assert "keeper" not in hearth.situational_facts()
 
 

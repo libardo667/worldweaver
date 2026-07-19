@@ -408,6 +408,26 @@ class WorldEffector:
 
     async def _do(self, act: Act) -> dict[str, Any]:
         target = str(act.target or "").strip()
+        growth_adoption = re.fullmatch(r"growth-adopt:(evt-[a-f0-9]{12})", target, re.IGNORECASE)
+        if target.lower().startswith("growth-adopt:") and growth_adoption is None:
+            return {"executed": False, "kind": "do", "reason": "invalid_growth_candidate"}
+        if growth_adoption:
+            adopt = getattr(self._ww, "adopt_identity_growth", None)
+            if not callable(adopt):
+                return {"executed": False, "kind": "do", "reason": "identity_growth_unavailable"}
+            result = await adopt(growth_adoption.group(1).lower())
+            payload = dict(result or {}) if isinstance(result, dict) else {}
+            adopted = bool(payload.get("ok") and payload.get("adopted"))
+            return {
+                "executed": adopted,
+                "kind": "do",
+                "command": "adopt_identity_growth",
+                "identity_growth_adopted": adopted,
+                "candidate_id": str(payload.get("candidate_id") or growth_adoption.group(1).lower()),
+                "adoption_event_id": str(payload.get("adoption_event_id") or ""),
+                "replayed": bool(payload.get("replayed")),
+                **({} if adopted else {"reason": str(payload.get("reason") or "identity_growth_declined")}),
+            }
         access_request = re.fullmatch(r"access-request:(.+)", target, re.IGNORECASE)
         access_mode = re.fullmatch(r"access-mode:(public|requestable|private|closed):(.+)", target, re.IGNORECASE)
         access_admission = re.fullmatch(r"access-(invite|revoke):([^:]+):(.+)", target, re.IGNORECASE)

@@ -46,6 +46,8 @@ replace it during arrival or travel. If an older deployment stored growth in a c
 can migrate that text into an empty hearth once; after that the old city row is only historical input.
 
 Residents can still stage self-edit proposals in their private ledgers. WorldWeaver does not currently
-promote those proposals automatically. The remaining work is to give the resident a clear, local way to
-consider and adopt a proposal without making a city, steward, population comparison, or text filter the
-judge of who they become.
+promote those proposals automatically. At the hearth, the resident can privately inspect one accepted
+identity proposal and the exact ledger events that produced it. If they then make the explicit adoption
+action shown with that proposal, WorldWeaver appends the resident's original words to `soul_growth.md`,
+refreshes the live prompt identity, and records the proposal, inspection, and adoption IDs. The action is
+not available in a city. Repeated wording is context, not evidence or automatic approval.

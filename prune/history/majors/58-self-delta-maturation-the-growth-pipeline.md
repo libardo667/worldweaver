@@ -1,9 +1,22 @@
 # Resident-owned identity growth
 
-## Status
+## Completed (2026-07-18)
 
-Active. Authority moved to the hearth on 2026-07-18. The remaining work is the resident-facing adoption
-process.
+Residents can now inspect and adopt their own identity proposals at their hearth. The `growth` information
+source returns one accepted `soul_edit` at a time, using the resident's exact words and showing the source
+pulse and proposal event IDs. It does not include goal or reverie updates, dropped proposals, or another
+resident's material.
+
+Adoption is a separate `do` action addressed to that exact proposal. It works only after the proposal's
+record has crossed the private information boundary and only while the resident is in a live hearth.
+Cities do not expose the source or action. A successful adoption appends the exact wording to
+`identity/soul_growth.md`, refreshes the composed and in-memory soul, and records a `growth_adopted` event
+plus durable metadata linking the proposal, inspection, adoption, actor, and source events. Retrying the
+same adoption does not add a second event or duplicate text. Startup also repairs an interrupted identity
+file write from the already-recorded adoption event.
+
+Focused tests cover filtering, inspection-before-action, city refusal, provenance, restart, live drive
+refresh, hearth travel, and city-to-city travel.
 
 ## Problem
 
@@ -43,10 +56,10 @@ compaction needs its own explicit, reversible decision.
 - [x] Existing city growth can migrate once without overriding an established hearth layer.
 - [x] Current residents no longer transmit private self-edit proposals to cities.
 - [x] The city no longer promotes, rejects, embeds, or population-compares identity proposals.
-- [ ] A resident can electively inspect a bounded growth candidate and its source events.
-- [ ] Adoption requires a later explicit resident action.
-- [ ] Adoption writes `soul_growth.md`, refreshes the composed soul, and records complete provenance.
-- [ ] Restart, hearth travel, and city-to-city travel preserve the adopted growth unchanged.
+- [x] A resident can electively inspect a bounded growth candidate and its source events.
+- [x] Adoption requires a later explicit resident action.
+- [x] Adoption writes `soul_growth.md`, refreshes the composed soul, and records complete provenance.
+- [x] Restart, hearth travel, and city-to-city travel preserve the adopted growth unchanged.
 - [x] Tests prove that a city or steward cannot modify resident identity through the compatibility endpoint.
 
 ## Likely files

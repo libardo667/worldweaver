@@ -16,7 +16,7 @@
 | --- | --- |
 | Public deployment and federation | 18, 37, 127 |
 | Human participation and correspondence | 39, 43, 71 |
-| Resident cognition and identity | 56, 58, 65, 67 |
+| Resident cognition and identity | 56, 65, 67 |
 | Operations and accounting | 70 |
 | Stoops, City Studio, and game town | 125, 126, 130 |
 

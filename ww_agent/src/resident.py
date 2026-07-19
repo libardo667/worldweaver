@@ -21,6 +21,7 @@ from src.identity.hearth_activation import (
     HearthRuntimeLease,
     acquire_hearth_runtime,
 )
+from src.identity.growth import repair_growth_adoptions
 from src.identity.loader import IdentityLoader, ResidentIdentity
 from src.inference.client import InferenceClient
 from src.runtime.cognitive_core import CognitiveCore
@@ -151,6 +152,7 @@ class Resident:
         Load identity, establish session, wire up loops. Call before run().
         """
         self._identity = IdentityLoader.load(self._resident_dir)
+        repair_growth_adoptions(self._resident_dir, self._identity)
         if self._hearth_config is None:
             self._hearth_config = HearthConfig.load(self._resident_dir)
         logger.info("[%s] identity loaded", self.name)
@@ -394,6 +396,7 @@ class Resident:
             vision=config.vision,
             gifts_enabled=config.gifts,
             city_names={"city"},
+            identity=identity,
         )
 
     def _build_core(
