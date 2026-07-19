@@ -76,6 +76,30 @@ def generate_node_identity(
     private_key = Ed25519PrivateKey.generate()
     private_bytes = private_key.private_bytes_raw()
     public_key = _encode(private_key.public_key().public_bytes_raw())
+    descriptor = write_public_descriptor(
+        descriptor_path=descriptor_path,
+        node_id=node_id,
+        shard_type=shard_type,
+        city_id=city_id,
+        public_key=public_key,
+    )
+
+    private_key_path.parent.mkdir(parents=True, exist_ok=True)
+    private_key_path.parent.chmod(0o700)
+    private_key_path.write_text(f"{_encode(private_bytes)}\n", encoding="utf-8")
+    private_key_path.chmod(0o600)
+    return descriptor
+
+
+def write_public_descriptor(
+    *,
+    descriptor_path: Path,
+    node_id: str,
+    shard_type: str,
+    city_id: str | None,
+    public_key: str,
+) -> dict[str, object]:
+    """Write the public half of a node identity without exposing its key file."""
     descriptor: dict[str, object] = {
         "schema": "worldweaver.node",
         "schema_version": 1,
@@ -85,11 +109,6 @@ def generate_node_identity(
     }
     if city_id:
         descriptor["city_id"] = city_id
-
-    private_key_path.parent.mkdir(parents=True, exist_ok=True)
-    private_key_path.parent.chmod(0o700)
-    private_key_path.write_text(f"{_encode(private_bytes)}\n", encoding="utf-8")
-    private_key_path.chmod(0o600)
     descriptor_path.write_text(f"{json.dumps(descriptor, indent=2, sort_keys=True)}\n", encoding="utf-8")
     return descriptor
 
