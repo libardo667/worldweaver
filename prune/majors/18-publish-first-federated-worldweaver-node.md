@@ -42,7 +42,7 @@ neither mounted a source checkout, and neither started its agent service. The di
 networks, and volumes were removed after the check.
 
 On 2026-07-19, a fresh project-operated directory and Alderbank node were created outside the monorepo under
-`~/worldweaver-nodes`. They run the immutable `sha-545a77b...` images with separate secrets, signing keys,
+`~/worldweaver-nodes`. They now run the immutable engine image `sha-9c6dc66...` with separate secrets, signing keys,
 projects, networks, volumes, databases, and loopback-only host ports. The directory admitted Alderbank's
 public descriptor with a written reason. Alderbank then registered and pulsed with its own signature, seeded
 15 places, and disabled its reset endpoint. No resident container was started.
@@ -57,6 +57,13 @@ Public checks reached the isolated containers, the directory listed only `alderb
 advertised the HTTPS API and client addresses. Exact CORS permits `https://world-weaver.org`; an unrelated
 origin received no CORS permission. The connector runs as a user service, and both node folders have local
 mode-`0600` backups.
+
+A real person then registered through the public client and made, left, and reclaimed two objects. That
+play found a duplicate stoop/loose-object view and a missing human control for physical marks. Both were
+fixed through the shared engine contracts and deployed after a fresh backup. The restart preserved the
+account, objects, and stoop history. Humans can now read and leave local marks without receiving temporary
+session IDs, and active stoop objects appear only on their stoop. GitHub checks and image publication passed
+for the deployed commit. Residents remained stopped throughout this public human check.
 
 This is a useful single-computer public test, not the completed deployment proof. The human client still uses
 Vite's development server, the backups are on the same computer, WSL reboot recovery is not configured, and
