@@ -97,6 +97,8 @@ export function WorldMap({ nodes, edges, mapStyle, focusKey, onNodeClick, onView
         const map = L.map(containerRef.current, {
           center: [45.014, -122.0],
           zoom: 14,
+          zoomSnap: 0.1,
+          zoomDelta: 0.5,
           zoomControl: false,
           maxBoundsViscosity: 1,
         });
@@ -250,10 +252,15 @@ export function WorldMap({ nodes, edges, mapStyle, focusKey, onNodeClick, onView
         const node = byKey.get(focusKey);
         const target = node ? displayPointByKey.get(node.key) : undefined;
         if (target) {
+          // A fictional town already has an exact, sheet-filling minimum zoom.
+          // Focusing a place should pan there, not immediately punch back in.
+          const targetZoom = generatedBoundsRef.current
+            ? Math.max(map.getZoom(), map.getMinZoom())
+            : Math.max(map.getZoom(), 15);
           if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-            map.setView(target, Math.max(map.getZoom(), 15), { animate: false });
+            map.setView(target, targetZoom, { animate: false });
           } else {
-            map.flyTo(target, Math.max(map.getZoom(), 15), { duration: 0.9 });
+            map.flyTo(target, targetZoom, { duration: 0.9 });
           }
         }
       }

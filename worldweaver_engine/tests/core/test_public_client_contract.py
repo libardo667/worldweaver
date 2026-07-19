@@ -102,6 +102,8 @@ def test_schematic_map_uses_a_precompiled_field_drawing_without_generating_in_th
     assert "map.getBoundsZoom(sheetBounds, true)" in world_map
     assert "map.setMaxBounds(sheetBounds)" in world_map
     assert "maxBoundsViscosity: 1" in world_map
+    assert "zoomSnap: 0.1" in world_map
+    assert "Math.max(map.getZoom(), map.getMinZoom())" in world_map
     assert "Math.random(" not in world_map
 
 
