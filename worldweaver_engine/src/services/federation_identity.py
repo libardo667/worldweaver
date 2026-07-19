@@ -216,16 +216,11 @@ def login_human_actor_local(
     *,
     username: str,
     password: str,
-    current_shard: Optional[str] = None,
 ) -> ActorProjectionBundle:
     identifier = str(username or "").strip().lower()
     auth = db.query(FederationActorAuth).filter((FederationActorAuth.username == identifier) | (FederationActorAuth.email == identifier)).first()
     if auth is None or not verify_password(password, auth.password_hash):
         raise HTTPException(status_code=401, detail="invalid_credentials")
-    actor = db.get(FederationActor, auth.actor_id)
-    if actor is not None and current_shard:
-        actor.current_shard = current_shard
-        db.commit()
     return _build_bundle(db, auth.actor_id)
 
 
@@ -257,7 +252,6 @@ def reset_password_local(
     *,
     token: str,
     new_password: str,
-    current_shard: Optional[str] = None,
 ) -> ActorProjectionBundle:
     hashed_token = _reset_token_hash(token)
     auth = db.query(FederationActorAuth).filter(FederationActorAuth.password_reset_token_hash == hashed_token).first()
@@ -274,9 +268,6 @@ def reset_password_local(
     auth.password_reset_token_hash = None
     auth.password_reset_expires_at = None
     auth.password_reset_requested_at = None
-    actor = db.get(FederationActor, auth.actor_id)
-    if actor is not None and current_shard:
-        actor.current_shard = current_shard
     db.commit()
     return _build_bundle(db, auth.actor_id)
 
@@ -378,11 +369,11 @@ def register_human_actor_remote(
     return ActorProjectionBundle.from_dict(payload)
 
 
-def login_human_actor_remote(*, username: str, password: str, current_shard: str) -> ActorProjectionBundle:
+def login_human_actor_remote(*, username: str, password: str) -> ActorProjectionBundle:
     payload = _federation_request(
         "POST",
         "/api/federation/auth/login",
-        {"identifier": username, "password": password, "current_shard": current_shard},
+        {"identifier": username, "password": password},
     )
     return ActorProjectionBundle.from_dict(payload)
 
@@ -395,11 +386,11 @@ def request_password_reset_remote(*, identifier: str) -> dict[str, Any]:
     )
 
 
-def reset_password_remote(*, token: str, new_password: str, current_shard: str) -> ActorProjectionBundle:
+def reset_password_remote(*, token: str, new_password: str) -> ActorProjectionBundle:
     payload = _federation_request(
         "POST",
         "/api/federation/auth/reset-password",
-        {"token": token, "new_password": new_password, "current_shard": current_shard},
+        {"token": token, "new_password": new_password},
     )
     return ActorProjectionBundle.from_dict(payload)
 
@@ -448,12 +439,10 @@ def login_human_actor(db: Session, *, username: str, password: str) -> ActorProj
             db,
             username=username,
             password=password,
-            current_shard=current_shard_id(),
         )
     return login_human_actor_remote(
         username=username,
         password=password,
-        current_shard=current_shard_id(),
     )
 
 
@@ -469,12 +458,10 @@ def reset_password(db: Session, *, token: str, new_password: str) -> ActorProjec
             db,
             token=token,
             new_password=new_password,
-            current_shard=current_shard_id(),
         )
     return reset_password_remote(
         token=token,
         new_password=new_password,
-        current_shard=current_shard_id(),
     )
 
 

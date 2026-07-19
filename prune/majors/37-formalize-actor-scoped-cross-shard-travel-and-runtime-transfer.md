@@ -12,6 +12,10 @@ gateway. Departure removes the source presence, redirects with only a random tra
 destination authenticate the actor and retry arrival. Browser session IDs and locations are separate for
 each shard even when several local shards share one client origin.
 
+Authentication no longer changes an actor's recorded city. Ordinary human entry checks the federation
+attachment before creating local state and rejects a second local session. A person therefore cannot open
+another city tab and silently bypass the travel lifecycle.
+
 The old plan said a resident's private runtime payload had to move with every city trip. That is no longer
 the design. A resident's hearth remains private and may keep running on its current host while the resident
 attaches to a remote city. Moving the hearth itself is the separate host-migration problem in Major 127.
@@ -48,6 +52,7 @@ advertises its prefix automatically; a deployed steward can override it with `WW
 - The source node retires the source session before confirming departure.
 - The destination alone resolves its arrival hub and confirms arrival.
 - A traveling actor must not appear active in two cities.
+- Signing in proves identity; it never changes city attachment.
 - The coordinator stores handoff state, not the resident's private hearth.
 - Each city remains usable when its directory or peer is offline.
 

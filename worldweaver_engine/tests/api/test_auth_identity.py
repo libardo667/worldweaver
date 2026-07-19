@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from jose import jwt
 
 from src.config import settings
-from src.models import FederationActor, FederationActorAuth, Player
+from src.models import FederationActor, FederationActorAuth, Player, SessionVars
 from src.services.auth_service import ALGORITHM
 
 
@@ -126,6 +126,118 @@ def test_login_accepts_email_or_username(client, db_session, monkeypatch):
     )
     assert login_by_email.status_code == 200
     assert login_by_email.json()["actor_id"] == register.json()["actor_id"]
+
+
+def test_login_does_not_move_the_actor_to_the_authenticating_shard(client, db_session, monkeypatch):
+    monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
+    register = client.post(
+        "/api/auth/register",
+        json={
+            "email": "still-there@example.com",
+            "username": "stillthere",
+            "display_name": "Still There",
+            "password": "supersecret1",
+            "terms_accepted": True,
+        },
+    )
+    actor = db_session.get(FederationActor, register.json()["actor_id"])
+    assert actor is not None
+    actor.current_shard = "another-city"
+    db_session.commit()
+
+    login = client.post(
+        "/api/auth/login",
+        json={"identifier": "stillthere", "password": "supersecret1"},
+    )
+
+    assert login.status_code == 200
+    db_session.refresh(actor)
+    assert actor.current_shard == "another-city"
+
+
+def test_ordinary_bootstrap_rejects_an_actor_attached_to_another_city(
+    seeded_client,
+    seeded_world_id,
+    db_session,
+    monkeypatch,
+):
+    monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
+    register = seeded_client.post(
+        "/api/auth/register",
+        json={
+            "email": "elsewhere@example.com",
+            "username": "elsewhere",
+            "display_name": "Elsewhere",
+            "password": "supersecret1",
+            "terms_accepted": True,
+        },
+    )
+    actor = db_session.get(FederationActor, register.json()["actor_id"])
+    assert actor is not None
+    actor.current_shard = "another-city"
+    db_session.commit()
+
+    response = seeded_client.post(
+        "/api/session/bootstrap",
+        json={
+            "session_id": "elsewhere-session",
+            "world_id": seeded_world_id,
+            "player_role": "Elsewhere",
+            "bootstrap_source": "commons_client",
+        },
+        headers={"Authorization": f"Bearer {register.json()['token']}"},
+    )
+
+    assert response.status_code == 409
+    assert "federation travel" in response.json()["detail"]
+    assert db_session.get(SessionVars, "elsewhere-session") is None
+
+
+def test_ordinary_bootstrap_rejects_a_second_local_session_for_one_actor(
+    seeded_client,
+    seeded_world_id,
+    db_session,
+    monkeypatch,
+):
+    monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
+    register = seeded_client.post(
+        "/api/auth/register",
+        json={
+            "email": "already-here@example.com",
+            "username": "alreadyhere",
+            "display_name": "Already Here",
+            "password": "supersecret1",
+            "terms_accepted": True,
+        },
+    )
+    headers = {"Authorization": f"Bearer {register.json()['token']}"}
+    first = seeded_client.post(
+        "/api/session/bootstrap",
+        json={
+            "session_id": "already-here-one",
+            "world_id": seeded_world_id,
+            "player_role": "Already Here",
+            "bootstrap_source": "commons_client",
+        },
+        headers=headers,
+    )
+    assert first.status_code == 200
+
+    second = seeded_client.post(
+        "/api/session/bootstrap",
+        json={
+            "session_id": "already-here-two",
+            "world_id": seeded_world_id,
+            "player_role": "Already Here",
+            "bootstrap_source": "commons_client",
+        },
+        headers=headers,
+    )
+
+    assert second.status_code == 409
+    assert "already present" in second.json()["detail"]
+    assert db_session.get(SessionVars, "already-here-one") is not None
+    assert db_session.get(SessionVars, "already-here-two") is None
 
 
 def test_login_normalizes_legacy_visitor_passes(client, db_session, monkeypatch):

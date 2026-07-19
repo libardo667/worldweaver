@@ -304,7 +304,6 @@ def login_human_actor(
         db,
         username=payload.normalized_identifier,
         password=payload.password,
-        current_shard=str(payload.current_shard or "").strip() or None,
     )
     return bundle.to_dict()
 
@@ -331,7 +330,6 @@ def reset_password_human_actor(
         db,
         token=str(payload.token or "").strip(),
         new_password=payload.new_password,
-        current_shard=str(payload.current_shard or "").strip() or None,
     )
     return bundle.to_dict()
 

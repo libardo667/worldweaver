@@ -52,7 +52,7 @@ from ...models.schemas import (
     WorldSeedRequest,
     WorldSeedResponse,
 )
-from ...services import city_pack_service, federation_discovery, federation_travel, session_service
+from ...services import city_pack_service, federation_discovery, federation_identity, federation_travel, session_service
 from ...services.event_submission import WorldEventCommand, submit_world_event
 from ...services.session_service import (
     remove_cached_sessions,
@@ -276,6 +276,38 @@ def _handoff_place(db: Session, row: ShardTravelHandoff) -> Optional[str]:
 def _require_handoff_owner(row: ShardTravelHandoff, player: Optional[Player]) -> None:
     if row.owner_player_id and (player is None or player.id != row.owner_player_id):
         raise HTTPException(status_code=403, detail="Cannot manage travel owned by another player.")
+
+
+def _require_ordinary_player_attachment(
+    db: Session,
+    *,
+    session_id: str,
+    bootstrap_source: str,
+    player: Optional[Player],
+) -> None:
+    """Keep ordinary entry from creating a second human presence."""
+    if player is None or str(bootstrap_source or "").strip() == "federation-travel":
+        return
+    actor_id = str(player.actor_id or "").strip()
+    if not actor_id:
+        raise HTTPException(status_code=409, detail="This player has no durable actor identity.")
+
+    live_session = db.query(SessionVars).filter(SessionVars.actor_id == actor_id).first()
+    if live_session is not None and str(live_session.session_id) != str(session_id):
+        raise HTTPException(
+            status_code=409,
+            detail=f"This actor is already present in local session '{live_session.session_id}'.",
+        )
+
+    attachment = federation_identity.get_actor_bundle(db, actor_id)
+    local_shard = current_shard_id()
+    if attachment.status == "traveling":
+        raise HTTPException(status_code=409, detail="This actor is currently traveling and must finish that trip before ordinary entry.")
+    if attachment.current_shard != local_shard:
+        raise HTTPException(
+            status_code=409,
+            detail=(f"This actor is attached to '{attachment.current_shard}', not '{local_shard}'. " "Enter through federation travel rather than opening a second city presence."),
+        )
 
 
 def _resolve_departure_route(route_id: str, destination_shard: str) -> Dict[str, Any]:
@@ -887,6 +919,12 @@ def bootstrap_session_world(
     context; resident-private state is initialized locally.
     """
     try:
+        _require_ordinary_player_attachment(
+            db,
+            session_id=str(payload.session_id),
+            bootstrap_source=str(payload.bootstrap_source),
+            player=player,
+        )
         deleted = _delete_session_world_rows(db, payload.session_id)
         _clear_runtime_session_caches(payload.session_id)
         if any(int(count) > 0 for count in deleted.values()):
