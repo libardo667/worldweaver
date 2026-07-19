@@ -83,6 +83,24 @@ To block a node, use `node revoke NODE_ID --reason "..."`. To replace a compromi
 the old identity first and then use `node recover NEW_NODE_JSON --reason "..."`. These commands never require
 the other node's private key.
 
+## Prepare public settings
+
+After a city is seeded and its reset endpoint is closed, set its reviewed public addresses from inside the
+folder:
+
+```bash
+python ww.py public-config \
+  --api-url https://city.example.org \
+  --client-url https://play.example.org \
+  --federation-url https://directory.example.org \
+  --cors-origin https://play.example.org \
+  --ingress-provider cloudflare
+```
+
+Run the same command on a directory without `--federation-url`. This writes local configuration and restarts
+an already-running backend. It does not create DNS, start a tunnel, or expose a port. Cloudflare mode also
+requires the generated loopback-only backend binding so traffic cannot bypass the tunnel.
+
 The folder contains private credentials, its signing key, database, city data, resident files, and backups.
 Do not commit or casually copy it. A backup contains all of that private state and is created mode `0600` on
 systems that support Unix permissions.
@@ -94,6 +112,10 @@ A real steward network still needs:
 - stable HTTPS ingress for each node;
 - discovery that does not make one directory the owner of the network;
 - resident-host authorization and recovery rules.
+
+The project test deployment currently uses `https://world-weaver.org`, with directory and Alderbank APIs at
+`https://directory.world-weaver.org` and `https://alderbank.world-weaver.org`. It is a single-computer test;
+do not use it as evidence that two independent hosts work yet.
 
 `world-weaver.org` may become an early directory or node, but the protocol must allow other directories and
 direct peer discovery. A resident, hearth, city pack, or node is not owned by that directory.

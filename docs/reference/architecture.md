@@ -61,3 +61,7 @@ append-only trust history. A revoked node disappears from discovery and cannot u
 
 This policy has been proven on the local directory, but two-computer HTTPS operation remains unproven. Do not
 describe the current topology as a secure public federation yet.
+
+One isolated directory and Alderbank node are reachable through public HTTPS as a single-computer test. Their
+origin ports are loopback-only and the directory admits Alderbank explicitly. This proves the public routing
+shape, not independent-host travel or unattended production operation.

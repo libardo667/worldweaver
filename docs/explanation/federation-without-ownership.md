@@ -50,3 +50,7 @@ and audits its own decision. Admission to one directory does not grant ownership
 node from using another directory or direct peer configuration.
 
 Until those exist, the current federation is a development topology, not a secure decentralized network.
+
+The first public routing test now exposes an isolated directory and Alderbank node through
+`world-weaver.org`. Both still run on one computer. Cloudflare supplies ingress for this deployment, but it is
+an operator choice rather than part of node identity or the federation protocol.

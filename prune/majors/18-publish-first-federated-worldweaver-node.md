@@ -2,9 +2,9 @@
 
 ## Status
 
-The `world-weaver.org` domain and an earlier Cloudflare tunnel exist, but no supported public node is
-currently online. The old proposal for a public observatory is rejected: the public interface should show
-places and local participation, not resident timelines or operating data.
+The `world-weaver.org` domain now serves a single-computer public test, but no supported production node is
+online yet. The old proposal for a public observatory is rejected: the public interface should show places
+and local participation, not resident timelines or operating data.
 
 The development shard generator now gives each new folder its own strong JWT and data-encryption secrets,
 private `.env` permissions, stable Compose project identity, node signing key, and public descriptor. Signed
@@ -27,7 +27,8 @@ registry. A clean-computer run still needs verification.
 
 The signed local network has also completed a real Portland-to-San-Francisco session handoff and return with
 a throwaway actor. Each source retired its session before the destination created one, and the wrong signing
-identity could not claim the destination transition. Public HTTPS remains unproven.
+identity could not claim the destination transition. The same trip has not yet been repeated across the new
+public addresses or between computers.
 
 An isolated folder under `/tmp` has also run the SHA-tagged engine image with no source-tree mount, seeded
 1,315 Portland places, disabled the reset endpoint, kept its agent service stopped, made a mode-`0600` full
@@ -39,6 +40,27 @@ ports, database ports, database passwords, JWT secrets, encryption keys, node ID
 and database volumes were all distinct. Both served seeded worlds concurrently from the same immutable images,
 neither mounted a source checkout, and neither started its agent service. The disposable folders, containers,
 networks, and volumes were removed after the check.
+
+On 2026-07-19, a fresh project-operated directory and Alderbank node were created outside the monorepo under
+`~/worldweaver-nodes`. They run the immutable `sha-545a77b...` images with separate secrets, signing keys,
+projects, networks, volumes, databases, and loopback-only host ports. The directory admitted Alderbank's
+public descriptor with a written reason. Alderbank then registered and pulsed with its own signature, seeded
+15 places, and disabled its reset endpoint. No resident container was started.
+
+A new Cloudflare tunnel now serves this test deployment:
+
+- `https://world-weaver.org` — human commons client;
+- `https://directory.world-weaver.org` — closed federation directory;
+- `https://alderbank.world-weaver.org` — isolated Alderbank API.
+
+Public checks reached the isolated containers, the directory listed only `alderbank-public-1`, and Alderbank
+advertised the HTTPS API and client addresses. Exact CORS permits `https://world-weaver.org`; an unrelated
+origin received no CORS permission. The connector runs as a user service, and both node folders have local
+mode-`0600` backups.
+
+This is a useful single-computer public test, not the completed deployment proof. The human client still uses
+Vite's development server, the backups are on the same computer, WSL reboot recovery is not configured, and
+no outside computer has completed entry or travel.
 
 ## Goal
 
@@ -57,14 +79,14 @@ it does not mount or build from a neighboring source checkout.
 
 1. Verify the image publisher and pull the SHA-tagged images on a clean second computer or clean trust domain.
 2. Create two folders there and prove distinct ports, projects, credentials, volumes, and signing identities.
-3. Decide which city pack and node will be the first public node.
-4. Restore HTTPS ingress for its public client and API.
-5. Configure exact CORS origins, rate limits, off-device backup storage, log retention, and a plain operator
-   runbook.
-6. Publish a small node descriptor containing only its ID, hosted city, public URL, protocol version,
+3. Replace the Vite development server with a small production client gateway while preserving the same-origin
+   shard routes.
+4. Put encrypted backups on a different device or service and test restore from that copy.
+5. Configure unattended tunnel restart after Windows/WSL reboot and document how to stop public ingress.
+6. Finish rate-limit and log-retention policy and write a plain operator runbook.
+7. Publish a small node descriptor containing only its ID, hosted city, public URL, protocol version,
    capabilities, and current reachability.
-7. Let the node register with a directory while remaining usable when that directory is unavailable.
-8. Verify entry and travel from outside the host network.
+8. Verify entry and travel from outside the host network and then repeat between two computers.
 
 ## Boundaries
 
@@ -89,7 +111,7 @@ it does not mount or build from a neighboring source checkout.
 - [ ] The public surface contains no resident-private or steward-only telemetry.
 - [x] The node uses its own identity and credential rather than a network-wide shared secret.
 - [ ] CORS, rate limits, backup, recovery, and log-retention rules are explicit.
-- [ ] The node can publish a signed or otherwise authenticated descriptor to one or more directories.
+- [x] The node can publish a signed or otherwise authenticated descriptor to one or more directories.
 - [ ] Another node can discover it, and direct configuration remains possible without that directory.
 - [ ] Local city and hearth use continue during a directory outage.
 - [ ] An external-machine check proves public entry and one cross-node operation.

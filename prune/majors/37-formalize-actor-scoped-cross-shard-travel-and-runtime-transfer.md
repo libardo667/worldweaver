@@ -73,6 +73,11 @@ replacement requires revocation first and a separately reviewed replacement desc
 an audit row. The migrated live directory retained its three known cities and rejected an uninvited signed
 registration with HTTP 403.
 
+A separate image-backed directory and Alderbank folder are now publicly reachable over HTTPS on one computer.
+Their origin ports bind only to loopback, and the public directory lists the isolated Alderbank identity and
+HTTPS address. This proves public reachability and separate node state, but it is not the required trip between
+two computers. No resident was woken for this infrastructure check.
+
 ## Build next
 
 1. Put two independently created node folders behind real HTTPS addresses on different computers or trust
