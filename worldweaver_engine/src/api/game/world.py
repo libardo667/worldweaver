@@ -3051,11 +3051,24 @@ def post_location_chat(
     if not message:
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
+    session_id = str(payload.session_id or "").strip()
+    session_row = db.get(SessionVars, session_id)
+    if session_row is None:
+        raise HTTPException(status_code=404, detail="Session not found.")
+    vars_payload = _session_variables_payload(session_row.vars)
+    session_location = _session_location_from_vars(vars_payload)
+    requested_location = str(location or "").strip()
+    if not session_location:
+        raise HTTPException(status_code=409, detail="Session has no current location.")
+    if session_location != requested_location:
+        raise HTTPException(status_code=409, detail="You can only speak where you are standing.")
+    _, display_name = _session_display_details(session_id, vars_payload)
+
     # Store in real-time chat table (fast path — agents poll this)
     row = LocationChat(
-        location=location,
-        session_id=payload.session_id,
-        display_name=payload.display_name,
+        location=session_location,
+        session_id=session_id,
+        display_name=display_name,
         message=message,
     )
     db.add(row)
@@ -3065,7 +3078,6 @@ def post_location_chat(
     # Also record as a lightweight utterance WorldEvent so speech becomes part of
     # world memory: resident perception can recognize the same utterance as one
     # event instead of treating chat and history as separate occurrences.
-    display_name = payload.display_name or payload.session_id[:12]
     try:
         from ...services.world_memory import EVENT_TYPE_UTTERANCE
 
@@ -3073,16 +3085,16 @@ def post_location_chat(
         submit_world_event(
             db,
             WorldEventCommand(
-                session_id=payload.session_id,
+                session_id=session_id,
                 event_type=EVENT_TYPE_UTTERANCE,
                 summary=summary,
                 delta=_utterance_event_delta(
                     speaker_name=display_name,
-                    location=location,
+                    location=session_location,
                     message=message,
                     summary=summary,
                 ),
-                metadata={"surface": "chat", "channel": location},
+                metadata={"surface": "chat", "channel": session_location},
                 preserve_event_type=True,
             ),
         )

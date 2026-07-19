@@ -1289,7 +1289,7 @@ class TestWorldEventLedgerEndpoints:
             "/api/world/location/Cafe/chat",
             json={
                 "session_id": "speaker-session",
-                "display_name": "Levi",
+                "display_name": "Not Levi",
                 "message": "Hello from the counter.",
             },
         )
@@ -1311,6 +1311,19 @@ class TestWorldEventLedgerEndpoints:
         untrusted_chat = client.get("/api/world/location/Cafe/chat", params={"session_id": "not-a-real-session"}).json()["messages"][-1]
         assert "session_id" not in untrusted_chat
         assert "actor_id" not in untrusted_chat
+
+        remote_post = client.post(
+            "/api/world/location/Elsewhere/chat",
+            json={"session_id": "speaker-session", "display_name": "Levi", "message": "Remote words."},
+        )
+        assert remote_post.status_code == 409
+        assert remote_post.json()["detail"] == "You can only speak where you are standing."
+
+        missing_session_post = client.post(
+            "/api/world/location/Cafe/chat",
+            json={"session_id": "missing-session", "display_name": "Levi", "message": "Ghost words."},
+        )
+        assert missing_session_post.status_code == 404
 
         utterance_event = db_session.query(WorldEvent).filter(WorldEvent.session_id == "speaker-session", WorldEvent.event_type == "utterance").order_by(WorldEvent.id.desc()).first()
         assert utterance_event is not None
