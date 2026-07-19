@@ -3,10 +3,30 @@
 
 // Participant identity, persisted per browser. Spectating needs none of this.
 
+import { currentShardBase, currentShardScope } from "../api/base";
+
 const JWT_KEY = "ww.public.jwt";
 const PLAYER_KEY = "ww.public.player";
 const SESSION_KEY = "ww.public.session_id";
 const PLACE_KEY = "ww.public.place";
+
+function localKey(key: string): string {
+  return `${key}.${currentShardScope().replace(/^\//, "")}`;
+}
+
+function getLocalValue(key: string): string | null {
+  const scoped = localStorage.getItem(localKey(key));
+  if (scoped) return scoped;
+  // Carry the pre-prefix session into the configured default shard once.
+  if (!currentShardBase()) {
+    const legacy = localStorage.getItem(key);
+    if (legacy) {
+      localStorage.setItem(localKey(key), legacy);
+      return legacy;
+    }
+  }
+  return null;
+}
 
 export type PlayerIdentity = {
   actor_id: string;
@@ -37,26 +57,30 @@ export function setPlayer(player: PlayerIdentity): void {
 }
 
 export function getSessionId(): string | null {
-  return localStorage.getItem(SESSION_KEY);
+  return getLocalValue(SESSION_KEY);
 }
 
 export function mintSessionId(): string {
   const id = `ww-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  localStorage.setItem(SESSION_KEY, id);
+  localStorage.setItem(localKey(SESSION_KEY), id);
   return id;
 }
 
 export function getStandingPlace(): string | null {
-  return localStorage.getItem(PLACE_KEY);
+  return getLocalValue(PLACE_KEY);
 }
 
 export function setStandingPlace(place: string): void {
-  localStorage.setItem(PLACE_KEY, place);
+  localStorage.setItem(localKey(PLACE_KEY), place);
 }
 
 export function clearParticipant(): void {
   localStorage.removeItem(JWT_KEY);
   localStorage.removeItem(PLAYER_KEY);
-  localStorage.removeItem(SESSION_KEY);
-  localStorage.removeItem(PLACE_KEY);
+  localStorage.removeItem(localKey(SESSION_KEY));
+  localStorage.removeItem(localKey(PLACE_KEY));
+  if (!currentShardBase()) {
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(PLACE_KEY);
+  }
 }

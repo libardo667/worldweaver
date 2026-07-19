@@ -772,6 +772,7 @@ def _print_weave_status_for_shard(
 def _client_proxy_env(*, world_shard: ShardSpec, city_shard: ShardSpec, all_shards: list[ShardSpec]) -> dict[str, str]:
     env = {
         "VITE_PROXY_TARGET": _docker_network_backend_url(city_shard),
+        "VITE_DEFAULT_SHARD_PREFIX": _client_shard_prefix(city_shard),
         "VITE_WW_WORLD_URL": _docker_network_backend_url(world_shard),
         "VITE_WW_SHARD_ROUTES": _client_shard_routes(
             all_shards,
@@ -789,6 +790,7 @@ def _client_proxy_env(*, world_shard: ShardSpec, city_shard: ShardSpec, all_shar
 def _client_host_env(*, world_shard: ShardSpec, city_shard: ShardSpec, all_shards: list[ShardSpec]) -> dict[str, str]:
     env = {
         "VITE_PROXY_TARGET": _local_backend_url(city_shard),
+        "VITE_DEFAULT_SHARD_PREFIX": _client_shard_prefix(city_shard),
         "VITE_WW_WORLD_URL": _local_backend_url(world_shard),
         "VITE_WW_SHARD_ROUTES": _client_shard_routes(
             all_shards,

@@ -15,3 +15,9 @@ export function localShardPath(path: string): string {
   if (!path.startsWith("/api") && path !== "/health") return path;
   return `${currentShardBase()}${path}`;
 }
+
+export function currentShardScope(): string {
+  const base = currentShardBase();
+  const configuredDefault = String(import.meta.env.VITE_DEFAULT_SHARD_PREFIX || "").trim();
+  return base || configuredDefault || "/default";
+}

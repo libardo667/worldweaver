@@ -76,5 +76,10 @@ def test_public_client_can_keep_shard_api_traffic_under_a_same_origin_prefix():
 
     assert "localShardPath(path)" in api
     assert "currentShardBase" in base
+    assert "currentShardScope" in base
     assert "VITE_WW_SHARD_ROUTES" in vite
     assert "shardProxyEntries" in vite
+
+    store = (ENGINE_ROOT / "client-public" / "src" / "session" / "store.ts").read_text(encoding="utf-8")
+    assert "localKey(SESSION_KEY)" in store
+    assert "localKey(PLACE_KEY)" in store

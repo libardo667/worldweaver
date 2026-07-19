@@ -17,6 +17,8 @@ Federated hosts should set `WW_CLIENT_URL` to this human-facing origin. `WW_PUBL
 API address; travel discovery and reset mail no longer have to pretend those are the same endpoint.
 One client origin can serve several shards through prefixes such as `/ww-sfo` and `/ww-pdx`; each prefix
 keeps its API calls on the same browser origin and the unprefixed root remains the selected default shard.
+The actor login is shared across those paths, while the temporary session ID and standing place are stored
+per shard. Opening Portland can therefore never reuse an Alderbank incarnation by accident.
 
 ## Run
 
