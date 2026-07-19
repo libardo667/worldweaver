@@ -120,12 +120,14 @@ def test_fictional_builder_skips_osm_and_keeps_explicit_small_town_paths(tmp_pat
 
     assert manifest["fictional"] is True
     assert "openstreetmap" not in manifest["source"].lower()
-    assert manifest["version"] == "0.2.0"
+    assert manifest["version"] == "0.3.0"
     assert manifest["counts"]["stoops"] == 1
     assert manifest["counts"]["map_sections"] == 12
     assert manifest["generated_map"]["artifact_sha256"] == generated_map["artifact_sha256"]
     assert generated_map["generator"]["id"] == "worldweaver.field-map"
-    assert generated_map["generator"]["version"] == "0.2.0"
+    assert generated_map["generator"]["version"] == "0.3.0"
+    assert len(generated_map["seams"]) == 17
+    assert all(section["locked"] for section in generated_map["sections"])
     assert {route["name"] for route in generated_map["routes"]} == {
         "Footbridge Path",
         "Pineward Path",

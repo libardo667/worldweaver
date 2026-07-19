@@ -1,7 +1,7 @@
 {
   "city_id": "alderbank",
   "city_name": "Alderbank",
-  "pack_version": "0.2.0",
+  "pack_version": "0.3.0",
   "fictional": true,
   "import_osm": false,
   "source": "Original WorldWeaver fictional village",
@@ -59,6 +59,10 @@
         "name": "Pineward Path",
         "path_type": "woodland_footpath"
       }
+    },
+    "sections": {
+      "default_locked": true,
+      "overrides": {}
     }
   },
   "transit_systems": [],

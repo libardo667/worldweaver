@@ -22,13 +22,13 @@ itself fictional and state the source and license for its authored material.
 ## Build one pack
 
 ```bash
-python dev.py run worldweaver_engine/scripts/build_city_pack.py --city CITY_ID
+.venv/bin/python worldweaver_engine/scripts/build_city_pack.py --city CITY_ID
 ```
 
 For a repeatable build without network enrichment:
 
 ```bash
-python dev.py run worldweaver_engine/scripts/build_city_pack.py --city CITY_ID --offline
+.venv/bin/python worldweaver_engine/scripts/build_city_pack.py --city CITY_ID --offline
 ```
 
 The builder validates identifiers, coordinates, adjacency, paths, travel hubs, entry points, and stoop
@@ -44,6 +44,12 @@ GET /api/shard/city-pack/preview
 
 The preview works before the world is seeded. Fictional packs report a schematic map style and must not be
 placed over real map tiles.
+
+A generated fictional map is split into local sections. Each section records its own seed, revision, lock
+state, and decorative details. Shared seam records—not either section—own river and path crossings plus the
+terrain and region values along the border. Lock reviewed sections before export. The low-level section edit
+helper exists now; the browser controls for previewing and rerolling sections are still planned for City
+Studio.
 
 ## Create a local shard
 

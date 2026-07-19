@@ -22,6 +22,13 @@ The generated node operator now has explicit `map inspect` and `map publish` com
 the city, pack version, artifact and SVG hashes, passive SVG content, and canonical routes; refuses changes
 to non-map city files or publication while residents run; makes a full backup; and reloads the backend.
 
+The third map slice makes the 4-by-3 grid real rather than descriptive metadata. Each of Alderbank's twelve
+sections now has its own revision, seed, lock state, and local decorative details. Seventeen shared seam
+records carry elevation bands, region changes, and river or path crossings to both neighboring sections.
+All existing sections ship locked. A shared edit helper can unlock, reroll, and relock one section without
+changing the physical fields, canonical routes, required places, seams, or any neighboring section. A human
+preview and controls in City Studio are still needed before section editing is considered complete.
+
 Alderbank is the project's experiment town. On 2026-07-19, the project owner explicitly approved using the
 inhabited Alderbank shard for this work. That approval is narrow: the generated drawing may change while we
 learn, but accounts, objects, marks, doors, named places, and movement edges remain canonical engine state
@@ -90,6 +97,7 @@ for every interaction.
 - `worldweaver_engine/src/api/game/world.py`
 - `worldweaver_engine/src/services/city_pack_service.py`
 - `worldweaver_engine/src/services/map_generation/` (new)
+- `worldweaver_engine/src/services/map_generation/section_controls.py`
 - `worldweaver_engine/scripts/build_city_pack.py`
 - `worldweaver_engine/scripts/city_configs/*.json`
 - the future City Studio client described by Major 126
@@ -124,7 +132,7 @@ for every interaction.
 - [x] Alderbank preview shows a river, terrain regions, typed paths, named landmarks, and stable labels while
   preserving its current movement graph.
 - [ ] Each section can be previewed, rerolled, and locked independently without moving locked neighbors.
-- [ ] Section seams match for routes, waterways, elevation bands, and region edges.
+- [x] Section seams match for routes, waterways, elevation bands, and region edges.
 - [x] Every visible interactive route is backed by a canonical engine fact. Doorway drawing remains future
   work; current doors are exposed through the place controls rather than drawn on the map.
 - [ ] City Studio can export a validated versioned map artifact without mutating an inhabited shard.

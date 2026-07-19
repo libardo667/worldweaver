@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from scripts.build_city_pack import _build_landmarks, _build_neighborhoods
-from src.services.map_generation import compile_fictional_map
+from src.services.map_generation import compile_fictional_map, edit_section
 
 
 def _alderbank_inputs() -> tuple[dict, list[dict], list[dict]]:
@@ -28,6 +28,22 @@ def test_alderbank_field_map_is_deterministic_and_sectioned():
     assert first.artifact["grid"] == {"width": 72, "height": 54, "section_size": 18}
     assert len(first.artifact["sections"]) == 12
     assert all(section["seed"] for section in first.artifact["sections"])
+    assert all(section["locked"] is True for section in first.artifact["sections"])
+    assert len(first.artifact["seams"]) == 17
+    assert all(len(seam["sides"]) == 2 for seam in first.artifact["seams"])
+    assert all(seam["sha256"] for seam in first.artifact["seams"])
+    assert {connector["kind"] for seam in first.artifact["seams"] for connector in seam["connectors"]} == {
+        "path",
+        "river",
+    }
+    seam_references = {seam["id"]: sum(seam["id"] in section["seam_ids"] for section in first.artifact["sections"]) for seam in first.artifact["seams"]}
+    assert set(seam_references.values()) == {2}
+    sections_by_id = {section["id"]: section for section in first.artifact["sections"]}
+    for seam in first.artifact["seams"]:
+        for side in seam["sides"]:
+            expected = [{**connector, "edge": side["edge"], "seam_id": seam["id"]} for connector in seam["connectors"]]
+            actual = [connector for connector in sections_by_id[side["section_id"]]["connectors"] if connector["seam_id"] == seam["id"]]
+            assert actual == expected
     assert {field for field in first.artifact["fields"]} == {
         "elevation",
         "slope",
@@ -88,3 +104,56 @@ def test_fictional_map_rejects_display_metadata_for_an_invented_path():
 
     with pytest.raises(ValueError, match="do not match canonical paths"):
         compile_fictional_map(config, neighborhoods=neighborhoods, landmarks=landmarks)
+
+
+def test_one_unlocked_section_can_reroll_without_changing_core_fields_or_neighbors():
+    config, neighborhoods, landmarks = _alderbank_inputs()
+    baseline = compile_fictional_map(config, neighborhoods=neighborhoods, landmarks=landmarks).artifact
+
+    with pytest.raises(ValueError, match="is locked"):
+        edit_section(config, section_id="section-0-0", action="reroll")
+
+    unlocked_config = edit_section(config, section_id="section-0-0", action="unlock")
+    unlocked = compile_fictional_map(unlocked_config, neighborhoods=neighborhoods, landmarks=landmarks).artifact
+    rerolled_config = edit_section(unlocked_config, section_id="section-0-0", action="reroll")
+    rerolled = compile_fictional_map(rerolled_config, neighborhoods=neighborhoods, landmarks=landmarks).artifact
+
+    assert unlocked["fields"] == baseline["fields"]
+    assert rerolled["fields"] == baseline["fields"]
+    assert rerolled["waterways"] == baseline["waterways"]
+    assert rerolled["routes"] == baseline["routes"]
+    assert rerolled["anchors"] == baseline["anchors"]
+    assert rerolled["seams"] == baseline["seams"]
+
+    baseline_sections = {section["id"]: section for section in baseline["sections"]}
+    rerolled_sections = {section["id"]: section for section in rerolled["sections"]}
+    assert rerolled_sections["section-0-0"]["revision"] == 1
+    assert rerolled_sections["section-0-0"]["locked"] is False
+    assert rerolled_sections["section-0-0"]["detail"]["sha256"] != baseline_sections["section-0-0"]["detail"]["sha256"]
+    for section_id in baseline_sections.keys() - {"section-0-0"}:
+        assert rerolled_sections[section_id] == baseline_sections[section_id]
+
+    relocked_config = edit_section(rerolled_config, section_id="section-0-0", action="lock")
+    relocked = compile_fictional_map(relocked_config, neighborhoods=neighborhoods, landmarks=landmarks).artifact
+    relocked_section = next(section for section in relocked["sections"] if section["id"] == "section-0-0")
+    assert relocked_section["locked"] is True
+    assert relocked_section["revision"] == 1
+    assert relocked_section["detail"] == rerolled_sections["section-0-0"]["detail"]
+
+
+def test_section_overrides_cannot_name_space_outside_the_grid():
+    config, neighborhoods, landmarks = _alderbank_inputs()
+    config["fictional_map"]["sections"]["overrides"]["section-99-99"] = {"revision": 1, "locked": False}
+
+    with pytest.raises(ValueError, match="unknown sections"):
+        compile_fictional_map(config, neighborhoods=neighborhoods, landmarks=landmarks)
+
+
+def test_section_controls_reject_ambiguous_lock_values():
+    config, neighborhoods, landmarks = _alderbank_inputs()
+    config["fictional_map"]["sections"]["default_locked"] = "false"
+
+    with pytest.raises(ValueError, match="default_locked must be true or false"):
+        compile_fictional_map(config, neighborhoods=neighborhoods, landmarks=landmarks)
+    with pytest.raises(ValueError, match="default_locked must be true or false"):
+        edit_section(config, section_id="section-0-0", action="unlock")

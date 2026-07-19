@@ -2,12 +2,12 @@
   "schema_version": "1.0.0",
   "generator": {
     "id": "worldweaver.field-map",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "seed": "alderbank-fields-v1"
   },
   "source": {
     "city_id": "alderbank",
-    "pack_version": "0.2.0"
+    "pack_version": "0.3.0"
   },
   "bounds": {
     "south": 45.004395194,
@@ -902,9 +902,133 @@
       "y": 0,
       "width": 18,
       "height": 18,
-      "seed": "91f792e089ba5b44",
-      "locked": false,
-      "connectors": []
+      "revision": 0,
+      "seed": "26a1ef2c58b52b51",
+      "locked": true,
+      "seam_ids": [
+        "seam:section-0-0:section-1-0",
+        "seam:section-0-0:section-0-1"
+      ],
+      "connectors": [],
+      "detail": {
+        "features": [
+          {
+            "kind": "tree",
+            "x": 7.5,
+            "y": 1.5,
+            "size": 0.21
+          },
+          {
+            "kind": "tree",
+            "x": 9.5,
+            "y": 1.5,
+            "size": 0.28
+          },
+          {
+            "kind": "tree",
+            "x": 11.5,
+            "y": 1.5,
+            "size": 0.19
+          },
+          {
+            "kind": "tree",
+            "x": 11.5,
+            "y": 7.5,
+            "size": 0.32
+          },
+          {
+            "kind": "tree",
+            "x": 13.5,
+            "y": 7.5,
+            "size": 0.25
+          },
+          {
+            "kind": "tree",
+            "x": 15.5,
+            "y": 7.5,
+            "size": 0.26
+          },
+          {
+            "kind": "tree",
+            "x": 1.5,
+            "y": 9.5,
+            "size": 0.18
+          },
+          {
+            "kind": "tree",
+            "x": 13.5,
+            "y": 9.5,
+            "size": 0.2
+          },
+          {
+            "kind": "tree",
+            "x": 15.5,
+            "y": 9.5,
+            "size": 0.3
+          },
+          {
+            "kind": "tree",
+            "x": 17.5,
+            "y": 9.5,
+            "size": 0.18
+          },
+          {
+            "kind": "tree",
+            "x": 17.5,
+            "y": 11.5,
+            "size": 0.27
+          },
+          {
+            "kind": "tree",
+            "x": 5.5,
+            "y": 13.5,
+            "size": 0.29
+          },
+          {
+            "kind": "tree",
+            "x": 7.5,
+            "y": 13.5,
+            "size": 0.24
+          },
+          {
+            "kind": "tree",
+            "x": 7.5,
+            "y": 15.5,
+            "size": 0.18
+          },
+          {
+            "kind": "tree",
+            "x": 9.5,
+            "y": 15.5,
+            "size": 0.2
+          },
+          {
+            "kind": "tree",
+            "x": 15.5,
+            "y": 15.5,
+            "size": 0.32
+          },
+          {
+            "kind": "tree",
+            "x": 17.5,
+            "y": 15.5,
+            "size": 0.34
+          },
+          {
+            "kind": "tree",
+            "x": 5.5,
+            "y": 17.5,
+            "size": 0.25
+          },
+          {
+            "kind": "tree",
+            "x": 17.5,
+            "y": 17.5,
+            "size": 0.27
+          }
+        ],
+        "sha256": "4ad9b786f597251b31a77ff875c4684ea6b88b2fe7c58378b723cc7f42fd3cf9"
+      }
     },
     {
       "id": "section-1-0",
@@ -912,9 +1036,98 @@
       "y": 0,
       "width": 18,
       "height": 18,
-      "seed": "c45c0ce509c24619",
-      "locked": false,
-      "connectors": []
+      "revision": 0,
+      "seed": "aad708533c8f931f",
+      "locked": true,
+      "seam_ids": [
+        "seam:section-0-0:section-1-0",
+        "seam:section-1-0:section-2-0",
+        "seam:section-1-0:section-1-1"
+      ],
+      "connectors": [],
+      "detail": {
+        "features": [
+          {
+            "kind": "tree",
+            "x": 21.5,
+            "y": 5.5,
+            "size": 0.23
+          },
+          {
+            "kind": "tree",
+            "x": 23.5,
+            "y": 5.5,
+            "size": 0.21
+          },
+          {
+            "kind": "tree",
+            "x": 35.5,
+            "y": 5.5,
+            "size": 0.31
+          },
+          {
+            "kind": "tree",
+            "x": 19.5,
+            "y": 7.5,
+            "size": 0.2
+          },
+          {
+            "kind": "tree",
+            "x": 21.5,
+            "y": 7.5,
+            "size": 0.22
+          },
+          {
+            "kind": "tree",
+            "x": 25.5,
+            "y": 7.5,
+            "size": 0.25
+          },
+          {
+            "kind": "tree",
+            "x": 35.5,
+            "y": 7.5,
+            "size": 0.29
+          },
+          {
+            "kind": "tree",
+            "x": 25.5,
+            "y": 9.5,
+            "size": 0.33
+          },
+          {
+            "kind": "tree",
+            "x": 27.5,
+            "y": 9.5,
+            "size": 0.19
+          },
+          {
+            "kind": "tree",
+            "x": 29.5,
+            "y": 9.5,
+            "size": 0.3
+          },
+          {
+            "kind": "tree",
+            "x": 35.5,
+            "y": 9.5,
+            "size": 0.31
+          },
+          {
+            "kind": "tree",
+            "x": 21.5,
+            "y": 17.5,
+            "size": 0.25
+          },
+          {
+            "kind": "tree",
+            "x": 23.5,
+            "y": 17.5,
+            "size": 0.31
+          }
+        ],
+        "sha256": "26f468c7d1e32ab2b443b8a198150a0ca8b79bb9b75d3498cfa65193bbb00d1e"
+      }
     },
     {
       "id": "section-2-0",
@@ -922,9 +1135,182 @@
       "y": 0,
       "width": 18,
       "height": 18,
-      "seed": "aaf7700adf5db83c",
-      "locked": false,
-      "connectors": []
+      "revision": 0,
+      "seed": "021ea009ee21d748",
+      "locked": true,
+      "seam_ids": [
+        "seam:section-1-0:section-2-0",
+        "seam:section-2-0:section-3-0",
+        "seam:section-2-0:section-2-1"
+      ],
+      "connectors": [],
+      "detail": {
+        "features": [
+          {
+            "kind": "tree",
+            "x": 41.5,
+            "y": 1.5,
+            "size": 0.18
+          },
+          {
+            "kind": "tree",
+            "x": 43.5,
+            "y": 1.5,
+            "size": 0.27
+          },
+          {
+            "kind": "tree",
+            "x": 45.5,
+            "y": 1.5,
+            "size": 0.23
+          },
+          {
+            "kind": "tree",
+            "x": 47.5,
+            "y": 1.5,
+            "size": 0.19
+          },
+          {
+            "kind": "tree",
+            "x": 49.5,
+            "y": 1.5,
+            "size": 0.18
+          },
+          {
+            "kind": "tree",
+            "x": 53.5,
+            "y": 1.5,
+            "size": 0.2
+          },
+          {
+            "kind": "tree",
+            "x": 43.5,
+            "y": 3.5,
+            "size": 0.28
+          },
+          {
+            "kind": "tree",
+            "x": 45.5,
+            "y": 3.5,
+            "size": 0.28
+          },
+          {
+            "kind": "tree",
+            "x": 49.5,
+            "y": 3.5,
+            "size": 0.28
+          },
+          {
+            "kind": "tree",
+            "x": 39.5,
+            "y": 5.5,
+            "size": 0.2
+          },
+          {
+            "kind": "tree",
+            "x": 43.5,
+            "y": 5.5,
+            "size": 0.18
+          },
+          {
+            "kind": "tree",
+            "x": 45.5,
+            "y": 5.5,
+            "size": 0.23
+          },
+          {
+            "kind": "tree",
+            "x": 51.5,
+            "y": 5.5,
+            "size": 0.22
+          },
+          {
+            "kind": "tree",
+            "x": 53.5,
+            "y": 5.5,
+            "size": 0.29
+          },
+          {
+            "kind": "tree",
+            "x": 37.5,
+            "y": 7.5,
+            "size": 0.31
+          },
+          {
+            "kind": "tree",
+            "x": 39.5,
+            "y": 7.5,
+            "size": 0.25
+          },
+          {
+            "kind": "tree",
+            "x": 43.5,
+            "y": 7.5,
+            "size": 0.31
+          },
+          {
+            "kind": "tree",
+            "x": 45.5,
+            "y": 7.5,
+            "size": 0.25
+          },
+          {
+            "kind": "tree",
+            "x": 49.5,
+            "y": 7.5,
+            "size": 0.25
+          },
+          {
+            "kind": "tree",
+            "x": 53.5,
+            "y": 7.5,
+            "size": 0.19
+          },
+          {
+            "kind": "tree",
+            "x": 37.5,
+            "y": 9.5,
+            "size": 0.26
+          },
+          {
+            "kind": "tree",
+            "x": 39.5,
+            "y": 9.5,
+            "size": 0.24
+          },
+          {
+            "kind": "tree",
+            "x": 45.5,
+            "y": 9.5,
+            "size": 0.19
+          },
+          {
+            "kind": "tree",
+            "x": 47.5,
+            "y": 9.5,
+            "size": 0.32
+          },
+          {
+            "kind": "tree",
+            "x": 41.5,
+            "y": 11.5,
+            "size": 0.31
+          },
+          {
+            "kind": "tree",
+            "x": 51.5,
+            "y": 11.5,
+            "size": 0.25
+          },
+          {
+            "kind": "tree",
+            "x": 53.5,
+            "y": 15.5,
+            "size": 0.28
+          }
+        ],
+        "sha256": "1e3fcc7e1e99fb4a5a7225bc56d64ad2d269850f2b9f7cd6cdb235669095120a"
+      }
     },
     {
       "id": "section-3-0",
@@ -932,9 +1318,181 @@
       "y": 0,
       "width": 18,
       "height": 18,
-      "seed": "2f92c3929d20e901",
-      "locked": false,
-      "connectors": []
+      "revision": 0,
+      "seed": "ff95764fd8f95db3",
+      "locked": true,
+      "seam_ids": [
+        "seam:section-2-0:section-3-0",
+        "seam:section-3-0:section-3-1"
+      ],
+      "connectors": [],
+      "detail": {
+        "features": [
+          {
+            "kind": "tree",
+            "x": 55.5,
+            "y": 1.5,
+            "size": 0.23
+          },
+          {
+            "kind": "tree",
+            "x": 57.5,
+            "y": 1.5,
+            "size": 0.31
+          },
+          {
+            "kind": "tree",
+            "x": 69.5,
+            "y": 1.5,
+            "size": 0.32
+          },
+          {
+            "kind": "tree",
+            "x": 57.5,
+            "y": 3.5,
+            "size": 0.25
+          },
+          {
+            "kind": "tree",
+            "x": 59.5,
+            "y": 3.5,
+            "size": 0.28
+          },
+          {
+            "kind": "tree",
+            "x": 61.5,
+            "y": 3.5,
+            "size": 0.33
+          },
+          {
+            "kind": "tree",
+            "x": 63.5,
+            "y": 3.5,
+            "size": 0.21
+          },
+          {
+            "kind": "tree",
+            "x": 65.5,
+            "y": 3.5,
+            "size": 0.26
+          },
+          {
+            "kind": "tree",
+            "x": 67.5,
+            "y": 3.5,
+            "size": 0.27
+          },
+          {
+            "kind": "tree",
+            "x": 69.5,
+            "y": 3.5,
+            "size": 0.28
+          },
+          {
+            "kind": "tree",
+            "x": 71.5,
+            "y": 3.5,
+            "size": 0.31
+          },
+          {
+            "kind": "tree",
+            "x": 65.5,
+            "y": 5.5,
+            "size": 0.19
+          },
+          {
+            "kind": "tree",
+            "x": 67.5,
+            "y": 5.5,
+            "size": 0.32
+          },
+          {
+            "kind": "tree",
+            "x": 67.5,
+            "y": 7.5,
+            "size": 0.24
+          },
+          {
+            "kind": "tree",
+            "x": 55.5,
+            "y": 9.5,
+            "size": 0.25
+          },
+          {
+            "kind": "tree",
+            "x": 55.5,
+            "y": 11.5,
+            "size": 0.27
+          },
+          {
+            "kind": "tree",
+            "x": 57.5,
+            "y": 11.5,
+            "size": 0.3
+          },
+          {
+            "kind": "tree",
+            "x": 59.5,
+            "y": 11.5,
+            "size": 0.26
+          },
+          {
+            "kind": "tree",
+            "x": 55.5,
+            "y": 13.5,
+            "size": 0.28
+          },
+          {
+            "kind": "tree",
+            "x": 57.5,
+            "y": 13.5,
+            "size": 0.24
+          },
+          {
+            "kind": "tree",
+            "x": 59.5,
+            "y": 13.5,
+            "size": 0.27
+          },
+          {
+            "kind": "tree",
+            "x": 61.5,
+            "y": 13.5,
+            "size": 0.29
+          },
+          {
+            "kind": "tree",
+            "x": 55.5,
+            "y": 15.5,
+            "size": 0.2
+          },
+          {
+            "kind": "tree",
+            "x": 57.5,
+            "y": 15.5,
+            "size": 0.2
+          },
+          {
+            "kind": "tree",
+            "x": 59.5,
+            "y": 15.5,
+            "size": 0.3
+          },
+          {
+            "kind": "tree",
+            "x": 57.5,
+            "y": 17.5,
+            "size": 0.25
+          },
+          {
+            "kind": "tree",
+            "x": 59.5,
+            "y": 17.5,
+            "size": 0.26
+          }
+        ],
+        "sha256": "316ed349f685f80bd7a89d9badfab9f881cd0187d65d6a5059777e299684af20"
+      }
     },
     {
       "id": "section-0-1",
@@ -942,22 +1500,142 @@
       "y": 18,
       "width": 18,
       "height": 18,
-      "seed": "a030e7bcc2ecc821",
-      "locked": false,
+      "revision": 0,
+      "seed": "1d4a588674327270",
+      "locked": true,
+      "seam_ids": [
+        "seam:section-0-0:section-0-1",
+        "seam:section-0-1:section-1-1",
+        "seam:section-0-1:section-0-2"
+      ],
       "connectors": [
         {
           "feature_id": "alder-river",
           "kind": "river",
+          "offset": 13.0,
           "edge": "east",
-          "offset": 13
-        },
-        {
-          "feature_id": "alder-river",
-          "kind": "river",
-          "edge": "west",
-          "offset": 13
+          "seam_id": "seam:section-0-1:section-1-1"
         }
-      ]
+      ],
+      "detail": {
+        "features": [
+          {
+            "kind": "tree",
+            "x": 7.5,
+            "y": 19.5,
+            "size": 0.24
+          },
+          {
+            "kind": "tree",
+            "x": 9.5,
+            "y": 19.5,
+            "size": 0.27
+          },
+          {
+            "kind": "tree",
+            "x": 11.5,
+            "y": 19.5,
+            "size": 0.2
+          },
+          {
+            "kind": "tree",
+            "x": 11.5,
+            "y": 21.5,
+            "size": 0.24
+          },
+          {
+            "kind": "tree",
+            "x": 17.5,
+            "y": 21.5,
+            "size": 0.23
+          },
+          {
+            "kind": "tree",
+            "x": 11.5,
+            "y": 23.5,
+            "size": 0.19
+          },
+          {
+            "kind": "tree",
+            "x": 13.5,
+            "y": 23.5,
+            "size": 0.33
+          },
+          {
+            "kind": "tree",
+            "x": 11.5,
+            "y": 25.5,
+            "size": 0.26
+          },
+          {
+            "kind": "tree",
+            "x": 17.5,
+            "y": 25.5,
+            "size": 0.27
+          },
+          {
+            "kind": "tree",
+            "x": 1.5,
+            "y": 27.5,
+            "size": 0.33
+          },
+          {
+            "kind": "tree",
+            "x": 7.5,
+            "y": 27.5,
+            "size": 0.23
+          },
+          {
+            "kind": "tree",
+            "x": 11.5,
+            "y": 27.5,
+            "size": 0.32
+          },
+          {
+            "kind": "tree",
+            "x": 13.5,
+            "y": 27.5,
+            "size": 0.2
+          },
+          {
+            "kind": "tree",
+            "x": 15.5,
+            "y": 27.5,
+            "size": 0.25
+          },
+          {
+            "kind": "tree",
+            "x": 17.5,
+            "y": 27.5,
+            "size": 0.22
+          },
+          {
+            "kind": "tree",
+            "x": 1.5,
+            "y": 35.5,
+            "size": 0.22
+          },
+          {
+            "kind": "tree",
+            "x": 3.5,
+            "y": 35.5,
+            "size": 0.21
+          },
+          {
+            "kind": "tree",
+            "x": 5.5,
+            "y": 35.5,
+            "size": 0.22
+          },
+          {
+            "kind": "tree",
+            "x": 7.5,
+            "y": 35.5,
+            "size": 0.28
+          }
+        ],
+        "sha256": "362043a5cbe2c76c0ab49c15efb20437e2c863505d4cec4072a6196c524dda8f"
+      }
     },
     {
       "id": "section-1-1",
@@ -965,46 +1643,141 @@
       "y": 18,
       "width": 18,
       "height": 18,
-      "seed": "fc7283e9aa945413",
-      "locked": false,
+      "revision": 0,
+      "seed": "1121ac963293ddf8",
+      "locked": true,
+      "seam_ids": [
+        "seam:section-1-0:section-1-1",
+        "seam:section-0-1:section-1-1",
+        "seam:section-1-1:section-2-1",
+        "seam:section-1-1:section-1-2"
+      ],
       "connectors": [
         {
           "feature_id": "alder-river",
           "kind": "river",
-          "edge": "east",
-          "offset": 10
-        },
-        {
-          "feature_id": "alder-river",
-          "kind": "river",
+          "offset": 13.0,
           "edge": "west",
-          "offset": 13
+          "seam_id": "seam:section-0-1:section-1-1"
         },
         {
           "feature_id": "path:commons-bank:mill-reach",
           "kind": "path",
+          "offset": 10.0,
           "edge": "east",
-          "offset": 10
-        },
-        {
-          "feature_id": "path:commons-bank:mill-reach",
-          "kind": "path",
-          "edge": "east",
-          "offset": 11
+          "seam_id": "seam:section-1-1:section-2-1"
         },
         {
           "feature_id": "path:commons-bank:orchard-row",
           "kind": "path",
-          "edge": "south",
-          "offset": 13
+          "offset": 14.143,
+          "edge": "east",
+          "seam_id": "seam:section-1-1:section-2-1"
         },
         {
-          "feature_id": "path:commons-bank:pineward-edge",
+          "feature_id": "alder-river",
+          "kind": "river",
+          "offset": 10.0,
+          "edge": "east",
+          "seam_id": "seam:section-1-1:section-2-1"
+        },
+        {
+          "feature_id": "path:commons-bank:orchard-row",
           "kind": "path",
-          "edge": "west",
-          "offset": 4
+          "offset": 15.0,
+          "edge": "south",
+          "seam_id": "seam:section-1-1:section-1-2"
         }
-      ]
+      ],
+      "detail": {
+        "features": [
+          {
+            "kind": "tree",
+            "x": 21.5,
+            "y": 19.5,
+            "size": 0.24
+          },
+          {
+            "kind": "tree",
+            "x": 33.5,
+            "y": 19.5,
+            "size": 0.3
+          },
+          {
+            "kind": "tree",
+            "x": 19.5,
+            "y": 21.5,
+            "size": 0.29
+          },
+          {
+            "kind": "tree",
+            "x": 23.5,
+            "y": 21.5,
+            "size": 0.29
+          },
+          {
+            "kind": "tree",
+            "x": 35.5,
+            "y": 21.5,
+            "size": 0.33
+          },
+          {
+            "kind": "tree",
+            "x": 19.5,
+            "y": 23.5,
+            "size": 0.24
+          },
+          {
+            "kind": "tree",
+            "x": 21.5,
+            "y": 23.5,
+            "size": 0.3
+          },
+          {
+            "kind": "tree",
+            "x": 23.5,
+            "y": 23.5,
+            "size": 0.2
+          },
+          {
+            "kind": "tree",
+            "x": 25.5,
+            "y": 23.5,
+            "size": 0.25
+          },
+          {
+            "kind": "tree",
+            "x": 19.5,
+            "y": 25.5,
+            "size": 0.31
+          },
+          {
+            "kind": "tree",
+            "x": 21.5,
+            "y": 25.5,
+            "size": 0.23
+          },
+          {
+            "kind": "tree",
+            "x": 21.5,
+            "y": 27.5,
+            "size": 0.24
+          },
+          {
+            "kind": "tree",
+            "x": 23.5,
+            "y": 27.5,
+            "size": 0.34
+          },
+          {
+            "kind": "tree",
+            "x": 21.5,
+            "y": 35.5,
+            "size": 0.33
+          }
+        ],
+        "sha256": "365cfe0d8811fdf09231d62e93b16d1ecdf315e21829ad7d74f682b086e94467"
+      }
     },
     {
       "id": "section-2-1",
@@ -1012,40 +1785,62 @@
       "y": 18,
       "width": 18,
       "height": 18,
-      "seed": "e7fac9bd2ac066b8",
-      "locked": false,
+      "revision": 0,
+      "seed": "8b94b9d930d65885",
+      "locked": true,
+      "seam_ids": [
+        "seam:section-2-0:section-2-1",
+        "seam:section-1-1:section-2-1",
+        "seam:section-2-1:section-3-1",
+        "seam:section-2-1:section-2-2"
+      ],
       "connectors": [
         {
+          "feature_id": "path:commons-bank:mill-reach",
+          "kind": "path",
+          "offset": 10.0,
+          "edge": "west",
+          "seam_id": "seam:section-1-1:section-2-1"
+        },
+        {
+          "feature_id": "path:commons-bank:orchard-row",
+          "kind": "path",
+          "offset": 14.143,
+          "edge": "west",
+          "seam_id": "seam:section-1-1:section-2-1"
+        },
+        {
           "feature_id": "alder-river",
           "kind": "river",
+          "offset": 10.0,
+          "edge": "west",
+          "seam_id": "seam:section-1-1:section-2-1"
+        },
+        {
+          "feature_id": "alder-river",
+          "kind": "river",
+          "offset": 2.0,
           "edge": "east",
-          "offset": 2
-        },
-        {
-          "feature_id": "alder-river",
-          "kind": "river",
-          "edge": "west",
-          "offset": 10
-        },
-        {
-          "feature_id": "path:commons-bank:mill-reach",
-          "kind": "path",
-          "edge": "north",
-          "offset": 9
-        },
-        {
-          "feature_id": "path:commons-bank:mill-reach",
-          "kind": "path",
-          "edge": "west",
-          "offset": 9
-        },
-        {
-          "feature_id": "path:commons-bank:mill-reach",
-          "kind": "path",
-          "edge": "west",
-          "offset": 10
+          "seam_id": "seam:section-2-1:section-3-1"
         }
-      ]
+      ],
+      "detail": {
+        "features": [
+          {
+            "kind": "tree",
+            "x": 43.5,
+            "y": 33.5,
+            "size": 0.31
+          },
+          {
+            "kind": "tree",
+            "x": 43.5,
+            "y": 35.5,
+            "size": 0.21
+          }
+        ],
+        "sha256": "c4ff657a2e15e7a555ecd6899cf8d460075a2f37cd4ff0fcccdb507c7af8475e"
+      }
     },
     {
       "id": "section-3-1",
@@ -1053,22 +1848,94 @@
       "y": 18,
       "width": 18,
       "height": 18,
-      "seed": "aec60739ded6b8e4",
-      "locked": false,
+      "revision": 0,
+      "seed": "857402a9a0a0e639",
+      "locked": true,
+      "seam_ids": [
+        "seam:section-3-0:section-3-1",
+        "seam:section-2-1:section-3-1",
+        "seam:section-3-1:section-3-2"
+      ],
       "connectors": [
         {
           "feature_id": "alder-river",
           "kind": "river",
-          "edge": "east",
-          "offset": 5
-        },
-        {
-          "feature_id": "alder-river",
-          "kind": "river",
+          "offset": 2.0,
           "edge": "west",
-          "offset": 2
+          "seam_id": "seam:section-2-1:section-3-1"
         }
-      ]
+      ],
+      "detail": {
+        "features": [
+          {
+            "kind": "tree",
+            "x": 55.5,
+            "y": 25.5,
+            "size": 0.32
+          },
+          {
+            "kind": "tree",
+            "x": 61.5,
+            "y": 25.5,
+            "size": 0.21
+          },
+          {
+            "kind": "tree",
+            "x": 61.5,
+            "y": 27.5,
+            "size": 0.31
+          },
+          {
+            "kind": "tree",
+            "x": 57.5,
+            "y": 29.5,
+            "size": 0.21
+          },
+          {
+            "kind": "tree",
+            "x": 59.5,
+            "y": 29.5,
+            "size": 0.33
+          },
+          {
+            "kind": "tree",
+            "x": 69.5,
+            "y": 29.5,
+            "size": 0.27
+          },
+          {
+            "kind": "tree",
+            "x": 71.5,
+            "y": 29.5,
+            "size": 0.33
+          },
+          {
+            "kind": "tree",
+            "x": 59.5,
+            "y": 31.5,
+            "size": 0.24
+          },
+          {
+            "kind": "tree",
+            "x": 71.5,
+            "y": 31.5,
+            "size": 0.19
+          },
+          {
+            "kind": "tree",
+            "x": 69.5,
+            "y": 35.5,
+            "size": 0.19
+          },
+          {
+            "kind": "tree",
+            "x": 71.5,
+            "y": 35.5,
+            "size": 0.2
+          }
+        ],
+        "sha256": "bddb3879c2ad018031bfa8359b962f65f7533b16da45c8588ab0c1d593c11500"
+      }
     },
     {
       "id": "section-0-2",
@@ -1076,9 +1943,91 @@
       "y": 36,
       "width": 18,
       "height": 18,
-      "seed": "6a016df567ea379c",
-      "locked": false,
-      "connectors": []
+      "revision": 0,
+      "seed": "bc6e2fcc0b2281b5",
+      "locked": true,
+      "seam_ids": [
+        "seam:section-0-1:section-0-2",
+        "seam:section-0-2:section-1-2"
+      ],
+      "connectors": [],
+      "detail": {
+        "features": [
+          {
+            "kind": "tree",
+            "x": 5.5,
+            "y": 37.5,
+            "size": 0.25
+          },
+          {
+            "kind": "tree",
+            "x": 7.5,
+            "y": 37.5,
+            "size": 0.33
+          },
+          {
+            "kind": "tree",
+            "x": 9.5,
+            "y": 37.5,
+            "size": 0.19
+          },
+          {
+            "kind": "tree",
+            "x": 17.5,
+            "y": 45.5,
+            "size": 0.23
+          },
+          {
+            "kind": "tree",
+            "x": 3.5,
+            "y": 47.5,
+            "size": 0.24
+          },
+          {
+            "kind": "tree",
+            "x": 1.5,
+            "y": 49.5,
+            "size": 0.3
+          },
+          {
+            "kind": "tree",
+            "x": 3.5,
+            "y": 49.5,
+            "size": 0.24
+          },
+          {
+            "kind": "tree",
+            "x": 5.5,
+            "y": 49.5,
+            "size": 0.23
+          },
+          {
+            "kind": "tree",
+            "x": 1.5,
+            "y": 51.5,
+            "size": 0.3
+          },
+          {
+            "kind": "tree",
+            "x": 3.5,
+            "y": 51.5,
+            "size": 0.21
+          },
+          {
+            "kind": "tree",
+            "x": 7.5,
+            "y": 51.5,
+            "size": 0.29
+          },
+          {
+            "kind": "tree",
+            "x": 1.5,
+            "y": 53.5,
+            "size": 0.26
+          }
+        ],
+        "sha256": "e79c2cde4df92eb378f4d81eeab6bba96d32c3005884f547c92eda0dd701addf"
+      }
     },
     {
       "id": "section-1-2",
@@ -1086,16 +2035,82 @@
       "y": 36,
       "width": 18,
       "height": 18,
-      "seed": "3d282f519c6133fe",
-      "locked": false,
+      "revision": 0,
+      "seed": "7d3c27378a25cf40",
+      "locked": true,
+      "seam_ids": [
+        "seam:section-1-1:section-1-2",
+        "seam:section-0-2:section-1-2",
+        "seam:section-1-2:section-2-2"
+      ],
       "connectors": [
         {
           "feature_id": "path:commons-bank:orchard-row",
           "kind": "path",
+          "offset": 15.0,
           "edge": "north",
-          "offset": 12
+          "seam_id": "seam:section-1-1:section-1-2"
         }
-      ]
+      ],
+      "detail": {
+        "features": [
+          {
+            "kind": "tree",
+            "x": 35.5,
+            "y": 39.5,
+            "size": 0.33
+          },
+          {
+            "kind": "tree",
+            "x": 35.5,
+            "y": 43.5,
+            "size": 0.27
+          },
+          {
+            "kind": "tree",
+            "x": 35.5,
+            "y": 47.5,
+            "size": 0.22
+          },
+          {
+            "kind": "tree",
+            "x": 31.5,
+            "y": 49.5,
+            "size": 0.26
+          },
+          {
+            "kind": "tree",
+            "x": 27.5,
+            "y": 51.5,
+            "size": 0.32
+          },
+          {
+            "kind": "tree",
+            "x": 29.5,
+            "y": 51.5,
+            "size": 0.33
+          },
+          {
+            "kind": "tree",
+            "x": 35.5,
+            "y": 51.5,
+            "size": 0.21
+          },
+          {
+            "kind": "tree",
+            "x": 31.5,
+            "y": 53.5,
+            "size": 0.26
+          },
+          {
+            "kind": "tree",
+            "x": 35.5,
+            "y": 53.5,
+            "size": 0.3
+          }
+        ],
+        "sha256": "bec4cbb03b15a4c0b9d0e84b5b3a4a8c85bfabbdda922fd1f2200f1a74c2324d"
+      }
     },
     {
       "id": "section-2-2",
@@ -1103,9 +2118,248 @@
       "y": 36,
       "width": 18,
       "height": 18,
-      "seed": "059a2972f3e4c982",
-      "locked": false,
-      "connectors": []
+      "revision": 0,
+      "seed": "55f3ee51deb4f875",
+      "locked": true,
+      "seam_ids": [
+        "seam:section-2-1:section-2-2",
+        "seam:section-1-2:section-2-2",
+        "seam:section-2-2:section-3-2"
+      ],
+      "connectors": [],
+      "detail": {
+        "features": [
+          {
+            "kind": "tree",
+            "x": 39.5,
+            "y": 37.5,
+            "size": 0.2
+          },
+          {
+            "kind": "tree",
+            "x": 41.5,
+            "y": 37.5,
+            "size": 0.34
+          },
+          {
+            "kind": "tree",
+            "x": 37.5,
+            "y": 39.5,
+            "size": 0.3
+          },
+          {
+            "kind": "tree",
+            "x": 39.5,
+            "y": 39.5,
+            "size": 0.21
+          },
+          {
+            "kind": "tree",
+            "x": 45.5,
+            "y": 39.5,
+            "size": 0.28
+          },
+          {
+            "kind": "tree",
+            "x": 37.5,
+            "y": 41.5,
+            "size": 0.22
+          },
+          {
+            "kind": "tree",
+            "x": 43.5,
+            "y": 41.5,
+            "size": 0.34
+          },
+          {
+            "kind": "tree",
+            "x": 45.5,
+            "y": 41.5,
+            "size": 0.18
+          },
+          {
+            "kind": "tree",
+            "x": 47.5,
+            "y": 41.5,
+            "size": 0.25
+          },
+          {
+            "kind": "tree",
+            "x": 37.5,
+            "y": 43.5,
+            "size": 0.31
+          },
+          {
+            "kind": "tree",
+            "x": 41.5,
+            "y": 43.5,
+            "size": 0.24
+          },
+          {
+            "kind": "tree",
+            "x": 43.5,
+            "y": 43.5,
+            "size": 0.2
+          },
+          {
+            "kind": "tree",
+            "x": 45.5,
+            "y": 43.5,
+            "size": 0.24
+          },
+          {
+            "kind": "tree",
+            "x": 47.5,
+            "y": 43.5,
+            "size": 0.25
+          },
+          {
+            "kind": "tree",
+            "x": 37.5,
+            "y": 45.5,
+            "size": 0.27
+          },
+          {
+            "kind": "tree",
+            "x": 39.5,
+            "y": 45.5,
+            "size": 0.19
+          },
+          {
+            "kind": "tree",
+            "x": 41.5,
+            "y": 45.5,
+            "size": 0.34
+          },
+          {
+            "kind": "tree",
+            "x": 45.5,
+            "y": 45.5,
+            "size": 0.2
+          },
+          {
+            "kind": "tree",
+            "x": 47.5,
+            "y": 45.5,
+            "size": 0.23
+          },
+          {
+            "kind": "tree",
+            "x": 37.5,
+            "y": 47.5,
+            "size": 0.28
+          },
+          {
+            "kind": "tree",
+            "x": 43.5,
+            "y": 47.5,
+            "size": 0.24
+          },
+          {
+            "kind": "tree",
+            "x": 51.5,
+            "y": 47.5,
+            "size": 0.3
+          },
+          {
+            "kind": "tree",
+            "x": 53.5,
+            "y": 47.5,
+            "size": 0.19
+          },
+          {
+            "kind": "tree",
+            "x": 39.5,
+            "y": 49.5,
+            "size": 0.21
+          },
+          {
+            "kind": "tree",
+            "x": 43.5,
+            "y": 49.5,
+            "size": 0.29
+          },
+          {
+            "kind": "tree",
+            "x": 45.5,
+            "y": 49.5,
+            "size": 0.27
+          },
+          {
+            "kind": "tree",
+            "x": 47.5,
+            "y": 49.5,
+            "size": 0.19
+          },
+          {
+            "kind": "tree",
+            "x": 49.5,
+            "y": 49.5,
+            "size": 0.31
+          },
+          {
+            "kind": "tree",
+            "x": 51.5,
+            "y": 49.5,
+            "size": 0.33
+          },
+          {
+            "kind": "tree",
+            "x": 53.5,
+            "y": 49.5,
+            "size": 0.22
+          },
+          {
+            "kind": "tree",
+            "x": 37.5,
+            "y": 51.5,
+            "size": 0.2
+          },
+          {
+            "kind": "tree",
+            "x": 39.5,
+            "y": 51.5,
+            "size": 0.25
+          },
+          {
+            "kind": "tree",
+            "x": 47.5,
+            "y": 51.5,
+            "size": 0.29
+          },
+          {
+            "kind": "tree",
+            "x": 49.5,
+            "y": 51.5,
+            "size": 0.25
+          },
+          {
+            "kind": "tree",
+            "x": 37.5,
+            "y": 53.5,
+            "size": 0.3
+          },
+          {
+            "kind": "tree",
+            "x": 43.5,
+            "y": 53.5,
+            "size": 0.31
+          },
+          {
+            "kind": "tree",
+            "x": 47.5,
+            "y": 53.5,
+            "size": 0.27
+          },
+          {
+            "kind": "tree",
+            "x": 51.5,
+            "y": 53.5,
+            "size": 0.26
+          }
+        ],
+        "sha256": "c5d8d7a682e619ea12d8776ebf79dcff601d31c97636b63044f12a661f4d9bc2"
+      }
     },
     {
       "id": "section-3-2",
@@ -1113,19 +2367,1763 @@
       "y": 36,
       "width": 18,
       "height": 18,
-      "seed": "9d9ed71b4bbaf084",
-      "locked": false,
-      "connectors": []
+      "revision": 0,
+      "seed": "59103dbc44f0c270",
+      "locked": true,
+      "seam_ids": [
+        "seam:section-3-1:section-3-2",
+        "seam:section-2-2:section-3-2"
+      ],
+      "connectors": [],
+      "detail": {
+        "features": [
+          {
+            "kind": "tree",
+            "x": 67.5,
+            "y": 37.5,
+            "size": 0.28
+          },
+          {
+            "kind": "tree",
+            "x": 71.5,
+            "y": 37.5,
+            "size": 0.22
+          },
+          {
+            "kind": "tree",
+            "x": 65.5,
+            "y": 39.5,
+            "size": 0.19
+          },
+          {
+            "kind": "tree",
+            "x": 67.5,
+            "y": 39.5,
+            "size": 0.26
+          },
+          {
+            "kind": "tree",
+            "x": 69.5,
+            "y": 39.5,
+            "size": 0.28
+          },
+          {
+            "kind": "tree",
+            "x": 71.5,
+            "y": 39.5,
+            "size": 0.25
+          },
+          {
+            "kind": "tree",
+            "x": 59.5,
+            "y": 41.5,
+            "size": 0.33
+          },
+          {
+            "kind": "tree",
+            "x": 69.5,
+            "y": 41.5,
+            "size": 0.18
+          },
+          {
+            "kind": "tree",
+            "x": 57.5,
+            "y": 43.5,
+            "size": 0.27
+          },
+          {
+            "kind": "tree",
+            "x": 61.5,
+            "y": 43.5,
+            "size": 0.2
+          },
+          {
+            "kind": "tree",
+            "x": 67.5,
+            "y": 43.5,
+            "size": 0.22
+          },
+          {
+            "kind": "tree",
+            "x": 57.5,
+            "y": 45.5,
+            "size": 0.21
+          },
+          {
+            "kind": "tree",
+            "x": 59.5,
+            "y": 45.5,
+            "size": 0.23
+          },
+          {
+            "kind": "tree",
+            "x": 61.5,
+            "y": 45.5,
+            "size": 0.24
+          },
+          {
+            "kind": "tree",
+            "x": 65.5,
+            "y": 45.5,
+            "size": 0.19
+          },
+          {
+            "kind": "tree",
+            "x": 57.5,
+            "y": 47.5,
+            "size": 0.23
+          },
+          {
+            "kind": "tree",
+            "x": 61.5,
+            "y": 47.5,
+            "size": 0.3
+          },
+          {
+            "kind": "tree",
+            "x": 71.5,
+            "y": 47.5,
+            "size": 0.27
+          },
+          {
+            "kind": "tree",
+            "x": 59.5,
+            "y": 51.5,
+            "size": 0.24
+          },
+          {
+            "kind": "tree",
+            "x": 71.5,
+            "y": 51.5,
+            "size": 0.21
+          },
+          {
+            "kind": "tree",
+            "x": 59.5,
+            "y": 53.5,
+            "size": 0.25
+          },
+          {
+            "kind": "tree",
+            "x": 71.5,
+            "y": 53.5,
+            "size": 0.33
+          }
+        ],
+        "sha256": "bc278eb0f26726838a7d734a4d532ba0945a625c7add090096eddc0c00cdb720"
+      }
+    }
+  ],
+  "seams": [
+    {
+      "id": "seam:section-0-0:section-1-0",
+      "orientation": "vertical",
+      "sides": [
+        {
+          "section_id": "section-0-0",
+          "edge": "east"
+        },
+        {
+          "section_id": "section-1-0",
+          "edge": "west"
+        }
+      ],
+      "length": 18,
+      "elevation_bands": "444444444444444444",
+      "region_transitions": [
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ]
+      ],
+      "connectors": [],
+      "sha256": "57a4ae4d6e37a22b648bba7e482b1e39135d9bfb29dcd89618bf7998f7bc8102"
+    },
+    {
+      "id": "seam:section-0-0:section-0-1",
+      "orientation": "horizontal",
+      "sides": [
+        {
+          "section_id": "section-0-0",
+          "edge": "south"
+        },
+        {
+          "section_id": "section-0-1",
+          "edge": "north"
+        }
+      ],
+      "length": 18,
+      "elevation_bands": "444444444444444444",
+      "region_transitions": [
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ]
+      ],
+      "connectors": [],
+      "sha256": "c7dfef9a3aa04b34afe40ec29afc785a37dd1847f0f3a64e02f01712169524ae"
+    },
+    {
+      "id": "seam:section-1-0:section-2-0",
+      "orientation": "vertical",
+      "sides": [
+        {
+          "section_id": "section-1-0",
+          "edge": "east"
+        },
+        {
+          "section_id": "section-2-0",
+          "edge": "west"
+        }
+      ],
+      "length": 18,
+      "elevation_bands": "444444444444444444",
+      "region_transitions": [
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ]
+      ],
+      "connectors": [],
+      "sha256": "c823ac7996cf06fc2eee4cd1eaf3126826511381204e3f8930d78d2af45ce656"
+    },
+    {
+      "id": "seam:section-1-0:section-1-1",
+      "orientation": "horizontal",
+      "sides": [
+        {
+          "section_id": "section-1-0",
+          "edge": "south"
+        },
+        {
+          "section_id": "section-1-1",
+          "edge": "north"
+        }
+      ],
+      "length": 18,
+      "elevation_bands": "444444444444444444",
+      "region_transitions": [
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ]
+      ],
+      "connectors": [],
+      "sha256": "c54781642b18cca079cfeff05413a119649fb10ec377897fff9b70312ec91352"
+    },
+    {
+      "id": "seam:section-2-0:section-3-0",
+      "orientation": "vertical",
+      "sides": [
+        {
+          "section_id": "section-2-0",
+          "edge": "east"
+        },
+        {
+          "section_id": "section-3-0",
+          "edge": "west"
+        }
+      ],
+      "length": 18,
+      "elevation_bands": "444444444444433333",
+      "region_transitions": [
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "riverbank",
+          "riverbank"
+        ]
+      ],
+      "connectors": [],
+      "sha256": "e4850c45cdbb6db7a7bca9eac4b143639bea69a8ce75c7f0d2dddb3daeab83be"
+    },
+    {
+      "id": "seam:section-2-0:section-2-1",
+      "orientation": "horizontal",
+      "sides": [
+        {
+          "section_id": "section-2-0",
+          "edge": "south"
+        },
+        {
+          "section_id": "section-2-1",
+          "edge": "north"
+        }
+      ],
+      "length": 18,
+      "elevation_bands": "444443333322222222",
+      "region_transitions": [
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "working",
+          "working"
+        ],
+        [
+          "working",
+          "working"
+        ],
+        [
+          "working",
+          "working"
+        ],
+        [
+          "working",
+          "working"
+        ],
+        [
+          "working",
+          "working"
+        ],
+        [
+          "working",
+          "riverbank"
+        ],
+        [
+          "working",
+          "riverbank"
+        ],
+        [
+          "riverbank",
+          "riverbank"
+        ],
+        [
+          "riverbank",
+          "riverbank"
+        ],
+        [
+          "riverbank",
+          "riverbank"
+        ],
+        [
+          "riverbank",
+          "riverbank"
+        ],
+        [
+          "riverbank",
+          "riverbank"
+        ],
+        [
+          "riverbank",
+          "riverbank"
+        ],
+        [
+          "riverbank",
+          "riverbank"
+        ],
+        [
+          "riverbank",
+          "riverbank"
+        ],
+        [
+          "riverbank",
+          "riverbank"
+        ]
+      ],
+      "connectors": [],
+      "sha256": "9e68f7b3f1b712a77616f9974eae9a54e8ee5586a7c0b7c5dd58a088969ae500"
+    },
+    {
+      "id": "seam:section-3-0:section-3-1",
+      "orientation": "horizontal",
+      "sides": [
+        {
+          "section_id": "section-3-0",
+          "edge": "south"
+        },
+        {
+          "section_id": "section-3-1",
+          "edge": "north"
+        }
+      ],
+      "length": 18,
+      "elevation_bands": "223333333333333333",
+      "region_transitions": [
+        [
+          "riverbank",
+          "riverbank"
+        ],
+        [
+          "riverbank",
+          "riverbank"
+        ],
+        [
+          "riverbank",
+          "riverbank"
+        ],
+        [
+          "woodland",
+          "riverbank"
+        ],
+        [
+          "woodland",
+          "riverbank"
+        ],
+        [
+          "woodland",
+          "riverbank"
+        ],
+        [
+          "rough_ground",
+          "riverbank"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ]
+      ],
+      "connectors": [],
+      "sha256": "6fec0b44fdae2701a659508505b02b2d4472fa2f5d6f9992b56f9bb799f0678d"
+    },
+    {
+      "id": "seam:section-0-1:section-1-1",
+      "orientation": "vertical",
+      "sides": [
+        {
+          "section_id": "section-0-1",
+          "edge": "east"
+        },
+        {
+          "section_id": "section-1-1",
+          "edge": "west"
+        }
+      ],
+      "length": 18,
+      "elevation_bands": "444444433332222333",
+      "region_transitions": [
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "riverbank",
+          "riverbank"
+        ],
+        [
+          "riverbank",
+          "riverbank"
+        ],
+        [
+          "water",
+          "water"
+        ],
+        [
+          "water",
+          "water"
+        ],
+        [
+          "riverbank",
+          "riverbank"
+        ],
+        [
+          "riverbank",
+          "riverbank"
+        ],
+        [
+          "riverbank",
+          "riverbank"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ]
+      ],
+      "connectors": [
+        {
+          "feature_id": "alder-river",
+          "kind": "river",
+          "offset": 13.0
+        }
+      ],
+      "sha256": "ffc485362364d79765d3f465bb5f8e21f1daea9ee108109879ffef9628c2cb45"
+    },
+    {
+      "id": "seam:section-0-1:section-0-2",
+      "orientation": "horizontal",
+      "sides": [
+        {
+          "section_id": "section-0-1",
+          "edge": "south"
+        },
+        {
+          "section_id": "section-0-2",
+          "edge": "north"
+        }
+      ],
+      "length": 18,
+      "elevation_bands": "333333333333333333",
+      "region_transitions": [
+        [
+          "woodland",
+          "rough_ground"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "rough_ground"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "rough_ground",
+          "woodland"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ]
+      ],
+      "connectors": [],
+      "sha256": "6826ad3b62eadf1fc204df0acd118fb9b9c272b61359371ae689162cbe6ae3a7"
+    },
+    {
+      "id": "seam:section-1-1:section-2-1",
+      "orientation": "vertical",
+      "sides": [
+        {
+          "section_id": "section-1-1",
+          "edge": "east"
+        },
+        {
+          "section_id": "section-2-1",
+          "edge": "west"
+        }
+      ],
+      "length": 18,
+      "elevation_bands": "444433332222233334",
+      "region_transitions": [
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "woodland",
+          "rough_ground"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "village",
+          "village"
+        ],
+        [
+          "village",
+          "village"
+        ],
+        [
+          "village",
+          "village"
+        ],
+        [
+          "riverbank",
+          "riverbank"
+        ],
+        [
+          "riverbank",
+          "riverbank"
+        ],
+        [
+          "riverbank",
+          "water"
+        ],
+        [
+          "water",
+          "water"
+        ],
+        [
+          "water",
+          "riverbank"
+        ],
+        [
+          "riverbank",
+          "riverbank"
+        ],
+        [
+          "riverbank",
+          "village"
+        ],
+        [
+          "village",
+          "village"
+        ],
+        [
+          "village",
+          "village"
+        ],
+        [
+          "village",
+          "village"
+        ],
+        [
+          "village",
+          "village"
+        ]
+      ],
+      "connectors": [
+        {
+          "feature_id": "path:commons-bank:mill-reach",
+          "kind": "path",
+          "offset": 10.0
+        },
+        {
+          "feature_id": "path:commons-bank:orchard-row",
+          "kind": "path",
+          "offset": 14.143
+        },
+        {
+          "feature_id": "alder-river",
+          "kind": "river",
+          "offset": 10.0
+        }
+      ],
+      "sha256": "0aabefdd965b990fbaee283f5077c3fd98e63408fc72ce12dde734db20f9c79a"
+    },
+    {
+      "id": "seam:section-1-1:section-1-2",
+      "orientation": "horizontal",
+      "sides": [
+        {
+          "section_id": "section-1-1",
+          "edge": "south"
+        },
+        {
+          "section_id": "section-1-2",
+          "edge": "north"
+        }
+      ],
+      "length": 18,
+      "elevation_bands": "333333333333333344",
+      "region_transitions": [
+        [
+          "rough_ground",
+          "rough_ground"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "cultivated"
+        ],
+        [
+          "cultivated",
+          "cultivated"
+        ],
+        [
+          "cultivated",
+          "cultivated"
+        ],
+        [
+          "cultivated",
+          "cultivated"
+        ],
+        [
+          "cultivated",
+          "cultivated"
+        ],
+        [
+          "cultivated",
+          "cultivated"
+        ],
+        [
+          "cultivated",
+          "cultivated"
+        ],
+        [
+          "village",
+          "cultivated"
+        ],
+        [
+          "village",
+          "cultivated"
+        ],
+        [
+          "village",
+          "village"
+        ],
+        [
+          "village",
+          "village"
+        ],
+        [
+          "village",
+          "village"
+        ],
+        [
+          "village",
+          "village"
+        ],
+        [
+          "village",
+          "village"
+        ]
+      ],
+      "connectors": [
+        {
+          "feature_id": "path:commons-bank:orchard-row",
+          "kind": "path",
+          "offset": 15.0
+        }
+      ],
+      "sha256": "bd29ee4205242a8677292ab7de21c69b827ac7a1d276e9e141651895a83f5099"
+    },
+    {
+      "id": "seam:section-2-1:section-3-1",
+      "orientation": "vertical",
+      "sides": [
+        {
+          "section_id": "section-2-1",
+          "edge": "east"
+        },
+        {
+          "section_id": "section-3-1",
+          "edge": "west"
+        }
+      ],
+      "length": 18,
+      "elevation_bands": "222223333444444444",
+      "region_transitions": [
+        [
+          "riverbank",
+          "riverbank"
+        ],
+        [
+          "water",
+          "water"
+        ],
+        [
+          "water",
+          "water"
+        ],
+        [
+          "riverbank",
+          "riverbank"
+        ],
+        [
+          "riverbank",
+          "riverbank"
+        ],
+        [
+          "rough_ground",
+          "riverbank"
+        ],
+        [
+          "rough_ground",
+          "woodland"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ]
+      ],
+      "connectors": [
+        {
+          "feature_id": "alder-river",
+          "kind": "river",
+          "offset": 2.0
+        }
+      ],
+      "sha256": "d6e8af6653a0009ab0da1185ef0060032f6c7fb72c8100115477305de5955057"
+    },
+    {
+      "id": "seam:section-2-1:section-2-2",
+      "orientation": "horizontal",
+      "sides": [
+        {
+          "section_id": "section-2-1",
+          "edge": "south"
+        },
+        {
+          "section_id": "section-2-2",
+          "edge": "north"
+        }
+      ],
+      "length": 18,
+      "elevation_bands": "444444444444444444",
+      "region_transitions": [
+        [
+          "village",
+          "village"
+        ],
+        [
+          "village",
+          "village"
+        ],
+        [
+          "village",
+          "village"
+        ],
+        [
+          "village",
+          "woodland"
+        ],
+        [
+          "village",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "meadow",
+          "woodland"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ]
+      ],
+      "connectors": [],
+      "sha256": "3b6bc3d669e63a72ee1c3dd84d3cc5f5daa296c9699e6fb2a41be9a4c88068de"
+    },
+    {
+      "id": "seam:section-3-1:section-3-2",
+      "orientation": "horizontal",
+      "sides": [
+        {
+          "section_id": "section-3-1",
+          "edge": "south"
+        },
+        {
+          "section_id": "section-3-2",
+          "edge": "north"
+        }
+      ],
+      "length": 18,
+      "elevation_bands": "444444444444333333",
+      "region_transitions": [
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ]
+      ],
+      "connectors": [],
+      "sha256": "d9c1f5a2f8f46a88ba16a8e621ac1bccf9b754be2f73bfcbdc8266ceeb02da05"
+    },
+    {
+      "id": "seam:section-0-2:section-1-2",
+      "orientation": "vertical",
+      "sides": [
+        {
+          "section_id": "section-0-2",
+          "edge": "east"
+        },
+        {
+          "section_id": "section-1-2",
+          "edge": "west"
+        }
+      ],
+      "length": 18,
+      "elevation_bands": "344444444444444444",
+      "region_transitions": [
+        [
+          "rough_ground",
+          "rough_ground"
+        ],
+        [
+          "rough_ground",
+          "rough_ground"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "woodland"
+        ],
+        [
+          "meadow",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ]
+      ],
+      "connectors": [],
+      "sha256": "6be26a844f5b8453918a1ef38ba569b225ae04bd11cf8f96905e2877d53f08a6"
+    },
+    {
+      "id": "seam:section-1-2:section-2-2",
+      "orientation": "vertical",
+      "sides": [
+        {
+          "section_id": "section-1-2",
+          "edge": "east"
+        },
+        {
+          "section_id": "section-2-2",
+          "edge": "west"
+        }
+      ],
+      "length": 18,
+      "elevation_bands": "444444444433344433",
+      "region_transitions": [
+        [
+          "village",
+          "village"
+        ],
+        [
+          "village",
+          "village"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "meadow"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ]
+      ],
+      "connectors": [],
+      "sha256": "ed7e3d769a1255cc2f25e29dc7968a5b95b5c8cc3933a3e5ab58cdbbebb8a9c5"
+    },
+    {
+      "id": "seam:section-2-2:section-3-2",
+      "orientation": "vertical",
+      "sides": [
+        {
+          "section_id": "section-2-2",
+          "edge": "east"
+        },
+        {
+          "section_id": "section-3-2",
+          "edge": "west"
+        }
+      ],
+      "length": 18,
+      "elevation_bands": "433333333333333333",
+      "region_transitions": [
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "meadow",
+          "meadow"
+        ],
+        [
+          "woodland",
+          "meadow"
+        ],
+        [
+          "woodland",
+          "woodland"
+        ]
+      ],
+      "connectors": [],
+      "sha256": "cff3ee89eef8af89b032a7048e1ebcb797eea50bfccb3a6a3783b2b4d7841375"
     }
   ],
   "validation": {
     "required_anchor_count": 13,
     "canonical_route_count": 3,
-    "all_required_anchors_placed": true
+    "all_required_anchors_placed": true,
+    "section_seam_count": 17,
+    "locked_section_count": 12
   },
   "svg": {
     "filename": "generated_map.svg",
-    "sha256": "3e89fbf325d6fd9273ef1f185ccd910b88637fe2e1763b060606aad1ea2669c6"
+    "sha256": "2f8357abde93cf062d26a372ab6c4d5aa20d2a552e29bb431d11b6e3cee5e5cd"
   },
-  "artifact_sha256": "269455ce05bbe00159bdd1dbf9d574dd66bfd5e5c300c3591bc2029f899445f4"
+  "artifact_sha256": "6ac477a7fb7bd3f7f40659c1a96e3fbc2d11687c49eb98c3e1e51dca0ba982c2"
 }

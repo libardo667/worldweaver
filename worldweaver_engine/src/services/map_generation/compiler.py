@@ -17,7 +17,7 @@ from html import escape
 from typing import Any, Mapping, Sequence
 
 GENERATOR_ID = "worldweaver.field-map"
-GENERATOR_VERSION = "0.2.0"
+GENERATOR_VERSION = "0.3.0"
 ARTIFACT_SCHEMA_VERSION = "1.0.0"
 
 
@@ -395,58 +395,81 @@ def _categorical_fields(
 
 
 def _line_cells(points: Sequence[Sequence[float]], width: int, height: int) -> set[tuple[int, int]]:
-    if len(points) < 2:
-        return set()
-    (x0, y0), (x1, y1) = points[0], points[-1]
-    steps = max(1, int(max(abs(float(x1) - float(x0)), abs(float(y1) - float(y0))) * 3))
-    return {
-        (
-            max(0, min(width - 1, int(round(float(x0) + (float(x1) - float(x0)) * index / steps)))),
-            max(0, min(height - 1, int(round(float(y0) + (float(y1) - float(y0)) * index / steps)))),
+    cells: set[tuple[int, int]] = set()
+    for start, end in zip(points, points[1:]):
+        x0, y0 = float(start[0]), float(start[1])
+        x1, y1 = float(end[0]), float(end[1])
+        steps = max(1, int(max(abs(x1 - x0), abs(y1 - y0)) * 3))
+        cells.update(
+            (
+                max(0, min(width - 1, int(round(x0 + (x1 - x0) * index / steps)))),
+                max(0, min(height - 1, int(round(y0 + (y1 - y0) * index / steps)))),
+            )
+            for index in range(steps + 1)
         )
-        for index in range(steps + 1)
-    }
+    return cells
 
 
 def _sections(
     *,
+    source: Mapping[str, Any],
     seed: str,
     width: int,
     height: int,
     section_size: int,
-    waterways: Sequence[Mapping[str, Any]],
-    routes: Sequence[Mapping[str, Any]],
+    regions: Sequence[Sequence[str]],
 ) -> list[dict[str, Any]]:
-    feature_cells: list[tuple[str, str, set[tuple[int, int]]]] = []
-    for waterway in waterways:
-        points = waterway.get("points") if isinstance(waterway.get("points"), list) else []
-        feature_cells.append((str(waterway.get("id") or "waterway"), str(waterway.get("kind") or "river"), {(int(round(float(point[0]))), int(round(float(point[1])))) for point in points}))
-    for route in routes:
-        points = route.get("points") if isinstance(route.get("points"), list) else []
-        feature_cells.append((str(route.get("id") or "path"), "path", _line_cells(points, width, height)))
-
+    raw_controls = source.get("sections")
+    if raw_controls is not None and not isinstance(raw_controls, Mapping):
+        raise ValueError("fictional_map.sections must be an object")
+    controls = raw_controls or {}
+    default_locked = controls.get("default_locked", False)
+    if not isinstance(default_locked, bool):
+        raise ValueError("fictional_map.sections.default_locked must be true or false")
+    raw_overrides = controls.get("overrides")
+    if raw_overrides is not None and not isinstance(raw_overrides, Mapping):
+        raise ValueError("fictional_map.sections.overrides must be an object")
+    overrides = raw_overrides or {}
     result: list[dict[str, Any]] = []
+    expected_ids: set[str] = set()
     for sy in range(0, height, section_size):
         for sx in range(0, width, section_size):
             section_width = min(section_size, width - sx)
             section_height = min(section_size, height - sy)
-            connectors: list[dict[str, Any]] = []
-            for feature_id, kind, cells in feature_cells:
-                candidates: set[tuple[str, int]] = set()
-                for x, y in cells:
-                    if not sx <= x < sx + section_width or not sy <= y < sy + section_height:
-                        continue
-                    if y == sy:
-                        candidates.add(("north", x - sx))
-                    if y == sy + section_height - 1:
-                        candidates.add(("south", x - sx))
-                    if x == sx:
-                        candidates.add(("west", y - sy))
-                    if x == sx + section_width - 1:
-                        candidates.add(("east", y - sy))
-                for edge, offset in sorted(candidates):
-                    connectors.append({"feature_id": feature_id, "kind": kind, "edge": edge, "offset": offset})
             section_id = f"section-{sx // section_size}-{sy // section_size}"
+            expected_ids.add(section_id)
+            override = overrides.get(section_id) if isinstance(overrides.get(section_id), Mapping) else {}
+            revision = override.get("revision", 0)
+            if not isinstance(revision, int) or isinstance(revision, bool) or not 0 <= revision <= 9999:
+                raise ValueError(f"section '{section_id}' revision must be an integer between 0 and 9999")
+            locked = override.get("locked", default_locked)
+            if not isinstance(locked, bool):
+                raise ValueError(f"section '{section_id}' locked state must be true or false")
+            section_seed = hashlib.sha256(f"{seed}:{section_id}:{revision}".encode()).hexdigest()[:16]
+            detail_seed = seed if revision == 0 else section_seed
+            features: list[dict[str, Any]] = []
+            for y in range(sy + 1, sy + section_height, 2):
+                for x in range(sx + 1, sx + section_width, 2):
+                    region = regions[y][x]
+                    if region == "woodland" and _unit(detail_seed, "tree", x, y) > 0.42:
+                        features.append(
+                            {
+                                "kind": "tree",
+                                "x": round(x + 0.5, 2),
+                                "y": round(y + 0.5, 2),
+                                "size": round(0.18 + _unit(detail_seed, "tree-size", x, y) * 0.16, 2),
+                            }
+                        )
+                    elif revision > 0 and region in {"rough_ground", "meadow"} and _unit(detail_seed, "stone", x, y) > 0.9:
+                        features.append(
+                            {
+                                "kind": "stone",
+                                "x": round(x + 0.5, 2),
+                                "y": round(y + 0.5, 2),
+                                "size": round(0.12 + _unit(detail_seed, "stone-size", x, y) * 0.11, 2),
+                            }
+                        )
+            detail_hash = _canonical_hash({"features": features})
             result.append(
                 {
                     "id": section_id,
@@ -454,12 +477,116 @@ def _sections(
                     "y": sy,
                     "width": section_width,
                     "height": section_height,
-                    "seed": hashlib.sha256(f"{seed}:{section_id}".encode()).hexdigest()[:16],
-                    "locked": False,
-                    "connectors": connectors,
+                    "revision": revision,
+                    "seed": section_seed,
+                    "locked": locked,
+                    "seam_ids": [],
+                    "connectors": [],
+                    "detail": {"features": features, "sha256": detail_hash},
                 }
             )
+    unknown_overrides = sorted(set(str(key) for key in overrides) - expected_ids)
+    if unknown_overrides:
+        raise ValueError(f"section overrides name unknown sections: {', '.join(unknown_overrides)}")
     return result
+
+
+def _feature_cells(
+    waterways: Sequence[Mapping[str, Any]],
+    routes: Sequence[Mapping[str, Any]],
+    *,
+    width: int,
+    height: int,
+) -> list[tuple[str, str, set[tuple[int, int]]]]:
+    result: list[tuple[str, str, set[tuple[int, int]]]] = []
+    for waterway in waterways:
+        points = waterway.get("points") if isinstance(waterway.get("points"), list) else []
+        result.append((str(waterway.get("id") or "waterway"), str(waterway.get("kind") or "river"), _line_cells(points, width, height)))
+    for route in routes:
+        points = route.get("points") if isinstance(route.get("points"), list) else []
+        result.append((str(route.get("id") or "path"), "path", _line_cells(points, width, height)))
+    return result
+
+
+def _seam_connectors(
+    features: Sequence[tuple[str, str, set[tuple[int, int]]]],
+    *,
+    orientation: str,
+    boundary: int,
+    start: int,
+    length: int,
+) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for feature_id, kind, cells in features:
+        if orientation == "vertical":
+            before = [y for x, y in cells if x == boundary - 1 and start <= y < start + length]
+            after = [y for x, y in cells if x == boundary and start <= y < start + length]
+        else:
+            before = [x for x, y in cells if y == boundary - 1 and start <= x < start + length]
+            after = [x for x, y in cells if y == boundary and start <= x < start + length]
+        if before and after:
+            offset = sum([*before, *after]) / (len(before) + len(after)) - start
+            result.append({"feature_id": feature_id, "kind": kind, "offset": round(offset, 3)})
+    return sorted(result, key=lambda item: (item["kind"], item["feature_id"], item["offset"]))
+
+
+def _section_seams(
+    sections: list[dict[str, Any]],
+    *,
+    elevation: Sequence[Sequence[float]],
+    regions: Sequence[Sequence[str]],
+    waterways: Sequence[Mapping[str, Any]],
+    routes: Sequence[Mapping[str, Any]],
+    width: int,
+    height: int,
+) -> list[dict[str, Any]]:
+    by_origin = {(int(section["x"]), int(section["y"])): section for section in sections}
+    features = _feature_cells(waterways, routes, width=width, height=height)
+    seams: list[dict[str, Any]] = []
+    for section in sections:
+        sx, sy = int(section["x"]), int(section["y"])
+        sw, sh = int(section["width"]), int(section["height"])
+        for orientation, neighbor, first_edge, second_edge in (
+            ("vertical", by_origin.get((sx + sw, sy)), "east", "west"),
+            ("horizontal", by_origin.get((sx, sy + sh)), "south", "north"),
+        ):
+            if neighbor is None:
+                continue
+            length = min(sh, int(neighbor["height"])) if orientation == "vertical" else min(sw, int(neighbor["width"]))
+            boundary = sx + sw if orientation == "vertical" else sy + sh
+            start = sy if orientation == "vertical" else sx
+            elevation_bands: list[int] = []
+            region_transitions: list[list[str]] = []
+            for offset in range(length):
+                if orientation == "vertical":
+                    before = (boundary - 1, start + offset)
+                    after = (boundary, start + offset)
+                else:
+                    before = (start + offset, boundary - 1)
+                    after = (start + offset, boundary)
+                average = (float(elevation[before[1]][before[0]]) + float(elevation[after[1]][after[0]])) / 2.0
+                elevation_bands.append(min(7, max(0, round(average * 7))))
+                region_transitions.append([regions[before[1]][before[0]], regions[after[1]][after[0]]])
+            seam_id = f"seam:{section['id']}:{neighbor['id']}"
+            connectors = _seam_connectors(features, orientation=orientation, boundary=boundary, start=start, length=length)
+            seam = {
+                "id": seam_id,
+                "orientation": orientation,
+                "sides": [
+                    {"section_id": section["id"], "edge": first_edge},
+                    {"section_id": neighbor["id"], "edge": second_edge},
+                ],
+                "length": length,
+                "elevation_bands": "".join(format(value, "x") for value in elevation_bands),
+                "region_transitions": region_transitions,
+                "connectors": connectors,
+            }
+            seam["sha256"] = _canonical_hash(seam)
+            seams.append(seam)
+            for target, edge in ((section, first_edge), (neighbor, second_edge)):
+                target["seam_ids"].append(seam_id)
+                target["connectors"].extend({**connector, "edge": edge, "seam_id": seam_id} for connector in connectors)
+    return seams
 
 
 def _u8_field(values: Sequence[Sequence[float]]) -> dict[str, Any]:
@@ -514,7 +641,6 @@ def _svg_curve(points: Sequence[Sequence[float]]) -> str:
 def _render_svg(
     *,
     city_name: str,
-    seed: str,
     width: int,
     height: int,
     section_size: int,
@@ -522,6 +648,7 @@ def _render_svg(
     regions: Sequence[Sequence[str]],
     waterways: Sequence[Mapping[str, Any]],
     routes: Sequence[Mapping[str, Any]],
+    sections: Sequence[Mapping[str, Any]],
 ) -> str:
     parts = [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -549,13 +676,18 @@ def _render_svg(
         parts.append(f'<polyline points="{points}" stroke="#b8d1d0" stroke-width="{max(0.35, stroke_width * 0.2):.2f}" opacity="0.55"/>')
     parts.append("</g>")
 
-    parts.append('<g fill="#536b4b" opacity="0.5">')
-    for y in range(1, height, 2):
-        for x in range(1, width, 2):
-            if regions[y][x] == "woodland" and _unit(seed, "tree", x, y) > 0.42:
-                radius = 0.18 + _unit(seed, "tree-size", x, y) * 0.16
-                parts.append(f'<circle cx="{x + 0.5:.2f}" cy="{y + 0.5:.2f}" r="{radius:.2f}"/>')
-    parts.append("</g>")
+    for section in sections:
+        detail = section.get("detail") if isinstance(section.get("detail"), Mapping) else {}
+        features = detail.get("features") if isinstance(detail.get("features"), list) else []
+        parts.append(f'<g id="detail-{escape(str(section.get("id") or "section"))}" data-revision="{int(section.get("revision") or 0)}">')
+        for feature in features:
+            if not isinstance(feature, Mapping):
+                continue
+            kind = str(feature.get("kind") or "")
+            color = "#536b4b" if kind == "tree" else "#797568"
+            opacity = "0.50" if kind == "tree" else "0.42"
+            parts.append(f'<circle cx="{float(feature.get("x") or 0):.2f}" cy="{float(feature.get("y") or 0):.2f}" ' f'r="{float(feature.get("size") or 0.1):.2f}" fill="{color}" opacity="{opacity}"/>')
+        parts.append("</g>")
 
     parts.append('<g stroke="#8f8059" stroke-width="0.08" opacity="0.28">')
     for y in range(0, height, 2):
@@ -632,7 +764,23 @@ def compile_fictional_map(
     flow = _flow_grid(elevation, seed=seed, width=width, height=height)
     wetness = _wetness_grid(elevation, flow, width=width, height=height, waterways=waterways)
     soils, regions = _categorical_fields(source, seed=seed, width=width, height=height, anchors=compiled_anchors, elevation=elevation, slope=slope, wetness=wetness, waterways=waterways)
-    sections = _sections(seed=seed, width=width, height=height, section_size=section_size, waterways=waterways, routes=routes)
+    sections = _sections(
+        source=source,
+        seed=seed,
+        width=width,
+        height=height,
+        section_size=section_size,
+        regions=regions,
+    )
+    seams = _section_seams(
+        sections,
+        elevation=elevation,
+        regions=regions,
+        waterways=waterways,
+        routes=routes,
+        width=width,
+        height=height,
+    )
 
     soil_palette = ["water", "wet_alluvial", "alluvial_loam", "well_drained_loam", "woodland_floor", "thin_rocky"]
     region_palette = ["water", "riverbank", "village", "working", "cultivated", "woodland", "meadow", "rough_ground"]
@@ -654,15 +802,17 @@ def compile_fictional_map(
         "anchors": compiled_anchors,
         "routes": routes,
         "sections": sections,
+        "seams": seams,
         "validation": {
             "required_anchor_count": len(compiled_anchors),
             "canonical_route_count": len(routes),
             "all_required_anchors_placed": all(bool(item.get("id")) for item in compiled_anchors),
+            "section_seam_count": len(seams),
+            "locked_section_count": sum(1 for section in sections if section["locked"]),
         },
     }
     svg = _render_svg(
         city_name=str(config.get("city_name") or config.get("city_id") or "Fictional city"),
-        seed=seed,
         width=width,
         height=height,
         section_size=section_size,
@@ -670,6 +820,7 @@ def compile_fictional_map(
         regions=regions,
         waterways=waterways,
         routes=routes,
+        sections=sections,
     )
     artifact["svg"] = {"filename": "generated_map.svg", "sha256": hashlib.sha256(svg.encode("utf-8")).hexdigest()}
     artifact["artifact_sha256"] = _canonical_hash(artifact)

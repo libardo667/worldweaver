@@ -223,7 +223,7 @@ def test_folder_operator_verifies_generated_maps_before_publication(tmp_path: Pa
         text=True,
     )
     assert inspected.returncode == 0, inspected.stderr
-    assert "Verified generated map for alderbank pack 0.2.0" in inspected.stdout
+    assert "Verified generated map for alderbank pack 0.3.0" in inspected.stdout
 
     unconfirmed = subprocess.run(
         [sys.executable, str(shard / "ww.py"), "map", "publish", str(city_pack)],

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
@@ -169,9 +170,80 @@ def _check_generated_map(
     for index, section in enumerate(sections):
         if not _stable_id(section.get("seed")):
             _issue(issues, "error", "missing_generated_map_section_seed", f"{path}.sections[{index}].seed", "Each map section needs a stable seed.")
+        revision = section.get("revision")
+        if not isinstance(revision, int) or isinstance(revision, bool) or not 0 <= revision <= 9999:
+            _issue(issues, "error", "invalid_generated_map_section_revision", f"{path}.sections[{index}].revision", "Each map section needs a bounded integer revision.")
+        if not isinstance(section.get("locked"), bool):
+            _issue(issues, "error", "invalid_generated_map_section_lock", f"{path}.sections[{index}].locked", "Each map section needs an explicit lock state.")
         connectors = section.get("connectors")
         if not isinstance(connectors, list):
             _issue(issues, "error", "invalid_generated_map_connectors", f"{path}.sections[{index}].connectors", "Section connectors must be a list.")
+        if not isinstance(section.get("seam_ids"), list):
+            _issue(issues, "error", "invalid_generated_map_seam_ids", f"{path}.sections[{index}].seam_ids", "Section seam IDs must be a list.")
+        detail = section.get("detail") if isinstance(section.get("detail"), Mapping) else {}
+        features = detail.get("features")
+        detail_hash = _stable_id(detail.get("sha256"))
+        expected_detail_hash = hashlib.sha256(json.dumps({"features": features}, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
+        if not isinstance(features, list) or detail_hash != expected_detail_hash:
+            _issue(issues, "error", "invalid_generated_map_section_detail", f"{path}.sections[{index}].detail", "Section detail must match its recorded hash.")
+
+    section_ids = {_stable_id(section.get("id")) for section in sections}
+    seams = _items(artifact.get("seams"))
+    seam_ids = [_stable_id(seam.get("id")) for seam in seams]
+    if len(seam_ids) != len(set(seam_ids)):
+        _issue(issues, "error", "duplicate_generated_map_seam", f"{path}.seams", "Generated seam IDs must be unique.")
+    if isinstance(width, int) and isinstance(height, int) and isinstance(section_size, int) and section_size > 0:
+        columns = math.ceil(width / section_size)
+        rows_count = math.ceil(height / section_size)
+        expected_seam_count = (columns - 1) * rows_count + (rows_count - 1) * columns
+        if len(seams) != expected_seam_count:
+            _issue(issues, "error", "missing_generated_map_seams", f"{path}.seams", "Generated sections must share one seam record for every internal border.")
+    seams_by_section: dict[str, set[str]] = {section_id: set() for section_id in section_ids}
+    connectors_by_section: dict[str, list[dict[str, Any]]] = {section_id: [] for section_id in section_ids}
+    for index, seam in enumerate(seams):
+        seam_path = f"{path}.seams[{index}]"
+        sides = _items(seam.get("sides"))
+        side_ids = [_stable_id(side.get("section_id")) for side in sides]
+        if len(sides) != 2 or len(set(side_ids)) != 2 or any(section_id not in section_ids for section_id in side_ids):
+            _issue(issues, "error", "invalid_generated_map_seam_sides", f"{seam_path}.sides", "A seam must join exactly two known sections.")
+        connectors = _items(seam.get("connectors"))
+        for side in sides:
+            section_id = _stable_id(side.get("section_id"))
+            if section_id in seams_by_section:
+                seams_by_section[section_id].add(_stable_id(seam.get("id")))
+                connectors_by_section[section_id].extend(
+                    {
+                        **connector,
+                        "edge": _stable_id(side.get("edge")),
+                        "seam_id": _stable_id(seam.get("id")),
+                    }
+                    for connector in connectors
+                )
+        length = seam.get("length")
+        elevation_bands = seam.get("elevation_bands")
+        transitions = seam.get("region_transitions")
+        if not isinstance(length, int) or not isinstance(elevation_bands, str) or len(elevation_bands) != length or not isinstance(transitions, list) or len(transitions) != length:
+            _issue(issues, "error", "invalid_generated_map_seam_fields", seam_path, "A seam's terrain and region bands must cover its full shared edge.")
+        seam_hash = _stable_id(seam.get("sha256"))
+        hash_payload = dict(seam)
+        hash_payload.pop("sha256", None)
+        expected_seam_hash = hashlib.sha256(json.dumps(hash_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
+        if seam_hash != expected_seam_hash:
+            _issue(issues, "error", "generated_map_seam_hash_mismatch", f"{seam_path}.sha256", "A generated map seam does not match its recorded hash.")
+    for index, section in enumerate(sections):
+        recorded = {_stable_id(value) for value in section.get("seam_ids", [])} if isinstance(section.get("seam_ids"), list) else set()
+        if recorded != seams_by_section.get(_stable_id(section.get("id")), set()):
+            _issue(issues, "error", "generated_map_section_seam_mismatch", f"{path}.sections[{index}].seam_ids", "A section must name every shared seam exactly once.")
+        recorded_connectors = section.get("connectors")
+        expected_connectors = connectors_by_section.get(_stable_id(section.get("id")), [])
+        if recorded_connectors != expected_connectors:
+            _issue(
+                issues,
+                "error",
+                "generated_map_section_connector_mismatch",
+                f"{path}.sections[{index}].connectors",
+                "A section must copy its shared feature crossings from the seam record.",
+            )
 
     anchors = _items(artifact.get("anchors"))
     if not anchors or not all(bool(item.get("required")) for item in anchors):
