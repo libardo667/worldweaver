@@ -156,6 +156,7 @@ def _build_pulse_payload(db_session: Any, pulse_seq: int) -> Dict[str, Any]:
     return {
         "shard_id": current_shard_id(),
         "shard_url": os.environ.get("WW_PUBLIC_URL", ""),
+        "client_url": os.environ.get("WW_CLIENT_URL", ""),
         "pulse_seq": pulse_seq,
         "sent_at": datetime.now(timezone.utc).isoformat(),
         "residents": residents,

@@ -193,6 +193,7 @@ def test_local_registration_advertises_the_docker_host_address(tmp_path, monkeyp
 
     assert dev._register_city_shard(world, city, dry_run=False) is True
     assert requests[0][1]["payload"]["shard_url"] == "http://host.docker.internal:8002"
+    assert requests[0][1]["payload"]["client_url"] is None
 
 
 def test_agent_start_keeps_the_local_backend_address_override(tmp_path, monkeypatch):

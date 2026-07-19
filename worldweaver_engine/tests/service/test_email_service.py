@@ -1,4 +1,5 @@
-from src.services.email_service import build_welcome_email_payload
+from src.services.email_service import build_password_reset_email_payload, build_welcome_email_payload
+from src.config import settings
 
 
 def test_build_welcome_email_payload_uses_shared_world_copy():
@@ -17,3 +18,13 @@ def test_build_welcome_email_payload_escapes_display_name_in_html():
 
     assert "<strong>&lt;Dale&gt;</strong>" in payload["html"]
     assert "<strong><Dale></strong>" not in payload["html"]
+
+
+def test_password_reset_link_prefers_human_client_url(monkeypatch):
+    monkeypatch.setattr(settings, "client_url", "https://play.example")
+    monkeypatch.setattr(settings, "public_url", "https://api.example")
+
+    payload = build_password_reset_email_payload("dale@example.com", "Dale", "once-only")
+
+    assert "https://play.example/?reset_token=once-only" in payload["text"]
+    assert "https://api.example" not in payload["text"]

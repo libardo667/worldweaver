@@ -446,6 +446,7 @@ def main() -> None:
         reg_payload = {
             "shard_id": shard_id,
             "shard_url": server,
+            "client_url": str(shard_env.get("WW_CLIENT_URL") or "").strip() or None,
             "shard_type": "city",
             "city_id": args.city_id,
         }

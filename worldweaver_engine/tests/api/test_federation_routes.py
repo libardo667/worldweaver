@@ -6,12 +6,15 @@ from fastapi import HTTPException
 from src.api.federation.routes import (
     PulseRequest,
     PulseResidentItem,
+    RegisterShardRequest,
     StartTravelRequest,
     TravelTransitionRequest,
     get_traveler_history,
     mark_travel_arrived,
     mark_travel_departed,
     receive_pulse,
+    register_shard,
+    list_shards,
     start_travel,
 )
 from src.models import FederationActor, FederationResident, FederationShard, FederationTraveler
@@ -105,6 +108,36 @@ def test_receive_pulse_upserts_existing_resident_without_duplicate(db_session):
     assert len(residents) == 1
     assert residents[0].resident_id == "resident-sun-li"
     assert residents[0].last_location == "Inner Richmond"
+
+
+def test_registry_keeps_api_and_human_client_urls_separate(db_session):
+    registered = register_shard(
+        RegisterShardRequest(
+            shard_id="alderbank-node",
+            shard_url="https://api.alderbank.example",
+            client_url="https://alderbank.example",
+            shard_type="city",
+            city_id="alderbank",
+        ),
+        db_session,
+        None,
+    )
+
+    assert registered["registered"] is True
+    listed = list_shards(db_session)["shards"]
+    assert listed[0]["shard_url"] == "https://api.alderbank.example"
+    assert listed[0]["client_url"] == "https://alderbank.example"
+
+    pulse = PulseRequest(
+        shard_id="alderbank-node",
+        shard_url="https://api-2.alderbank.example",
+        client_url="https://play.alderbank.example",
+        pulse_seq=1,
+    )
+    receive_pulse(pulse, db_session, None)
+    row = db_session.get(FederationShard, "alderbank-node")
+    assert row.shard_url == "https://api-2.alderbank.example"
+    assert row.client_url == "https://play.alderbank.example"
 
 
 def test_receive_pulse_rejects_stale_seq_with_last_seq(db_session):

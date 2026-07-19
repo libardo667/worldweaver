@@ -556,6 +556,12 @@ def _shard_public_url(shard: ShardSpec) -> str:
     return configured or _local_backend_url(shard)
 
 
+def _shard_client_url(shard: ShardSpec) -> str:
+    """Return an explicitly advertised human client URL, if this node has one."""
+
+    return str(_shard_env(shard).get("WW_CLIENT_URL", "")).strip()
+
+
 def _federation_token(world_shard: ShardSpec, city_shard: ShardSpec) -> str:
     city_token = str(_shard_env(city_shard).get("FEDERATION_TOKEN", "")).strip()
     if city_token:
@@ -632,6 +638,7 @@ def _register_city_shard(world_shard: ShardSpec, city_shard: ShardSpec, *, dry_r
     payload = {
         "shard_id": _registry_shard_id(city_shard),
         "shard_url": _docker_host_backend_url(city_shard),
+        "client_url": _shard_client_url(city_shard) or None,
         "shard_type": "city",
         "city_id": city_shard.city_id,
     }

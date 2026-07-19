@@ -53,6 +53,7 @@ FEDERATION_URL={federation_url}
 WW_RUNTIME_FEDERATION_URL={runtime_federation_url}
 FEDERATION_TOKEN={token}
 WW_PUBLIC_URL=http://localhost:{port}
+WW_CLIENT_URL=
 WW_DB_HOST=db
 WW_DB_PORT=5432
 WW_DB_EXTERNAL_PORT={db_external_port}
@@ -83,6 +84,7 @@ SHARD_TYPE=world
 WW_SHARD_EXPERIENCE_PATH=
 FEDERATION_TOKEN={token}
 WW_PUBLIC_URL=http://localhost:{port}
+WW_CLIENT_URL=
 WW_DB_HOST=db
 WW_DB_PORT=5432
 WW_DB_EXTERNAL_PORT={db_external_port}
@@ -145,6 +147,7 @@ services:
       WW_DATABASE_URL: ${{WW_DATABASE_URL:-}}
       WW_AGENT_RESIDENTS_DIR: /app/residents
       WW_PUBLIC_URL: ${{WW_RUNTIME_PUBLIC_URL:-${{WW_PUBLIC_URL}}}}
+      WW_CLIENT_URL: ${{WW_CLIENT_URL:-}}
       FEDERATION_URL: ${{WW_RUNTIME_FEDERATION_URL:-${{FEDERATION_URL}}}}
     ports:
       - "${{BACKEND_PORT}}:8000"

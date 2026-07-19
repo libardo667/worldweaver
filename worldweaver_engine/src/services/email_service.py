@@ -51,7 +51,9 @@ def build_welcome_email_payload(to_email: str, display_name: str) -> dict[str, o
 def build_password_reset_email_payload(to_email: str, display_name: str, reset_token: str) -> dict[str, object]:
     safe_name = escape(display_name.strip() or "traveler")
     raw_name = display_name.strip() or "traveler"
-    public_url = str(settings.public_url or "").strip().rstrip("/")
+    # WW_PUBLIC_URL is the shard API. A reset link belongs on the human site
+    # when the node advertises one; the API URL remains a compatibility fallback.
+    public_url = str(settings.client_url or settings.public_url or "").strip().rstrip("/")
     reset_link = f"{public_url}/?reset_token={escape(reset_token)}" if public_url else ""
     text_lines = [
         f"Hello, {raw_name}.",

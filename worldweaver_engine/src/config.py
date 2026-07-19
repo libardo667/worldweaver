@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     city_db_file: str = Field(default="worldweaver.db", validation_alias="CITY_DB_FILE")
     federation_token: Optional[str] = Field(default=None, validation_alias="FEDERATION_TOKEN")
     public_url: Optional[str] = Field(default=None, validation_alias="WW_PUBLIC_URL")
+    client_url: Optional[str] = Field(default=None, validation_alias="WW_CLIENT_URL")
     shard_experience_path: Optional[str] = Field(
         default=None,
         validation_alias="WW_SHARD_EXPERIENCE_PATH",

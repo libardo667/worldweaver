@@ -255,6 +255,7 @@ def _travel_handoff_payload(row: ShardTravelHandoff) -> Dict[str, Any]:
         "source_shard": row.source_shard,
         "destination_shard": row.destination_shard,
         "destination_url": row.destination_url,
+        "destination_client_url": row.destination_client_url,
         "route_id": row.route_id,
         "departure_hub_id": row.departure_hub_id,
         "departure_hub": row.departure_hub,
@@ -297,6 +298,7 @@ def _resolve_departure_route(route_id: str, destination_shard: str) -> Dict[str,
                 "arrival_hub_id": arrival_hub_id,
                 "arrival_hub": str(route.get("arrival_hub") or "").strip() or None,
                 "destination_url": str(node.get("shard_url") or "").strip() or None,
+                "destination_client_url": str(node.get("client_url") or "").strip() or None,
             }
         raise HTTPException(status_code=404, detail=f"Route '{route_id}' does not lead to node '{destination_shard}'.")
     raise HTTPException(status_code=404, detail=f"Travel route '{route_id}' not found in this city pack.")
@@ -1146,6 +1148,7 @@ def depart_session_for_travel(
         source_shard=source_shard,
         destination_shard=destination_shard,
         destination_url=route["destination_url"],
+        destination_client_url=route["destination_client_url"],
         route_id=route_id,
         departure_hub_id=route["departure_hub_id"],
         departure_hub=route["departure_hub"],

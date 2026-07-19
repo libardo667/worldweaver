@@ -87,6 +87,7 @@ def _compute_shard_status(last_pulse_ts: Optional[datetime], interval: int) -> s
 class RegisterShardRequest(BaseModel):
     shard_id: str
     shard_url: str
+    client_url: Optional[str] = None
     shard_type: str = "city"
     city_id: Optional[str] = None
 
@@ -116,6 +117,7 @@ class PulseTravelerItem(BaseModel):
 class PulseRequest(BaseModel):
     shard_id: str
     shard_url: Optional[str] = None
+    client_url: Optional[str] = None
     pulse_seq: int
     sent_at: Optional[str] = None
     residents: List[PulseResidentItem] = []
@@ -246,6 +248,7 @@ def register_shard(
         shard = FederationShard(shard_id=payload.shard_id)
         db.add(shard)
     shard.shard_url = payload.shard_url
+    shard.client_url = str(payload.client_url or "").strip() or None
     shard.shard_type = payload.shard_type
     shard.city_id = payload.city_id
     db.commit()
@@ -518,6 +521,8 @@ def receive_pulse(
     shard.last_pulse_seq = payload.pulse_seq
     if payload.shard_url:
         shard.shard_url = payload.shard_url
+    if payload.client_url:
+        shard.client_url = payload.client_url
 
     # Upsert residents
     for r in payload.residents:
@@ -642,6 +647,7 @@ def list_shards(db: Session = Depends(get_db)) -> Dict[str, Any]:
             {
                 "shard_id": s.shard_id,
                 "shard_url": s.shard_url,
+                "client_url": s.client_url,
                 "shard_type": s.shard_type,
                 "city_id": s.city_id,
                 "last_pulse_ts": s.last_pulse_ts.isoformat() if s.last_pulse_ts else None,

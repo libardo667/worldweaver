@@ -63,6 +63,7 @@ def resolve_inter_city_routes(
             {
                 "shard_id": str(shard.get("shard_id") or "").strip(),
                 "shard_url": str(shard.get("shard_url") or "").strip(),
+                "client_url": str(shard.get("client_url") or "").strip(),
                 "status": str(shard.get("status") or "offline").strip(),
             }
             for shard in shards

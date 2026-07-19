@@ -578,6 +578,7 @@ class FederationShard(Base):
 
     shard_id = Column(String(80), primary_key=True)
     shard_url = Column(String(255), nullable=False)
+    client_url = Column(String(255), nullable=True)
     shard_type = Column(String(20), nullable=False, default="city")  # city|world|neighborhood
     city_id = Column(String(80), nullable=True)
     last_pulse_ts = Column(DateTime, nullable=True)
@@ -688,6 +689,7 @@ class ShardTravelHandoff(Base):
     source_shard = Column(String(80), nullable=False)
     destination_shard = Column(String(80), nullable=False)
     destination_url = Column(String(255), nullable=True)
+    destination_client_url = Column(String(255), nullable=True)
     route_id = Column(String(80), nullable=True)
     departure_hub_id = Column(String(80), nullable=True)
     departure_hub = Column(String(200), nullable=True)

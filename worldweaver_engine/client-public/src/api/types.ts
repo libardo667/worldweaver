@@ -244,6 +244,7 @@ export type MoveResponse = {
 export type ShardInfo = {
   shard_id: string;
   shard_url: string;
+  client_url?: string | null;
   shard_type: string;
   city_id: string;
   status: "healthy" | "degraded" | "stale" | "offline" | string;

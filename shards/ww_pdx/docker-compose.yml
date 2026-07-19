@@ -42,6 +42,7 @@ services:
       WW_DATABASE_URL: ${WW_DATABASE_URL:-}
       WW_AGENT_RESIDENTS_DIR: /app/residents
       WW_PUBLIC_URL: ${WW_RUNTIME_PUBLIC_URL:-${WW_PUBLIC_URL}}
+      WW_CLIENT_URL: ${WW_CLIENT_URL:-}
       FEDERATION_URL: http://ww_world-backend:8000
     ports:
       - "${BACKEND_PORT}:8000"

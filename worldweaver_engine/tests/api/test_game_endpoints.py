@@ -253,6 +253,7 @@ class TestGameEndpoints:
                             {
                                 "shard_id": "bay-commons-1",
                                 "shard_url": "https://bay.example",
+                                "client_url": "https://play.bay.example",
                                 "status": "healthy",
                             }
                         ],
@@ -284,6 +285,7 @@ class TestGameEndpoints:
         assert response.status_code == 200
         assert response.json()["handoff"]["status"] == "traveling"
         assert response.json()["handoff"]["destination_url"] == "https://bay.example"
+        assert response.json()["handoff"]["destination_client_url"] == "https://play.bay.example"
         assert repeated.status_code == 200
         assert repeated.json()["idempotent"] is True
         assert len(starts) == 1
@@ -327,7 +329,7 @@ class TestGameEndpoints:
                         "departure_hub": "Portland Union Station",
                         "arrival_hub_id": "emeryville-sf-transfer",
                         "arrival_hub": "Emeryville",
-                        "nodes": [{"shard_id": "bay-commons-1", "shard_url": "https://bay.example", "status": "healthy"}],
+                        "nodes": [{"shard_id": "bay-commons-1", "shard_url": "https://bay.example", "client_url": "https://play.bay.example", "status": "healthy"}],
                     }
                 ],
             },

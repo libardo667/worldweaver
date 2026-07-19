@@ -20,6 +20,11 @@ authenticated player. The missing browser contract is how a destination advertis
 the registry currently provides only the destination backend URL. A traveler must also be able to arrive,
 authenticate on the new web origin, and retry a recoverable handoff without putting a token in the URL.
 
+Node registration, pulses, route discovery, and source-side recovery records now carry an optional human
+client URL separately from the shard API URL. Password-reset mail uses the same human URL when configured.
+Existing local nodes leave it blank rather than falsely advertising the one shared development client as
+the front door to every city.
+
 ## Build next
 
 1. Replace the shared federation token with per-node authentication and signed requests.
@@ -27,7 +32,7 @@ authenticate on the new web origin, and retry a recoverable handoff without putt
 3. Put two nodes behind real HTTPS addresses on different computers or trust domains.
 4. Prove that a resident can remain hosted at their hearth, visit a remote city, and return without copying
    the complete hearth to that city.
-5. Add a public-client URL to the node advertisement, distinct from its backend/federation URL.
+5. Configure and verify a real public-client URL for each independently hosted destination.
 6. Add a clear human travel control to the commons client using the same departure and arrival contracts.
    Carry only the travel ID in the redirect; authenticate normally on the destination origin before arrival.
 7. Make failed, offline, and retryable travel states visible without reviving a ghost session.
