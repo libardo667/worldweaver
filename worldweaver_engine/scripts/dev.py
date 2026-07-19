@@ -373,9 +373,12 @@ def _resolve_city_shard(shards: list[ShardSpec], requested: str | None) -> Shard
             if shard.dir_name.lower() == preferred or str(shard.city_id or "").lower() == preferred:
                 return shard
 
-    for shard in city_shards:
-        if shard.dir_name == "ww_sfo":
-            return shard
+    # Alderbank is the maintained playable default. Keep SFO as the fallback
+    # for older checkouts that do not have the fictional town yet.
+    for default_name in ("ww_alderbank", "ww_sfo"):
+        for shard in city_shards:
+            if shard.dir_name == default_name:
+                return shard
 
     return sorted(city_shards, key=lambda item: item.dir_name)[0]
 

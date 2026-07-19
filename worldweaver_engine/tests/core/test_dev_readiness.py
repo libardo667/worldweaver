@@ -51,6 +51,14 @@ def test_all_city_start_uses_one_canonical_directory_per_registry_identity(tmp_p
     assert dev._ordered_unique_city_shards([duplicate, alderbank, canonical]) == [alderbank, canonical]
 
 
+def test_public_client_defaults_to_the_playable_town(tmp_path, monkeypatch):
+    sfo = _shard(tmp_path, "ww_sfo", shard_type="city", city_id="san_francisco")
+    alderbank = _shard(tmp_path, "ww_alderbank", shard_type="city", city_id="alderbank", shard_id="ww_alderbank")
+    monkeypatch.delenv("WW_DEV_CITY_SHARD", raising=False)
+
+    assert dev._resolve_city_shard([sfo, alderbank], None) is alderbank
+
+
 def test_registration_refreshes_when_human_client_url_is_stale(tmp_path):
     city = _shard(tmp_path, "ww_sfo", shard_type="city", city_id="san_francisco")
     current = {
