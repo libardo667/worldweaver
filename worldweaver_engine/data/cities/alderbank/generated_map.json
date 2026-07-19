@@ -2,12 +2,12 @@
   "schema_version": "1.0.0",
   "generator": {
     "id": "worldweaver.field-map",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "seed": "alderbank-fields-v1"
   },
   "source": {
     "city_id": "alderbank",
-    "pack_version": "0.1.0"
+    "pack_version": "0.2.0"
   },
   "bounds": {
     "south": 45.004395194,
@@ -834,8 +834,11 @@
     {
       "id": "path:commons-bank:mill-reach",
       "kind": "path",
+      "path_type": "riverside_footpath",
+      "name": "River Path",
       "from": "commons-bank",
       "to": "mill-reach",
+      "via": [],
       "points": [
         [
           34.2,
@@ -850,12 +853,21 @@
     {
       "id": "path:commons-bank:orchard-row",
       "kind": "path",
+      "path_type": "village_footpath",
+      "name": "Footbridge Path",
       "from": "commons-bank",
       "to": "orchard-row",
+      "via": [
+        "alder-footbridge"
+      ],
       "points": [
         [
           34.2,
           29.544
+        ],
+        [
+          36.0,
+          32.599
         ],
         [
           26.1,
@@ -866,8 +878,11 @@
     {
       "id": "path:commons-bank:pineward-edge",
       "kind": "path",
+      "path_type": "woodland_footpath",
+      "name": "Pineward Path",
       "from": "commons-bank",
       "to": "pineward-edge",
+      "via": [],
       "points": [
         [
           34.2,
@@ -1110,7 +1125,7 @@
   },
   "svg": {
     "filename": "generated_map.svg",
-    "sha256": "eeebc1a6230d086494f466551b87f89d8e1f3d6c5ad4065ec9b0e69f3f075c7f"
+    "sha256": "3e89fbf325d6fd9273ef1f185ccd910b88637fe2e1763b060606aad1ea2669c6"
   },
-  "artifact_sha256": "d4e596f956a0168cc2579debf025c4b7026fac8236726d5bfa371ebfd60d41c6"
+  "artifact_sha256": "269455ce05bbe00159bdd1dbf9d574dd66bfd5e5c300c3591bc2029f899445f4"
 }

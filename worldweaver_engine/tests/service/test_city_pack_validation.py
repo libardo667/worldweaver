@@ -120,11 +120,17 @@ def test_fictional_builder_skips_osm_and_keeps_explicit_small_town_paths(tmp_pat
 
     assert manifest["fictional"] is True
     assert "openstreetmap" not in manifest["source"].lower()
-    assert manifest["version"] == "0.1.0"
+    assert manifest["version"] == "0.2.0"
     assert manifest["counts"]["stoops"] == 1
     assert manifest["counts"]["map_sections"] == 12
     assert manifest["generated_map"]["artifact_sha256"] == generated_map["artifact_sha256"]
     assert generated_map["generator"]["id"] == "worldweaver.field-map"
+    assert generated_map["generator"]["version"] == "0.2.0"
+    assert {route["name"] for route in generated_map["routes"]} == {
+        "Footbridge Path",
+        "Pineward Path",
+        "River Path",
+    }
     assert generated_map["svg"]["sha256"]
     assert generated_svg.startswith('<?xml version="1.0"')
     assert by_id["mill-reach"]["adjacent_to"] == ["commons-bank"]
@@ -162,3 +168,17 @@ def test_city_pack_validation_rejects_changed_generated_map_rows(tmp_path):
         "generated_map_field_hash_mismatch",
         "generated_map_hash_mismatch",
     }
+
+
+def test_city_pack_validation_rejects_a_drawn_route_that_is_not_a_canonical_path(tmp_path):
+    engine_root = Path(__file__).resolve().parents[2]
+    config = engine_root / "scripts" / "city_configs" / "alderbank.json"
+    output = tmp_path / "alderbank"
+    build_pack(config, output, offline=True)
+    pack = {path.stem: json.loads(path.read_text(encoding="utf-8")) for path in output.glob("*.json")}
+    pack["generated_map"]["routes"][0]["id"] = "path:commons-bank:invented-shortcut"
+
+    report = validate_city_pack(pack)
+
+    assert report.valid is False
+    assert "generated_map_route_mismatch" in {issue.code for issue in report.errors}

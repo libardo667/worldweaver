@@ -115,6 +115,7 @@ def _check_generated_map(
     artifact: Mapping[str, Any],
     fictional: bool,
     city_id: str,
+    neighborhoods: Sequence[Mapping[str, Any]],
 ) -> None:
     path = "generated_map"
     if not fictional:
@@ -175,6 +176,35 @@ def _check_generated_map(
     anchors = _items(artifact.get("anchors"))
     if not anchors or not all(bool(item.get("required")) for item in anchors):
         _issue(issues, "error", "missing_generated_map_anchors", f"{path}.anchors", "Every compiled city-pack anchor must be recorded as required.")
+    anchor_ids = {_stable_id(anchor.get("id")) for anchor in anchors}
+
+    expected_route_ids: set[str] = set()
+    for neighborhood in neighborhoods:
+        source_id = _stable_id(neighborhood.get("id"))
+        adjacent = neighborhood.get("adjacent_to") if isinstance(neighborhood.get("adjacent_to"), list) else []
+        for adjacent_id in adjacent:
+            pair = tuple(sorted((source_id, _stable_id(adjacent_id))))
+            if pair[0] and pair[1] and pair[0] != pair[1]:
+                expected_route_ids.add(f"path:{pair[0]}:{pair[1]}")
+    routes = _items(artifact.get("routes"))
+    route_ids = [_stable_id(route.get("id")) for route in routes]
+    if len(route_ids) != len(set(route_ids)):
+        _issue(issues, "error", "duplicate_generated_map_route", f"{path}.routes", "Generated route IDs must be unique.")
+    if set(route_ids) != expected_route_ids:
+        _issue(issues, "error", "generated_map_route_mismatch", f"{path}.routes", "Generated routes must exactly match the city pack's canonical neighborhood paths.")
+    for index, route in enumerate(routes):
+        route_path = f"{path}.routes[{index}]"
+        if _stable_id(route.get("kind")) != "path":
+            _issue(issues, "error", "invalid_generated_map_route_kind", f"{route_path}.kind", "A generated route must remain a canonical path.")
+        if not _stable_id(route.get("name")) or not _stable_id(route.get("path_type")):
+            _issue(issues, "error", "missing_generated_map_route_style", route_path, "A generated path needs a display name and path type.")
+        via = route.get("via") if isinstance(route.get("via"), list) else []
+        if any(_stable_id(anchor_id) not in anchor_ids for anchor_id in via):
+            _issue(issues, "error", "unknown_generated_map_route_anchor", f"{route_path}.via", "A generated path waypoint must be a required city-pack anchor.")
+        points = route.get("points") if isinstance(route.get("points"), list) else []
+        if len(points) != len(via) + 2:
+            _issue(issues, "error", "invalid_generated_map_route_points", f"{route_path}.points", "A generated path needs one point for each endpoint and required waypoint.")
+
     claimed_hash = _stable_id(artifact.get("artifact_sha256"))
     if not re.fullmatch(r"[a-f0-9]{64}", claimed_hash):
         _issue(issues, "error", "missing_generated_map_hash", f"{path}.artifact_sha256", "The generated map artifact needs a SHA-256 hash.")
@@ -206,10 +236,6 @@ def validate_city_pack(pack: Mapping[str, Any]) -> CityPackValidationReport:
         _issue(issues, "error", "fictional_osm_source", "manifest.source", "A fictional pack must not claim OpenStreetMap as its geography source.")
     place_reference_level = "error" if fictional is True else "warning"
 
-    generated_map = pack.get("generated_map") if isinstance(pack.get("generated_map"), Mapping) else None
-    if generated_map is not None:
-        _check_generated_map(issues, artifact=generated_map, fictional=fictional is True, city_id=city_id)
-
     neighborhoods = _items(pack.get("neighborhoods"))
     if not neighborhoods:
         _issue(issues, "error", "missing_neighborhoods", "neighborhoods", "A city needs at least one neighborhood.")
@@ -222,6 +248,16 @@ def validate_city_pack(pack: Mapping[str, Any]) -> CityPackValidationReport:
             normalized = _stable_id(adjacent_id)
             if normalized and normalized not in neighborhood_ids:
                 _issue(issues, "error", "unknown_neighborhood", f"neighborhoods[{index}].adjacent_to", f"Neighborhood '{normalized}' does not exist in this pack.")
+
+    generated_map = pack.get("generated_map") if isinstance(pack.get("generated_map"), Mapping) else None
+    if generated_map is not None:
+        _check_generated_map(
+            issues,
+            artifact=generated_map,
+            fictional=fictional is True,
+            city_id=city_id,
+            neighborhoods=neighborhoods,
+        )
 
     landmarks = _items(pack.get("landmarks"))
     _check_unique_ids(

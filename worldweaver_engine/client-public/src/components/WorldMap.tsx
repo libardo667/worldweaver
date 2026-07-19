@@ -203,10 +203,18 @@ export function WorldMap({ nodes, edges, mapStyle, focusKey, onNodeClick, onView
       }
 
       markers.clearLayers();
+      const compiledRoutesVisible = mapStyle === "schematic" && generatedLayerRef.current != null;
+      const drawnPathPairs = new Set<string>();
       for (const edge of edges) {
         // Containment says that a landmark belongs to a larger place. It is
         // useful to the place UI, but it is not a visible walking route.
         if (edge.kind !== "path") continue;
+        // The compiled sheet draws the same canonical edges with their authored
+        // path shape and surface. The plain fallback line would cut across it.
+        if (compiledRoutesVisible) continue;
+        const pairKey = [edge.from, edge.to].sort().join("\u0000");
+        if (drawnPathPairs.has(pairKey)) continue;
+        drawnPathPairs.add(pairKey);
         const from = byKey.get(edge.from);
         const to = byKey.get(edge.to);
         const fromPoint = from ? displayPointByKey.get(from.key) : undefined;
@@ -229,7 +237,13 @@ export function WorldMap({ nodes, edges, mapStyle, focusKey, onNodeClick, onView
             className: `mk ${occupancyClass(node)}${isFocus ? " mk-here" : ""}`,
           },
         );
-        marker.bindTooltip(node.name, { direction: "top" });
+        const primaryPlace = node.node_type === "location";
+        marker.bindTooltip(node.name, {
+          direction: "top",
+          permanent: primaryPlace,
+          className: primaryPlace ? "map-label map-label--place" : "map-label",
+          offset: L.point(0, -markerRadius(node, isFocus) - 2),
+        });
         marker.on("click", () => onNodeClickRef.current?.(node));
         marker.addTo(markers);
         const element = marker.getElement();

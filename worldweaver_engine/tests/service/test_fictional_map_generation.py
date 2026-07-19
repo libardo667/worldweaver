@@ -41,6 +41,9 @@ def test_alderbank_field_map_is_deterministic_and_sectioned():
         *(landmark["id"] for landmark in landmarks),
     }
     assert {route["kind"] for route in first.artifact["routes"]} == {"path"}
+    by_route_id = {route["id"]: route for route in first.artifact["routes"]}
+    assert by_route_id["path:commons-bank:orchard-row"]["via"] == ["alder-footbridge"]
+    assert by_route_id["path:commons-bank:pineward-edge"]["path_type"] == "woodland_footpath"
     assert any(connector["kind"] == "river" for section in first.artifact["sections"] for connector in section["connectors"])
 
 
@@ -73,4 +76,15 @@ def test_fictional_map_rejects_bounds_that_would_letterbox_the_svg():
     config["bboxes"]["default"] = "45.0000,-122.0200,45.0300,-121.9800"
 
     with pytest.raises(ValueError, match="must match the grid aspect"):
+        compile_fictional_map(config, neighborhoods=neighborhoods, landmarks=landmarks)
+
+
+def test_fictional_map_rejects_display_metadata_for_an_invented_path():
+    config, neighborhoods, landmarks = _alderbank_inputs()
+    config["fictional_map"]["route_styles"]["path:orchard-row:pineward-edge"] = {
+        "name": "Invented shortcut",
+        "path_type": "footpath",
+    }
+
+    with pytest.raises(ValueError, match="do not match canonical paths"):
         compile_fictional_map(config, neighborhoods=neighborhoods, landmarks=landmarks)

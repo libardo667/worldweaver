@@ -13,6 +13,11 @@ additive drawing over Alderbank's existing movement graph. It produces stable te
 region cover, required place anchors, canonical routes, twelve independently seeded sections, typed section
 connectors, a hashed JSON artifact, and a hashed SVG.
 
+The second map slice gives each canonical neighborhood edge an optional name, path type, and required
+landmark waypoint. The compiler refuses display metadata for a path that does not exist in the city graph,
+and the pack validator refuses an artifact whose drawn route set differs from that graph. Alderbank now
+draws River Path, Footbridge Path, and Pineward Path and keeps permanent labels on its four main places.
+
 Alderbank is the project's experiment town. On 2026-07-19, the project owner explicitly approved using the
 inhabited Alderbank shard for this work. That approval is narrow: the generated drawing may change while we
 learn, but accounts, objects, marks, doors, named places, and movement edges remain canonical engine state
@@ -112,11 +117,12 @@ for every interaction.
 - [ ] A fictional-map source schema declares seeds, physical fields, required anchors, section boundaries,
   and rule-library versions.
 - [x] The same compiler inputs produce byte-stable or canonically equivalent artifacts.
-- [ ] Alderbank preview shows a river, terrain regions, typed paths, named landmarks, and stable labels while
+- [x] Alderbank preview shows a river, terrain regions, typed paths, named landmarks, and stable labels while
   preserving its current movement graph.
 - [ ] Each section can be previewed, rerolled, and locked independently without moving locked neighbors.
 - [ ] Section seams match for routes, waterways, elevation bands, and region edges.
-- [ ] Every visible interactive route and doorway is backed by a canonical engine fact.
+- [x] Every visible interactive route is backed by a canonical engine fact. Doorway drawing remains future
+  work; current doors are exposed through the place controls rather than drawn on the map.
 - [ ] City Studio can export a validated versioned map artifact without mutating an inhabited shard.
 - [x] The approved Alderbank experiment shard can publish and serve the generated artifact without running
   the generator at page load.

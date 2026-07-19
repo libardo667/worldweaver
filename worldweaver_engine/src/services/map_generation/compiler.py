@@ -17,7 +17,7 @@ from html import escape
 from typing import Any, Mapping, Sequence
 
 GENERATOR_ID = "worldweaver.field-map"
-GENERATOR_VERSION = "0.1.0"
+GENERATOR_VERSION = "0.2.0"
 ARTIFACT_SCHEMA_VERSION = "1.0.0"
 
 
@@ -132,8 +132,14 @@ def _anchors(
     return sorted(result, key=lambda item: (item["kind"], item["id"]))
 
 
-def _routes(neighborhoods: Sequence[Mapping[str, Any]], anchors: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    points = {str(item.get("id") or ""): item for item in anchors if item.get("kind") == "neighborhood"}
+def _routes(
+    neighborhoods: Sequence[Mapping[str, Any]],
+    anchors: Sequence[Mapping[str, Any]],
+    source: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    points = {str(item.get("id") or ""): item for item in anchors}
+    neighborhood_points = {anchor_id: point for anchor_id, point in points.items() if point.get("kind") == "neighborhood"}
+    raw_styles = source.get("route_styles") if isinstance(source.get("route_styles"), Mapping) else {}
     found: set[tuple[str, str]] = set()
     result: list[dict[str, Any]] = []
     for record in neighborhoods:
@@ -141,18 +147,35 @@ def _routes(neighborhoods: Sequence[Mapping[str, Any]], anchors: Sequence[Mappin
         for raw_target in record.get("adjacent_to", []) if isinstance(record.get("adjacent_to"), list) else []:
             target = str(raw_target or "").strip()
             pair = tuple(sorted((source, target)))
-            if not source or not target or source == target or pair in found or source not in points or target not in points:
+            if not source or not target or source == target or pair in found or source not in neighborhood_points or target not in neighborhood_points:
                 continue
             found.add(pair)
+            route_id = f"path:{pair[0]}:{pair[1]}"
+            style = raw_styles.get(route_id) if isinstance(raw_styles.get(route_id), Mapping) else {}
+            via_ids = style.get("via") if isinstance(style.get("via"), list) else []
+            missing_via = [str(anchor_id) for anchor_id in via_ids if str(anchor_id) not in points]
+            if missing_via:
+                raise ValueError(f"generated route '{route_id}' names unknown anchors: {', '.join(missing_via)}")
+            route_points = [
+                neighborhood_points[pair[0]],
+                *(points[str(anchor_id)] for anchor_id in via_ids),
+                neighborhood_points[pair[1]],
+            ]
             result.append(
                 {
-                    "id": f"path:{pair[0]}:{pair[1]}",
+                    "id": route_id,
                     "kind": "path",
+                    "path_type": str(style.get("path_type") or "footpath").strip(),
+                    "name": str(style.get("name") or "Path").strip(),
                     "from": pair[0],
                     "to": pair[1],
-                    "points": [[points[pair[0]]["x"], points[pair[0]]["y"]], [points[pair[1]]["x"], points[pair[1]]["y"]]],
+                    "via": [str(anchor_id) for anchor_id in via_ids],
+                    "points": [[point["x"], point["y"]] for point in route_points],
                 }
             )
+    unknown_styles = sorted(set(str(key) for key in raw_styles) - {route["id"] for route in result})
+    if unknown_styles:
+        raise ValueError(f"generated route styles do not match canonical paths: {', '.join(unknown_styles)}")
     return sorted(result, key=lambda item: item["id"])
 
 
@@ -471,6 +494,23 @@ def _shade(hex_color: str, elevation: float) -> str:
     return "#" + "".join(f"{max(0, min(255, round(channel * factor))):02x}" for channel in rgb)
 
 
+def _svg_curve(points: Sequence[Sequence[float]]) -> str:
+    """Return a smooth SVG path that still passes through every waypoint."""
+    coordinates = [(float(point[0]), float(point[1])) for point in points]
+    if len(coordinates) < 2:
+        return ""
+    commands = [f"M {coordinates[0][0]:.2f} {coordinates[0][1]:.2f}"]
+    for index in range(len(coordinates) - 1):
+        previous = coordinates[max(0, index - 1)]
+        start = coordinates[index]
+        end = coordinates[index + 1]
+        following = coordinates[min(len(coordinates) - 1, index + 2)]
+        control_1 = (start[0] + (end[0] - previous[0]) / 6.0, start[1] + (end[1] - previous[1]) / 6.0)
+        control_2 = (end[0] - (following[0] - start[0]) / 6.0, end[1] - (following[1] - start[1]) / 6.0)
+        commands.append(f"C {control_1[0]:.2f} {control_1[1]:.2f} {control_2[0]:.2f} {control_2[1]:.2f} {end[0]:.2f} {end[1]:.2f}")
+    return " ".join(commands)
+
+
 def _render_svg(
     *,
     city_name: str,
@@ -481,6 +521,7 @@ def _render_svg(
     elevation: Sequence[Sequence[float]],
     regions: Sequence[Sequence[str]],
     waterways: Sequence[Mapping[str, Any]],
+    routes: Sequence[Mapping[str, Any]],
 ) -> str:
     parts = [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -531,6 +572,18 @@ def _render_svg(
             parts.append(f'<line x1="{start}" y1="{y + 0.5}" x2="{end}" y2="{y + 0.5}"/>')
     parts.append("</g>")
 
+    # These lines are drawings of canonical neighborhood edges, not new
+    # movement rules. Authored route metadata only chooses their name, surface,
+    # and required landmark waypoints.
+    parts.append('<g fill="none" stroke-linecap="round" stroke-linejoin="round">')
+    for route in routes:
+        curve = _svg_curve(route.get("points", []))
+        path_type = str(route.get("path_type") or "footpath")
+        outer_width = 0.7 if path_type == "riverside_footpath" else 0.62
+        parts.append(f'<path d="{curve}" stroke="#665f4e" stroke-width="{outer_width:.2f}" opacity="0.48"/>')
+        parts.append(f'<path d="{curve}" stroke="#e8ddbd" stroke-width="{outer_width * 0.58:.2f}" opacity="0.94"/>')
+    parts.append("</g>")
+
     parts.append('<g fill="none" stroke="#625f56" stroke-width="0.08" stroke-dasharray="0.35 0.3" opacity="0.24">')
     for x in range(section_size, width, section_size):
         parts.append(f'<line x1="{x}" y1="0" x2="{x}" y2="{height}"/>')
@@ -572,7 +625,7 @@ def compile_fictional_map(
     bounds = _bounds(config)
     _validate_projected_aspect(bounds, width=width, height=height)
     compiled_anchors = _anchors(neighborhoods, landmarks, bounds=bounds, width=width, height=height)
-    routes = _routes(neighborhoods, compiled_anchors)
+    routes = _routes(neighborhoods, compiled_anchors, source)
     waterways = _waterways(source, seed=seed, width=width, height=height)
     elevation = _elevation_grid(source, seed=seed, width=width, height=height, waterways=waterways)
     slope = _slope_grid(elevation, width=width, height=height)
@@ -607,7 +660,17 @@ def compile_fictional_map(
             "all_required_anchors_placed": all(bool(item.get("id")) for item in compiled_anchors),
         },
     }
-    svg = _render_svg(city_name=str(config.get("city_name") or config.get("city_id") or "Fictional city"), seed=seed, width=width, height=height, section_size=section_size, elevation=elevation, regions=regions, waterways=waterways)
+    svg = _render_svg(
+        city_name=str(config.get("city_name") or config.get("city_id") or "Fictional city"),
+        seed=seed,
+        width=width,
+        height=height,
+        section_size=section_size,
+        elevation=elevation,
+        regions=regions,
+        waterways=waterways,
+        routes=routes,
+    )
     artifact["svg"] = {"filename": "generated_map.svg", "sha256": hashlib.sha256(svg.encode("utf-8")).hexdigest()}
     artifact["artifact_sha256"] = _canonical_hash(artifact)
     return CompiledFictionalMap(artifact=artifact, svg=svg)

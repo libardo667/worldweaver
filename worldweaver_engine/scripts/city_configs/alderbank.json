@@ -1,7 +1,7 @@
 {
   "city_id": "alderbank",
   "city_name": "Alderbank",
-  "pack_version": "0.1.0",
+  "pack_version": "0.2.0",
   "fictional": true,
   "import_osm": false,
   "source": "Original WorldWeaver fictional village",
@@ -44,6 +44,21 @@
       "mill-reach": "working",
       "orchard-row": "cultivated",
       "pineward-edge": "woodland"
+    },
+    "route_styles": {
+      "path:commons-bank:mill-reach": {
+        "name": "River Path",
+        "path_type": "riverside_footpath"
+      },
+      "path:commons-bank:orchard-row": {
+        "name": "Footbridge Path",
+        "path_type": "village_footpath",
+        "via": ["alder-footbridge"]
+      },
+      "path:commons-bank:pineward-edge": {
+        "name": "Pineward Path",
+        "path_type": "woodland_footpath"
+      }
     }
   },
   "transit_systems": [],
