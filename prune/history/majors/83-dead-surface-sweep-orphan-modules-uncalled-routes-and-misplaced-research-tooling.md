@@ -1,5 +1,10 @@
 # Sweep the verified-dead surface: orphan modules, uncalled API routes, and misplaced research tooling
 
+> **Disposition, 2026-07-18:** complete. The test-inclusive graph pass identified three final production
+> islands, which were removed in `7bf7ae7`. The rules reducer was checked separately and retained because it
+> remains the engine's state transition machinery. Future reachability checks are routine maintenance, not
+> an indefinitely open major.
+
 ## Ownership correction (2026-07-14)
 
 The former `sync_substrate.py` tool, manifest, baseline, and dedicated tests were retired with archived

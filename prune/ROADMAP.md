@@ -14,10 +14,10 @@ The project now has:
 - local speech, elective information, physical traces, and private prompt diagnostics;
 - citywide conversation available only through an elective information tool;
 - durable objects, making, giving, exchange, room access, and bounded object stoops;
-- a fictional test town, Alderbank, used by people and a four-resident cohort;
+- a fictional test town, Alderbank, with four game-native resident homes and bounded human/resident play;
 - a place-centered public client;
 - recoverable local city-to-city handoff;
-- stopped hearth export, import, and generation fencing.
+- stopped hearth export, import, and generation fencing;
 - hearth-owned identity growth with one-time migration from older city rows.
 
 ## Now

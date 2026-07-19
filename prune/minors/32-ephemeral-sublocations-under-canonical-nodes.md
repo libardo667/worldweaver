@@ -1,165 +1,34 @@
-# Sublocations under canonical map nodes
+# Finish sublocations under canonical places
 
-> 🚧 **IN PROGRESS (first ephemeral layer landed 2026-07-17).** Major 36's map, navigation, and occupancy work remains
-> the owning dependency. Major 63 closed without needing finer sublocations for speech privacy, but a live
-> resident has now independently attempted a reasonable within-neighborhood move that the flat graph could
-> not represent.
+## Status
 
-## Problem
+Ephemeral sublocations are implemented. A resident can enter or narrowly create a plausible place within
+their current canonical location, such as a back room or nearby bench. Each child has a stable parent-scoped
+ID and expiry. It never becomes a route in the canonical city graph. Exact sublocation names already scope
+speech, traces, events, and presence.
 
-Residents and players sometimes refer to plausible within-place destinations that
-are not part of the canonical city-pack graph:
+## Remaining problem
 
-- `back booth`
-- `bench by the laundromat`
-- `their stall`
-- `alley behind the Arms`
-- `the duplex near Arbor Lodge Park`
+Some small places are durable rather than temporary: a home room, shop stall, studio, or steward-authored
+back room. There is no explicit durable child-place contract or promotion path yet. The public client also
+needs a clear way to show that a person is inside a child place without treating it as another neighborhood.
 
-Today these phrases are just bad movement targets. They fail graph validation and
-quietly disappear. That keeps the canonical map clean, but it also throws away a
-useful layer of lived local texture.
+## Build next
 
-### Live evidence: Jarosław Nowak, 2026-07-17
+1. Add an explicit `durable` child-place type with a named source: city pack, resident hearth/home, or
+   steward publication.
+2. Keep automatic resident prose creation ephemeral. Promotion to durable always requires a separate,
+   explicit action.
+3. Add public-client labels and movement controls that preserve the canonical parent context.
+4. Attach the environmental activity from Minor 33 to either a canonical place or a child place.
+5. Add cleanup and migration tests proving expiry never deletes durable children or pollutes route data.
 
-During an unsteered Portland run, Jarosław used an ordinary reactive pulse to attempt a `move` from the
-canonical `Arbor Lodge` node to `the duplex near Arbor Lodge Park`. The city rejected it because its route
-API accepts only exact canonical graph destinations. This was not a request to visit another neighborhood;
-it was a reasonable attempt to locate a home-scale place inside the neighborhood where he had been seeded.
+## Acceptance criteria
 
-That case corrects one assumption in the original minor: not every sublocation is disposable scene texture.
-Some are temporary (`back booth tonight`), while others may be durable personal or steward-defined places
-(`their duplex`, `the tattoo room`, `the shop's back room`). The parent graph node remains canonical in both
-cases; the sublocation needs its own identity and declared lifetime rather than being inferred from prose on
-every move.
-
-## First implementation slice — 2026-07-17
-
-The engine now stores ephemeral sublocations as `WorldNode(node_type="sublocation")` records with a
-parent-scoped normalized identity, creator, creation/activity timestamps, bounded TTL, and expiry. They do
-not receive `path` edges and therefore never enter the cached canonical location graph.
-
-An active child is added to the scene graph only under its canonical parent. Movement can enter an existing
-child by label. Resident prose movement may also create one when canonical routing fails and the destination
-passes a deliberately narrow within-place rule: the phrase must name the current parent or carry a local cue
-such as `back room`, `booth`, `studio`, `duplex`, `behind`, or `near`. Unknown distant names remain errors.
-Human map movement does not opt into automatic creation.
-
-Entering an ephemeral child refreshes its lifetime. Expired children stop resolving and disappear from scene
-graphs without deleting their historical node. Exact sublocation names also provide existing chat, trace,
-event, and presence surfaces with a local scope.
-
-This completes the ephemeral runtime foundation, not the whole minor. Durable personal/steward places,
-explicit promotion, ambient-presence attachment, and public City Studio controls remain open.
-
-## Goal
-
-Allow scene-rich, non-canonical place refinements to exist without polluting the
-durable city graph.
-
-The intended model is:
-
-- canonical graph nodes remain the durable navigable map truth
-- sublocations can exist underneath a canonical parent location
-- each sublocation declares whether it is ephemeral or durable
-- ephemeral sublocations remain temporary, local, and removable
-
-This is not a replacement for graph-grounded movement. It is a secondary layer
-for scene texture once canonical movement has already landed somewhere real.
-
-This minor now also carries a second job:
-
-- giving scene synthesis somewhere concrete to land
-- making local places feel more lived-in and less samey
-- providing temporary structure for ambient presence and lightweight occupancy as
-  formalized in
-  [`33-lightweight-ambient-presence-for-scene-synthesis.md`](prune/minors/33-lightweight-ambient-presence-for-scene-synthesis.md)
-
-## Proposed Model
-
-Treat non-canonical destinations as candidate **subjective sublocations** when
-they clearly describe a place *within* the current canonical location. A candidate
-must resolve to an existing sublocation or pass a bounded creation rule; arbitrary
-prose must not silently become durable map truth.
-
-Each sublocation should carry:
-
-- stable `sublocation_id`
-- canonical `parent_location_id`
-- `label`
-- `persistence`: `ephemeral` or `durable`
-- `created_by_session`
-- `created_at`
-- `last_active_at`
-- `ttl_seconds` when ephemeral
-- optional lightweight occupancy
-- optional ambient-presence descriptors
-
-Rules:
-
-- ephemeral sublocations must always belong to a canonical parent node
-- they must never automatically become durable map nodes
-- they should expire when inactive for long enough
-- durable sublocations require an explicit city-pack, steward, resident-home, or promotion source
-- repeated/shared use can later inform promotion decisions, but promotion is a
-  separate explicit process
-
-## Scope
-
-In scope:
-
-- scene-local sublocation creation
-- durable personal or steward-defined sublocations under a canonical parent
-- TTL cleanup
-- attaching residents/players to sublocations under a canonical parent
-- UI surfaces that can show "someone is at the back booth of X"
-- optional ambient or background presences attached to those sublocations
-
-Out of scope:
-
-- automatic promotion into the city-pack graph
-- freeform cross-city travel targets
-- replacing canonical route planning with fuzzy prose locations
-
-## Interaction With Movement
-
-Canonical movement must still resolve to a real graph node first.
-
-Suggested flow:
-
-1. move to canonical node
-2. optionally enter a sublocation under that node
-3. expire it when unused if its declared persistence is ephemeral
-
-This prevents bogus movement phrases from becoming graph pollution while still
-letting the world express richer local detail.
-
-## Why This Is Worth Keeping Open
-
-This gives the map and scene system a middle layer:
-
-- richer than only canonical city-pack nodes
-- safer than letting every phrase become a durable graph entity
-
-It also aligns well with the longer-term resident/world fractal direction:
-temporary local structure can exist, be observed, and then either fade or earn
-promotion later.
-
-It also creates a concrete target for the reclaimed scene-synthesis layer in
-Major 10: generated local structure should not have to jump straight from prose
-to canonical graph mutation.
-
-It is also the natural landing zone for the ambient-presence layer: if a place
-needs a queue, prep spillover, commuters under an awning, or a few regulars at
-the edge of the room, that should attach here rather than becoming a fake
-durable actor or polluting the canonical map.
-
-## Acceptance Criteria
-
-- [x] Non-canonical within-place destinations can be represented without entering the durable map graph
-- [x] Every sublocation has a stable ID and always attaches to a canonical parent location
-- [ ] Durable personal/steward sublocations and ephemeral scene sublocations have explicit, different lifetimes
-- [x] Inactive ephemeral sublocations expire automatically
-- [x] The canonical navigation graph remains clean and queryable
-- [x] This layer is treated as optional scene texture, not as a substitute for graph-grounded movement
-- [ ] Scene synthesis and lightweight ambient presence can attach to sublocations without forcing durable graph changes
+- [x] Ephemeral child places have stable IDs, canonical parents, bounded creation, and expiry.
+- [x] Canonical navigation remains free of child-place routes.
+- [x] Speech, traces, events, and presence can use an exact child-place scope.
+- [ ] Durable child places have an explicit source and never expire through ephemeral cleanup.
+- [ ] Promotion from ephemeral to durable is deliberate and recorded.
+- [ ] The public client can enter, leave, and display child places without confusing them with neighborhoods.
+- [ ] Deterministic environmental activity can attach to either level.

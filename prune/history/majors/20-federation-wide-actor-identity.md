@@ -1,5 +1,11 @@
 # Federation-wide actor identity for humans and residents
 
+> **Disposition, 2026-07-18:** moved to history. The durable actor spine is implemented across auth,
+> local projections, resident identity, correspondence, and recoverable travel. Independent-node trust,
+> remote-host proof, and remaining legacy imports are tracked by Majors 37 and 127 rather than keeping a
+> second overlapping identity project active. The older observatory and player-shadow criteria below are
+> not current requirements.
+
 ## Status
 
 The core actor spine is substantially implemented. `FederationActor`, actor-subject JWTs, local player

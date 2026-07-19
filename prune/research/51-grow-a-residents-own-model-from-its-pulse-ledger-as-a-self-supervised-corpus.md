@@ -1,5 +1,9 @@
 # Grow a resident's own model from its pulse ledger — distillation now, prediction-error learning as the prize
 
+> **Disposition, 2026-07-18:** moved from the architecture queue to research. Corpus privacy, model
+> training, behavioral comparison, and prediction-error learning are experiments. None is required before
+> the current resident runtime, federation, public client, or game town can continue to be built.
+
 > **Canonical home: WorldWeaver (2026-07-14).** Migrated in full from the legacy `the-stable`
 > work-item ledger during the one-resident/many-worlds consolidation. In this record, “familiar” names
 > a resident inhabiting a keeper-tended hearth; it is not a separate agent species (Major 86).

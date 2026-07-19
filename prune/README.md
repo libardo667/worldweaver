@@ -14,10 +14,10 @@
 
 | Area | Work items |
 | --- | --- |
-| Public deployment and federation | 18, 20, 37, 127 |
+| Public deployment and federation | 18, 37, 127 |
 | Human participation and correspondence | 39, 43, 71 |
-| Resident cognition and identity | 51, 56, 58, 60, 65, 67 |
-| Operations and cleanup | 70, 83 |
+| Resident cognition and identity | 56, 58, 65, 67 |
+| Operations and accounting | 70 |
 | Stoops, City Studio, and game town | 125, 126, 130 |
 
 ## Active bounded work
@@ -25,9 +25,9 @@
 | Minor | Purpose |
 | --- | --- |
 | 31 | Local topology command polish |
-| 32 | Ephemeral sublocation lifecycle |
-| 33 | Environmental scene activity without fake residents |
-| 122 | Bound external network access without broad resident profiling |
+| 32 | Durable child places on top of the completed ephemeral layer |
+| 33 | Deterministic environmental activity without fake people |
+| 122 | Explicit, resident-scoped external network access |
 
 ## Rules
 

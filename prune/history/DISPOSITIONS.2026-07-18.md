@@ -17,6 +17,8 @@ as success after the fact.
 | Major 62 | Rejected as outcome targeting. Neutral founding variety remains in the reviewed dormant-resident creation path. |
 | Major 72 | Superseded by live inbox perception, carried speech, and Major 39's remaining correspondence work. |
 | Major 80 | Graduated thesis; remaining economics work is separate. |
+| Major 20 | Core actor identity is complete. JWTs, local projections, resident identity, mail addressing, and travel use one actor ID; remaining independent-node trust belongs to Majors 37 and 127. |
+| Major 83 | Complete. The test-inclusive graph audit found three final production islands; they and the older verified-dead surfaces were removed, while the reducer was retained as live engine machinery. |
 | Major 113 | Rejected. Turning a person's file activity and abandoned projects into resident grief is a surveillance and guilt surface. |
 | Minor 34 | Implementation complete. Any later threshold study belongs in research. |
 | Minor 37 | Superseded by narrator removal and the public/steward client split. |
@@ -28,9 +30,10 @@ removed. Exact-place speech and the elective `chatter` tool remain.
 
 ## Moved to research
 
-Majors 73, 74, 75, 77, 82, and 114 through 121, plus Minors 62, 63, 120, 121, 123, 126, 127, and 129,
-describe experiments, offline measurements, or ethics gates. They remain available but no longer compete
-with architectural work.
+Majors 51, 73, 74, 75, 77, 82, and 114 through 121, plus Minors 62, 63, 120, 121, 123, 126, 127,
+and 129, describe experiments, offline measurements, model training, or ethics gates. They remain
+available but no longer compete with architectural work. Major 51's useful engineering prerequisite is a
+privacy-reviewed corpus export; actual training and model comparison remain research.
 
 ## Moved to publication
 
@@ -42,3 +45,8 @@ queue.
 The July 14 architectural plan, prompt-pipeline trace, and work-item audit moved to history. Their useful
 current conclusions have been reduced into `prune/VISION.md`, `prune/ROADMAP.md`, and the manual under
 `docs/`.
+
+The reusable `prune/harness/` kit also moved intact to history. It still contains possible source material
+for a separate coding-agent workflow project, but its narrator sweeps, projection gates, warning budgets,
+branch policy, and commands no longer describe WorldWeaver. The March directory audit moved beside it; its
+file-by-file conclusions were useful at the time but are now materially stale.
