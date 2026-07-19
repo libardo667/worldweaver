@@ -3,11 +3,11 @@
 
 import { useTheme } from "../theme/ThemeProvider";
 
-export function ThemeToggle() {
+export function ThemeToggle({ inline = false }: { inline?: boolean }) {
   const { theme, toggleTheme } = useTheme();
   return (
     <button
-      className="theme-toggle"
+      className={`theme-toggle${inline ? " theme-toggle--inline" : ""}`}
       onClick={toggleTheme}
       title={theme === "light" ? "Switch to night" : "Switch to day"}
       aria-label={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}

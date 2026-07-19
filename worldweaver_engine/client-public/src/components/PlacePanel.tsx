@@ -15,6 +15,7 @@ import { Overheard } from "./Overheard";
 import { PresenceHere } from "./PresenceHere";
 import { SpeakBar } from "./SpeakBar";
 import { StoopHere } from "./StoopHere";
+import { ThemeToggle } from "./ThemeToggle";
 import { TravelHere } from "./TravelHere";
 import { WalkTargets } from "./WalkTargets";
 
@@ -72,9 +73,12 @@ export function PlacePanel({ slug, node, nodes, edges, me, onWalk, onTravel, onC
           <p className="place-kicker">{standingHere ? "You are standing at" : "You are looking at"}</p>
           <h2 ref={headingRef} tabIndex={-1} className="place-name">{name}</h2>
         </div>
-        <button className="place-close" onClick={onClose} title="Back to the map" aria-label="Close place panel">
-          ✕
-        </button>
+        <div className="place-header-actions">
+          <ThemeToggle inline />
+          <button className="place-close" onClick={onClose} title="Back to the map" aria-label="Close place panel">
+            ✕
+          </button>
+        </div>
       </header>
 
       <div className="place-body">

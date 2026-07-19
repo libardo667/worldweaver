@@ -2319,14 +2319,14 @@ def query_world_map(
         src = str(edge.get("from") or "")
         dst = str(edge.get("to") or "")
         if src in node_keys and dst in node_keys:
-            edges.append({"from": src, "to": dst})
+            edges.append({"from": src, "to": dst, "kind": "path"})
 
     for child_name, parent_name in parent_links.items():
         child = filtered_nodes.get(child_name)
         parent = filtered_nodes.get(parent_name)
         if not child or not parent:
             continue
-        edge = {"from": parent["key"], "to": child["key"]}
+        edge = {"from": parent["key"], "to": child["key"], "kind": "contains"}
         if edge not in edges:
             edges.append(edge)
 

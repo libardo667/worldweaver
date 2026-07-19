@@ -80,6 +80,17 @@ def test_public_client_keeps_keyboard_and_reduced_motion_guards():
     assert ":focus-visible" in styles
 
 
+def test_schematic_map_keeps_layout_stable_and_does_not_draw_containment_as_a_path():
+    world_map = (PUBLIC_COMPONENTS / "WorldMap.tsx").read_text(encoding="utf-8")
+    app = (ENGINE_ROOT / "client-public" / "src" / "App.tsx").read_text(encoding="utf-8")
+    place_panel = (PUBLIC_COMPONENTS / "PlacePanel.tsx").read_text(encoding="utf-8")
+
+    assert "stableOffsetAngle(node.key)" in world_map
+    assert 'if (edge.kind !== "path") continue' in world_map
+    assert "{!placeParams && <ThemeToggle />}" in app
+    assert "<ThemeToggle inline />" in place_panel
+
+
 def test_public_client_can_keep_shard_api_traffic_under_a_same_origin_prefix():
     api = PUBLIC_API.read_text(encoding="utf-8")
     base = (ENGINE_ROOT / "client-public" / "src" / "api" / "base.ts").read_text(encoding="utf-8")

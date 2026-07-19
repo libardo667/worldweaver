@@ -190,6 +190,15 @@ button {
   box-shadow: var(--shadow);
 }
 
+.theme-toggle--inline {
+  position: static;
+  z-index: auto;
+  width: 32px;
+  height: 32px;
+  box-shadow: none;
+  font-size: 15px;
+}
+
 /* --- Threshold ----------------------------------------------------------
    The landing invitation. The map stays pannable behind it: the container
    ignores the pointer, only the card catches it. */
@@ -354,6 +363,12 @@ button {
   background: transparent;
   color: var(--ink-soft);
   font-size: 14px;
+}
+
+.place-header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
 }
 
 .place-body {

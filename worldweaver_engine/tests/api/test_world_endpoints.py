@@ -751,8 +751,10 @@ class TestWorldMapQueryEndpoint:
         assert clement["player_names"] == []
         assert clement["agent_names"] == []
         parent_edge = next(edge for edge in payload["edges"] if edge["to"] == clement["key"])
+        assert parent_edge["kind"] == "contains"
         parent = next(node for node in payload["nodes"] if node["key"] == parent_edge["from"])
         assert parent["name"] == "Inner Richmond"
+        assert all(edge["kind"] in {"path", "contains"} for edge in payload["edges"])
 
         identified = client.get(
             "/api/world/map/query",

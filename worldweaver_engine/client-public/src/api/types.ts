@@ -18,7 +18,7 @@ export type MapNode = {
   parent_location: string;
 };
 
-export type MapEdge = { from: string; to: string };
+export type MapEdge = { from: string; to: string; kind: "path" | "contains" | string };
 
 export type MapQueryResult = { nodes: MapNode[]; edges: MapEdge[] };
 

@@ -306,7 +306,7 @@ export function App() {
         />
       )}
 
-      <ThemeToggle />
+      {!placeParams && <ThemeToggle />}
     </div>
   );
 }

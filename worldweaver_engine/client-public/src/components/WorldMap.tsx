@@ -39,6 +39,17 @@ function markerRadius(node: MapNode, isFocus: boolean): number {
   return node.node_type !== "location" ? 4 : 7;
 }
 
+function stableOffsetAngle(key: string): number {
+  // The angle belongs to the node identity, not its current API-array index.
+  // Presence changes may reorder nodes, but must never rearrange the town.
+  let hash = 2166136261;
+  for (let index = 0; index < key.length; index += 1) {
+    hash ^= key.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return ((hash >>> 0) / 0xffffffff) * Math.PI * 2;
+}
+
 export function WorldMap({ nodes, edges, mapStyle, focusKey, onNodeClick, onViewportChange, frame }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Leaflet.Map | null>(null);
@@ -119,35 +130,48 @@ export function WorldMap({ nodes, edges, mapStyle, focusKey, onNodeClick, onView
       const georef = nodes.filter((n) => n.lat != null && n.lon != null);
       const byKey = new Map(georef.map((n) => [n.key, n]));
 
-      markers.clearLayers();
-      for (const edge of edges) {
-        const from = byKey.get(edge.from);
-        const to = byKey.get(edge.to);
-        if (from?.lat == null || from.lon == null || to?.lat == null || to.lon == null) continue;
-        L.polyline(
-          [
-            [from.lat, from.lon],
-            [to.lat, to.lon],
-          ],
-          { className: "map-path", interactive: false },
-        ).addTo(markers);
-      }
-      // Fan out markers sharing one coordinate so none hides another.
+      // Fan out markers sharing one authored coordinate. The displayed point
+      // is derived from stable node identity, so presence-driven API ordering
+      // cannot make two places trade positions.
       const buckets = new Map<string, MapNode[]>();
       for (const node of georef) {
         const key = `${Number(node.lat).toFixed(5)}:${Number(node.lon).toFixed(5)}`;
         buckets.set(key, [...(buckets.get(key) ?? []), node]);
       }
+      const displayPointByKey = new Map<string, [number, number]>();
       for (const node of georef) {
         const bucketKey = `${Number(node.lat).toFixed(5)}:${Number(node.lon).toFixed(5)}`;
         const bucket = buckets.get(bucketKey) ?? [node];
-        const index = bucket.findIndex((candidate) => candidate.key === node.key);
-        const angle = bucket.length > 1 ? (Math.PI * 2 * index) / bucket.length : 0;
+        const angle = bucket.length > 1 ? stableOffsetAngle(node.key) : 0;
         const offset = bucket.length > 1 ? 0.0012 : 0;
+        displayPointByKey.set(node.key, [
+          (node.lat as number) + Math.cos(angle) * offset,
+          (node.lon as number) + Math.sin(angle) * offset,
+        ]);
+      }
+
+      markers.clearLayers();
+      for (const edge of edges) {
+        // Containment says that a landmark belongs to a larger place. It is
+        // useful to the place UI, but it is not a visible walking route.
+        if (edge.kind !== "path") continue;
+        const from = byKey.get(edge.from);
+        const to = byKey.get(edge.to);
+        const fromPoint = from ? displayPointByKey.get(from.key) : undefined;
+        const toPoint = to ? displayPointByKey.get(to.key) : undefined;
+        if (!fromPoint || !toPoint) continue;
+        L.polyline(
+          [fromPoint, toPoint],
+          { className: "map-path", interactive: false },
+        ).addTo(markers);
+      }
+      for (const node of georef) {
         const isFocus = focusKey != null && node.key === focusKey;
+        const displayPoint = displayPointByKey.get(node.key);
+        if (!displayPoint) continue;
 
         const marker = L.circleMarker(
-          [(node.lat as number) + Math.cos(angle) * offset, (node.lon as number) + Math.sin(angle) * offset],
+          displayPoint,
           {
             radius: markerRadius(node, isFocus),
             className: `mk ${occupancyClass(node)}${isFocus ? " mk-here" : ""}`,
@@ -174,8 +198,8 @@ export function WorldMap({ nodes, edges, mapStyle, focusKey, onNodeClick, onView
       if (focusKey && focusKey !== lastFocusRef.current) {
         lastFocusRef.current = focusKey;
         const node = byKey.get(focusKey);
-        if (node) {
-          const target: [number, number] = [node.lat as number, node.lon as number];
+        const target = node ? displayPointByKey.get(node.key) : undefined;
+        if (target) {
           if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
             map.setView(target, Math.max(map.getZoom(), 15), { animate: false });
           } else {
