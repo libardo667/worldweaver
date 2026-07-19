@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WorldWeaver City Studio</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        color: #26352f;
+        background: #e9e3d3;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; background: linear-gradient(135deg, #eee9dc, #d9e1d5); }
+      button, select { font: inherit; }
+      button { cursor: pointer; }
+      .shell { min-height: 100vh; display: grid; grid-template-columns: 19rem minmax(0, 1fr); }
+      aside { padding: 1.4rem; background: #263a34; color: #f6f1e4; }
+      aside h1 { margin: 0; font-family: Georgia, serif; font-size: 1.55rem; font-weight: 500; }
+      aside p { color: #cbd7d0; line-height: 1.45; font-size: .9rem; }
+      .create { display: grid; gap: .65rem; padding: 1rem 0; border-block: 1px solid #ffffff26; }
+      select, .primary, .secondary { min-height: 2.6rem; border-radius: .55rem; border: 1px solid transparent; padding: .55rem .7rem; }
+      .primary { background: #d7b876; color: #25362f; font-weight: 700; }
+      .secondary { background: transparent; border-color: #8aa095; color: inherit; }
+      .draft-list { display: grid; gap: .45rem; margin-top: 1rem; }
+      .draft-button { width: 100%; text-align: left; border: 1px solid #ffffff20; border-radius: .55rem; padding: .7rem; background: #ffffff0b; color: inherit; }
+      .draft-button.active { border-color: #d7b876; background: #ffffff15; }
+      main { padding: clamp(1rem, 3vw, 2.4rem); min-width: 0; }
+      .topline { display: flex; gap: 1rem; align-items: end; justify-content: space-between; margin-bottom: 1rem; }
+      .topline h2 { margin: 0; font-family: Georgia, serif; font-size: clamp(1.6rem, 4vw, 2.5rem); font-weight: 500; }
+      .status { color: #52645d; min-height: 1.4rem; }
+      .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 17rem; gap: 1rem; }
+      .map-card, .panel { background: #faf7ed; border: 1px solid #b7c1b5; border-radius: .9rem; box-shadow: 0 10px 30px #30453b18; }
+      .map-card { min-height: 34rem; display: grid; place-items: center; overflow: hidden; }
+      .map-card img { display: block; width: 100%; height: 100%; max-height: 76vh; object-fit: contain; }
+      .panel { padding: 1rem; }
+      .panel h3 { margin: 0 0 .75rem; font-size: 1rem; }
+      .sections { display: grid; grid-template-columns: repeat(4, 1fr); gap: .35rem; }
+      .section { aspect-ratio: 1; border: 1px solid #9eaa9f; border-radius: .35rem; background: #e6eadf; color: #35473f; font-size: .72rem; }
+      .section.unlocked { border-style: dashed; background: #f2dfb5; }
+      .section.active { outline: 3px solid #709487; outline-offset: 1px; }
+      .controls { display: grid; gap: .5rem; margin-top: 1rem; }
+      .controls button { min-height: 2.45rem; border-radius: .5rem; border: 1px solid #8fa096; background: #fffdf5; color: #304239; }
+      .controls button:disabled { cursor: not-allowed; opacity: .45; }
+      .facts { margin: .9rem 0; padding: .75rem; border-radius: .5rem; background: #edf0e7; font-size: .82rem; line-height: 1.5; }
+      .empty { color: #607168; text-align: center; padding: 3rem; }
+      @media (max-width: 900px) {
+        .shell { grid-template-columns: 1fr; }
+        aside { position: static; }
+        .workspace { grid-template-columns: 1fr; }
+        .map-card { min-height: 24rem; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside>
+        <h1>City Studio</h1>
+        <p>Build and review a private city draft. Nothing here publishes to a running town.</p>
+        <div class="create">
+          <label for="configuration">Start from a configuration</label>
+          <select id="configuration"></select>
+          <button id="create" class="primary">Create draft</button>
+        </div>
+        <div id="drafts" class="draft-list" aria-label="Saved drafts"></div>
+      </aside>
+      <main>
+        <div class="topline">
+          <div>
+            <h2 id="city-title">Choose a draft</h2>
+            <div id="status" class="status">Private editor connected on this computer only.</div>
+          </div>
+          <button id="full-map" class="secondary" disabled>Full map</button>
+        </div>
+        <div id="empty" class="map-card empty">Create or select a draft to inspect its map.</div>
+        <div id="workspace" class="workspace" hidden>
+          <div class="map-card"><img id="map" alt="Generated city draft map" /></div>
+          <section class="panel">
+            <h3>Map sections</h3>
+            <div id="sections" class="sections"></div>
+            <div id="facts" class="facts">Select a section.</div>
+            <div class="controls">
+              <button id="unlock">Unlock section</button>
+              <button id="reroll">Reroll local detail</button>
+              <button id="lock">Lock section</button>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+    <script>
+      const token = "__CITY_STUDIO_TOKEN__";
+      const state = { draft: null, selected: null, mapUrl: null };
+      const byId = (id) => document.getElementById(id);
+
+      async function api(path, options = {}) {
+        const response = await fetch(path, {
+          ...options,
+          headers: { "X-City-Studio-Token": token, "Content-Type": "application/json", ...(options.headers || {}) },
+        });
+        if (!response.ok) {
+          let message = `${response.status} ${response.statusText}`;
+          try { message = (await response.json()).detail || message; } catch (_) {}
+          throw new Error(message);
+        }
+        return response;
+      }
+
+      function setStatus(message, error = false) {
+        byId("status").textContent = message;
+        byId("status").style.color = error ? "#9b3f36" : "#52645d";
+      }
+
+      async function loadConfigurations() {
+        const payload = await (await api("/api/configurations")).json();
+        const select = byId("configuration");
+        select.replaceChildren();
+        for (const config of payload.configurations) {
+          const option = document.createElement("option");
+          option.value = config.id;
+          option.textContent = `${config.name}${config.fictional ? " · fictional" : ""}`;
+          select.append(option);
+        }
+      }
+
+      async function loadDraftList() {
+        const payload = await (await api("/api/drafts")).json();
+        const list = byId("drafts");
+        list.replaceChildren();
+        for (const draft of payload.drafts) {
+          const button = document.createElement("button");
+          button.className = `draft-button${state.draft?.metadata.draft_id === draft.draft_id ? " active" : ""}`;
+          button.textContent = `${draft.city_id} · draft ${draft.draft_revision}`;
+          button.addEventListener("click", () => loadDraft(draft.draft_id));
+          list.append(button);
+        }
+      }
+
+      async function showMap(path) {
+        const blob = await (await api(path, { headers: { Accept: "image/svg+xml" } })).blob();
+        if (state.mapUrl) URL.revokeObjectURL(state.mapUrl);
+        state.mapUrl = URL.createObjectURL(blob);
+        byId("map").src = state.mapUrl;
+      }
+
+      function renderDraft() {
+        const draft = state.draft;
+        if (!draft.map_available) {
+          byId("workspace").hidden = true;
+          byId("empty").hidden = false;
+          byId("empty").textContent = "This real-city draft is valid. A geographic preview is not part of the first City Studio yet.";
+          byId("full-map").disabled = true;
+          byId("city-title").textContent = draft.manifest.city;
+          return;
+        }
+        byId("empty").hidden = true;
+        byId("workspace").hidden = false;
+        byId("full-map").disabled = false;
+        byId("city-title").textContent = draft.manifest.city;
+        const sections = byId("sections");
+        sections.replaceChildren();
+        sections.style.gridTemplateColumns = `repeat(${new Set(draft.sections.map((section) => section.x)).size || 1}, 1fr)`;
+        for (const section of draft.sections) {
+          const button = document.createElement("button");
+          button.className = `section${section.locked ? "" : " unlocked"}${state.selected === section.id ? " active" : ""}`;
+          button.textContent = section.id.replace("section-", "");
+          button.title = `${section.id}: ${section.locked ? "locked" : "unlocked"}, revision ${section.revision}`;
+          button.addEventListener("click", () => selectSection(section.id));
+          sections.append(button);
+        }
+        renderSelection();
+      }
+
+      function renderSelection() {
+        const section = state.draft?.sections.find((item) => item.id === state.selected);
+        byId("unlock").disabled = !section || !section.locked;
+        byId("reroll").disabled = !section || section.locked;
+        byId("lock").disabled = !section || section.locked;
+        byId("facts").textContent = section
+          ? `${section.id} · revision ${section.revision} · ${section.locked ? "locked" : "unlocked"} · ${section.detail_count} local details`
+          : "Select a section.";
+      }
+
+      async function loadDraft(id) {
+        try {
+          state.draft = await (await api(`/api/drafts/${encodeURIComponent(id)}`)).json();
+          state.selected = null;
+          renderDraft();
+          if (state.draft.map_available) await showMap(`/api/drafts/${encodeURIComponent(id)}/map.svg`);
+          await loadDraftList();
+          setStatus(`Draft ${state.draft.metadata.draft_revision} is valid and private.`);
+        } catch (error) { setStatus(error.message, true); }
+      }
+
+      async function selectSection(id) {
+        try {
+          state.selected = id;
+          renderDraft();
+          await showMap(`/api/drafts/${encodeURIComponent(state.draft.metadata.draft_id)}/sections/${encodeURIComponent(id)}.svg`);
+        } catch (error) { setStatus(error.message, true); }
+      }
+
+      async function editSection(action) {
+        if (!state.draft || !state.selected) return;
+        try {
+          const id = state.draft.metadata.draft_id;
+          state.draft = await (await api(`/api/drafts/${encodeURIComponent(id)}/sections/${encodeURIComponent(state.selected)}`, {
+            method: "POST",
+            body: JSON.stringify({ action, expected_revision: state.draft.metadata.draft_revision }),
+          })).json();
+          renderDraft();
+          await showMap(`/api/drafts/${encodeURIComponent(id)}/sections/${encodeURIComponent(state.selected)}.svg`);
+          await loadDraftList();
+          setStatus(`${state.selected} ${action} complete. Draft ${state.draft.metadata.draft_revision} is valid.`);
+        } catch (error) { setStatus(error.message, true); }
+      }
+
+      byId("create").addEventListener("click", async () => {
+        try {
+          const city = byId("configuration").value;
+          const draft = await (await api("/api/drafts", { method: "POST", body: JSON.stringify({ city }) })).json();
+          await loadDraft(draft.metadata.draft_id);
+        } catch (error) { setStatus(error.message, true); }
+      });
+      byId("full-map").addEventListener("click", async () => {
+        if (!state.draft) return;
+        try {
+          state.selected = null;
+          renderDraft();
+          await showMap(`/api/drafts/${encodeURIComponent(state.draft.metadata.draft_id)}/map.svg`);
+        } catch (error) { setStatus(error.message, true); }
+      });
+      byId("unlock").addEventListener("click", () => editSection("unlock"));
+      byId("reroll").addEventListener("click", () => editSection("reroll"));
+      byId("lock").addEventListener("click", () => editSection("lock"));
+
+      Promise.all([loadConfigurations(), loadDraftList()]).catch((error) => setStatus(error.message, true));
+    </script>
+  </body>
+</html>

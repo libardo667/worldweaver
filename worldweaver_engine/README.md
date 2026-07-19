@@ -38,7 +38,8 @@ same service rather than grow a second set of city rules.
 
 `src/services/city_draft_store.py` keeps unpublished source configurations and validated previews under
 `data/city_drafts`, never under the published `data/cities` tree. Use `python dev.py city-draft --help` from
-the repository root. This is the local draft foundation; it is not yet the browser-based City Studio.
+the repository root, or run `python dev.py city-studio` for the loopback-only browser editor. City Studio is
+a separate token-protected process; it is not mounted into the public shard API.
 
 ## Develop from the repository root
 

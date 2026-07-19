@@ -79,7 +79,10 @@ def _run(
             continue
         display.append(argument)
     print(f"\n==> {' '.join(display)}", flush=True)
-    return subprocess.call(command, cwd=cwd, env=env)
+    try:
+        return subprocess.call(command, cwd=cwd, env=env)
+    except KeyboardInterrupt:
+        return 130
 
 
 def _python_works(path: Path) -> bool:
@@ -781,6 +784,7 @@ def _help() -> None:
                                         create an isolated, folder-operated node
   python dev.py city-draft create --city CITY
                                         build a private draft and preview outside published packs
+  python dev.py city-studio             open the private browser editor on this computer
   python dev.py run <script> [args...]  run a repository Python script
 
 Other commands are passed to worldweaver_engine/scripts/dev.py, so commands such as
@@ -818,6 +822,8 @@ def main() -> int:
         return _run([sys.executable, "scripts/new_shard.py", *rest], cwd=ENGINE_DIR)
     if command == "city-draft":
         return _run([sys.executable, "scripts/city_draft.py", *rest], cwd=ENGINE_DIR)
+    if command == "city-studio":
+        return _run([sys.executable, "scripts/city_studio.py", *rest], cwd=ENGINE_DIR)
     if command == "agent":
         return _run([sys.executable, "-m", "src.main", *rest], cwd=AGENT_DIR)
     if command == "engine":

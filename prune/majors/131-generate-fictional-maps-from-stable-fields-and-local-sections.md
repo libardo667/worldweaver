@@ -25,9 +25,9 @@ to non-map city files or publication while residents run; makes a full backup; a
 The third map slice makes the 4-by-3 grid real rather than descriptive metadata. Each of Alderbank's twelve
 sections now has its own revision, seed, lock state, and local decorative details. Seventeen shared seam
 records carry elevation bands, region changes, and river or path crossings to both neighboring sections.
-All existing sections ship locked. A shared edit helper and local draft command can preview, unlock, reroll,
-and relock one section without changing the physical fields, canonical routes, required places, seams, or
-any neighboring section. Browser controls in City Studio are still needed.
+All existing sections ship locked. The local draft command and City Studio can preview, unlock, reroll, and
+relock one section without changing the physical fields, canonical routes, required places, seams, or any
+neighboring section.
 
 Alderbank is the project's experiment town. On 2026-07-19, the project owner explicitly approved using the
 inhabited Alderbank shard for this work. That approval is narrow: the generated drawing may change while we
@@ -132,7 +132,7 @@ for every interaction.
 - [x] Alderbank preview shows a river, terrain regions, typed paths, named landmarks, and stable labels while
   preserving its current movement graph.
 - [x] Each section can be previewed, rerolled, and locked independently in a private draft without moving
-  locked neighbors. City Studio still needs to expose these controls in a browser.
+  locked neighbors, from either the local command or City Studio.
 - [x] Section seams match for routes, waterways, elevation bands, and region edges.
 - [x] Every visible interactive route is backed by a canonical engine fact. Doorway drawing remains future
   work; current doors are exposed through the place controls rather than drawn on the map.

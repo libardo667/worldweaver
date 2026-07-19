@@ -75,6 +75,17 @@ python dev.py city-draft section alderbank section-0-0 lock
 A reroll is refused while the section is locked. Every successful edit rebuilds and validates the private
 preview. These commands do not publish a pack; first publication remains a separate future operation.
 
+For the same workflow in a browser, run:
+
+```bash
+python dev.py city-studio
+```
+
+City Studio opens on `127.0.0.1` and uses a fresh access token for that process. It is a separate local app,
+not a route on the public shard server. The first screen can create a draft from a checked-in city
+configuration, show the full generated map, focus any section, and unlock, reroll, or relock that section.
+Stop it with Ctrl+C. Import, general place editing, export, and first publication are still future work.
+
 ## Create a local shard
 
 ```bash

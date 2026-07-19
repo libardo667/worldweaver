@@ -22,7 +22,13 @@ The first private draft store is also in place. `python dev.py city-draft` can c
 preview a draft, then unlock, reroll, and relock one fictional-map section. Drafts live under ignored
 `data/city_drafts`, outside published packs. Each save assembles and validates a complete preview in a
 temporary directory before replacing the prior draft, and every section gets its own cropped SVG preview.
-There is deliberately no public HTTP write route yet; browser access still needs a local steward boundary.
+
+The first City Studio browser boundary now runs as its own process with `python dev.py city-studio`. It binds
+only to `127.0.0.1`, uses a fresh token for every run, checks host headers, and has no CORS or public-shard
+mount. The page can create a draft from a checked-in configuration, view the full map, focus each local
+section, and unlock, reroll, or relock it. Writes carry the expected draft revision so two stale views cannot
+silently overwrite each other. Its routes touch city configurations and the private draft store only; they
+do not read residents, accounts, the world database, or a published pack.
 
 ## Goal
 
@@ -31,13 +37,13 @@ portable files that can be exchanged and hosted without approval from a central 
 
 ## Build next
 
-1. Put the private draft operations behind a local steward browser boundary.
-2. Let a steward create, import, edit, validate, and preview a draft on a geographic or generated fictional
-   map. Major 131 owns the deterministic field and section compiler used by that preview.
+1. Add JSON import and ordinary place, route, landmark, and field-constraint editing to the local studio.
+2. Improve geographic preview for real-city drafts; Major 131 continues to own generated fictional maps.
 3. Export and import an immutable, versioned pack artifact.
 4. Add a first-publication operation that refuses to overwrite a seeded or inhabited node.
 5. Keep replacement of an inhabited pack blocked until a separate migration contract exists.
-6. Document the tool publicly while keeping write access to a hosted node authenticated.
+6. Document the tool publicly. Any future remotely hosted editor needs real steward authentication; the
+   current studio deliberately remains local-only.
 
 ## Pack rules
 
@@ -64,11 +70,11 @@ portable files that can be exchanged and hosted without approval from a central 
 - [x] Packs have schema and pack versions, validated travel hubs, and route hub IDs.
 - [x] Real and fictional packs use the same core builder and preview shape.
 - [x] The CLI supports reproducible noninteractive builds.
-- [ ] City-pack assembly and validation now have one extracted implementation used by the CLI. This becomes
-  complete when the browser calls it too rather than duplicating its rules.
+- [x] The CLI and local browser use one extracted build and validation implementation rather than duplicated
+  rules.
 - [x] A steward can save and preview a draft with the local command, without touching a live pack. Browser
   controls remain to be built.
 - [ ] Packs can be imported and exported without a central catalog.
 - [ ] First publication refuses a seeded or inhabited target.
 - [ ] Replacing an inhabited city remains impossible without an explicit migration workflow.
-- [ ] The studio has no resident-private read or write surface.
+- [x] The studio has no resident-private read or write surface.
