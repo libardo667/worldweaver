@@ -10,6 +10,19 @@ telemetry.
 The remaining work is to make this the normal human interface and retire the old combined client as a
 public product.
 
+## Update (2026-07-18)
+
+The root defaults now use `client-public`. `weave-up`, `weave-client`, and `client` start the place-centered
+commons client on port 5174, and the default client Compose project builds from `client-public/`. The old
+combined interface is no longer launched by a normal development or deployment command; it remains
+temporarily available as the explicitly named local `client-legacy` command while the useful parts are
+sorted from the telemetry and obsolete controls.
+
+The action inventory found real participant gaps still to review: password recovery, correspondence,
+giving and exchange, ordinary room access, stoop withdrawal, and human cross-node travel. Their presence in
+the old client does not automatically mean every old interaction should be copied. Each should use the
+current typed engine contract and fit the place-centered interface.
+
 ## Build next
 
 1. Inventory actions still available only in the old client.
@@ -38,5 +51,5 @@ public product.
 - [x] The map and current place are primary; activity history is optional.
 - [ ] All supported ordinary participant actions are available in `client-public`.
 - [ ] The old combined client is either removed or limited to named steward-only functions.
-- [ ] Root commands and deployment serve the public client as the default human surface.
+- [x] Root commands and deployment serve the public client as the default human surface.
 - [ ] Accessibility and mobile checks cover the supported entry and place flows.

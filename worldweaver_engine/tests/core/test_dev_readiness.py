@@ -65,6 +65,29 @@ def test_client_routes_keep_browser_traffic_off_runtime_only_node_urls(tmp_path)
     }
 
 
+def test_default_client_compose_runs_the_public_surface():
+    compose = dev.CLIENT_COMPOSE_FILE.read_text(encoding="utf-8")
+
+    assert "dockerfile: client-public/Dockerfile" in compose
+    assert "./client-public:/app/client-public" in compose
+    assert "public_client_node_modules:/app/client-public/node_modules" in compose
+    assert '"5174:5174"' in compose
+    assert "client/Dockerfile" not in compose
+
+
+def test_weave_client_runs_public_client_against_selected_shard(tmp_path, monkeypatch):
+    world = _shard(tmp_path, "ww_world", shard_type="world", shard_id="ww_world")
+    city = _shard(tmp_path, "ww_alderbank", shard_type="city", city_id="alderbank", shard_id="ww_alderbank")
+    commands: list[list[str]] = []
+    monkeypatch.setattr(dev, "_load_shard_specs", lambda: [world, city])
+    monkeypatch.setattr(dev, "_run", lambda command, **_kwargs: commands.append(command) or 0)
+
+    result = dev.run_weave_client(city="ww_alderbank", lan=False)
+
+    assert result == 0
+    assert commands == [["npm", "--prefix", "client-public", "run", "dev"]]
+
+
 def test_compose_resolution_rejects_unusable_path_placeholders(monkeypatch):
     monkeypatch.setattr(dev.shutil, "which", lambda command: f"/fake/{command}")
     monkeypatch.setattr(dev.subprocess, "call", lambda *_args, **_kwargs: 1)

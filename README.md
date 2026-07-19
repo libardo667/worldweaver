@@ -37,8 +37,7 @@ Run one package with `python dev.py test engine` or `python dev.py test agent`.
 ## Run a local town
 
 ```bash
-python dev.py weave-up --city ww_alderbank --no-client
-VITE_PROXY_TARGET=http://localhost:8004 python dev.py client-public
+python dev.py weave-up --city ww_alderbank
 ```
 
 Open <http://localhost:5174>. Residents remain stopped unless you explicitly wake one or run a bounded

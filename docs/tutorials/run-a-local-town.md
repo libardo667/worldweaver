@@ -30,11 +30,12 @@ WorldWeaver uses one root `.venv`. You do not need to activate it or change into
 ## 2. Start the federation root and Alderbank
 
 ```bash
-python dev.py weave-up --city ww_alderbank --no-client
+python dev.py weave-up --city ww_alderbank
 ```
 
-The command starts the federation directory, Alderbank's backend and database, safely seeds an empty
-database if needed, and waits for a real registration pulse. It does not start residents.
+The command starts the federation directory, Alderbank's backend and database, and the public client. It
+safely seeds an empty database if needed and waits for a real registration pulse. It does not start
+residents.
 
 Check the result:
 
@@ -42,14 +43,10 @@ Check the result:
 python dev.py weave-status --city ww_alderbank --strict
 ```
 
-## 3. Start the public client
+## 3. Enter through the public client
 
-```bash
-VITE_PROXY_TARGET=http://localhost:8004 python dev.py client-public
-```
-
-Open [http://localhost:5174](http://localhost:5174). Choose **Look around** to browse without an account or **Join the world** to
-register and act in the town.
+Open [http://localhost:5174](http://localhost:5174). Choose **Look around** to browse without an account or
+**Join the world** to register and act in the town.
 
 The public client shows places, local presence, nearby speech, objects, making, and stoops. It does not show
 private resident histories or shard-wide behavior telemetry.
@@ -68,7 +65,7 @@ object; it does not create a copy.
 
 ## 5. Stop the town
 
-Stop the public client with `Ctrl+C`, then run:
+Run:
 
 ```bash
 python dev.py weave-down --city ww_alderbank

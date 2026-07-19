@@ -11,7 +11,8 @@ shareable deep links.
 ## Run
 
 ```bash
-python dev.py client-public            # from the repo root; Vite on :5174
+python dev.py client                   # from the repo root; Vite on :5174
+python dev.py client-public            # explicit alias
 VITE_PROXY_TARGET=http://localhost:8004 npm run dev   # point at a specific shard
 ```
 

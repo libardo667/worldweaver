@@ -6,6 +6,8 @@
 venv
 env
 client/node_modules
+client-public/node_modules
+client-public/dist
 dist
 __pycache__
 *.pyc

@@ -34,10 +34,13 @@ python dev.py weave-down --city CITY
 ```bash
 python dev.py client
 python dev.py client-public
+python dev.py client-legacy
 ```
 
-The current `weave-up` wrapper starts the older combined client on port 5173. The place-centered public
-client runs on port 5174 and should be started explicitly with `VITE_PROXY_TARGET` set to the chosen shard.
+`client` and `client-public` both start the supported place-centered client on port 5174. `weave-up` starts
+the same client and points it at the selected city automatically. `client-legacy` is the retired combined
+interface on port 5173; use it only for local migration or debugging while its remaining useful functions
+are separated.
 
 ## Residents
 

@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parent.parent
 WORKSPACE_ROOT = ROOT.parent
 SHARDS_ROOT = WORKSPACE_ROOT / "shards"
 ENV_FILE = ROOT / ".env"
-CLIENT_ENV_FILE = ROOT / "client" / ".env.local"
+CLIENT_ENV_FILE = ROOT / "client-public" / ".env.local"
 CLIENT_COMPOSE_FILE = ROOT / "docker-compose.yml"
 LEGACY_STACK_COMPOSE_FILE = ROOT / "docker-compose.legacy.yml"
 API_KEY_NAMES = ("OPENROUTER_API_KEY", "LLM_API_KEY", "OPENAI_API_KEY")
@@ -38,6 +38,7 @@ DEFAULT_RUNTIME_DB_PATHS = ("worldweaver.db", "db/worldweaver.db")
 DEFAULT_TEST_DB_PATHS = ("test_database.db", "test_env_integration.db")
 HARNESS_COMMANDS = ("eval", "eval-smoke", "sweep", "llm-playtest", "benchmark-three-layer")
 CLIENT_PROJECT = "ww_client"
+PUBLIC_CLIENT_PORT = 5174
 
 
 @dataclass(frozen=True)
@@ -793,7 +794,7 @@ def _print_weave_summary(*, world_shard: ShardSpec, city_shard: ShardSpec, clien
     _print_result("INFO", f"world root: {world_shard.dir_name} -> {_local_backend_url(world_shard)}")
     _print_result("INFO", f"city shard: {city_shard.dir_name} ({city_shard.display_name}) -> {_local_backend_url(city_shard)}")
     if client_started:
-        _print_result("INFO", "client: http://localhost:5173")
+        _print_result("INFO", f"public client: http://localhost:{PUBLIC_CLIENT_PORT}")
         _print_result("INFO", f"default client API target: {_local_backend_url(city_shard)}")
     if agents_started:
         _print_result("INFO", "agents: requested; they will start after backend seed and registration checks")
@@ -912,6 +913,9 @@ def run_install() -> int:
     pip_rc = _run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
     if pip_rc != 0:
         return pip_rc
+    public_rc = _run(["npm", "--prefix", "client-public", "install"])
+    if public_rc != 0:
+        return public_rc
     return _run(["npm", "--prefix", "client", "install"])
 
 
@@ -1001,11 +1005,11 @@ def run_preflight(*, require_docker: bool = False) -> int:
         _print_result("FAIL", "missing .env (copy .env.example to .env)")
 
     if CLIENT_ENV_FILE.exists():
-        _print_result("PASS", "client/.env.local present")
+        _print_result("PASS", "client-public/.env.local present")
     else:
         _print_result(
             "WARN",
-            "client/.env.local missing (create if you need client-only overrides)",
+            "client-public/.env.local missing (create if you need client-only overrides)",
         )
 
     # API key checks (non-secret pass/fail only)
@@ -1533,10 +1537,10 @@ def run_weave_client(*, city: str | None, lan: bool) -> int:
         return 1
 
     env = _client_host_env(world_shard=world_shard, city_shard=city_shard, all_shards=shards)
-    _print_result("INFO", f"starting local client on http://localhost:5173 for {city_shard.dir_name} -> {_local_backend_url(city_shard)}")
+    _print_result("INFO", f"starting public client on http://localhost:{PUBLIC_CLIENT_PORT} for {city_shard.dir_name} -> {_local_backend_url(city_shard)}")
     _print_result("INFO", f"world registry target: {_local_backend_url(world_shard)}")
 
-    cmd = ["npm", "--prefix", "client", "run", "dev"]
+    cmd = ["npm", "--prefix", "client-public", "run", "dev"]
     if lan:
         cmd += ["--", "--host"]
     return _run(cmd, cwd=ROOT, env=env)
@@ -1791,7 +1795,7 @@ def main() -> int:
     )
     weave_client_parser = sub.add_parser(
         "weave-client",
-        help="run the Vite client locally against the shard-first runtime",
+        help="run the public commons client locally against the shard-first runtime",
     )
     weave_client_parser.add_argument(
         "--city",
@@ -1839,7 +1843,7 @@ def main() -> int:
         action="store_true",
         help="bind to 0.0.0.0 so devices on the local network can reach the server",
     )
-    client_parser = sub.add_parser("client", help="run client dev server")
+    client_parser = sub.add_parser("client", help="run the public commons client dev server (:5174)")
     client_parser.add_argument(
         "--lan",
         action="store_true",
@@ -1851,8 +1855,14 @@ def main() -> int:
         action="store_true",
         help="expose Vite dev server on all interfaces (for phone/LAN access)",
     )
+    client_legacy_parser = sub.add_parser("client-legacy", help="run the retired combined client locally for migration/debug work (:5173)")
+    client_legacy_parser.add_argument(
+        "--lan",
+        action="store_true",
+        help="expose the legacy Vite server on all interfaces",
+    )
     sub.add_parser("test", help="run backend test suite")
-    sub.add_parser("build", help="run client build")
+    sub.add_parser("build", help="build the supported public client")
     sub.add_parser("static", help="run baseline static checks (client build + compileall)")
     lint_parser = sub.add_parser(
         "lint",
@@ -1988,7 +1998,7 @@ def main() -> int:
             cmd += ["--host", "0.0.0.0"]
         return _run(cmd)
     if args.command == "client":
-        cmd = ["npm", "--prefix", "client", "run", "dev"]
+        cmd = ["npm", "--prefix", "client-public", "run", "dev"]
         if getattr(args, "lan", False):
             cmd += ["--", "--host"]
         return _run(cmd)
@@ -1997,10 +2007,15 @@ def main() -> int:
         if getattr(args, "lan", False):
             cmd += ["--", "--host"]
         return _run(cmd)
+    if args.command == "client-legacy":
+        cmd = ["npm", "--prefix", "client", "run", "dev"]
+        if getattr(args, "lan", False):
+            cmd += ["--", "--host"]
+        return _run(cmd)
     if args.command == "test":
         return _run([sys.executable, "-m", "pytest", "-q"])
     if args.command == "build":
-        return _run(["npm", "--prefix", "client", "run", "build"])
+        return _run(["npm", "--prefix", "client-public", "run", "build"])
     if args.command == "static":
         return run_static_checks()
     if args.command == "lint":

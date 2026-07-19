@@ -28,7 +28,7 @@ belong to `../ww_agent/` and the resident's hearth.
 - `src/services/`: world rules and application services
 - `src/models/`: database records
 - `client-public/`: normal participant client
-- `client/`: older combined client, retained while steward-only needs are separated
+- `client/`: retired combined client, available only through `client-legacy` while useful operations are separated
 - `scripts/`: city building, seeding, and maintenance commands
 - `tests/`: engine contract tests
 
@@ -39,6 +39,7 @@ python dev.py install
 python dev.py test engine
 python dev.py build
 python dev.py check
+python dev.py weave-up --city ww_alderbank
 ```
 
 Do not run a separate package virtual environment. The root `.venv` and `dev.py` are the supported
