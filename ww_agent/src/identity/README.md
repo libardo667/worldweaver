@@ -193,6 +193,14 @@ both witness-key fingerprints in advance. The node private keys remain outside t
 receipts create an auditable two-sided chain, but neither receipt authorizes deletion. A later cleanup policy
 must separately require recovery evidence, retention rules, and an explicit destructive command.
 
+`hearth_remote_activation.py` applies those statements in a restartable order. It verifies every resident,
+host, witness, and key binding before changing state. The source first records the handoff, becomes retired,
+and only then receives a source receipt. The destination refuses to advance until that receipt verifies, then
+stores it, advances exactly one generation, becomes active, and receives its own receipt. Tests interrupt both
+receipt boundaries and prove the operation can resume without reactivating the source or incrementing twice.
+The retired source directory, sealed resident key, ledger, and artifacts remain intact. There is no deletion
+function in this protocol.
+
 ## Open decisions that must remain explicit
 
 - Where the resident's identity signing/recovery material lives and how it can be recovered without making

@@ -47,6 +47,10 @@ from src.identity.hearth_manifest import (
     inspect_hearth_manifest,
     load_hearth_manifest,
 )
+from src.identity.hearth_receipt import (
+    HEARTH_ACTIVATION_RECEIPT_FILENAME,
+    HEARTH_RETIREMENT_RECEIPT_FILENAME,
+)
 from src.identity.hearth_transfer import (
     HearthTransferError,
     build_hearth_transfer_payload,
@@ -88,6 +92,8 @@ _HOST_SPECIFIC_ROOT_FILES = {
     "familiar.json",
     "hearth_activation.json",
     HEARTH_HANDOFF_FILENAME,
+    HEARTH_RETIREMENT_RECEIPT_FILENAME,
+    HEARTH_ACTIVATION_RECEIPT_FILENAME,
 }
 _PORTABLE_IDENTITY_FILES = {
     "IDENTITY.md",

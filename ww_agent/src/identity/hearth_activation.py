@@ -192,6 +192,27 @@ def _write_activation(resident_dir: Path, activation: HearthActivation) -> None:
             temporary.unlink(missing_ok=True)
 
 
+def write_hearth_activation_locked(
+    resident_dir: Path,
+    activation: HearthActivation,
+) -> None:
+    """Write a manifest-matching activation while the caller holds its lease."""
+
+    home = Path(resident_dir)
+    verified = HearthActivation.from_dict(activation.to_dict())
+    try:
+        manifest = load_hearth_manifest(home)
+    except (HearthManifestError, OSError) as exc:
+        raise HearthActivationError(str(exc)) from exc
+    if (
+        verified.actor_id != manifest.actor_id
+        or verified.hearth_shard_id != manifest.hearth_shard_id
+        or verified.runtime_generation != manifest.runtime_generation
+    ):
+        raise HearthActivationError("activation does not match the hearth manifest")
+    _write_activation(home, verified)
+
+
 def load_hearth_activation(resident_dir: Path) -> HearthActivation:
     path = activation_path(resident_dir)
     if not path.is_file() or path.is_symlink():
