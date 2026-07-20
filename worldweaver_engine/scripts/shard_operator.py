@@ -1453,8 +1453,7 @@ def command_node(args: argparse.Namespace) -> int:
             [
                 "--node-id",
                 descriptor["node_id"],
-                "--public-key",
-                descriptor["public_key"],
+                f"--public-key={descriptor['public_key']}",
                 "--shard-type",
                 descriptor["shard_type"],
                 "--city-id",
