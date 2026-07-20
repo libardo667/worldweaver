@@ -169,6 +169,18 @@ def test_certificate_rejects_wrong_identity_key_expiry_and_excess_lifetime():
             issued_at=NOW,
             expires_at=NOW + 86_401,
         )
+    with pytest.raises(ResidentProtocolError, match="generation"):
+        issue_runtime_certificate(
+            identity_private_key=identity_private,
+            runtime_public_key=Ed25519PrivateKey.generate().public_key(),
+            actor_id=ACTOR_ID,
+            hearth_shard_id=HEARTH_ID,
+            runtime_generation=2**63,
+            audience=AUDIENCE,
+            scopes=[SCOPE],
+            issued_at=NOW,
+            expires_at=NOW + 60,
+        )
 
 
 def test_request_rejects_missing_headers_old_timestamp_and_tampered_certificate_signature():

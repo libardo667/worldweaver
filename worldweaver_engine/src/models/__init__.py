@@ -54,6 +54,78 @@ class SessionVars(Base):
     actor_id = Column(String(36), nullable=True, index=True)
 
 
+class ResidentAuthority(Base):
+    """City-local public identity binding and active resident generation."""
+
+    __tablename__ = "resident_authorities"
+    __table_args__ = (
+        CheckConstraint(
+            "active_runtime_generation IS NULL OR active_runtime_generation >= 1",
+            name="ck_resident_authorities_active_generation",
+        ),
+        CheckConstraint(
+            "recovery_policy_version >= 1",
+            name="ck_resident_authorities_recovery_policy",
+        ),
+    )
+
+    actor_id = Column(String(36), primary_key=True)
+    hearth_shard_id = Column(String(80), nullable=False)
+    identity_public_key = Column(String(64), nullable=False, unique=True)
+    identity_key_id = Column(String(48), nullable=False, unique=True, index=True)
+    active_runtime_generation = Column(Integer, nullable=True)
+    recovery_policy_version = Column(Integer, nullable=False, default=1, server_default="1")
+    bound_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class ResidentSessionAuthority(Base):
+    """The resident generation allowed to act through one local session."""
+
+    __tablename__ = "resident_session_authorities"
+    __table_args__ = (
+        CheckConstraint(
+            "runtime_generation >= 1",
+            name="ck_resident_session_authorities_generation",
+        ),
+    )
+
+    session_id = Column(
+        String(64),
+        ForeignKey("session_vars.session_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    actor_id = Column(String(36), nullable=False, index=True)
+    runtime_generation = Column(Integer, nullable=False)
+    bound_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class ResidentRequestNonce(Base):
+    """Short-lived replay guard for a resident's signed city request."""
+
+    __tablename__ = "resident_request_nonces"
+    __table_args__ = (
+        CheckConstraint(
+            "runtime_generation >= 1",
+            name="ck_resident_request_nonces_generation",
+        ),
+        UniqueConstraint(
+            "certificate_id",
+            "nonce",
+            name="uq_resident_request_certificate_nonce",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    certificate_id = Column(String(128), nullable=False, index=True)
+    nonce = Column(String(128), nullable=False)
+    actor_id = Column(String(36), nullable=False, index=True)
+    runtime_generation = Column(Integer, nullable=False)
+    signed_at = Column(DateTime, nullable=False)
+    received_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
+
+
 class ResidentIdentityGrowth(Base):
     """Legacy city-held identity data retained for hearth migration."""
 

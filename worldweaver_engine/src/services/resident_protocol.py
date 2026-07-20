@@ -32,6 +32,7 @@ CERTIFICATE_SCHEMA = "worldweaver.resident-runtime-certificate"
 CERTIFICATE_VERSION = 1
 DEFAULT_MAX_CLOCK_SKEW_SECONDS = 300
 MAX_CERTIFICATE_LIFETIME_SECONDS = 24 * 60 * 60
+MAX_RUNTIME_GENERATION = (2**63) - 1
 
 _CERTIFICATE_FIELDS = {
     "schema",
@@ -182,7 +183,7 @@ class ResidentRuntimeCertificate:
         generation = raw.get("runtime_generation")
         issued_at = raw.get("issued_at")
         expires_at = raw.get("expires_at")
-        if isinstance(generation, bool) or not isinstance(generation, int) or generation < 1:
+        if isinstance(generation, bool) or not isinstance(generation, int) or generation < 1 or generation > MAX_RUNTIME_GENERATION:
             raise ResidentProtocolError("Resident certificate generation is invalid.")
         if isinstance(issued_at, bool) or not isinstance(issued_at, int):
             raise ResidentProtocolError("Resident certificate issued_at is invalid.")

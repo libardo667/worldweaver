@@ -110,6 +110,18 @@ live-key migration remains an explicit later step.
 8. Encrypt and authenticate hearth transfer before moving the resident identity private key between hosts.
 9. Migrate one synthetic resident, then one reviewed dormant resident, before waking a real resident.
 
+## Implementation checkpoint
+
+As of 2026-07-20, steps 1 and 2 are implemented. The city also has the empty schema and internal service
+needed for step 3: admitted resident public keys, an active runtime generation, per-session generation
+bindings, and one-time request nonces. Focused tests prove key-conflict rejection, generation fencing, exact
+request verification, and replay rejection. The migration has been exercised forward, backward, and forward
+again on a throwaway SQLite database.
+
+This is not live route enforcement yet. No existing resident has been assigned a private identity key, no
+anonymous compatibility route has been closed, and Alderbank's resident sessions have not been migrated.
+That waits for the shared HTTP authorization dependency and an explicit synthetic admission path.
+
 ## Acceptance tests
 
 - Anonymous use of a public session ID cannot move, speak, mark, read private mail, mutate objects, leave, or
