@@ -53,6 +53,81 @@ def test_new_shard_keeps_node_identity_separate_from_city_pack(tmp_path: Path) -
     assert "COMPOSE_PROJECT_NAME=rose-city-coop-1\n" in env_text
 
 
+def test_new_shard_can_advertise_and_bind_on_a_private_node_network(
+    tmp_path: Path,
+) -> None:
+    city_pack = tmp_path / "pack"
+    city_pack.mkdir()
+    (city_pack / "neighborhoods.json").write_text("[]", encoding="utf-8")
+
+    script = Path(__file__).resolve().parents[2] / "scripts" / "new_shard.py"
+    subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "portland",
+            "--base-dir",
+            str(tmp_path),
+            "--city-pack-dir",
+            str(city_pack),
+            "--public-url",
+            "http://192.168.77.2:8003/",
+            "--client-url",
+            "https://portland.example.test/",
+            "--bind-address",
+            "0.0.0.0",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    shard = tmp_path / "ww_pdx"
+    generated_env = _read_env(shard / ".env")
+    assert generated_env["WW_PUBLIC_URL"] == "http://192.168.77.2:8003"
+    assert generated_env["WW_CLIENT_URL"] == "https://portland.example.test"
+    assert '"0.0.0.0:${BACKEND_PORT}:8000"' in (shard / "docker-compose.yml").read_text(
+        encoding="utf-8"
+    )
+
+
+def test_new_shard_rejects_unsafe_public_urls_and_invalid_bind_addresses(
+    tmp_path: Path,
+) -> None:
+    script = Path(__file__).resolve().parents[2] / "scripts" / "new_shard.py"
+
+    for options, expected in (
+        (
+            ["--public-url", "ftp://example.test"],
+            "--public-url must be an http(s) URL",
+        ),
+        (
+            ["--public-url", "https://user:secret@example.test"],
+            "without embedded credentials",
+        ),
+        (
+            ["--bind-address", "all-interfaces"],
+            "--bind-address must be an IPv4 address",
+        ),
+    ):
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(script),
+                "world",
+                "--type",
+                "world",
+                "--base-dir",
+                str(tmp_path),
+                *options,
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 2
+        assert expected in result.stderr
+
+
 def test_new_world_directory_is_closed_and_has_folder_local_trust_commands(
     tmp_path: Path,
 ) -> None:
@@ -380,9 +455,9 @@ def test_folder_operator_verifies_generated_maps_before_publication(
     neighborhoods = json.loads(
         (changed_canonical_pack / "neighborhoods.json").read_text(encoding="utf-8")
     )
-    neighborhoods[0][
-        "vibe"
-    ] = "A canonical city change that map-only publication must refuse."
+    neighborhoods[0]["vibe"] = (
+        "A canonical city change that map-only publication must refuse."
+    )
     (changed_canonical_pack / "neighborhoods.json").write_text(
         json.dumps(neighborhoods, indent=2) + "\n", encoding="utf-8"
     )

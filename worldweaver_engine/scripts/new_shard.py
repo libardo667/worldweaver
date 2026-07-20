@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import ipaddress
 import json
 import os
 import re
@@ -73,8 +74,8 @@ WW_RUNTIME_FEDERATION_URL={runtime_federation_url}
 FEDERATION_TOKEN={token}
 WW_NODE_PRIVATE_KEY_PATH=identity/node.key
 WW_ENABLE_DEV_RESET=true
-WW_PUBLIC_URL=http://localhost:{port}
-WW_CLIENT_URL=
+WW_PUBLIC_URL={public_url}
+WW_CLIENT_URL={client_url}
 WW_CORS_ORIGINS=*
 WW_INGRESS_PROVIDER=
 WW_TRUST_CLOUDFLARE_PROXY=false
@@ -114,8 +115,8 @@ WW_SHARD_EXPERIENCE_PATH=
 FEDERATION_TOKEN={token}
 WW_NODE_PRIVATE_KEY_PATH=identity/node.key
 WW_ENABLE_DEV_RESET=false
-WW_PUBLIC_URL=http://localhost:{port}
-WW_CLIENT_URL=
+WW_PUBLIC_URL={public_url}
+WW_CLIENT_URL={client_url}
 WW_CORS_ORIGINS=*
 WW_INGRESS_PROVIDER=
 WW_TRUST_CLOUDFLARE_PROXY=false
@@ -184,7 +185,7 @@ services:
       WW_CLIENT_URL: ${{WW_CLIENT_URL:-}}
       FEDERATION_URL: ${{WW_RUNTIME_FEDERATION_URL:-${{FEDERATION_URL}}}}
     ports:
-      - "127.0.0.1:${{BACKEND_PORT}}:8000"
+      - "{bind_address}:${{BACKEND_PORT}}:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -250,7 +251,7 @@ services:
       WW_DB_PASSWORD: ${{WW_DB_PASSWORD:-postgres}}
       WW_DATABASE_URL: ${{WW_DATABASE_URL:-}}
     ports:
-      - "127.0.0.1:${{BACKEND_PORT}}:8000"
+      - "{bind_address}:${{BACKEND_PORT}}:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -419,6 +420,33 @@ def _city_pack_timezone(city_pack_src: Path | None) -> str:
     return str(payload.get("timezone") or "").strip()
 
 
+def _http_url(value: str, *, option: str, allow_empty: bool = False) -> str:
+    from urllib.parse import urlsplit
+
+    candidate = str(value or "").strip()
+    if not candidate and allow_empty:
+        return ""
+    parsed = urlsplit(candidate)
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.netloc
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise ValueError(
+            f"{option} must be an http(s) URL without embedded credentials"
+        )
+    return candidate.rstrip("/")
+
+
+def _bind_address(value: str) -> str:
+    candidate = str(value or "").strip()
+    try:
+        return str(ipaddress.IPv4Address(candidate))
+    except ValueError as exc:
+        raise ValueError("--bind-address must be an IPv4 address") from exc
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Create a new WorldWeaver shard directory."
@@ -450,6 +478,21 @@ def main() -> None:
         "--runtime-federation",
         default="",
         help="Federation URL used inside Docker when it differs from the host-side URL",
+    )
+    parser.add_argument(
+        "--public-url",
+        default="",
+        help="API URL advertised to other nodes (default: http://localhost:<port>)",
+    )
+    parser.add_argument(
+        "--client-url",
+        default="",
+        help="Optional human-facing client URL advertised for this shard",
+    )
+    parser.add_argument(
+        "--bind-address",
+        default="127.0.0.1",
+        help="Host IPv4 address that accepts API traffic (default: 127.0.0.1)",
     )
     parser.add_argument(
         "--token", default="", help="Shared federation secret (FEDERATION_TOKEN)"
@@ -485,6 +528,20 @@ def main() -> None:
     )
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+
+    try:
+        public_url = _http_url(
+            args.public_url or f"http://localhost:{args.port}",
+            option="--public-url",
+        )
+        client_url = _http_url(
+            args.client_url,
+            option="--client-url",
+            allow_empty=True,
+        )
+        bind_address = _bind_address(args.bind_address)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     image_tag = str(args.image_tag or "").strip() or _current_image_tag()
     try:
@@ -617,8 +674,13 @@ def main() -> None:
             jwt_secret=jwt_secret,
             data_encryption_key=data_encryption_key,
             db_password=db_password,
+            public_url=public_url,
+            client_url=client_url,
         )
-        compose_content = _COMPOSE_WORLD.format(db_external_port=db_external_port)
+        compose_content = _COMPOSE_WORLD.format(
+            db_external_port=db_external_port,
+            bind_address=bind_address,
+        )
     else:
         env_content = _ENV_CITY.format(
             engine_image=engine_image,
@@ -640,11 +702,14 @@ def main() -> None:
             jwt_secret=jwt_secret,
             data_encryption_key=data_encryption_key,
             db_password=db_password,
+            public_url=public_url,
+            client_url=client_url,
         )
         compose_content = _COMPOSE_CITY.format(
             city_id=city_id,
             shard_id=shard_id,
             db_external_port=db_external_port,
+            bind_address=bind_address,
         )
 
     files = {
@@ -669,6 +734,8 @@ def main() -> None:
     if args.shard_type != "world":
         print(f"  city_id   : {city_id}")
     print(f"  port      : {args.port}")
+    print(f"  bind      : {bind_address}")
+    print(f"  public URL: {public_url}")
     print(f"  engine    : {engine_image}")
     if args.shard_type != "world":
         print(f"  agent     : {agent_image}")
