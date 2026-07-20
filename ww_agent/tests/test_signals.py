@@ -95,5 +95,4 @@ def test_queues_are_pure_event_log_views(tmp_path):
     assert intents.all() == []
     assert not (memory_dir / "stimulus_packets.json").exists()
     assert not (memory_dir / "intent_queue.json").exists()
-    # ensure_file still materializes the observability snapshot.
-    assert (memory_dir / "runtime_snapshot.json").exists()
+    assert not (memory_dir / "runtime_snapshot.json").exists()

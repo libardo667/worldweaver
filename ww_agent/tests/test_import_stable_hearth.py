@@ -73,7 +73,8 @@ def test_stable_import_preserves_resident_state_but_not_old_host_runtime(tmp_pat
     assert not (target / "daemon.log").exists()
     assert not (target / "state.json").exists()
     assert not (target / "familiar.json").exists()
-    assert (target / "memory" / "runtime_projection.json").read_text() != "{}\n"
+    assert (target / "memory" / "runtime_checkpoint.json").is_file()
+    assert not (target / "memory" / "runtime_projection.json").exists()
     hearth = json.loads((target / "hearth.json").read_text())
     assert hearth == {"place": "the workbench", "read_roots": [str(granted.resolve())]}
     tuning = json.loads((target / "identity" / "tuning.json").read_text())

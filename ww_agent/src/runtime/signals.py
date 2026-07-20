@@ -15,7 +15,6 @@ from src.runtime.ledger import (
     derive_intents,
     derive_packets,
     load_current_runtime_state,
-    sync_runtime_compatibility_projections,
 )
 
 
@@ -362,7 +361,6 @@ class StimulusPacketQueue:
             event_type="packet_emitted",
             payload=packet.to_dict(),
         )
-        _write_runtime_snapshot(self._path.parent)
         return packet
 
     def emit(
@@ -464,7 +462,6 @@ class StimulusPacketQueue:
                     "source_loop": updated.source_loop,
                 },
             )
-            _write_runtime_snapshot(self._path.parent)
         return updated
 
     def expire_due(self, *, as_of: datetime | str) -> list[StimulusPacket]:
@@ -492,13 +489,10 @@ class StimulusPacketQueue:
                 ts=effective_now,
             )
             expired.append(closed)
-        if expired:
-            _write_runtime_snapshot(self._path.parent)
         return expired
 
     def ensure_file(self) -> None:
-        sync_runtime_compatibility_projections(self._path.parent)
-        _write_runtime_snapshot(self._path.parent)
+        load_current_runtime_state(self._path.parent)
 
     def _load(self) -> list[StimulusPacket]:
         return [
@@ -518,7 +512,6 @@ class IntentQueue:
             event_type="intent_staged",
             payload=intent.to_dict(),
         )
-        _write_runtime_snapshot(self._path.parent)
         return intent
 
     def stage(
@@ -581,7 +574,6 @@ class IntentQueue:
                 "validation_state": chosen.validation_state,
             },
         )
-        _write_runtime_snapshot(self._path.parent)
         return chosen
 
     def mark_status(
@@ -626,7 +618,6 @@ class IntentQueue:
                     "validation_state": updated.validation_state,
                 },
             )
-            _write_runtime_snapshot(self._path.parent)
         return updated
 
     def expire_due(self, *, as_of: datetime | str) -> list[IntentQueueEntry]:
@@ -655,13 +646,10 @@ class IntentQueue:
                 ts=effective_now,
             )
             expired.append(closed)
-        if expired:
-            _write_runtime_snapshot(self._path.parent)
         return expired
 
     def ensure_file(self) -> None:
-        sync_runtime_compatibility_projections(self._path.parent)
-        _write_runtime_snapshot(self._path.parent)
+        load_current_runtime_state(self._path.parent)
 
     def _load(self) -> list[IntentQueueEntry]:
         return [

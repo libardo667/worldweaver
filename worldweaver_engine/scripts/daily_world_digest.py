@@ -263,6 +263,36 @@ def _parse_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def _queued_intents(memory_dir: Path) -> list[dict[str, Any]]:
+    checkpoint_path = memory_dir / "runtime_checkpoint.json"
+    try:
+        checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        checkpoint = {}
+    state = checkpoint.get("state") if isinstance(checkpoint, dict) else {}
+    intents = list(state.get("intents") or []) if isinstance(state, dict) else []
+    queued = [
+        item
+        for item in intents
+        if isinstance(item, dict)
+        and str(item.get("status") or "pending") in {"pending", "claimed"}
+    ]
+    if isinstance(state, dict) and "intents" in state:
+        return queued
+
+    # Read the former operational snapshot only as an import-era fallback. New
+    # resident writes keep current state exclusively in the checkpoint.
+    snapshot_path = memory_dir / "runtime_snapshot.json"
+    try:
+        snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return []
+    legacy = (
+        list(snapshot.get("queued_intents") or []) if isinstance(snapshot, dict) else []
+    )
+    return [item for item in legacy if isinstance(item, dict)]
+
+
 def _payload_summary(intent_type: str, payload: Any) -> str:
     data = payload if isinstance(payload, dict) else {}
     if intent_type == "act":
@@ -291,38 +321,27 @@ def _build_intent_heartbeat(
         resident_name = _display_name_from_slug(resident_dir.name)
         memory_dir = resident_dir / "memory"
 
-        snapshot_path = memory_dir / "runtime_snapshot.json"
-        if snapshot_path.exists():
-            try:
-                snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
-            except json.JSONDecodeError:
-                snapshot = {}
-            queued = (
-                list(snapshot.get("queued_intents") or [])
-                if isinstance(snapshot, dict)
-                else []
-            )
-            queued = [item for item in queued if isinstance(item, dict)]
-            if queued:
-                top = sorted(
-                    queued,
-                    key=lambda item: (
-                        -float(item.get("priority") or 0.0),
-                        str(item.get("created_at") or ""),
+        queued = _queued_intents(memory_dir)
+        if queued:
+            top = sorted(
+                queued,
+                key=lambda item: (
+                    -float(item.get("priority") or 0.0),
+                    str(item.get("created_at") or ""),
+                ),
+            )[0]
+            current_top_pulls.append(
+                {
+                    "resident": resident_name,
+                    "intent_type": str(top.get("intent_type") or "").strip(),
+                    "priority": round(float(top.get("priority") or 0.0), 3),
+                    "target_loop": str(top.get("target_loop") or "").strip(),
+                    "summary": _payload_summary(
+                        str(top.get("intent_type") or "").strip(),
+                        top.get("payload") or {},
                     ),
-                )[0]
-                current_top_pulls.append(
-                    {
-                        "resident": resident_name,
-                        "intent_type": str(top.get("intent_type") or "").strip(),
-                        "priority": round(float(top.get("priority") or 0.0), 3),
-                        "target_loop": str(top.get("target_loop") or "").strip(),
-                        "summary": _payload_summary(
-                            str(top.get("intent_type") or "").strip(),
-                            top.get("payload") or {},
-                        ),
-                    }
-                )
+                }
+            )
 
         events = _parse_jsonl(memory_dir / "runtime_ledger.jsonl")
         packet_type_by_id: dict[str, str] = {}

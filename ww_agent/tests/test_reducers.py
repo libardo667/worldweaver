@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from src.identity.loader import LoopTuning, ResidentIdentity
 from src.runtime.ledger import (
     append_runtime_event,
+    load_current_runtime_state,
     load_runtime_events,
     reduce_runtime_events,
 )
-from src.runtime.signals import IntentQueue, StimulusPacketQueue, write_runtime_snapshot
+from src.runtime.signals import IntentQueue, StimulusPacketQueue
 
 
 class _DummyWorldClient:
@@ -150,7 +150,6 @@ def _queue_research(memory_dir, query, priority="normal", source=""):
         event_type="research_queued",
         payload={"query": query, "priority": priority, "source": source},
     )
-    write_runtime_snapshot(memory_dir)
 
 
 def _empty_reduced_state():
@@ -171,7 +170,7 @@ def _identity(**tuning_overrides: Any) -> ResidentIdentity:
     )
 
 
-def test_signal_queues_write_runtime_snapshot(tmp_path):
+def test_signal_queues_advance_the_runtime_checkpoint(tmp_path):
     resident_dir = tmp_path / "sun_li"
     memory_dir = resident_dir / "memory"
     packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
@@ -201,35 +200,28 @@ def test_signal_queues_write_runtime_snapshot(tmp_path):
         source="fast_ground_intent",
     )
 
-    snapshot = json.loads(
-        (memory_dir / "runtime_snapshot.json").read_text(encoding="utf-8")
-    )
-    projection = json.loads(
-        (memory_dir / "runtime_projection.json").read_text(encoding="utf-8")
-    )
+    current = load_current_runtime_state(memory_dir)
+    projection = current.runtime_projection
     ledger_lines = (
         (memory_dir / "runtime_ledger.jsonl")
         .read_text(encoding="utf-8")
         .strip()
         .splitlines()
     )
-    assert snapshot["packet_counts"]["total"] == 1
-    assert snapshot["packet_counts"]["observed"] == 1
-    assert snapshot["intent_counts"]["failed"] == 1
-    assert snapshot["research_queue"]["total"] == 1
-    assert snapshot["research_queue"]["high"] == 1
-    assert (
-        snapshot["research_queue"]["pending_items"][0]["query"]
-        == "Clement Street farmers market hours"
-    )
+    assert current.packets[0]["status"] == "observed"
+    assert current.intents[0]["status"] == "failed"
+    assert current.intents[0]["validation_state"] == "invalid_payload"
+    assert current.intents[0]["source_packet_ids"] == [packet.packet_id]
+    assert current.research_queue[0]["query"] == "Clement Street farmers market hours"
+    assert current.research_queue[0]["priority"] == "high"
     assert projection["ledger_event_count"] >= 4
     assert projection["event_counts"]["packet_emitted"] == 1
     assert projection["event_counts"]["intent_staged"] == 1
     assert projection["event_counts"]["intent_status_changed"] == 1
     assert projection["event_counts"]["research_queued"] == 1
     assert len(ledger_lines) >= 4
-    assert snapshot["recent_failures"][0]["validation_state"] == "invalid_payload"
-    assert snapshot["lineage"][0]["source_packet_ids"] == [packet.packet_id]
+    assert not (memory_dir / "runtime_snapshot.json").exists()
+    assert not (memory_dir / "runtime_projection.json").exists()
 
 
 def test_signal_queues_rehydrate_from_ledger_when_projection_files_are_missing(
@@ -308,7 +300,7 @@ def test_signal_expiry_writes_explicit_terminal_events_at_injected_time(tmp_path
     assert {event["ts"] for event in terminal_events} == {"2026-07-17T12:00:00+00:00"}
 
 
-def test_runtime_snapshot_rehydrates_research_queue_from_ledger(tmp_path):
+def test_runtime_checkpoint_rehydrates_research_queue_from_ledger(tmp_path):
     resident_dir = tmp_path / "sun_li"
     memory_dir = resident_dir / "memory"
     _queue_research(
@@ -318,16 +310,9 @@ def test_runtime_snapshot_rehydrates_research_queue_from_ledger(tmp_path):
         source="fast_ground_intent",
     )
 
-    write_runtime_snapshot(memory_dir)
-    snapshot = json.loads(
-        (memory_dir / "runtime_snapshot.json").read_text(encoding="utf-8")
-    )
-    assert snapshot["research_queue"]["total"] == 1
-    assert (
-        snapshot["research_queue"]["pending_items"][0]["query"]
-        == "ASL organizations in Chinatown"
-    )
-    assert snapshot["research_queue"]["pending_items"][0]["priority"] == "high"
+    current = load_current_runtime_state(memory_dir)
+    assert current.research_queue[0]["query"] == "ASL organizations in Chinatown"
+    assert current.research_queue[0]["priority"] == "high"
 
 
 def test_runtime_reducer_matches_ledger_history(tmp_path):

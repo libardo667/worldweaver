@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import uuid
 from copy import deepcopy
 from contextlib import contextmanager
@@ -19,14 +18,17 @@ import fcntl
 from src.runtime.relations import RELATIONAL_EVENT_SCHEMA_VERSION
 
 _LEDGER_FILENAME = "runtime_ledger.jsonl"
-_PROJECTION_FILENAME = "runtime_projection.json"
-_SUBJECTIVE_PROJECTION_FILENAME = "subjective_projection.json"
-_MEMORY_PROJECTION_FILENAME = "memory_projection.json"
-_SUBJECTIVE_FACTS_FILENAME = "subjective_facts.json"
-_COGNITIVE_PROJECTION_FILENAME = "cognitive_projection.json"
-_ROUTE_PROJECTION_FILENAME = "active_route.json"
 _CHECKPOINT_FILENAME = "runtime_checkpoint.json"
 _WRITER_LOCK_FILENAME = "runtime_ledger.lock"
+_LEGACY_DERIVED_FILENAMES = {
+    "active_route.json",
+    "cognitive_projection.json",
+    "memory_projection.json",
+    "runtime_projection.json",
+    "runtime_snapshot.json",
+    "subjective_facts.json",
+    "subjective_projection.json",
+}
 
 CHECKPOINT_FORMAT_VERSION = 2
 REDUCER_FORMAT_VERSION = 3
@@ -150,47 +152,12 @@ def _ledger_path(memory_dir: Path) -> Path:
     return memory_dir / _LEDGER_FILENAME
 
 
-def _projection_path(memory_dir: Path) -> Path:
-    return memory_dir / _PROJECTION_FILENAME
-
-
-def _subjective_projection_path(memory_dir: Path) -> Path:
-    return memory_dir / _SUBJECTIVE_PROJECTION_FILENAME
-
-
-def _memory_projection_path(memory_dir: Path) -> Path:
-    return memory_dir / _MEMORY_PROJECTION_FILENAME
-
-
-def _subjective_facts_path(memory_dir: Path) -> Path:
-    return memory_dir / _SUBJECTIVE_FACTS_FILENAME
-
-
-def _cognitive_projection_path(memory_dir: Path) -> Path:
-    return memory_dir / _COGNITIVE_PROJECTION_FILENAME
-
-
-def _route_projection_path(memory_dir: Path) -> Path:
-    return memory_dir / _ROUTE_PROJECTION_FILENAME
-
-
 def _checkpoint_path(memory_dir: Path) -> Path:
     return memory_dir / _CHECKPOINT_FILENAME
 
 
 def _writer_lock_path(memory_dir: Path) -> Path:
     return memory_dir / _WRITER_LOCK_FILENAME
-
-
-def _intents_dir(memory_dir: Path) -> Path:
-    return memory_dir.parent / "letters" / "intents"
-
-
-def _mail_intent_filename(mail_intent_id: str, recipient: str) -> str:
-    safe_recipient = (
-        re.sub(r"[^a-z0-9]+", "_", recipient.lower()).strip("_") or "unknown"
-    )
-    return f"intent_{mail_intent_id}_{safe_recipient}.md"
 
 
 def _sender_from_filename(filename: str) -> str:
@@ -2545,97 +2512,19 @@ def _reduced_after_bounded_replay(
     )
 
 
-def _write_runtime_compatibility_projections(
-    memory_dir: Path, state: ResidentReducedState
-) -> None:
-    # Packets and intents are pure event-log views (see signals.py); they are
-    # never written as json shadows. Only the sidecars still read directly by
-    # loops — the active route and staged mail intents — are materialized here.
-    memory_dir.mkdir(parents=True, exist_ok=True)
-    route_path = _route_projection_path(memory_dir)
-    if state.active_route is None:
-        route_path.unlink(missing_ok=True)
-    else:
-        _write_json(route_path, state.active_route)
-
-    intents_dir = _intents_dir(memory_dir)
-    intents_dir.mkdir(parents=True, exist_ok=True)
-    wanted: set[str] = set()
-    for item in state.active_mail_intents:
-        mail_intent_id = str(item.get("mail_intent_id") or "").strip()
-        recipient = str(item.get("recipient") or "").strip()
-        context = str(item.get("context") or "").strip()
-        staged_at = str(item.get("staged_at") or "").strip()
-        if not mail_intent_id or not recipient:
-            continue
-        filename = _mail_intent_filename(mail_intent_id, recipient)
-        wanted.add(filename)
-        (intents_dir / filename).write_text(
-            (
-                f"Mail-Intent-ID: {mail_intent_id}\n"
-                f"To: {recipient}\n"
-                f"Staged-At: {staged_at}\n\n"
-                "Context:\n"
-                f"{context}"
-            ),
-            encoding="utf-8",
-        )
-    for path in intents_dir.glob("intent_*.md"):
-        if path.name not in wanted:
-            path.unlink(missing_ok=True)
-
-
-def sync_runtime_compatibility_projections(memory_dir: Path) -> None:
-    _write_runtime_compatibility_projections(
-        memory_dir, reduce_runtime_events(_load_events(memory_dir))
-    )
-
-
-def write_runtime_projection(memory_dir: Path) -> None:
-    _write_json(
-        _projection_path(memory_dir),
-        reduce_runtime_events(_load_events(memory_dir)).runtime_projection,
-    )
-
-
-def write_subjective_projection(memory_dir: Path) -> None:
-    _write_json(
-        _subjective_projection_path(memory_dir),
-        reduce_runtime_events(_load_events(memory_dir)).subjective_projection,
-    )
-
-
-def write_memory_projection(memory_dir: Path) -> None:
-    _write_json(
-        _memory_projection_path(memory_dir),
-        reduce_runtime_events(_load_events(memory_dir)).memory_projection,
-    )
-
-
-def write_subjective_facts(memory_dir: Path) -> None:
-    _write_json(
-        _subjective_facts_path(memory_dir),
-        reduce_runtime_events(_load_events(memory_dir)).subjective_facts,
-    )
-
-
-def write_cognitive_projection(memory_dir: Path) -> None:
-    _write_json(
-        _cognitive_projection_path(memory_dir),
-        reduce_runtime_events(_load_events(memory_dir)).cognitive_projection,
-    )
-
-
 def _write_reduced_runtime_artifacts(
     memory_dir: Path, reduced: ResidentReducedState
 ) -> None:
-    _write_runtime_compatibility_projections(memory_dir, reduced)
-    _write_json(_projection_path(memory_dir), reduced.runtime_projection)
-    _write_json(_subjective_projection_path(memory_dir), reduced.subjective_projection)
-    _write_json(_memory_projection_path(memory_dir), reduced.memory_projection)
-    _write_json(_subjective_facts_path(memory_dir), reduced.subjective_facts)
-    _write_json(_cognitive_projection_path(memory_dir), reduced.cognitive_projection)
     _write_runtime_checkpoint(memory_dir, reduced)
+
+
+def _remove_legacy_runtime_derivatives(memory_dir: Path) -> None:
+    for filename in _LEGACY_DERIVED_FILENAMES:
+        (memory_dir / filename).unlink(missing_ok=True)
+    intents_dir = memory_dir.parent / "letters" / "intents"
+    if intents_dir.exists():
+        for path in intents_dir.glob("intent_*.md"):
+            path.unlink(missing_ok=True)
 
 
 def rebuild_runtime_artifacts(
@@ -2646,6 +2535,7 @@ def rebuild_runtime_artifacts(
     reduced = reduce_runtime_events(
         list(events) if events is not None else _load_events(memory_dir)
     )
+    _remove_legacy_runtime_derivatives(memory_dir)
     _write_reduced_runtime_artifacts(memory_dir, reduced)
     return reduced
 

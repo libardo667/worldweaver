@@ -78,14 +78,14 @@ semantics, converge readers, and only then delete dead shadows.
 - [x] Corruption before the final record fails loudly instead of being skipped as missing history.
 - [x] Concurrent or accidental second writers cannot interleave ledger records or acknowledge one sequence
       twice.
-- [ ] A normal event performs one ledger append and one checkpoint transition; it does not rewrite unconsumed
+- [x] A normal event performs one ledger append and one checkpoint transition; it does not rewrite unconsumed
       projection or compatibility files.
 - [ ] Normal runtime readers use the checkpoint/current-state API and do not repeatedly parse the complete
       cold ledger.
 - [ ] A full replay oracle agrees with the incremental checkpoint after every event in lifecycle and randomized
       sequence tests.
 - [x] Complete cold history remains streamable for audit and research with no front truncation.
-- [ ] Migration/recovery tests cover existing ledgers and rebuild old derived files only when explicitly needed.
+- [x] Migration/recovery tests cover existing ledgers and rebuild old derived files only when explicitly needed.
 
 ## Risks & Rollback
 
@@ -143,3 +143,15 @@ time. The resident core chooses one time at tick entry and uses it for both expi
 tick. A new current-state API returns the valid checkpoint and falls back to cold replay only when necessary;
 packet, intent, route, mail, research, and operational snapshot reads now use that API. Remaining full-history
 readers need individual classification as either legitimate history consumers or current-state callers.
+
+### 2026-07-20 — one normal derived-state file
+
+Normal append no longer writes five standalone projection JSON files, `active_route.json`, staged mail
+Markdown, or `runtime_snapshot.json`. It appends the durable event and atomically replaces one checkpoint. An
+explicit rebuild removes those legacy derivatives, while hearth packaging and Stable import continue to treat
+them as disposable rather than resident history.
+
+The daily operator digest reads queued intents from the checkpoint and falls back to a legacy runtime snapshot
+only for an old folder that has no checkpoint intent state. Queue operations and expiry no longer refresh that
+snapshot. A repository-wide reader search and focused migration tests cover this removal. The remaining work is
+to classify direct cold-history readers and add a broader randomized incremental/full-replay oracle.

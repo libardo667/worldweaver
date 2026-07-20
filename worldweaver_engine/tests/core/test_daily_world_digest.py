@@ -48,22 +48,24 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
     now = datetime.now(timezone.utc)
     memory_dir = shard_dir / "residents" / "mariko_tanaka" / "memory"
     memory_dir.mkdir(parents=True, exist_ok=True)
-    (memory_dir / "runtime_snapshot.json").write_text(
+    (memory_dir / "runtime_checkpoint.json").write_text(
         json.dumps(
             {
-                "queued_intents": [
-                    {
-                        "intent_id": "int-1",
-                        "intent_type": "move",
-                        "target_loop": "fast",
-                        "status": "pending",
-                        "priority": 0.82,
-                        "validation_state": "unvalidated",
-                        "source_packet_ids": ["pkt-1"],
-                        "created_at": now.isoformat(),
-                        "payload": {"destination": "North Beach"},
-                    }
-                ]
+                "state": {
+                    "intents": [
+                        {
+                            "intent_id": "int-1",
+                            "intent_type": "move",
+                            "target_loop": "fast",
+                            "status": "pending",
+                            "priority": 0.82,
+                            "validation_state": "unvalidated",
+                            "source_packet_ids": ["pkt-1"],
+                            "created_at": now.isoformat(),
+                            "payload": {"destination": "North Beach"},
+                        }
+                    ]
+                }
             },
             indent=2,
         ),

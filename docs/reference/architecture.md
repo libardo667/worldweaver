@@ -41,8 +41,9 @@ intents now advance from checkpoint state rather than being reconstructed from t
 Completed queue history may be bounded, but it cannot evict older open work. New appends are serialized,
 numbered, flushed to disk, and checked for corruption; an incomplete final fragment is preserved separately
 before the next append. Replay is deterministic at an explicit `as_of` time, and expired packet or intent work
-closes through a ledger event at the tick's chosen time. Several live readers and redundant derived files still
-need to move onto the checkpoint API.
+closes through a ledger event at the tick's chosen time. A normal append writes only the ledger record and one
+checkpoint; an explicit rebuild removes the former projection and snapshot files. Several live readers still
+need classification or migration onto the checkpoint API.
 
 ## Information and action are separate
 

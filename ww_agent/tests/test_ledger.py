@@ -650,6 +650,41 @@ def test_current_state_and_queue_readers_use_the_checkpoint(
     assert ledger.derive_research_queue(tmp_path) == []
 
 
+def test_normal_append_writes_only_the_ledger_and_checkpoint(tmp_path) -> None:
+    ledger.append_runtime_event(tmp_path, event_type="first", payload={})
+    ledger.append_runtime_event(tmp_path, event_type="second", payload={})
+
+    assert {path.name for path in tmp_path.iterdir()} == {
+        "runtime_checkpoint.json",
+        "runtime_ledger.jsonl",
+        "runtime_ledger.lock",
+    }
+
+
+def test_explicit_rebuild_removes_legacy_derived_files(tmp_path) -> None:
+    legacy_files = {
+        "active_route.json",
+        "cognitive_projection.json",
+        "memory_projection.json",
+        "runtime_projection.json",
+        "runtime_snapshot.json",
+        "subjective_facts.json",
+        "subjective_projection.json",
+    }
+    for filename in legacy_files:
+        (tmp_path / filename).write_text("{}\n", encoding="utf-8")
+    intents_dir = tmp_path.parent / "letters" / "intents"
+    intents_dir.mkdir(parents=True)
+    staged = intents_dir / "intent_old_person.md"
+    staged.write_text("old projection\n", encoding="utf-8")
+
+    ledger.rebuild_runtime_artifacts(tmp_path)
+
+    assert not any((tmp_path / filename).exists() for filename in legacy_files)
+    assert not staged.exists()
+    assert (tmp_path / "runtime_checkpoint.json").is_file()
+
+
 def test_simple_queue_updates_advance_checkpoint_without_loading_cold_history(
     tmp_path, monkeypatch
 ) -> None:
