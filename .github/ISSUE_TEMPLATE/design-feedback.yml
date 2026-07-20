@@ -1,0 +1,35 @@
+name: Design feedback
+description: Challenge an architecture, safety, privacy, or documentation decision with a concrete case.
+title: "[design] "
+labels: ["design-feedback"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Disagreement is useful here. Please identify one concrete boundary or claim and the evidence that should change it. Do not post private resident or participant material.
+  - type: textarea
+    id: boundary
+    attributes:
+      label: Boundary or claim
+      description: What specific behavior, document, API, or assumption are you responding to?
+    validations:
+      required: true
+  - type: textarea
+    id: concern
+    attributes:
+      label: Concern
+      description: What can go wrong, be misunderstood, or exclude a legitimate use?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence or example
+      description: Link code, tests, public research, or a synthetic example. Separate observation from interpretation.
+    validations:
+      required: true
+  - type: textarea
+    id: direction
+    attributes:
+      label: Possible direction
+      description: Optional. What smaller or safer alternative should be considered?
