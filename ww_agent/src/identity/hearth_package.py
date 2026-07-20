@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
 import shutil
@@ -309,6 +310,16 @@ def _export_hearth_package_locked(
         raise HearthPackageError(f"refusing to replace existing package: {output}")
     if not output.parent.is_dir():
         raise HearthPackageError(f"package parent is not a directory: {output.parent}")
+    package_bytes, metadata = _build_hearth_package_bytes_locked(home)
+    _write_new_package(output, package_bytes)
+    return metadata
+
+
+def _build_hearth_package_bytes_locked(
+    resident_dir: Path,
+) -> tuple[bytes, dict[str, Any]]:
+    """Build the deterministic archive without leaving plaintext temporary files."""
+    home = Path(resident_dir)
     try:
         manifest = load_hearth_manifest(home)
         inventory = inventory_hearth(home)
@@ -335,6 +346,18 @@ def _export_hearth_package_locked(
         "hearth_manifest": manifest.to_dict(),
         "files": files,
     }
+    package_buffer = io.BytesIO()
+    with zipfile.ZipFile(package_buffer, "w") as archive:
+        archive.writestr(
+            _zip_file_info(HEARTH_PACKAGE_METADATA), _canonical_json(metadata)
+        )
+        for relative, content in contents:
+            archive.writestr(_zip_file_info(relative), content)
+    return package_buffer.getvalue(), metadata
+
+
+def _write_new_package(output: Path, content: bytes) -> None:
+    """Atomically create a package path without replacing an existing path."""
     temporary: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -344,19 +367,13 @@ def _export_hearth_package_locked(
             delete=False,
         ) as handle:
             temporary = Path(handle.name)
-        with zipfile.ZipFile(temporary, "w") as archive:
-            archive.writestr(
-                _zip_file_info(HEARTH_PACKAGE_METADATA), _canonical_json(metadata)
-            )
-            for relative, content in contents:
-                archive.writestr(_zip_file_info(relative), content)
-        os.replace(temporary, output)
-    except (OSError, zipfile.BadZipFile) as exc:
+            handle.write(content)
+        os.link(temporary, output)
+    except OSError as exc:
         raise HearthPackageError(f"could not write hearth package: {exc}") from exc
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
-    return metadata
 
 
 def _read_package_metadata(archive: zipfile.ZipFile) -> dict[str, Any]:
@@ -482,9 +499,10 @@ def import_hearth_package(package_path: Path, resident_dir: Path) -> dict[str, A
                 destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
                 digest = hashlib.sha256()
                 size = 0
-                with archive.open(relative.as_posix(), "r") as source, destination.open(
-                    "xb"
-                ) as output:
+                with (
+                    archive.open(relative.as_posix(), "r") as source,
+                    destination.open("xb") as output,
+                ):
                     for chunk in iter(lambda: source.read(1024 * 1024), b""):
                         size += len(chunk)
                         if size > expected_size:
