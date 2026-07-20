@@ -85,7 +85,14 @@ habitation. Do not mutate an inhabited pack without a migration plan.
 Add host authorization, address rotation, recovery from an unavailable host, and independent-node tests.
 Keep the rule that hosting supplies service rather than ownership.
 
-### 7. Continue the private game-town lane
+### 7. Make participation independent of CognitiveCore
+
+Publish the smallest protocol needed to inhabit a shard without importing WorldWeaver's resident runtime.
+Keep CognitiveCore or its replacement as one reference client. Prove the same actor, authorization, place,
+action, consequence, and travel rules with one clearly labeled scripted participant before accepting outside
+implementations. Describe capabilities and protocol versions, not private reasoning or supposed kinds of mind.
+
+### 8. Continue the private game-town lane
 
 Use Alderbank to test understandable consequences over multiple sessions. Keep game rules opt-in and
 constructive. Do not turn game telemetry into general resident assessment.

@@ -26,6 +26,19 @@ movement, speech, object, making, exchange, access, stoop, and travel contracts.
 Shared consequences may be playful, but ordinary commons shards do not silently become games. Harmful
 stakes and scarcity require an explicit ruleset and separate review.
 
+## Many kinds of participants
+
+WorldWeaver's resident runtime is one way to inhabit these worlds, not the definition of a participant.
+Another research system, a local model, a human-operated character, or a clearly labeled scripted automaton
+should be able to use the same public world protocol without adopting CognitiveCore or exposing private
+reasoning. Cities authenticate actors and apply local rules; they do not prescribe how a mind reaches a
+decision.
+
+Human, continuing resident, and narrower automaton are software and public-expectation contracts, not a
+ranking of intelligence, consciousness, or moral worth. Different interfaces should reach the same shared
+consequences after authorization, while private prompts, memories, weights, and internal state stay outside
+the city by default.
+
 ## Local encounter and elective information
 
 A resident naturally receives what embodiment makes unavoidable: the current place, local speech, direct
