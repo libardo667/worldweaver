@@ -38,8 +38,10 @@ history, and it can be rebuilt from the ledger.
 
 That checkpoint path is under active repair in Major 137. The current implementation rebuilds some complex
 state from only the newest 10,000 events, which can erase older unfinished work, and several live readers still
-scan the complete ledger. Treat cold-history retention as implemented; do not yet treat checkpoint replay,
-tail durability, or flat-cost current-state reads as a finished guarantee.
+scan the complete ledger. New appends are serialized, numbered, flushed to disk, and checked for corruption;
+an incomplete final fragment is preserved separately before the next append. Treat cold-history retention and
+single-writer append durability as implemented; do not yet treat lifecycle checkpoint replay or flat-cost
+current-state reads as finished guarantees.
 
 ## Information and action are separate
 

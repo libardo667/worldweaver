@@ -72,11 +72,11 @@ semantics, converge readers, and only then delete dead shadows.
 - [ ] Newer terminal history cannot evict an older unresolved packet or intent.
 - [ ] Packet and intent expiry uses an injected clock and writes an explicit terminal event.
 - [ ] The same prior state, event sequence, and `as_of` produce byte-identical reduced state.
-- [ ] Every accepted event has a monotonic sequence, and the checkpoint records the exact sequence and byte
+- [x] Every accepted event has a monotonic sequence, and the checkpoint records the exact sequence and byte
       offset it includes.
-- [ ] A partial final record is detected and quarantined without losing the next valid append.
-- [ ] Corruption before the final record fails loudly instead of being skipped as missing history.
-- [ ] Concurrent or accidental second writers cannot interleave ledger records or acknowledge one sequence
+- [x] A partial final record is detected and quarantined without losing the next valid append.
+- [x] Corruption before the final record fails loudly instead of being skipped as missing history.
+- [x] Concurrent or accidental second writers cannot interleave ledger records or acknowledge one sequence
       twice.
 - [ ] A normal event performs one ledger append and one checkpoint transition; it does not rewrite unconsumed
       projection or compatibility files.
@@ -84,7 +84,7 @@ semantics, converge readers, and only then delete dead shadows.
       cold ledger.
 - [ ] A full replay oracle agrees with the incremental checkpoint after every event in lifecycle and randomized
       sequence tests.
-- [ ] Complete cold history remains streamable for audit and research with no front truncation.
+- [x] Complete cold history remains streamable for audit and research with no front truncation.
 - [ ] Migration/recovery tests cover existing ledgers and rebuild old derived files only when explicitly needed.
 
 ## Risks & Rollback
@@ -104,3 +104,17 @@ latency for silent record loss.
 Rollback each slice independently: retain the old ledger format reader, rebuild the new checkpoint from cold
 history, and restore a compatibility exporter if needed. Do not roll back to front truncation or bounded replay
 of unresolved state.
+
+## Progress
+
+### 2026-07-20 — durable serialized append foundation
+
+Checkpoint format 2 keeps existing JSONL ledgers readable by treating older records' physical order as their
+implicit sequence. Every new accepted event carries an explicit increasing sequence. A short-lived file lock
+covers sequence allocation, append, reducer transition, and checkpoint replacement, so two writers cannot
+claim the same position. The event append and atomic checkpoint replacement are flushed to disk.
+
+Cold replay now rejects blank, non-object, malformed, or mis-sequenced completed records. If a process left an
+unterminated final fragment, the next writer saves those exact bytes beside the ledger before truncating only
+that fragment and appending the next valid record. This completes the storage foundation, not the lifecycle
+repair: the 10,000-event complex replay boundary and status-blind queue caps remain the next work.

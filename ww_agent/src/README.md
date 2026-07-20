@@ -7,9 +7,11 @@
   by operational surfaces. A time-bound host run changes no cognitive clock; the core keeps its own cadence.
 - `runtime/cognitive_core.py` — authoritative perceive → integrate → ignite → pulse → act path.
 - `runtime/ledger.py` — append-only event history and a versioned current-state checkpoint. Major 137 is
-  repairing bounded replay that can lose older open work, silent malformed-record handling, dead projection
-  files, and remaining full-history readers. It also derives the small relationship view from prompt-delivery
-  and reply edges. These private projections stay in the hearth and are not copied into city session storage.
+  repairing bounded replay that can lose older open work, dead projection files, and remaining full-history
+  readers. New events already use a serialized, durably flushed sequence; an incomplete final write is
+  quarantined and completed-record corruption stops replay. It also derives the small relationship view from
+  prompt-delivery and reply edges. These private projections stay in the hearth and are not copied into city
+  session storage.
 - `runtime/prompt_trace.py` — explicitly enabled private inference-boundary evidence, off during ordinary
   runs and excluded from every substrate reducer.
 - `runtime/prompt_context.py` — typed available/selected/withheld source envelope and final prose renderer.

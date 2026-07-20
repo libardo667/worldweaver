@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from time import perf_counter
@@ -12,18 +13,21 @@ from src.runtime.salience import derive_arousal, derive_grief, derive_vital
 from src.runtime.substrate import derive_afterimage, derive_baseline
 
 
-def test_cold_ledger_retains_first_event_beyond_old_window(
-    tmp_path, monkeypatch
-) -> None:
-    monkeypatch.setattr(ledger, "rebuild_runtime_artifacts", lambda _memory_dir: None)
-    first = ledger.append_runtime_event(
-        tmp_path, event_type="first", payload={"ordinal": 0}
+def test_cold_ledger_retains_first_event_beyond_old_window(tmp_path) -> None:
+    events = [
+        {
+            "event_id": f"evt-{ordinal}",
+            "sequence": ordinal + 1,
+            "ts": "2026-07-17T00:00:00+00:00",
+            "event_type": "first" if ordinal == 0 else "later",
+            "payload": {"ordinal": ordinal},
+        }
+        for ordinal in range(10_051)
+    ]
+    first = events[0]
+    (tmp_path / "runtime_ledger.jsonl").write_text(
+        "".join(json.dumps(event) + "\n" for event in events), encoding="utf-8"
     )
-
-    for ordinal in range(1, 10_051):
-        ledger.append_runtime_event(
-            tmp_path, event_type="later", payload={"ordinal": ordinal}
-        )
 
     events = ledger.load_runtime_events(tmp_path)
     assert len(events) == 10_051
@@ -182,10 +186,93 @@ def test_rebuild_writes_versioned_current_checkpoint_atomically(tmp_path) -> Non
     assert checkpoint["ledger"] == {
         "byte_offset": (tmp_path / "runtime_ledger.jsonl").stat().st_size,
         "event_count": 1,
+        "last_sequence": 1,
         "last_event_id": event["event_id"],
     }
     assert checkpoint["state"]["research_queue"][0]["query"] == "harbor light"
     assert not list(tmp_path.glob(".*.tmp"))
+
+
+def test_new_events_have_monotonic_sequences(tmp_path) -> None:
+    first = ledger.append_runtime_event(tmp_path, event_type="first", payload={})
+    second = ledger.append_runtime_event(tmp_path, event_type="second", payload={})
+
+    assert first["sequence"] == 1
+    assert second["sequence"] == 2
+    assert ledger.load_runtime_checkpoint(tmp_path)["ledger"]["last_sequence"] == 2
+
+
+def test_append_migrates_legacy_record_order_without_rewriting_history(tmp_path) -> None:
+    legacy = [
+        {
+            "event_id": f"evt-legacy-{ordinal}",
+            "ts": f"2026-07-17T00:00:0{ordinal}+00:00",
+            "event_type": "legacy",
+            "payload": {"ordinal": ordinal},
+        }
+        for ordinal in range(2)
+    ]
+    ledger_path = tmp_path / "runtime_ledger.jsonl"
+    original = "".join(json.dumps(event) + "\n" for event in legacy).encode()
+    ledger_path.write_bytes(original)
+
+    appended = ledger.append_runtime_event(tmp_path, event_type="current", payload={})
+
+    assert appended["sequence"] == 3
+    assert ledger_path.read_bytes().startswith(original)
+    assert ledger.load_runtime_events(tmp_path)[:2] == legacy
+    assert ledger.load_runtime_checkpoint(tmp_path)["ledger"]["last_sequence"] == 3
+
+
+def test_incomplete_tail_is_quarantined_before_the_next_append(tmp_path) -> None:
+    first = ledger.append_runtime_event(tmp_path, event_type="first", payload={})
+    ledger_path = tmp_path / "runtime_ledger.jsonl"
+    with ledger_path.open("ab") as handle:
+        handle.write(b'{"event_id":"evt-interrupted"')
+
+    second = ledger.append_runtime_event(tmp_path, event_type="second", payload={})
+
+    events = ledger.load_runtime_events(tmp_path)
+    assert [event["event_id"] for event in events] == [
+        first["event_id"],
+        second["event_id"],
+    ]
+    assert [event["sequence"] for event in events] == [1, 2]
+    quarantines = list(tmp_path.glob("runtime_ledger.corrupt-tail.*.jsonl"))
+    assert len(quarantines) == 1
+    assert quarantines[0].read_bytes() == b'{"event_id":"evt-interrupted"'
+
+
+def test_middle_ledger_corruption_fails_without_changing_history(tmp_path) -> None:
+    first = ledger.append_runtime_event(tmp_path, event_type="first", payload={})
+    ledger_path = tmp_path / "runtime_ledger.jsonl"
+    original = ledger_path.read_bytes()
+    ledger_path.write_bytes(original + b"{broken}\n")
+
+    with pytest.raises(ledger.LedgerCorruptionError, match="malformed JSON"):
+        ledger.load_runtime_events(tmp_path)
+    with pytest.raises(ledger.LedgerCorruptionError, match="malformed JSON"):
+        ledger.append_runtime_event(tmp_path, event_type="second", payload={})
+
+    assert ledger_path.read_bytes() == original + b"{broken}\n"
+    assert first["sequence"] == 1
+
+
+def test_concurrent_writers_cannot_reuse_a_sequence(tmp_path) -> None:
+    def append(ordinal: int) -> dict:
+        return ledger.append_runtime_event(
+            tmp_path,
+            event_type="sample",
+            payload={"ordinal": ordinal},
+        )
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        appended = list(pool.map(append, range(12)))
+
+    events = ledger.load_runtime_events(tmp_path)
+    assert sorted(event["sequence"] for event in appended) == list(range(1, 13))
+    assert [event["sequence"] for event in events] == list(range(1, 13))
+    assert ledger.load_runtime_checkpoint(tmp_path)["ledger"]["last_sequence"] == 12
 
 
 def test_checkpoint_requires_exact_cold_ledger_offset_and_known_versions(

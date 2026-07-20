@@ -8,10 +8,13 @@ import os
 import re
 import uuid
 from copy import deepcopy
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
+
+import fcntl
 
 from src.runtime.relations import RELATIONAL_EVENT_SCHEMA_VERSION
 
@@ -23,8 +26,9 @@ _SUBJECTIVE_FACTS_FILENAME = "subjective_facts.json"
 _COGNITIVE_PROJECTION_FILENAME = "cognitive_projection.json"
 _ROUTE_PROJECTION_FILENAME = "active_route.json"
 _CHECKPOINT_FILENAME = "runtime_checkpoint.json"
+_WRITER_LOCK_FILENAME = "runtime_ledger.lock"
 
-CHECKPOINT_FORMAT_VERSION = 1
+CHECKPOINT_FORMAT_VERSION = 2
 REDUCER_FORMAT_VERSION = 1
 PROJECTION_FORMAT_VERSIONS = {
     "runtime": 1,
@@ -97,6 +101,16 @@ class ResidentReducedState:
     cognitive_projection: dict[str, Any]
 
 
+class LedgerCorruptionError(RuntimeError):
+    """The durable ledger cannot be interpreted without discarding history."""
+
+    def __init__(self, message: str, *, byte_offset: int | None = None) -> None:
+        if byte_offset is not None:
+            message = f"{message} (byte offset {byte_offset})"
+        super().__init__(message)
+        self.byte_offset = byte_offset
+
+
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -144,6 +158,10 @@ def _route_projection_path(memory_dir: Path) -> Path:
 
 def _checkpoint_path(memory_dir: Path) -> Path:
     return memory_dir / _CHECKPOINT_FILENAME
+
+
+def _writer_lock_path(memory_dir: Path) -> Path:
+    return memory_dir / _WRITER_LOCK_FILENAME
 
 
 def _intents_dir(memory_dir: Path) -> Path:
@@ -375,25 +393,63 @@ def _build_world_salience_projection(
     }
 
 
+def _decode_ledger_record(encoded: bytes, *, byte_offset: int) -> dict[str, Any]:
+    try:
+        raw = json.loads(encoded)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise LedgerCorruptionError(
+            "runtime ledger contains malformed JSON",
+            byte_offset=byte_offset,
+        ) from exc
+    if not isinstance(raw, dict):
+        raise LedgerCorruptionError(
+            "runtime ledger record is not a JSON object",
+            byte_offset=byte_offset,
+        )
+    return raw
+
+
+def _validate_event_sequence(
+    event: dict[str, Any], *, expected: int, byte_offset: int
+) -> None:
+    value = event.get("sequence")
+    if value is None:
+        # Ledgers written before checkpoint format 2 use physical record order.
+        return
+    if isinstance(value, bool) or not isinstance(value, int) or value != expected:
+        raise LedgerCorruptionError(
+            f"runtime ledger sequence must be {expected}, found {value!r}",
+            byte_offset=byte_offset,
+        )
+
+
 def _load_events(memory_dir: Path) -> list[dict[str, Any]]:
     path = _ledger_path(memory_dir)
     if not path.exists():
         return []
     events: list[dict[str, Any]] = []
-    try:
-        with path.open("r", encoding="utf-8") as handle:
-            for line in handle:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    raw = json.loads(line)
-                except Exception:
-                    continue
-                if isinstance(raw, dict):
-                    events.append(raw)
-    except Exception:
-        return []
+    byte_offset = 0
+    with path.open("rb") as handle:
+        for expected_sequence, encoded in enumerate(handle, start=1):
+            record_offset = byte_offset
+            byte_offset += len(encoded)
+            if not encoded.endswith(b"\n"):
+                raise LedgerCorruptionError(
+                    "runtime ledger ends with an incomplete record",
+                    byte_offset=record_offset,
+                )
+            if not encoded.strip():
+                raise LedgerCorruptionError(
+                    "runtime ledger contains a blank record",
+                    byte_offset=record_offset,
+                )
+            raw = _decode_ledger_record(encoded, byte_offset=record_offset)
+            _validate_event_sequence(
+                raw,
+                expected=expected_sequence,
+                byte_offset=record_offset,
+            )
+            events.append(raw)
     return events
 
 
@@ -407,6 +463,12 @@ def _iter_ledger_lines_reverse(path: Path, *, chunk_size: int = 64 * 1024):
     with path.open("rb") as handle:
         handle.seek(0, 2)
         position = handle.tell()
+        if position:
+            handle.seek(-1, 2)
+            if handle.read(1) != b"\n":
+                raise LedgerCorruptionError(
+                    "runtime ledger ends with an incomplete record"
+                )
         remainder = b""
         while position > 0:
             read_size = min(chunk_size, position)
@@ -449,10 +511,14 @@ def load_runtime_reducer_events(
     for encoded in _iter_ledger_lines_reverse(path):
         try:
             raw = json.loads(encoded)
-        except Exception:
-            continue
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise LedgerCorruptionError(
+                "runtime ledger contains malformed JSON in the reducer horizon"
+            ) from exc
         if not isinstance(raw, dict):
-            continue
+            raise LedgerCorruptionError(
+                "runtime ledger record is not a JSON object in the reducer horizon"
+            )
         event_ts = _parse_iso_ts(str(raw.get("ts") or ""))
         if newest_ts is None and event_ts is not None:
             newest_ts = event_ts
@@ -486,10 +552,14 @@ def load_runtime_projection_events(
     for encoded in _iter_ledger_lines_reverse(path):
         try:
             raw = json.loads(encoded)
-        except Exception:
-            continue
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise LedgerCorruptionError(
+                "runtime ledger contains malformed JSON in the projection horizon"
+            ) from exc
         if not isinstance(raw, dict):
-            continue
+            raise LedgerCorruptionError(
+                "runtime ledger record is not a JSON object in the projection horizon"
+            )
         selected.append(raw)
         if len(selected) >= requested_limit:
             break
@@ -503,6 +573,46 @@ def _append_event(memory_dir: Path, event: dict[str, Any]) -> None:
     encoded = json.dumps(event, ensure_ascii=True) + "\n"
     with path.open("a", encoding="utf-8") as handle:
         handle.write(encoded)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+@contextmanager
+def _serialized_writer(memory_dir: Path) -> Iterator[None]:
+    memory_dir.mkdir(parents=True, exist_ok=True)
+    with _writer_lock_path(memory_dir).open("a+b") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+def _quarantine_incomplete_tail(memory_dir: Path) -> Path | None:
+    """Remove and preserve bytes after the ledger's final complete newline."""
+    path = _ledger_path(memory_dir)
+    if not path.exists() or path.stat().st_size == 0:
+        return None
+    with path.open("r+b") as handle:
+        handle.seek(-1, 2)
+        if handle.read(1) == b"\n":
+            return None
+        handle.seek(0)
+        content = handle.read()
+        complete_end = content.rfind(b"\n") + 1
+        tail = content[complete_end:]
+        quarantine_path = memory_dir / (
+            f"runtime_ledger.corrupt-tail.{uuid.uuid4().hex}.jsonl"
+        )
+        with quarantine_path.open("xb") as quarantine:
+            quarantine.write(tail)
+            quarantine.flush()
+            os.fsync(quarantine.fileno())
+        handle.seek(complete_end)
+        handle.truncate()
+        handle.flush()
+        os.fsync(handle.fileno())
+    return quarantine_path
 
 
 def _derive_packets_from_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1949,6 +2059,11 @@ def _write_json(path: Path, payload: dict[str, Any] | list[dict[str, Any]]) -> N
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, path)
+        directory_fd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
     finally:
         temporary.unlink(missing_ok=True)
 
@@ -1966,6 +2081,11 @@ def _checkpoint_payload(
             "byte_offset": ledger.stat().st_size if ledger.exists() else 0,
             "event_count": int(
                 reduced.runtime_projection.get("ledger_event_count")
+                or len(reduced.events)
+            ),
+            "last_sequence": int(
+                last_event.get("sequence")
+                or reduced.runtime_projection.get("ledger_event_count")
                 or len(reduced.events)
             ),
             "last_event_id": str(last_event.get("event_id") or "").strip() or None,
@@ -2011,9 +2131,15 @@ def load_runtime_checkpoint(
         ledger_size = ledger.stat().st_size if ledger.exists() else 0
         try:
             checkpoint_offset = int(ledger_meta.get("byte_offset"))
+            last_sequence = int(ledger_meta.get("last_sequence"))
         except (TypeError, ValueError):
             return None
-        if checkpoint_offset != ledger_size:
+        event_count = ledger_meta.get("event_count")
+        if (
+            checkpoint_offset != ledger_size
+            or last_sequence < 0
+            or last_sequence != event_count
+        ):
             return None
     return raw
 
@@ -2313,26 +2439,34 @@ def append_runtime_event(
     event_type: str,
     payload: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    checkpoint = load_runtime_checkpoint(memory_dir)
-    event = {
-        "event_id": f"evt-{uuid.uuid4().hex[:12]}",
-        "ts": _utc_now_iso(),
-        "event_type": str(event_type).strip(),
-        "payload": dict(payload or {}),
-    }
-    _append_event(memory_dir, event)
-    if checkpoint is not None and (
-        event["event_type"] not in PROJECTION_STATE_EVENT_TYPES
-        or event["event_type"] in SIMPLE_CHECKPOINT_EVENT_TYPES
-    ):
-        _write_reduced_runtime_artifacts(
-            memory_dir, _reduced_after_simple_checkpoint_event(checkpoint, event)
-        )
-    elif checkpoint is not None:
-        _write_reduced_runtime_artifacts(
-            memory_dir,
-            _reduced_after_bounded_replay(memory_dir, checkpoint, event),
-        )
-    else:
-        rebuild_runtime_artifacts(memory_dir)
-    return event
+    with _serialized_writer(memory_dir):
+        checkpoint = load_runtime_checkpoint(memory_dir)
+        if checkpoint is None:
+            _quarantine_incomplete_tail(memory_dir)
+            existing_events = _load_events(memory_dir)
+            next_sequence = len(existing_events) + 1
+        else:
+            next_sequence = int(checkpoint["ledger"]["last_sequence"]) + 1
+        event = {
+            "event_id": f"evt-{uuid.uuid4().hex[:12]}",
+            "sequence": next_sequence,
+            "ts": _utc_now_iso(),
+            "event_type": str(event_type).strip(),
+            "payload": dict(payload or {}),
+        }
+        _append_event(memory_dir, event)
+        if checkpoint is not None and (
+            event["event_type"] not in PROJECTION_STATE_EVENT_TYPES
+            or event["event_type"] in SIMPLE_CHECKPOINT_EVENT_TYPES
+        ):
+            _write_reduced_runtime_artifacts(
+                memory_dir, _reduced_after_simple_checkpoint_event(checkpoint, event)
+            )
+        elif checkpoint is not None:
+            _write_reduced_runtime_artifacts(
+                memory_dir,
+                _reduced_after_bounded_replay(memory_dir, checkpoint, event),
+            )
+        else:
+            rebuild_runtime_artifacts(memory_dir)
+        return event
