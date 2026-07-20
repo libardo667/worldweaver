@@ -54,6 +54,8 @@ and closing production blockers is not required before asking a small number of 
 
 Severity: **blocker for local demonstration**
 
+Remediation status: **implemented in source on 2026-07-20; clean Docker proof pending**
+
 Evidence:
 
 - `README.md` and `docs/tutorials/run-a-local-town.md` instruct a newcomer to run
@@ -65,9 +67,10 @@ Evidence:
 
 Disposition:
 
-Create one idempotent demo bootstrap command that generates fresh local-only secrets, materializes Alderbank's
-tracked city pack, and clearly refuses to replace existing local state. Test it in a clean exported checkout.
-Then make the tutorial use that command before `weave-up`.
+`python dev.py demo-init` now creates fresh local-only secrets and node identities, copies Alderbank's tracked
+pack, leaves residents absent, does nothing on a complete second run, and refuses unmarked or partial existing
+state. The tutorial uses it before `weave-up`. Its filesystem behavior is covered by tests; the remaining proof
+is to run the documented sequence in a clean exported checkout with Docker.
 
 ### PR-02 — The live public client is Vite development mode
 

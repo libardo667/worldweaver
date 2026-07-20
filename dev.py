@@ -1255,6 +1255,7 @@ def _help() -> None:
                                         verify source evidence and activate N+1
   python dev.py new-shard CITY [options]
                                         create an isolated, folder-operated node
+  python dev.py demo-init               create missing local Alderbank demo state without starting it
   python dev.py city-draft create --city CITY
                                         build a private draft and preview outside published packs
   python dev.py city-studio             open the private browser editor on this computer
@@ -1299,6 +1300,11 @@ def main() -> int:
         return _hearth_host(rest)
     if command == "new-shard":
         return _run([sys.executable, "scripts/new_shard.py", *rest], cwd=ENGINE_DIR)
+    if command == "demo-init":
+        return _run(
+            [sys.executable, "scripts/bootstrap_local_demo.py", *rest],
+            cwd=ENGINE_DIR,
+        )
     if command == "city-draft":
         return _run([sys.executable, "scripts/city_draft.py", *rest], cwd=ENGINE_DIR)
     if command == "city-studio":

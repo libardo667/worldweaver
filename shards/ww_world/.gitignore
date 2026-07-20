@@ -4,3 +4,5 @@ residents/
 *.env
 node.json
 identity/node.key
+hearth-host.json
+hearth-host/identity/transport.key

@@ -22,6 +22,8 @@ ENV/
 shards/*/.env
 shards/*/.env.*
 shards/*/node.json
+shards/*/hearth-host.json
+shards/*/hearth-host/identity/transport.key
 shards/*/db/
 shards/*/data/
 shards/*/residents/

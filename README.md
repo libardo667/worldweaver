@@ -38,6 +38,7 @@ Run one package with `python dev.py test engine` or `python dev.py test agent`.
 ## Run a local town
 
 ```bash
+python dev.py demo-init
 python dev.py weave-up --city ww_alderbank
 ```
 

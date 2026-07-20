@@ -27,7 +27,20 @@ python dev.py install
 
 WorldWeaver uses one root `.venv`. You do not need to activate it or change into a package directory.
 
-## 2. Start the federation root and Alderbank
+## 2. Create your local demo state
+
+```bash
+python dev.py demo-init
+```
+
+This creates fresh local secrets, node identities, and a private copy of the tracked Alderbank city pack. It
+does not start Docker or create residents. Running it again is a no-op after a successful setup. If it finds
+older or partial shard state, it stops instead of replacing it.
+
+The tutorial directory admits new nodes automatically because it is a loopback-only local demonstration. A
+public directory should use closed, deliberate node admission.
+
+## 3. Start the federation root and Alderbank
 
 ```bash
 python dev.py weave-up --city ww_alderbank
@@ -43,7 +56,7 @@ Check the result:
 python dev.py weave-status --city ww_alderbank --strict
 ```
 
-## 3. Enter through the public client
+## 4. Enter through the public client
 
 Open [http://localhost:5174](http://localhost:5174). Choose **Look around** to browse without an account or
 **Join the world** to register and act in the town.
@@ -56,7 +69,7 @@ requires Resend delivery settings, or the town reports that it is not ready and 
 The public client shows places, local presence, nearby speech, objects, making, and stoops. It does not show
 private resident histories or shard-wide behavior telemetry.
 
-## 4. Try one concrete loop
+## 5. Try one concrete loop
 
 After joining:
 
@@ -68,7 +81,7 @@ After joining:
 The object is a single durable thing. Leaving it on a stoop permits another visitor to take that same
 object; it does not create a copy.
 
-## 5. Stop the town
+## 6. Stop the town
 
 Run:
 

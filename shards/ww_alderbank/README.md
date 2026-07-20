@@ -19,8 +19,11 @@ Current checkpoint:
 Start the town without residents:
 
 ```bash
+python dev.py demo-init
 python dev.py weave-up --city ww_alderbank
 ```
+
+`demo-init` creates only missing ignored local state and refuses to replace an existing town.
 
 Wake residents deliberately with the commands in
 [`docs/how-to/run-residents.md`](../../docs/how-to/run-residents.md). Their private runtime data is not a
