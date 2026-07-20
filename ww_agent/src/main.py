@@ -65,20 +65,31 @@ def _discover_residents(residents_dir: Path) -> list[Path]:
 
 async def _boot_resident(
     resident_dir: Path,
-    ww_client: WorldWeaverClient,
+    server_url: str,
     llm: InferenceClient,
     world_id: str,
 ) -> asyncio.Task:
     """Start a resident and return the running task."""
-    r = Resident(resident_dir, ww_client, llm)
-    await r.start(world_id)
-    task = asyncio.create_task(r.run(), name=f"resident:{r.name}")
-    return task
+    world = await WorldWeaverClient.for_resident(server_url, resident_dir)
+    try:
+        resident = Resident(resident_dir, world, llm)
+        await resident.start(world_id)
+    except BaseException:
+        await world.close()
+        raise
+
+    async def run_and_close() -> None:
+        try:
+            await resident.run()
+        finally:
+            await world.close()
+
+    return asyncio.create_task(run_and_close(), name=f"resident:{resident.name}")
 
 
 async def _drain_spawn_queue(
     spawn_queue: asyncio.Queue,
-    ww_client: WorldWeaverClient,
+    server_url: str,
     llm: InferenceClient,
     world_id: str,
     running_tasks: set[asyncio.Task],
@@ -92,7 +103,7 @@ async def _drain_spawn_queue(
         try:
             if spawn_boot_delay_seconds > 0:
                 await asyncio.sleep(spawn_boot_delay_seconds)
-            task = await _boot_resident(resident_dir, ww_client, llm, world_id)
+            task = await _boot_resident(resident_dir, server_url, llm, world_id)
             running_tasks.add(task)
             task.add_done_callback(running_tasks.discard)
         except Exception as e:
@@ -182,7 +193,7 @@ async def main() -> None:
                     resident_dir.name,
                 )
                 await asyncio.sleep(delay)
-            task = await _boot_resident(resident_dir, ww_client, llm, world_id)
+            task = await _boot_resident(resident_dir, ww_url, llm, world_id)
             running_tasks.add(task)
             task.add_done_callback(running_tasks.discard)
             tethered_names.add(resident_dir.name)
@@ -216,7 +227,7 @@ async def main() -> None:
         spawn_drain = asyncio.create_task(
             _drain_spawn_queue(
                 spawn_queue,
-                ww_client,
+                ww_url,
                 llm,
                 world_id,
                 running_tasks,

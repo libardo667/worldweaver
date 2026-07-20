@@ -354,7 +354,14 @@ def test_new_game_shard_copies_versioned_experience_and_uses_readable_name(
     assert "image: ${WW_ENGINE_IMAGE}" in compose_text
     assert "image: ${WW_AGENT_IMAGE}" in compose_text
     assert '"127.0.0.1:${BACKEND_PORT}:8000"' in compose_text
-    assert "./hearth-host" not in compose_text
+    assert (
+        "./hearth-host/identity/transport.key:"
+        "/run/secrets/ww-hearth-host-transport.key:ro"
+    ) in compose_text
+    assert (
+        "WW_HEARTH_TRANSPORT_PRIVATE_KEY: /run/secrets/ww-hearth-host-transport.key"
+        in compose_text
+    )
 
     generated_env = _read_env(shard / ".env")
     assert generated_env["WW_ENGINE_IMAGE"].startswith(

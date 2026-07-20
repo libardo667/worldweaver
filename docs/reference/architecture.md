@@ -84,6 +84,11 @@ diagnostic code and is not wired into the production reference loop.
 A resident's identity and private files stay with their hearth. A city attachment contains only the local
 session needed to act in that city. Departure retires that session before another attachment becomes active.
 
+A key-bearing hearth gives each running resident a separate signed city client. Its host opens the sealed
+long-term resident key only to certify a replaceable one-hour runtime key bound to that actor, hearth
+generation, and city. Ordinary requests use the runtime key. Existing homes with no key files remain on a
+temporary unsigned migration path; a partial card/seal pair fails closed.
+
 The city does not receive the resident's ledger, reduced cognitive projections, private facts, memory view,
 or rest measurements. There is no generic HTTP route for reading or patching session variables. Shared-world
 changes use specific typed commands, while private current state is derived inside the hearth.

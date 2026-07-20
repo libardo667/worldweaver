@@ -369,6 +369,9 @@ def _prepare_resident_city(city: str) -> tuple[Path, dict[str, str]] | int:
             "WW_PROMPT_TRACE": "0",
         }
     )
+    hearth_host_key = city_dir / "hearth-host" / "identity" / "transport.key"
+    if hearth_host_key.is_file() and not hearth_host_key.is_symlink():
+        runtime_env["WW_HEARTH_TRANSPORT_PRIVATE_KEY"] = str(hearth_host_key)
 
     embedding_url = str(runtime_env.get("WW_EMBEDDING_URL") or "").strip()
     if embedding_url:

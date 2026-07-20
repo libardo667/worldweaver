@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from pathlib import Path
 import re
 import time
 from dataclasses import dataclass, field
@@ -13,7 +14,13 @@ from typing import Any
 
 import httpx
 
-from src.world.resident_signing import ResidentRequestSigner
+from src.identity.resident_identity import resident_identity_path
+from src.identity.resident_key_seal import SEALED_RESIDENT_IDENTITY_FILENAME
+from src.world.resident_signing import (
+    ResidentRequestSigner,
+    ResidentSigningError,
+    signer_from_host_sealed_identity,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -251,10 +258,48 @@ class WorldWeaverClient:
             transport=transport,
         )
 
+    @classmethod
+    async def for_resident(
+        cls,
+        base_url: str,
+        resident_dir: Path,
+        *,
+        host_transport_private_key_path: str | Path | None = None,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> "WorldWeaverClient":
+        """Create one resident-owned client, retaining legacy unsigned homes."""
+
+        home = Path(resident_dir)
+        descriptor_exists = resident_identity_path(home).is_file()
+        seal_path = home / "identity" / SEALED_RESIDENT_IDENTITY_FILENAME
+        seal_exists = seal_path.is_file()
+        if descriptor_exists != seal_exists:
+            raise ResidentSigningError(
+                "Resident identity card and host-sealed key must either both exist or both be absent."
+            )
+        if not descriptor_exists:
+            return cls(base_url, transport=transport)
+
+        discovery = cls(base_url, transport=transport)
+        try:
+            audience = await discovery.get_shard_id()
+        finally:
+            await discovery.close()
+        signer = signer_from_host_sealed_identity(
+            home,
+            audience=audience,
+            host_transport_private_key_path=host_transport_private_key_path,
+        )
+        return cls(base_url, resident_signer=signer, transport=transport)
+
     @property
     def base_url(self) -> str:
         """The node this transport is currently attached to."""
         return self._base_url
+
+    @property
+    def has_resident_signer(self) -> bool:
+        return self._resident_signer is not None
 
     # ------------------------------------------------------------------
     # Health & World ID
@@ -282,6 +327,19 @@ class WorldWeaverClient:
         resp = await self._get("/api/world/id", timeout=10.0)
         data = resp.json()
         return data.get("world_id") or None
+
+    async def get_shard_id(self) -> str:
+        """Read the public audience used by resident runtime certificates."""
+
+        resp = await self._get("/api/settings/readiness", timeout=10.0)
+        data = resp.json()
+        shard = data.get("shard") if isinstance(data, dict) else None
+        shard_id = (
+            str(shard.get("shard_id") or "").strip() if isinstance(shard, dict) else ""
+        )
+        if not shard_id:
+            raise WorldClientError("Shard readiness did not name its public shard ID.")
+        return shard_id
 
     async def get_shard_experience(self) -> dict[str, Any]:
         """Read the node's public declaration of optional game rules."""

@@ -200,10 +200,12 @@ services:
     image: ${{WW_AGENT_IMAGE}}
     volumes:
       - ./residents:/app/residents
+      - ./hearth-host/identity/transport.key:/run/secrets/ww-hearth-host-transport.key:ro
     env_file: .env
     environment:
       WW_SERVER_URL: http://backend:8000
       WW_RESIDENTS_DIR: /app/residents
+      WW_HEARTH_TRANSPORT_PRIVATE_KEY: /run/secrets/ww-hearth-host-transport.key
     depends_on:
       backend:
         condition: service_healthy

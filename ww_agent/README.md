@@ -86,7 +86,7 @@ hearths; they use the same `Resident` host and do not define a second kind of pe
 - `src/runtime/information.py`: elective typed source access
 - `src/runtime/effectors.py`: typed action boundary
 - `src/world/client.py`: engine transport
-- `src/world/resident_signing.py`: exact request signatures for an injected short-lived resident runtime key
+- `src/world/resident_signing.py`: host-sealed identity to renewable, generation-bound runtime request signing
 - `src/identity/`: identity loading, hearth manifests, packages, and activation
 - `src/familiar/`: private hearth adapter and optional grants
 

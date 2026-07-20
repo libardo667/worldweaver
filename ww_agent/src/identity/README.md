@@ -111,23 +111,29 @@ not be able to start after a newer generation becomes active elsewhere.
 `hearth_manifest.py` defines the first manifest version. It contains only `actor_id`, the deterministic
 `hearth_shard_id`, and `runtime_generation` plus schema fields. It deliberately contains no current world,
 session, host, path, or credential. `scripts/hearth_manifest.py HOME` inspects without writing;
-`--initialize` is the explicit one-time migration action. The generation is descriptive in this first
-slice and does not yet fence a running process.
+`--initialize` is the explicit one-time migration action. The active generation and runtime lock fence normal
+startup; an orderly transfer advances the destination and retires the preserved source.
 
-`resident_identity.py` defines the stable public identity card that can eventually be reviewed during city
+`resident_identity.py` defines the stable public identity card reviewed during city
 admission. It contains the actor and hearth IDs, Ed25519 public key and fingerprint, recovery-policy format
 version, and a self-signature over those exact fields. It contains no runtime generation, current world,
 host, private key, or automatic claim to admission. The file is portable resident identity evidence. Its
 self-signature catches corruption and proves possession at creation; it does not tell a steward whom to trust.
-The library currently accepts only an injected synthetic private key and does not generate or store one.
+The library accepts an injected private key and does not silently generate one for an existing resident.
 
 `resident_key_seal.py` provides the first at-rest custody boundary for that private half. It encrypts an
 injected resident identity key for the current hearth host's separate X25519 receiver and binds the sealed
 bytes to the resident's verified public identity card. Opening checks the exact actor, hearth, identity key,
 and recipient host before returning the key in memory. The owner-only sealed file is host-specific and is
 excluded from plaintext hearth packages. This does not make the host the resident's owner, prevent an
-authorized malicious host from copying an in-memory key, or solve recovery. No real resident key is created
-or stored by an operator command yet.
+authorized malicious host from copying an in-memory key, or solve recovery. No existing resident is assigned a
+key by an automatic migration.
+
+`world/resident_signing.py` opens that host seal only long enough to sign a fresh runtime key. Its one-hour
+certificate binds the actor, hearth generation, city shard ID, and narrow session scopes. Ordinary requests
+then use the replaceable runtime key, and long-running processes renew it before expiry. Each key-bearing
+resident receives a separate world client; homes without both the card and seal stay on a named unsigned
+migration path, while a half-present pair fails closed.
 
 `hearth_package.py` provides the fail-closed, read-only inventory used before packaging. It hashes files
 that belong to the resident but does not copy them. Identity evidence, retained memory and ledgers,

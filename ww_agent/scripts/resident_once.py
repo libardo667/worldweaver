@@ -292,6 +292,10 @@ async def _run(args: argparse.Namespace) -> int:
         if not args.wake and not args.park:
             return 0
 
+        resident_world = await WorldWeaverClient.for_resident(server_url, home)
+        await world.close()
+        world = resident_world
+
         if args.park:
             resident = Resident(home, world, object())
             await resident.start(world_id)

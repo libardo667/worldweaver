@@ -127,6 +127,24 @@ Build the private half in this order:
 8. Specify recovery separately. A federation directory must not hold the only recovery key, and an ordinary
    transfer must not quietly invent a guardian or owner.
 
+### Runtime signing checkpoint — 2026-07-20
+
+Steps 5 and 6 are now implemented for a hearth that already has a reviewed public identity card and a private
+key sealed for its current host. The host opens that long-term key only to sign a fresh, replaceable Ed25519
+runtime key for one actor, hearth generation, city audience, and the three current session scopes. The runtime
+certificate lasts one hour and renews before expiry by opening the host seal again; ordinary HTTP requests use
+only the short-lived key.
+
+The resident command and daemon now construct a separate world client for each key-bearing resident. The
+client discovers the city's public shard ID, uses the signed bootstrap endpoint, and signs the exact encoded
+request path and serialized body thereafter. A half-created identity card or seal fails closed. Homes with
+neither file remain on the explicit unsigned migration path for now; no existing resident was silently given a
+key. The checked-in Alderbank agent and new-shard template mount only the hearth host's receiver key into the
+agent process, not the city node key or another resident's secret.
+
+This does not yet create keys for a new resident, admit the public card automatically, sign inter-city travel,
+or supply recovery. Those are the next proof boundaries.
+
 Encryption protects the package at rest and in transit and reduces accidental key exposure. It cannot stop a
 malicious temporary host from copying a key while that host is authorized to run the resident. Generation
 fencing can stop an orderly old copy; it cannot revoke an undisclosed offline copy. Do not claim otherwise
