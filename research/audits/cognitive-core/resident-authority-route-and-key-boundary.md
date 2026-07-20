@@ -118,9 +118,13 @@ bindings, and one-time request nonces. Focused tests prove key-conflict rejectio
 request verification, and replay rejection. The migration has been exercised forward, backward, and forward
 again on a throwaway SQLite database.
 
+The shared HTTP helper for step 4 is also implemented and tested. It preserves the exact body and query
+target, rejects requests that mix human and resident credentials, and resolves either a human JWT or a
+resident signature to the same small `AuthorizedActor` record before ordinary domain rules run.
+
 This is not live route enforcement yet. No existing resident has been assigned a private identity key, no
 anonymous compatibility route has been closed, and Alderbank's resident sessions have not been migrated.
-That waits for the shared HTTP authorization dependency and an explicit synthetic admission path.
+That waits for an explicit synthetic admission path, resident-side signing, and controlled route rollout.
 
 ## Acceptance tests
 
