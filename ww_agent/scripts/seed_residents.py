@@ -15,6 +15,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.inference.client import InferenceClient  # noqa: E402
+from src.identity.resident_identity_custody import (  # noqa: E402
+    initialize_resident_identity_custody,
+)
 from src.runtime.doula import DoulaLoop, _VOCATION_DOMAINS  # noqa: E402
 from src.runtime.ledger import load_runtime_events  # noqa: E402
 from src.world.client import WorldWeaverClient  # noqa: E402
@@ -150,6 +153,15 @@ async def run(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 2
+        host_key_path = str(
+            os.environ.get("WW_HEARTH_TRANSPORT_PRIVATE_KEY") or ""
+        ).strip()
+        if not host_key_path:
+            print(
+                "WW_HEARTH_TRANSPORT_PRIVATE_KEY is required to create signed residents.",
+                file=sys.stderr,
+            )
+            return 2
 
         random.seed(args.seed)
         llm = InferenceClient(
@@ -196,12 +208,17 @@ async def run(args: argparse.Namespace) -> int:
                     file=sys.stderr,
                 )
                 return 1
+            initialize_resident_identity_custody(
+                added[0],
+                host_transport_private_key_path=host_key_path,
+            )
             created.append(added[0])
 
         print("Created dormant residents:")
         for home in created:
             name, vocation = _resident_summary(home)
             print(f"  {home.name}: {name} — {vocation}")
+        print("Each public identity card still requires explicit city admission.")
         print("Nobody was activated or woken.")
         return 0
     finally:

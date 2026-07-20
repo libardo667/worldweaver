@@ -693,6 +693,14 @@ def _seed_residents(args: list[str]) -> int:
             "WW_DOULA": "0",
         }
     )
+    hearth_host_key = city_dir / "hearth-host" / "identity" / "transport.key"
+    if not hearth_host_key.is_file() or hearth_host_key.is_symlink():
+        print(
+            "The city's hearth-host identity is missing; run hearth-host initialize first.",
+            file=sys.stderr,
+        )
+        return 2
+    runtime_env["WW_HEARTH_TRANSPORT_PRIVATE_KEY"] = str(hearth_host_key)
     command = [
         sys.executable,
         str(AGENT_DIR / "scripts" / "seed_residents.py"),

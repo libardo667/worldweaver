@@ -62,7 +62,9 @@ python dev.py seed-residents --city ww_alderbank --count 4
 python dev.py seed-residents --city ww_alderbank --count 4 --apply
 ```
 
-Creation does not activate, wake, or place them in the city.
+Creation does not activate, wake, or place them in the city. It creates a public identity card and seals the
+private identity key for the current hearth host. A steward must explicitly admit the public card before the
+resident can use signed city bootstrap.
 
 ## Resident homes
 

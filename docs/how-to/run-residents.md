@@ -79,6 +79,17 @@ python dev.py seed-residents --city ww_alderbank --count 3 --apply
 ```
 
 Creation does not activate a hearth, create a city session, or start cognition.
+It does create a self-signed public identity card and a private key sealed for this hearth host. Review and
+admit that public card to the selected city before activation:
+
+```bash
+python dev.py resident-authority --city ww_alderbank admit \
+  shards/ww_alderbank/residents/NAME/identity/resident_identity.json \
+  --reason "Reviewed local resident creation"
+python dev.py resident --city ww_alderbank --resident NAME --activate
+```
+
+Admission trusts one public actor/key binding; it does not give the city the resident's private key or hearth.
 
 ## Clean up an interrupted run
 

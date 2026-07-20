@@ -55,11 +55,11 @@ local speech, activates on a new local signal or slow baseline, permits one elec
 typed action, private continuation, or wait. It has no production salience, arousal, prediction, drive,
 incubation, embedding, or mixed-pulse policy. Quiet is a valid result rather than a diagnosed failure.
 
-The ledger/checkpoint repair is complete, and automatic doula creation is off for new shards. Before a real
-resident run, finish live resident signing-key custody and signed bootstrap, run one clean synthetic resident
-through hearth and city, and inspect only structural receipts. Then run a fresh private resident with an empty
-ledger under the agreed privacy boundary. Reintroduce old mechanisms only one at a time through paired tests;
-do not restore the former core wholesale.
+The ledger/checkpoint repair is complete, automatic doula creation is off for new shards, and newly seeded
+dormant residents receive a host-sealed identity plus a public card for explicit city admission. Before a real
+resident run, run one clean synthetic resident through signed city bootstrap and leave, and inspect only
+structural receipts. Then run a fresh private resident with a clean ledger under the agreed privacy boundary.
+Reintroduce old mechanisms only one at a time through paired tests; do not restore the former core wholesale.
 
 Continue the research audit as a separate evidence lane. It should explain why old mechanisms remain removed
 or earn re-entry, not tune the new loop toward sociability, movement, or a preferred personality.
