@@ -54,12 +54,17 @@ variable represents lived experience.
 - [`elective-information-and-agency.md`](elective-information-and-agency.md) traces what a resident can read,
   who opens the reading window, what survives a continuation, and why the current cap is a host circuit
   breaker rather than durable resident-controlled attention.
+- [`action-consequence-and-embodiment.md`](action-consequence-and-embodiment.md) follows outward proposals
+  through world receipts and back toward the next prompt, including false success history, missing decline
+  feedback, incomplete venture accounting, and prose-only hearth physics.
 - [`repair-and-ablation-order.md`](repair-and-ablation-order.md) puts software truth repairs before neutral
   reference runs and one-variable mechanism tests.
 - [`claim-ledger.md`](claim-ledger.md) lists terms and implied claims that require a decision.
 - [`evidence/README.md`](evidence/README.md) defines the review method and first source set.
 - [`evidence/mechanism-review-01.md`](evidence/mechanism-review-01.md) reaches initial bounded decisions on
   prediction, ignition, arousal, quiet, and social-deficit assumptions.
+- [`evidence/mechanism-review-02.md`](evidence/mechanism-review-02.md) compares the action-feedback path with
+  competing accounts of sensorimotor integration, situated systems, and durable external supports.
 - `decisions.md` will be created only after a claim has both code evidence and literature review.
 
 ## Evidence boundary

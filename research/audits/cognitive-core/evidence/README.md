@@ -100,3 +100,7 @@ search before a decision.
 [`mechanism-review-01.md`](mechanism-review-01.md) applies the first source set plus targeted work on global
 workspace, quiet rest, and neurodivergent communication to five live code claims. Its decisions are narrow:
 rename overclaimed mechanisms, preserve quiet as a valid outcome, and require direct software comparisons.
+
+[`mechanism-review-02.md`](mechanism-review-02.md) compares the action path with competing internal-model,
+sensorimotor, situated-robotics, and extended-mind accounts. Its narrow decision is to preserve proposals,
+world outcomes, and later observations separately and test the feedback loop without calling it biological.

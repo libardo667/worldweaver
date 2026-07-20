@@ -119,6 +119,24 @@ lost or late signal delivery.
 - `prune/ROADMAP.md`
 - related work items whose assumptions change after the audit
 
+## Current checkpoint — 2026-07-19
+
+The audit workspace now traces the live tick, prompt policy, derived-field dependencies, state lifecycles,
+timing, elective reading, and action feedback. Deterministic checks have reproduced false prediction error,
+poll-rate-dependent call pressure, false settling/fervor durations, stale social pressure, direct-address
+starvation, lossy reading continuations, non-replayable read caching, false successful act history, missing
+command outcomes, incomplete venture accounting, and prose-only hearth action reported as physics.
+
+Two bounded evidence reviews now cover prediction/ignition/arousal/quiet/social norms and
+action-feedback/embodiment/external supports. They support plainer names, reliable event and consequence
+delivery, quiet as a valid outcome, and direct software comparisons. They do not validate a grand theory of
+mind.
+
+Still required before this major is complete: finish the term inventory, cover the remaining memory,
+interoception, homeostasis, identity, philosophical, phenomenological, contemplative, and AI-ethics lanes;
+repair software-truth bugs; run paired mechanism tests; and write the final decisions and public architecture
+corrections.
+
 ## Acceptance Criteria
 
 - [ ] A complete code trace distinguishes deterministic mechanisms, model prompts, derived state, world

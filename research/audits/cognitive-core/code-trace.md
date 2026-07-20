@@ -171,6 +171,16 @@ behavior policies authored by the project. They must not be reported as an emerg
     stay fixed, source providers may read live shard state, and the final action reaches the live engine.
 30. **Direct address is still prompt-level response pressure.** The shared contract instructs the model to
     choose a non-null act when addressed instead of merely ensuring the event reaches attention.
+31. **Act history counts proposals as successes.** The act-trace prompt reads `pulse_act_emitted`, then says
+    the resident moved, spoke, wrote, or acted even when the effector declined every attempt.
+32. **Action outcomes are not a general prompt input.** Immediate receipts stay in the tick result; blocked
+    movement, local declines, game-command declines, and runtime summaries are not rendered next time.
+33. **Typed command failures can leave no durable outcome.** HTTP errors and early effector returns bypass the
+    command-specific ledger append, leaving only a proposal and content-blind summary on the integrated path.
+34. **Venture ignores most typed bodily successes.** Its recent-contact reader recognizes generic actions,
+    movement, and travel but not object, making, stoop, exchange, or access success events.
+35. **A generic hearth `do` records prose as executed physics.** `LocalWorld` stores a gesture line and returns
+    a success narrative without creating inspectable object, place, or inventory state.
 
 ## Questions for the next code pass
 
@@ -183,3 +193,5 @@ behavior policies authored by the project. They must not be reported as an emerg
   prose describing it?
 - What is the smallest durable inquiry lifecycle that lets a resident resume chosen reading while keeping
   event delivery and steward resource limits separate?
+- What is the smallest outcome lifecycle that gives residents reliable consequence feedback without turning
+  private failures into public narration?

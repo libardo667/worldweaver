@@ -30,6 +30,11 @@ from being interpretable.
 11. **Make the information episode contract true.** Stop calling a reach-enabled pulse one LLM call, define
    whether only the final continuation commits, return cached results to the requesting model, and use an
    injected clock for replayable cache behavior.
+12. **Close the action-feedback loop.** Record one typed outcome for every proposal, preserve safe engine
+   decline codes, deliver unresolved outcomes to a later prompt, and stop narrating requested verbs as
+   successful history.
+13. **Make hearth physics honest.** Distinguish imaginative gesture from state-changing action until the
+   hearth implements the same canonical object and place consequences as other shards.
 
 ## Second: establish a neutral reference runtime
 

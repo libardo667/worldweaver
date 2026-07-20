@@ -13,7 +13,7 @@ change in behavior is not mistakenly credited to the numeric substrate.
 | `SOUL.md` | Authored identity description plus adopted growth | Identity scaffold | Strong and intentionally individual, but still authored/model-facing text rather than discovered ground truth |
 | `GROUND TRUTH` | World-supplied situational statements | Claimed facts plus philosophical boundary | Some claims are accurate affordances; the privacy claim is contradicted by the runtime mirror and raw vars endpoint |
 | current moment | Exact-place scene, selected speech/events, reachable places, and source catalog | Observation filtered by Python | The model sees what prompt-selection policy includes, not an unmediated world |
-| act trace | Counts dominant recent act kinds and names unused doors | Behavioral nudge | Saying unused doors remain available is useful; foregrounding them still applies population-wide novelty pressure |
+| act trace | Counts dominant proposed act kinds and names unused doors | Behavioral nudge built from false success semantics | It reads `pulse_act_emitted`, not outcomes, so blocked moves are described as movement and declined actions as completed history |
 | memory | Relevant or recent resident-selected notes | Retrieved history | Embedding retrieval can repeatedly surface one semantic cluster; recency fallback is a separate condition |
 | workshop | Prior artifacts plus detailed writing/drawing instructions | Affordance manual plus creative invitation | Present on nearly every pulse, so making is continually advertised whether or not the moment calls for it |
 | self-sameness warning | Embedding similarity over recent makings | Direct anti-repetition policy | “Pleasure is spent” is not measured. The block orders novelty or rest once similarity reaches `0.80` |
@@ -39,6 +39,7 @@ The strongest steering is not hidden in model weights. It is plain text written 
 - hard venture directs a move or physical act and withholds the workshop;
 - a workshop, journal, zine, drawing surface, and stock scenes appear across the population;
 - prior output is named as what the resident “feels” and what its inner world is “about.”
+- proposed acts are narrated as successful behavioral history even when the world declined them.
 
 These may be defensible game or interaction policies. They are not observations about what an agent naturally
 does. A run using them cannot establish that the numeric substrate independently caused reflection, movement,
