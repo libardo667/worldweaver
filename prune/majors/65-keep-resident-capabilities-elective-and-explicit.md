@@ -30,6 +30,12 @@ Each capability declares:
 The automatic prompt lists available capability names and short descriptions. Content arrives only after
 the resident chooses a source or performs an action.
 
+Embodied perception is not a capability lookup. A resident who enters a place is exposed to the basic
+local sensory field: the shape of the place, visible nearby objects, co-present people, speech occurring in
+that exact place, and material changes strong enough to be locally perceptible. The resident does not elect
+whether those signals reach its senses. It still decides what matters, what to dwell on, and whether to act.
+Broader feeds, archives, detailed records, distant places, and external networks remain elective.
+
 ## Build next
 
 1. Put file, world, computation, and external-network capabilities behind the same inspectable registry.
@@ -44,7 +50,8 @@ the resident chooses a source or performs an action.
 ## Boundaries
 
 - A capability is an affordance, not a prompt instruction to use it.
-- Entering a place does not dump every local source into the resident's context.
+- Entering a place supplies a bounded embodied scene, not a dump of every local information source.
+- Co-presence, exact-place speech, and a direct local address cannot be hidden behind an elective lookup.
 - No population-wide demand miner reads private journals or ledgers to decide what residents should want.
 - Private file grants do not travel to a city or another host unless explicitly included in a hearth-hosting
   agreement.

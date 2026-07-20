@@ -25,25 +25,34 @@ The runtime needs to distinguish three separate decisions:
 A direct message or local `@name` should shorten the first delay and may open the second decision. It must
 not decide the third. Being reachable is not the same as being obligated to reply.
 
+There is also a necessary split between perception and research. A resident does not choose whether it sees
+who shares the room, hears speech in that room, or encounters a strong local sensory change. Those are part
+of being embodied somewhere. It does choose whether to seek citywide chatter, archives, distant places,
+detailed records, or outside information. Automatic local perception must be bounded, structured, and
+physical; it must not grow back into a narrator that summarizes the whole town at every tick.
+
 ## Proposed solution
 
-1. Give the resident host an interruptible wait instead of an unconditional sleep. A world adapter may
+1. Define the bounded embodied scene shared by city and hearth worlds: local geometry and exits, visible
+   objects, co-present actors, exact-place speech, direct physical outcomes, and declared local sensory
+   conditions. Record new signals durably enough that a slow tick cannot make them vanish before attention.
+2. Give the resident host an interruptible wait instead of an unconditional sleep. A world adapter may
    signal that new addressed input is available; timeout still produces the ordinary quiet tick.
-2. Add a narrow city notification path for actor-addressed local chat and, once Major 39 settles its thread
+3. Add a narrow city notification path for actor-addressed local chat and, once Major 39 settles its thread
    model, direct mail. Prefer a cheap event cursor or long poll over repeatedly fetching the full scene.
-3. Keep the CognitiveCore's current direct-attention rule: addressed input can cause an attentive pulse,
+4. Keep the CognitiveCore's current direct-attention rule: addressed input can cause an attentive pulse,
    but the pulse remains free to reply, defer, move, keep working, or do nothing.
-4. Allow bounded per-resident cadence to change with recent structural state. Start with a small state
+5. Allow bounded per-resident cadence to change with recent structural state. Start with a small state
    machine rather than model-written timing:
    - quiet or resting: slow baseline checks;
    - recently active or co-present: normal checks;
    - newly addressed or sharply aroused: one prompt early, followed by a short responsive window;
    - repeated quiet checks: back off again.
-5. Put minimum and maximum intervals, cooldowns, and inference-cost guards in configuration. Do not derive
+6. Put minimum and maximum intervals, cooldowns, and inference-cost guards in configuration. Do not derive
    urgency by reading or scoring the private prose of a message.
-6. Record structural timing evidence: signal time, next observation time, whether attention ignited, whether
+7. Record structural timing evidence: signal time, next observation time, whether attention ignited, whether
    any act followed, and the number and cost of extra checks. Do not record message bodies in the report.
-7. Run a matched Alderbank trial after the fixed-cadence baseline. Compare time-to-notice for addressed
+8. Run a matched Alderbank trial after the fixed-cadence baseline. Compare time-to-notice for addressed
    events, ordinary tick volume, inference calls, actions, rest, and cleanup.
 
 ## Files affected
@@ -63,6 +72,8 @@ not decide the third. Being reachable is not the same as being obligated to repl
 ## Boundaries
 
 - Faster notice never means forced speech or a guaranteed reply.
+- Basic exact-place perception is automatic; distant or detailed information remains elective.
+- Automatic perception may report physical facts, not generated narration about what they mean.
 - Public local speech can wake only residents who are physically present and explicitly addressed.
 - Citywide chatter remains elective and must not become an interrupt feed.
 - Mail remains slower correspondence unless its final shared thread contract explicitly says otherwise.
