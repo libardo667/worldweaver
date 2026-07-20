@@ -13,7 +13,10 @@ from src.runtime.travel import TravelRequest
 
 
 def _record_text(result: dict) -> str:
-    return "\n".join(f"{item.get('title', '')}: {item.get('content', '')}" for item in result.get("records") or [])
+    return "\n".join(
+        f"{item.get('title', '')}: {item.get('content', '')}"
+        for item in result.get("records") or []
+    )
 
 
 # --- the eats source (false egress, local SF knowledge) ---
@@ -27,9 +30,20 @@ def test_eats_recommends_real_spots_for_a_known_neighborhood():
 
 def test_eats_handles_aliases_and_messy_input():
     registry = build_city_source_registry()
-    assert asyncio.run(registry.read("eats", "telegraph hill"))["records"][0]["locality"] == "north beach"
-    assert asyncio.run(registry.read("eats", "Outer Sunset District"))["records"][0]["locality"] == "sunset"
-    assert asyncio.run(registry.read("eats", "24th and mission"))["records"][0]["locality"] == "mission"
+    assert (
+        asyncio.run(registry.read("eats", "telegraph hill"))["records"][0]["locality"]
+        == "north beach"
+    )
+    assert (
+        asyncio.run(registry.read("eats", "Outer Sunset District"))["records"][0][
+            "locality"
+        ]
+        == "sunset"
+    )
+    assert (
+        asyncio.run(registry.read("eats", "24th and mission"))["records"][0]["locality"]
+        == "mission"
+    )
 
 
 def test_eats_requires_a_real_place_name():
@@ -94,7 +108,13 @@ class _FakeClient:
             "destinations": [
                 {
                     "route_id": "sf-portland",
-                    "nodes": [{"shard_id": "rose-city-coop-1", "shard_url": "https://pdx.example", "status": "healthy"}],
+                    "nodes": [
+                        {
+                            "shard_id": "rose-city-coop-1",
+                            "shard_url": "https://pdx.example",
+                            "status": "healthy",
+                        }
+                    ],
                 }
             ]
         }
@@ -126,10 +146,14 @@ def test_city_world_intercepts_an_explicit_live_node_before_the_backend():
     client = _FakeClient()
     world = CityWorld(client, build_city_source_registry())
 
-    result = asyncio.run(world.post_map_move("resident-city", "travel to rose-city-coop-1"))
+    result = asyncio.run(
+        world.post_map_move("resident-city", "travel to rose-city-coop-1")
+    )
 
     assert result["travel_pending"] is True
-    assert world.take_pending_travel() == TravelRequest("city", "rose-city-coop-1", "sf-portland", "rose-city-coop-1")
+    assert world.take_pending_travel() == TravelRequest(
+        "city", "rose-city-coop-1", "sf-portland", "rose-city-coop-1"
+    )
     assert client.posted == []
 
 
@@ -153,13 +177,23 @@ def test_get_scene_advertises_the_sources():
 def test_access_information_resolves_a_named_source_locally():
     client = _FakeClient()
     world = CityWorld(client, build_city_source_registry())
-    result = asyncio.run(world.access_information(kind="inspect", source="eats", query="north beach"))
-    assert result["records"] and all(item["locality"] == "north beach" for item in result["records"])
+    result = asyncio.run(
+        world.access_information(kind="inspect", source="eats", query="north beach")
+    )
+    assert result["records"] and all(
+        item["locality"] == "north beach" for item in result["records"]
+    )
     assert client.posted == []  # private access never touched the action endpoint
 
 
 def test_city_world_accepts_the_shared_registry_without_a_city_subclass():
-    registry = InformationSourceRegistry([InformationSource(name="plain", description="one shared provider", run=lambda _query: [])])
+    registry = InformationSourceRegistry(
+        [
+            InformationSource(
+                name="plain", description="one shared provider", run=lambda _query: []
+            )
+        ]
+    )
     world = CityWorld(_FakeClient(), registry)
 
     scene = asyncio.run(world.get_scene("sess-1"))
@@ -207,7 +241,10 @@ def test_recall_reads_the_residents_own_ledger(tmp_path):
     mem = tmp_path / "memory"
     mem.mkdir()
     (mem / "kept_memory.jsonl").write_text(
-        json.dumps({"note": "the kettle is still warm"}) + "\n" + json.dumps({"note": "I stayed on the sill"}) + "\n",
+        json.dumps({"note": "the kettle is still warm"})
+        + "\n"
+        + json.dumps({"note": "I stayed on the sill"})
+        + "\n",
         encoding="utf-8",
     )
     (mem / "runtime_ledger.jsonl").write_text(
@@ -222,7 +259,10 @@ def test_recall_reads_the_residents_own_ledger(tmp_path):
     )
     registry = build_city_source_registry(memory_dir=mem)
     assert "recall" in registry.names
-    assert next(source for source in registry.list() if source.name == "recall").provenance == "self-memory"
+    assert (
+        next(source for source in registry.list() if source.name == "recall").provenance
+        == "self-memory"
+    )
 
     overview = _record_text(asyncio.run(registry.read("recall", "")))
     assert "kettle" in overview or "sill" in overview
@@ -255,11 +295,23 @@ class _ReadClient:
     async def get_news(self) -> list[str]:
         return ["Fog returns to the Sunset", "BART delays on the M-line"]
 
-    async def get_nearby_landmarks(self, location: str, radius_km: float = 0.75) -> list[str]:
-        return ["Dolores Park", "Mission Dolores"] if "mission" in location.lower() else []
+    async def get_nearby_landmarks(
+        self, location: str, radius_km: float = 0.75
+    ) -> list[str]:
+        return (
+            ["Dolores Park", "Mission Dolores"] if "mission" in location.lower() else []
+        )
 
     async def get_world_facts(self, query: str, session_id=None, limit: int = 5):
-        return [_WorldFact(f"Someone was overheard talking about {query} at the taqueria.")] if query else []
+        return (
+            [
+                _WorldFact(
+                    f"Someone was overheard talking about {query} at the taqueria."
+                )
+            ]
+            if query
+            else []
+        )
 
     async def get_world_objects(self, session_id: str) -> dict:
         return {
@@ -316,8 +368,14 @@ class _ReadClient:
                     "status": "open",
                     "proposer_actor_id": "actor-riley",
                     "recipient_actor_id": "actor-self",
-                    "offered_object": {"object_id": "whistle-1", "name": "Reed whistle"},
-                    "requested_object": {"object_id": "cup-1", "name": "Small clay cup"},
+                    "offered_object": {
+                        "object_id": "whistle-1",
+                        "name": "Reed whistle",
+                    },
+                    "requested_object": {
+                        "object_id": "cup-1",
+                        "name": "Small clay cup",
+                    },
                     "viewer_role": "recipient",
                     "counterpart_present": True,
                     "can_accept": True,
@@ -329,7 +387,9 @@ class _ReadClient:
                 {
                     "recipient_actor_id": "actor-riley",
                     "recipient_session_id": "resident-riley",
-                    "requested_objects": [{"object_id": "token-riley", "name": "Riley's alder token"}],
+                    "requested_objects": [
+                        {"object_id": "token-riley", "name": "Riley's alder token"}
+                    ],
                 }
             ],
         }
@@ -344,11 +404,15 @@ class _ReadClient:
                 "is_controller": True,
                 "can_enter": True,
                 "can_request": False,
-                "active_grants": [{"actor_id": "actor-riley", "session_id": "resident-riley"}],
+                "active_grants": [
+                    {"actor_id": "actor-riley", "session_id": "resident-riley"}
+                ],
             }
         }
 
-    async def get_pending_space_access_requests(self, session_id: str, location: str) -> dict:
+    async def get_pending_space_access_requests(
+        self, session_id: str, location: str
+    ) -> dict:
         return {
             "requests": [
                 {
@@ -472,7 +536,9 @@ def test_news_source_reads_headlines():
 
 def test_places_source_looks_around():
     registry = build_city_source_registry(client=_ReadClient())
-    assert "Dolores Park" in _record_text(asyncio.run(registry.read("places", "the Mission")))
+    assert "Dolores Park" in _record_text(
+        asyncio.run(registry.read("places", "the Mission"))
+    )
     missing = asyncio.run(registry.read("places", ""))
     assert missing["ok"] is False and missing["reason"] == "query_required"
 
@@ -528,14 +594,18 @@ def test_travel_source_keeps_unhosted_routes_honest():
     result = asyncio.run(registry.read("travel", "los_angeles"))
 
     assert len(result["records"]) == 1
-    assert "no destination node is currently available" in result["records"][0]["content"]
+    assert (
+        "no destination node is currently available" in result["records"][0]["content"]
+    )
     assert result["records"][0]["metadata"]["availability"] == "unhosted"
 
 
 def test_full_context_grants_the_whole_catalog(tmp_path):
     mem = tmp_path / "m"
     mem.mkdir()
-    registry = build_city_source_registry(client=_ReadClient(), session_id="s1", memory_dir=mem)
+    registry = build_city_source_registry(
+        client=_ReadClient(), session_id="s1", memory_dir=mem
+    )
     assert set(registry.names) >= {
         "eats",
         "recall",
@@ -553,10 +623,19 @@ def test_alderbank_gets_its_declared_sources_without_san_francisco_material():
         client=_ReadClient(),
         session_id="s1",
         city_id="alderbank",
-        capabilities={"durable_objects", "replenishing_materials", "making", "witnessed_exchange", "space_permissions", "stoops"},
+        capabilities={
+            "durable_objects",
+            "replenishing_materials",
+            "making",
+            "witnessed_exchange",
+            "space_permissions",
+            "stoops",
+        },
     )
 
-    assert {"objects", "making", "exchanges", "access", "stoops"}.issubset(registry.names)
+    assert {"objects", "making", "exchanges", "access", "stoops"}.issubset(
+        registry.names
+    )
     assert "eats" not in registry.names
     assert "news" not in registry.names
 
@@ -571,13 +650,20 @@ def test_objects_source_separates_carried_from_local_objects():
 
     result = asyncio.run(registry.read("objects", ""))
 
-    assert {item["title"] for item in result["records"]} == {"Small clay cup", "Wooden token"}
-    carried = next(item for item in result["records"] if item["title"] == "Small clay cup")
+    assert {item["title"] for item in result["records"]} == {
+        "Small clay cup",
+        "Wooden token",
+    }
+    carried = next(
+        item for item in result["records"] if item["title"] == "Small clay cup"
+    )
     assert carried["locality"] == "carried"
     assert carried["metadata"]["object_id"] == "cup-1"
     assert 'target "object-place:cup-1"' in carried["content"]
     assert 'target "object-give:cup-1:resident-riley"' in carried["content"]
-    assert carried["metadata"]["give_recipients"] == [{"session_id": "resident-riley", "name": "Riley"}]
+    assert carried["metadata"]["give_recipients"] == [
+        {"session_id": "resident-riley", "name": "Riley"}
+    ]
     placed = next(item for item in result["records"] if item["title"] == "Wooden token")
     assert 'target "object-pick-up:token-1"' in placed["content"]
 
@@ -593,7 +679,9 @@ def test_making_source_reports_local_availability_without_making_anything():
     result = asyncio.run(registry.read("making", ""))
 
     assert "8 of 10 units" in _record_text(result)
-    recipe = next(item for item in result["records"] if item["metadata"]["kind"] == "recipe")
+    recipe = next(
+        item for item in result["records"] if item["metadata"]["kind"] == "recipe"
+    )
     assert recipe["metadata"]["can_make"] is True
     assert 'target "recipe:small_clay_cup"' in recipe["content"]
 
@@ -608,12 +696,20 @@ def test_exchanges_source_exposes_exact_two_party_choices_without_moving_objects
 
     result = asyncio.run(registry.read("exchanges", ""))
 
-    incoming = next(item for item in result["records"] if item["record_id"] == "exchange:exchange-1")
+    incoming = next(
+        item for item in result["records"] if item["record_id"] == "exchange:exchange-1"
+    )
     assert 'target "exchange-accept:exchange-1"' in incoming["content"]
     assert 'target "exchange-decline:exchange-1"' in incoming["content"]
-    option = next(item for item in result["records"] if item["record_id"].startswith("exchange-option:"))
+    option = next(
+        item
+        for item in result["records"]
+        if item["record_id"].startswith("exchange-option:")
+    )
     assert "Nothing moves unless they later accept" in option["content"]
-    assert 'target "exchange-offer:resident-riley:cup-1:token-riley"' in option["content"]
+    assert (
+        'target "exchange-offer:resident-riley:cup-1:token-riley"' in option["content"]
+    )
 
 
 def test_access_source_requires_a_place_and_exposes_controller_decisions():
@@ -673,7 +769,10 @@ def test_stoops_source_lists_before_opening_a_named_stoop():
     listed = asyncio.run(registry.read("stoops", ""))
     opened = asyncio.run(registry.read("stoops", "Commons"))
 
-    assert {item["title"] for item in listed["records"]} == {"The Commons Stoop", "Leave Small clay cup"}
+    assert {item["title"] for item in listed["records"]} == {
+        "The Commons Stoop",
+        "Leave Small clay cup",
+    }
     assert "Name this stoop to look inside" in _record_text(listed)
     assert "explicit permission for another visitor" in _record_text(listed)
     assert [item["title"] for item in opened["records"]] == ["Reed whistle"]
@@ -687,7 +786,9 @@ from src.runtime.drive import DeterministicEmbedder, DriveVector  # noqa: E402
 from src.world.client import ChatMessage  # noqa: E402
 
 
-def _msg(sid: str, name: str, text: str, ts: str = "2026-06-06T12:00:00+00:00") -> ChatMessage:
+def _msg(
+    sid: str, name: str, text: str, ts: str = "2026-06-06T12:00:00+00:00"
+) -> ChatMessage:
     return ChatMessage(id=0, session_id=sid, display_name=name, message=text, ts=ts)
 
 
@@ -695,7 +796,9 @@ class _CityChatClient:
     def __init__(self, messages: list[ChatMessage]):
         self._messages = messages
 
-    async def get_location_chat(self, location: str, since=None, session_id=None) -> list[ChatMessage]:
+    async def get_location_chat(
+        self, location: str, since=None, session_id=None
+    ) -> list[ChatMessage]:
         return list(self._messages) if location == "__city__" else []
 
 
@@ -717,7 +820,9 @@ def test_chatter_ranks_the_citywide_feed_by_soul_resonance():
     registry.bind_drive(drive)
     res = asyncio.run(registry.read("chatter", ""))
     speakers = [item["title"] for item in res["records"]]
-    assert speakers.index("Theo") < speakers.index("Mara")  # engine line outranks dahlias
+    assert speakers.index("Theo") < speakers.index(
+        "Mara"
+    )  # engine line outranks dahlias
     assert res["records"][0]["selection_mode"] == "soul_resonance"
 
 
@@ -764,7 +869,10 @@ def test_chatter_excludes_the_resident_itself():
 def test_source_records_carry_a_local_knowledge_provenance_tag():
     registry = build_city_source_registry(client=_ReadClient(), session_id="s1")
     assert asyncio.run(registry.read("news", ""))["provenance"] == "local-knowledge"
-    assert asyncio.run(registry.read("eats", "the Mission"))["provenance"] == "local-knowledge"
+    assert (
+        asyncio.run(registry.read("eats", "the Mission"))["provenance"]
+        == "local-knowledge"
+    )
 
 
 def test_advertisement_frames_local_knowledge_sources_as_knowing():

@@ -7,7 +7,11 @@ from scripts import resident_cohort
 def test_event_reader_returns_only_named_structural_json(tmp_path):
     path = tmp_path / "resident.log"
     path.write_text(
-        "private-looking runtime text that must be ignored\n" + json.dumps({"event": "resident_tick", "tick": 1}) + "\n" + json.dumps({"event": "resident_run_summary", "resident": "riley", "ticks": 4}) + "\n",
+        "private-looking runtime text that must be ignored\n"
+        + json.dumps({"event": "resident_tick", "tick": 1})
+        + "\n"
+        + json.dumps({"event": "resident_run_summary", "resident": "riley", "ticks": 4})
+        + "\n",
         encoding="utf-8",
     )
 
@@ -20,7 +24,9 @@ def test_event_reader_returns_only_named_structural_json(tmp_path):
 
 def test_resident_command_enables_prompt_trace_only_when_requested(tmp_path):
     home = tmp_path / "Riley"
-    ordinary = resident_cohort._resident_command(home, "http://example.test", duration=60)
+    ordinary = resident_cohort._resident_command(
+        home, "http://example.test", duration=60
+    )
     diagnostic = resident_cohort._resident_command(
         home,
         "http://example.test",
@@ -115,7 +121,9 @@ def test_presence_sampling_counts_only_named_resident_overlap(tmp_path, monkeypa
         def read(self):
             return json.dumps(payload).encode("utf-8")
 
-    monkeypatch.setattr(resident_cohort.urllib.request, "urlopen", lambda *_args, **_kwargs: Response())
+    monkeypatch.setattr(
+        resident_cohort.urllib.request, "urlopen", lambda *_args, **_kwargs: Response()
+    )
 
     resident_cohort._sample_presence("http://example.test", homes, report)
     finalized = resident_cohort._finalize_presence(report)

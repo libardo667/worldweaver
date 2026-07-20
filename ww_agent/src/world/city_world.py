@@ -27,12 +27,19 @@ import re
 from typing import Any
 
 from src.runtime.information import InformationSourceRegistry
-from src.runtime.travel import TravelRequest, looks_like_city_travel, parse_city_travel, parse_world_travel
+from src.runtime.travel import (
+    TravelRequest,
+    looks_like_city_travel,
+    parse_city_travel,
+    parse_world_travel,
+)
 from src.world.client import SceneData, TurnResult, WorldAffordance, WorldWeaverClient
 
 # Legacy "use <source> <input>" detector: known sources are declined on the physical
 # action path so an old-form pulse cannot silently rejoin narration.
-_LEGACY_USE_RX = re.compile(r"^\s*use\s+([a-z][a-z0-9_]*)\b\s*(.*)$", re.IGNORECASE | re.DOTALL)
+_LEGACY_USE_RX = re.compile(
+    r"^\s*use\s+([a-z][a-z0-9_]*)\b\s*(.*)$", re.IGNORECASE | re.DOTALL
+)
 
 
 class CityWorld:
@@ -61,12 +68,20 @@ class CityWorld:
             # closed until the resident is grounded, so a new arrival cannot reach for the
             # current it would drift onto. Local-knowledge sources (eats/recall/places) stay.
             if getattr(self, "incubating", False):
-                sources = [source for source in sources if getattr(source, "name", "") != "chatter"]
+                sources = [
+                    source
+                    for source in sources
+                    if getattr(source, "name", "") != "chatter"
+                ]
             # Provenance honesty (Minor 56): advertise local-knowledge sources as things the
             # resident KNOWS or senses first-hand — spoken as its own knowing, never as a
             # lookup. A future world-egress source would be advertised as a deliberate reach.
-            known = [source for source in sources if source.provenance != "world-egress"]
-            egress = [source for source in sources if source.provenance == "world-egress"]
+            known = [
+                source for source in sources if source.provenance != "world-egress"
+            ]
+            egress = [
+                source for source in sources if source.provenance == "world-egress"
+            ]
             scene.affordances = list(getattr(scene, "affordances", []) or []) + [
                 WorldAffordance(
                     source_id=f"source:{source.name}",
@@ -92,7 +107,11 @@ class CityWorld:
         if travel is not None:
             self._pending_travel = travel
             return TurnResult(
-                narrative=("You make ready to withdraw to your hearth." if travel.destination_kind == "hearth" else f"You make ready to travel to {travel.destination_name}."),
+                narrative=(
+                    "You make ready to withdraw to your hearth."
+                    if travel.destination_kind == "hearth"
+                    else f"You make ready to travel to {travel.destination_name}."
+                ),
                 choices=[],
                 vars={},
                 travel_pending=True,
@@ -134,7 +153,11 @@ class CityWorld:
             self._pending_travel = travel
             return {
                 "moved": True,
-                "to_location": "your hearth" if travel.destination_kind == "hearth" else travel.destination_name,
+                "to_location": (
+                    "your hearth"
+                    if travel.destination_kind == "hearth"
+                    else travel.destination_name
+                ),
                 "route_remaining": [],
                 "travel_pending": True,
             }
@@ -154,8 +177,12 @@ class CityWorld:
             payload = await self._client.get_travel_destinations()
         except Exception:
             return None
-        destinations = payload.get("destinations") if isinstance(payload, dict) else None
-        return parse_city_travel(text, destinations if isinstance(destinations, list) else [])
+        destinations = (
+            payload.get("destinations") if isinstance(payload, dict) else None
+        )
+        return parse_city_travel(
+            text, destinations if isinstance(destinations, list) else []
+        )
 
     def take_pending_travel(self) -> TravelRequest | None:
         """Return and clear the world change requested during the last tick."""
@@ -163,7 +190,9 @@ class CityWorld:
         self._pending_travel = None
         return pending
 
-    async def access_information(self, *, kind: str, source: str, query: str = "") -> dict[str, Any]:
+    async def access_information(
+        self, *, kind: str, source: str, query: str = ""
+    ) -> dict[str, Any]:
         """Resolve one private reach without touching the world action endpoint."""
         name = str(source or "").strip().lower()
         if not self._sources or name not in self._sources.names:

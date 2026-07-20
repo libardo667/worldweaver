@@ -83,7 +83,11 @@ class InferenceClient:
         """
         if images:
             user_content: Any = [{"type": "text", "text": user_prompt}]
-            user_content += [{"type": "image_url", "image_url": {"url": str(url)}} for url in images if str(url or "").strip()]
+            user_content += [
+                {"type": "image_url", "image_url": {"url": str(url)}}
+                for url in images
+                if str(url or "").strip()
+            ]
         else:
             user_content = user_prompt
         payload = {
@@ -160,9 +164,15 @@ class InferenceClient:
                 # still unambiguous and schema-checked by the caller. Do not,
                 # however, choose between two competing JSON values.
                 after_fence = trailing.removeprefix("```").strip()
-                if isinstance(candidate, dict) and trailing and not after_fence.startswith(("{", "[")):
+                if (
+                    isinstance(candidate, dict)
+                    and trailing
+                    and not after_fence.startswith(("{", "["))
+                ):
                     self.recovered_json_responses += 1
-                    logger.warning("inference: ignored trailing text after one valid JSON object")
+                    logger.warning(
+                        "inference: ignored trailing text after one valid JSON object"
+                    )
                     decoded = candidate
             if decoded is None:
                 raise InferenceError(
@@ -203,7 +213,9 @@ class InferenceClient:
                         max_retries + 1,
                     )
                     await asyncio.sleep(delay)
-                    last_error = httpx.HTTPStatusError(f"HTTP {resp.status_code}", request=resp.request, response=resp)
+                    last_error = httpx.HTTPStatusError(
+                        f"HTTP {resp.status_code}", request=resp.request, response=resp
+                    )
                     continue
 
                 resp.raise_for_status()
@@ -216,7 +228,9 @@ class InferenceClient:
                     continue
                 raise InferenceError("Inference request timed out") from e
 
-        raise InferenceError(f"Inference failed after {max_retries + 1} attempts") from last_error
+        raise InferenceError(
+            f"Inference failed after {max_retries + 1} attempts"
+        ) from last_error
 
     async def close(self) -> None:
         await self._client.aclose()

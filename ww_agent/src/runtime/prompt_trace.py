@@ -70,7 +70,14 @@ class PromptTraceRecorder:
         if not _enabled():
             return None
         trace_id = f"prm-{uuid.uuid4().hex[:16]}"
-        image_items = [{"index": index, "sha256": _sha256_text(item), "bytes": len(str(item or "").encode("utf-8"))} for index, item in enumerate(images or [])]
+        image_items = [
+            {
+                "index": index,
+                "sha256": _sha256_text(item),
+                "bytes": len(str(item or "").encode("utf-8")),
+            }
+            for index, item in enumerate(images or [])
+        ]
         inference = {
             "model": model,
             "max_tokens": int(max_tokens),
@@ -123,11 +130,17 @@ class PromptTraceRecorder:
                 "resident": self._resident_name,
                 "error_type": exc.__class__.__name__,
                 "error": str(exc),
-                **({"private_diagnostic": private_diagnostic} if private_diagnostic is not None else {}),
+                **(
+                    {"private_diagnostic": private_diagnostic}
+                    if private_diagnostic is not None
+                    else {}
+                ),
             }
         )
 
-    def record_validation_failure(self, prompt_trace_id: str | None, exc: Exception) -> None:
+    def record_validation_failure(
+        self, prompt_trace_id: str | None, exc: Exception
+    ) -> None:
         if not prompt_trace_id:
             return
         self._append(
@@ -146,7 +159,12 @@ class PromptTraceRecorder:
             self._path.parent.mkdir(parents=True, exist_ok=True)
             created = not self._path.exists()
             with self._path.open("a", encoding="utf-8") as handle:
-                handle.write(json.dumps(record, ensure_ascii=False, default=str, separators=(",", ":")) + "\n")
+                handle.write(
+                    json.dumps(
+                        record, ensure_ascii=False, default=str, separators=(",", ":")
+                    )
+                    + "\n"
+                )
             if created:
                 try:
                     self._path.chmod(0o600)
@@ -154,4 +172,6 @@ class PromptTraceRecorder:
                     pass
         except Exception as exc:
             # Observability must never stall or alter the resident's rhythm.
-            logger.warning("[%s:prompt-trace] capture failed: %s", self._resident_name, exc)
+            logger.warning(
+                "[%s:prompt-trace] capture failed: %s", self._resident_name, exc
+            )

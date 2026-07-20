@@ -34,14 +34,28 @@ def main(argv: list[str] | None = None) -> int:
 
     home = Path(args.home).expanduser().resolve()
     if not home.is_dir() or not (home / "identity").is_dir():
-        print(json.dumps({"resident": home.name, "status": "invalid", "error": "resident home is missing identity/"}, sort_keys=True))
+        print(
+            json.dumps(
+                {
+                    "resident": home.name,
+                    "status": "invalid",
+                    "error": "resident home is missing identity/",
+                },
+                sort_keys=True,
+            )
+        )
         return 2
 
     if args.initialize:
         try:
             initialize_hearth_manifest(home)
         except (HearthManifestError, OSError) as exc:
-            print(json.dumps({"resident": home.name, "status": "invalid", "error": str(exc)}, sort_keys=True))
+            print(
+                json.dumps(
+                    {"resident": home.name, "status": "invalid", "error": str(exc)},
+                    sort_keys=True,
+                )
+            )
             return 1
 
     report = inspect_hearth_manifest(home)

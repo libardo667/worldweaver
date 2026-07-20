@@ -20,7 +20,11 @@ from src.runtime.substrate import active_drive_nudges, derive_afterimage, predic
 
 
 def _events_by_type(memory_dir, event_type):
-    return [event for event in load_runtime_events(memory_dir) if str(event.get("event_type") or "").strip() == event_type]
+    return [
+        event
+        for event in load_runtime_events(memory_dir)
+        if str(event.get("event_type") or "").strip() == event_type
+    ]
 
 
 # --- validation -----------------------------------------------------------
@@ -46,7 +50,11 @@ def test_pulse_validates_and_clamps_typed_contract():
     )
 
     assert pulse.felt_sense == "a slow warmth settling"
-    assert pulse.act is not None and pulse.act.kind == "speak" and pulse.act.target == "Levi"
+    assert (
+        pulse.act is not None
+        and pulse.act.kind == "speak"
+        and pulse.act.target == "Levi"
+    )
     exp = pulse.expectations[0]
     assert exp.features == {"warmth": 1.0}  # clamped to 1, negative + unnamed dropped
     assert exp.scope == "self" and exp.confidence == 1.0
@@ -141,9 +149,13 @@ def test_soft_fields_degrade_gracefully():
         }
     )
     assert pulse.act is not None and pulse.act.body == "Jasmine, Levi?"
-    assert [e.features for e in pulse.expectations] == [{"social_pull": 0.8}]  # empty one dropped
+    assert [e.features for e in pulse.expectations] == [
+        {"social_pull": 0.8}
+    ]  # empty one dropped
     assert pulse.drive_nudges == []  # empty nudge dropped, not fatal
-    assert [(t.trace_id, t.verdict) for t in pulse.trace_verdicts] == [("ok", "watch")]  # bad verdict dropped
+    assert [(t.trace_id, t.verdict) for t in pulse.trace_verdicts] == [
+        ("ok", "watch")
+    ]  # bad verdict dropped
 
 
 def test_empty_pulse_is_valid():
@@ -212,7 +224,9 @@ def test_act_routing_keeps_versioned_relational_context(tmp_path):
 def test_reach_is_recorded_but_never_routed_as_world_act(tmp_path):
     summary = route_pulse(
         tmp_path,
-        Pulse.from_dict({"reach": {"kind": "read", "source": "files", "query": "README.md"}}),
+        Pulse.from_dict(
+            {"reach": {"kind": "read", "source": "files", "query": "README.md"}}
+        ),
     )
 
     assert len(_events_by_type(tmp_path, "pulse_reach_emitted")) == 1
@@ -296,7 +310,9 @@ def test_drive_nudges_decay_independently(tmp_path):
     t0 = datetime(2026, 6, 2, 12, 0, 0, tzinfo=timezone.utc)
     route_pulse(
         tmp_path,
-        Pulse.from_dict({"drive_nudges": [{"features": {"curiosity": 0.6}, "half_life": 300}]}),
+        Pulse.from_dict(
+            {"drive_nudges": [{"features": {"curiosity": 0.6}, "half_life": 300}]}
+        ),
         now=t0.isoformat(),
     )
     fresh = active_drive_nudges(tmp_path, now=t0.isoformat())
@@ -377,7 +393,9 @@ def test_gate_contradiction_check_routes_through_route_pulse(tmp_path):
     route_pulse(
         tmp_path,
         Pulse.from_dict({"self_delta": {"soul_edit": "I will abandon my post"}}),
-        gate_contradiction_check=lambda kind, body: ("drop" if "abandon" in body else None),
+        gate_contradiction_check=lambda kind, body: (
+            "drop" if "abandon" in body else None
+        ),
     )
     staged = _events_by_type(tmp_path, "self_delta_staged")
     assert len(staged) == 1
@@ -400,7 +418,9 @@ def test_trace_verdicts_are_recorded(tmp_path):
         ),
     )
     recorded = _events_by_type(tmp_path, "trace_verdict_recorded")
-    assert {(item["payload"]["trace_id"], item["payload"]["verdict"]) for item in recorded} == {
+    assert {
+        (item["payload"]["trace_id"], item["payload"]["verdict"]) for item in recorded
+    } == {
         ("tr-a", "consolidate"),
         ("tr-b", "release"),
     }
@@ -435,7 +455,9 @@ def test_pulse_events_do_not_disturb_existing_projections(tmp_path):
     # intact — new event types are simply ignored by the existing builders.
     route_pulse(
         tmp_path,
-        Pulse.from_dict({"felt_sense": "x", "expectations": [{"features": {"warmth": 0.5}}]}),
+        Pulse.from_dict(
+            {"felt_sense": "x", "expectations": [{"features": {"warmth": 0.5}}]}
+        ),
     )
     reduced = reduce_runtime_events(load_runtime_events(tmp_path))
     assert reduced.cognitive_projection["active_nodes"] == []

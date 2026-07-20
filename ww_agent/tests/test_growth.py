@@ -27,7 +27,9 @@ def _resident(tmp_path: Path, *, growth: str = ""):
     (identity_dir / "SOUL.md").write_text("I am Rowan.\n", encoding="utf-8")
     (identity_dir / "IDENTITY.md").write_text("# Rowan\n", encoding="utf-8")
     if growth:
-        IdentityLoader.save_growth_soul(resident_dir, growth, metadata={"legacy_source": "older hearth"})
+        IdentityLoader.save_growth_soul(
+            resident_dir, growth, metadata={"legacy_source": "older hearth"}
+        )
     return resident_dir, IdentityLoader.load(resident_dir)
 
 
@@ -45,7 +47,14 @@ def _stage(resident_dir: Path, body: str, *, dropped: bool = False) -> str:
         gate_contradiction_check=(lambda _kind, _body: "drop") if dropped else None,
     )
     events = load_runtime_events(resident_dir / "memory")
-    return str(next(event["event_id"] for event in reversed(events) if event.get("event_type") == "self_delta_staged" and (event.get("payload") or {}).get("kind") == "soul_edit"))
+    return str(
+        next(
+            event["event_id"]
+            for event in reversed(events)
+            if event.get("event_type") == "self_delta_staged"
+            and (event.get("payload") or {}).get("kind") == "soul_edit"
+        )
+    )
 
 
 def test_growth_source_returns_one_exact_accepted_soul_edit_with_provenance(tmp_path):
@@ -68,15 +77,23 @@ def test_growth_source_returns_one_exact_accepted_soul_edit_with_provenance(tmp_
     assert "A dropped proposal" not in record["content"]
 
 
-def test_growth_adoption_requires_inspection_then_updates_live_and_durable_identity(tmp_path):
-    resident_dir, identity = _resident(tmp_path, growth="I already carry an older lesson.")
+def test_growth_adoption_requires_inspection_then_updates_live_and_durable_identity(
+    tmp_path,
+):
+    resident_dir, identity = _resident(
+        tmp_path, growth="I already carry an older lesson."
+    )
     candidate_id = _stage(resident_dir, "I make room to ask before assuming.")
 
     declined = adopt_growth_candidate(resident_dir, identity, candidate_id)
     assert declined == {"ok": False, "reason": "growth_candidate_not_inspected"}
 
     world = LocalWorld(home_dir=resident_dir, identity=identity)
-    accessed = asyncio.run(InformationAccess(ww_client=world, memory_dir=resident_dir / "memory")(Reach(kind="inspect", source="growth", query=candidate_id)))
+    accessed = asyncio.run(
+        InformationAccess(ww_client=world, memory_dir=resident_dir / "memory")(
+            Reach(kind="inspect", source="growth", query=candidate_id)
+        )
+    )
     assert accessed["accessed"] is True
 
     effector = WorldEffector(
@@ -97,11 +114,18 @@ def test_growth_adoption_requires_inspection_then_updates_live_and_durable_ident
 
     assert adopted["executed"] is True
     assert adopted["identity_growth_adopted"] is True
-    assert identity.growth_soul == ("I already carry an older lesson.\n\n" "I make room to ask before assuming.")
-    assert identity.soul == (resident_dir / "identity" / "SOUL.md").read_text(encoding="utf-8").strip()
+    assert identity.growth_soul == (
+        "I already carry an older lesson.\n\n" "I make room to ask before assuming."
+    )
+    assert (
+        identity.soul
+        == (resident_dir / "identity" / "SOUL.md").read_text(encoding="utf-8").strip()
+    )
 
     events = load_runtime_events(resident_dir / "memory")
-    adoption = next(event for event in events if event.get("event_type") == "growth_adopted")
+    adoption = next(
+        event for event in events if event.get("event_type") == "growth_adopted"
+    )
     payload = adoption["payload"]
     assert payload["candidate_id"] == candidate_id
     assert payload["body"] == "I make room to ask before assuming."
@@ -109,7 +133,9 @@ def test_growth_adoption_requires_inspection_then_updates_live_and_durable_ident
     assert payload["inspection_event_id"]
     assert len(payload["source_event_ids"]) == 2
 
-    metadata = json.loads((resident_dir / "identity" / "soul_growth.json").read_text(encoding="utf-8"))
+    metadata = json.loads(
+        (resident_dir / "identity" / "soul_growth.json").read_text(encoding="utf-8")
+    )
     assert metadata["legacy_source"] == "older hearth"
     assert metadata["adoptions"][0]["adoption_event_id"] == adoption["event_id"]
     assert metadata["adoptions"][0]["source_event_ids"] == payload["source_event_ids"]
@@ -123,7 +149,11 @@ def test_growth_adoption_replay_repairs_without_duplicate_text_or_event(tmp_path
     resident_dir, identity = _resident(tmp_path)
     candidate_id = _stage(resident_dir, "I can leave a question unanswered.")
     world = LocalWorld(home_dir=resident_dir, identity=identity)
-    asyncio.run(InformationAccess(ww_client=world, memory_dir=resident_dir / "memory")(Reach(kind="inspect", source="growth", query=candidate_id)))
+    asyncio.run(
+        InformationAccess(ww_client=world, memory_dir=resident_dir / "memory")(
+            Reach(kind="inspect", source="growth", query=candidate_id)
+        )
+    )
 
     first = adopt_growth_candidate(resident_dir, identity, candidate_id)
     second = adopt_growth_candidate(resident_dir, identity, candidate_id)
@@ -141,7 +171,11 @@ def test_restart_repairs_an_adoption_recorded_before_identity_write_completed(tm
     resident_dir, identity = _resident(tmp_path)
     candidate_id = _stage(resident_dir, "I can change course without losing myself.")
     world = LocalWorld(home_dir=resident_dir, identity=identity)
-    asyncio.run(InformationAccess(ww_client=world, memory_dir=resident_dir / "memory")(Reach(kind="inspect", source="growth", query=candidate_id)))
+    asyncio.run(
+        InformationAccess(ww_client=world, memory_dir=resident_dir / "memory")(
+            Reach(kind="inspect", source="growth", query=candidate_id)
+        )
+    )
     result = adopt_growth_candidate(resident_dir, identity, candidate_id)
     assert result["adopted"] is True
 
@@ -170,7 +204,9 @@ def test_identity_growth_tools_exist_only_on_a_live_hearth(tmp_path):
 
     class _City:
         async def post_action(self, _session_id, _action):
-            raise AssertionError("growth adoption must not fall through to a city action")
+            raise AssertionError(
+                "growth adoption must not fall through to a city action"
+            )
 
     city_effector = WorldEffector(
         ww_client=_City(),
@@ -178,7 +214,11 @@ def test_identity_growth_tools_exist_only_on_a_live_hearth(tmp_path):
         identity=identity,
         memory_dir=resident_dir / "memory",
     )
-    result = asyncio.run(city_effector(Act(kind="do", body="adopt it", target=f"growth-adopt:{candidate_id}")))
+    result = asyncio.run(
+        city_effector(
+            Act(kind="do", body="adopt it", target=f"growth-adopt:{candidate_id}")
+        )
+    )
     assert result == {
         "executed": False,
         "kind": "do",

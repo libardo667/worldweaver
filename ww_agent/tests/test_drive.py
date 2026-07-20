@@ -31,13 +31,19 @@ def test_distinct_souls_resonate_with_different_moments():
     assert rd_f["magnitude"] > rm_f["magnitude"]
     # And each surfaces its own fragment, not the other's.
     assert "engine" in rm_e["resonant"][0]["text"].lower()
-    assert "fog" in rd_f["resonant"][0]["text"].lower() or "harbor" in rd_f["resonant"][0]["text"].lower()
+    assert (
+        "fog" in rd_f["resonant"][0]["text"].lower()
+        or "harbor" in rd_f["resonant"][0]["text"].lower()
+    )
 
 
 def test_constitution_dominates_growth_and_reverie():
     # Same fragment in both the constitution and a reverie — the constitution
     # (weight 1.0) should win over the reverie (0.35).
-    dv = _build(constitution="the harbor is my whole home", reveries=["the harbor is my whole home"])
+    dv = _build(
+        constitution="the harbor is my whole home",
+        reveries=["the harbor is my whole home"],
+    )
     r = asyncio.run(dv.resonance("the harbor is my whole home"))
     assert r["resonant"][0]["slice"] == "constitution"
 
@@ -45,9 +51,21 @@ def test_constitution_dominates_growth_and_reverie():
 def test_contradiction_check_floors_on_constitution():
     dv = _build(constitution=MECHANIC)
     # An edit grounded in the core resonates → accepted (None).
-    assert asyncio.run(dv.contradiction_check("soul_edit", "I take pride in mending broken engines")) is None
+    assert (
+        asyncio.run(
+            dv.contradiction_check(
+                "soul_edit", "I take pride in mending broken engines"
+            )
+        )
+        is None
+    )
     # An edit with no footing in the constitution → tempered.
-    assert asyncio.run(dv.contradiction_check("soul_edit", "I float away on cosmic tides forever")) == "clamp"
+    assert (
+        asyncio.run(
+            dv.contradiction_check("soul_edit", "I float away on cosmic tides forever")
+        )
+        == "clamp"
+    )
 
 
 def test_empty_drive_vector_is_neutral():
@@ -60,7 +78,11 @@ def test_empty_drive_vector_is_neutral():
 
 
 def test_slices_are_embedded_and_fragmented():
-    dv = _build(constitution=MECHANIC, growth="I have learned to listen before I wrench.", reveries=["the smell of motor oil at dawn"])
+    dv = _build(
+        constitution=MECHANIC,
+        growth="I have learned to listen before I wrench.",
+        reveries=["the smell of motor oil at dawn"],
+    )
     assert len(dv.slices["constitution"]) == 2  # two sentences
     assert len(dv.slices["growth"]) == 1
     assert len(dv.slices["reverie"]) == 1

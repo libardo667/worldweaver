@@ -33,7 +33,9 @@ def _set_mode(path: Path, expected: int) -> bool:
     try:
         os.chmod(path, expected, follow_symlinks=False)
     except OSError as exc:
-        raise HearthPermissionError(f"Could not secure hearth path {path}: {exc}") from exc
+        raise HearthPermissionError(
+            f"Could not secure hearth path {path}: {exc}"
+        ) from exc
     return True
 
 
@@ -58,7 +60,9 @@ def secure_hearth_permissions(root: Path) -> HearthPermissionReport:
     symlinks_skipped = 0
     special_entries_skipped = 0
 
-    for current, directory_names, file_names in os.walk(root, topdown=True, followlinks=False):
+    for current, directory_names, file_names in os.walk(
+        root, topdown=True, followlinks=False
+    ):
         current_path = Path(current)
         retained_directories: list[str] = []
         for name in directory_names:
@@ -69,7 +73,9 @@ def secure_hearth_permissions(root: Path) -> HearthPermissionReport:
             try:
                 entry_mode = path.lstat().st_mode
             except OSError as exc:
-                raise HearthPermissionError(f"Could not inspect hearth path {path}: {exc}") from exc
+                raise HearthPermissionError(
+                    f"Could not inspect hearth path {path}: {exc}"
+                ) from exc
             if not stat.S_ISDIR(entry_mode):
                 special_entries_skipped += 1
                 continue
@@ -86,7 +92,9 @@ def secure_hearth_permissions(root: Path) -> HearthPermissionReport:
             try:
                 entry_mode = path.lstat().st_mode
             except OSError as exc:
-                raise HearthPermissionError(f"Could not inspect hearth path {path}: {exc}") from exc
+                raise HearthPermissionError(
+                    f"Could not inspect hearth path {path}: {exc}"
+                ) from exc
             if not stat.S_ISREG(entry_mode):
                 special_entries_skipped += 1
                 continue

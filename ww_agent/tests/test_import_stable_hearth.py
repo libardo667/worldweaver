@@ -100,7 +100,14 @@ def test_stable_import_keeps_a_carried_gift_archive_readable(tmp_path):
     carried.parent.mkdir(parents=True)
     carried.write_text("a carried page\n", encoding="utf-8")
     (source / "given.jsonl").write_text(
-        json.dumps({"ts": "2026-06-15T00:00:00+00:00", "file": "inbox/72-salience.md", "note": ""}) + "\n",
+        json.dumps(
+            {
+                "ts": "2026-06-15T00:00:00+00:00",
+                "file": "inbox/72-salience.md",
+                "note": "",
+            }
+        )
+        + "\n",
         encoding="utf-8",
     )
     target = tmp_path / "worldweaver" / "residents" / "maker"
@@ -110,4 +117,6 @@ def test_stable_import_keeps_a_carried_gift_archive_readable(tmp_path):
 
     hearth = json.loads((target / "hearth.json").read_text(encoding="utf-8"))
     assert hearth["gifts"] is True
-    assert (target / "workshop" / "given" / "inbox" / "72-salience.md").read_text(encoding="utf-8") == "a carried page\n"
+    assert (target / "workshop" / "given" / "inbox" / "72-salience.md").read_text(
+        encoding="utf-8"
+    ) == "a carried page\n"

@@ -43,7 +43,9 @@ def test_shared_source_registry_normalizes_provider_records():
             InformationSource(
                 name="artifact",
                 description="read one authorized artifact",
-                run=lambda query: [{"record_id": "artifact:1", "content": f"read {query}"}],
+                run=lambda query: [
+                    {"record_id": "artifact:1", "content": f"read {query}"}
+                ],
                 provenance="scoped-reading",
                 freshness="live",
                 locality="hearth",
@@ -100,7 +102,9 @@ def test_provenance_guidance_distinguishes_reading_from_knowing():
 
 
 def test_resident_recall_source_is_world_independent(tmp_path):
-    (tmp_path / "kept_memory.jsonl").write_text('{"note":"a brass hinge from yesterday"}\n', encoding="utf-8")
+    (tmp_path / "kept_memory.jsonl").write_text(
+        '{"note":"a brass hinge from yesterday"}\n', encoding="utf-8"
+    )
     registry = InformationSourceRegistry(resident_information_sources(tmp_path))
 
     result = asyncio.run(registry.read("recall", "hinge"))
@@ -154,12 +158,16 @@ def test_information_access_is_private_ledger_evidence_not_a_world_act(tmp_path)
     world = _World()
     access = InformationAccess(ww_client=world, memory_dir=tmp_path)
 
-    result = asyncio.run(access(Reach(kind="inspect", source="eats", query="North Beach")))
+    result = asyncio.run(
+        access(Reach(kind="inspect", source="eats", query="North Beach"))
+    )
 
     assert result["accessed"] is True
     assert "[eats | neighborhood_match | stable] Corner Bakery" in result["detail"]
     assert result["records"][0]["locality"] == "North Beach"
-    assert world.requests == [{"kind": "inspect", "source": "eats", "query": "North Beach"}]
+    assert world.requests == [
+        {"kind": "inspect", "source": "eats", "query": "North Beach"}
+    ]
     events = load_runtime_events(tmp_path)
     assert [event["event_type"] for event in events] == ["information_accessed"]
     receipt = events[0]["payload"]
@@ -177,7 +185,9 @@ def test_information_access_is_private_ledger_evidence_not_a_world_act(tmp_path)
     assert "Corner Bakery" not in encoded_receipt
 
 
-def test_growth_access_retains_only_the_record_id_needed_for_explicit_adoption(tmp_path):
+def test_growth_access_retains_only_the_record_id_needed_for_explicit_adoption(
+    tmp_path,
+):
     class GrowthWorld:
         async def access_information(self, *, kind: str, source: str, query: str = ""):
             return {
@@ -195,7 +205,9 @@ def test_growth_access_retains_only_the_record_id_needed_for_explicit_adoption(t
 
     access = InformationAccess(ww_client=GrowthWorld(), memory_dir=tmp_path)
 
-    result = asyncio.run(access(Reach(kind="inspect", source="growth", query="proposal-1")))
+    result = asyncio.run(
+        access(Reach(kind="inspect", source="growth", query="proposal-1"))
+    )
 
     assert result["accessed"] is True
     receipt = load_runtime_events(tmp_path)[0]["payload"]
@@ -206,12 +218,20 @@ def test_growth_access_retains_only_the_record_id_needed_for_explicit_adoption(t
     assert "private proposed identity words" not in encoded_receipt
 
 
-def test_information_access_reuses_an_equivalent_fresh_read_without_calling_world(tmp_path):
+def test_information_access_reuses_an_equivalent_fresh_read_without_calling_world(
+    tmp_path,
+):
     world = _World()
-    access = InformationAccess(ww_client=world, memory_dir=tmp_path, freshness_seconds=30)
+    access = InformationAccess(
+        ww_client=world, memory_dir=tmp_path, freshness_seconds=30
+    )
 
-    first = asyncio.run(access(Reach(kind="inspect", source="eats", query="North   Beach")))
-    second = asyncio.run(access(Reach(kind="INSPECT", source="EATS", query="north beach")))
+    first = asyncio.run(
+        access(Reach(kind="inspect", source="eats", query="North   Beach"))
+    )
+    second = asyncio.run(
+        access(Reach(kind="INSPECT", source="EATS", query="north beach"))
+    )
 
     assert first.get("deduplicated") is None
     assert second["deduplicated"] is True

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from src.familiar import visual
 
-
 _SCANNED_PDF = (
     b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
     b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"

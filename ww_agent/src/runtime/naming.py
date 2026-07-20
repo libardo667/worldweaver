@@ -13,7 +13,9 @@ _SEP_RE = re.compile(r"[\s_\-]+")
 
 
 def slugify_resident_name(name: str) -> str:
-    normalized = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    normalized = (
+        unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    )
     slug = _NON_ALNUM_RE.sub("_", normalized.strip().lower())
     slug = _MULTI_UNDERSCORE_RE.sub("_", slug).strip("_")
     if not slug:
@@ -33,7 +35,11 @@ def normalize_reference(name: str) -> str:
     co-presence / reply-edge match (so directed speech to a co-present peer lands in the room
     instead of mis-routing to the mail path) and by the offline addressing scorer.
     """
-    folded = unicodedata.normalize("NFKD", str(name or "")).encode("ascii", "ignore").decode("ascii")
+    folded = (
+        unicodedata.normalize("NFKD", str(name or ""))
+        .encode("ascii", "ignore")
+        .decode("ascii")
+    )
     return _SEP_RE.sub(" ", folded.strip().lower()).strip()
 
 

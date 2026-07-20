@@ -87,7 +87,10 @@ def _resident(tmp_path, client: _FakeCityClient) -> Resident:
 
 
 def _event_types(resident: Resident) -> list[str]:
-    return [str(event.get("event_type") or "") for event in load_runtime_events(resident._resident_dir / "memory")]
+    return [
+        str(event.get("event_type") or "")
+        for event in load_runtime_events(resident._resident_dir / "memory")
+    ]
 
 
 def test_confirmed_city_departure_enters_private_hearth_with_same_home(tmp_path):
@@ -144,7 +147,9 @@ def test_unconfirmed_departure_cannot_activate_the_hearth(tmp_path):
     resident = _resident(tmp_path, client)
     city = resident._build_city_world(resident._active_session_id())
 
-    unchanged = asyncio.run(resident._apply_travel_request(city, TravelRequest("hearth")))
+    unchanged = asyncio.run(
+        resident._apply_travel_request(city, TravelRequest("hearth"))
+    )
 
     assert unchanged is city
     assert resident._attachment_kind == "city"
@@ -201,7 +206,9 @@ def test_hearth_return_bootstraps_a_fresh_city_session_for_same_actor(
     ]
 
 
-def test_city_to_city_travel_retires_source_then_swaps_one_host_to_destination(tmp_path):
+def test_city_to_city_travel_retires_source_then_swaps_one_host_to_destination(
+    tmp_path,
+):
     source = _FakeCityClient()
     destination = _FakeCityClient(base_url="https://destination.example")
     resident = Resident(
@@ -218,13 +225,17 @@ def test_city_to_city_travel_retires_source_then_swaps_one_host_to_destination(t
     resident._session_id = "source-session"
     resident._attachment_kind = "city"
     (resident._resident_dir / "memory").mkdir(parents=True)
-    (resident._resident_dir / "session_id.txt").write_text("source-session", encoding="utf-8")
+    (resident._resident_dir / "session_id.txt").write_text(
+        "source-session", encoding="utf-8"
+    )
     city = resident._build_city_world("source-session")
 
     next_city = asyncio.run(
         resident._apply_travel_request(
             city,
-            TravelRequest("city", "rose-city-coop-1", "sf-portland", "rose-city-coop-1"),
+            TravelRequest(
+                "city", "rose-city-coop-1", "sf-portland", "rose-city-coop-1"
+            ),
         )
     )
 
@@ -236,7 +247,9 @@ def test_city_to_city_travel_retires_source_then_swaps_one_host_to_destination(t
     assert resident._attachment_kind == "city"
     assert resident._session_id == destination.arrivals[0]["session_id"]
     assert resident._identity.growth_soul == growth_before
-    assert (resident._resident_dir / "session_id.txt").read_text(encoding="utf-8") == resident._session_id
+    assert (resident._resident_dir / "session_id.txt").read_text(
+        encoding="utf-8"
+    ) == resident._session_id
     assert _event_types(resident)[-3:] == [
         "inter_shard_travel_started",
         "inter_shard_source_departed",
@@ -277,7 +290,11 @@ def test_city_to_city_travel_retries_the_same_destination_handoff(tmp_path):
         async def arrive_session_from_travel(self, **payload) -> dict:
             self.arrivals.append(payload)
             status = "session_booted" if len(self.arrivals) == 1 else "arrived"
-            return {"success": status == "arrived", "recoverable": status != "arrived", "handoff": {"status": status}}
+            return {
+                "success": status == "arrived",
+                "recoverable": status != "arrived",
+                "handoff": {"status": status},
+            }
 
     source = _FakeCityClient()
     destination = _RecoveringDestination(base_url="https://destination.example")
@@ -293,7 +310,9 @@ def test_city_to_city_travel_retries_the_same_destination_handoff(tmp_path):
     resident._session_id = "source-session"
     resident._attachment_kind = "city"
     (resident._resident_dir / "memory").mkdir(parents=True)
-    (resident._resident_dir / "session_id.txt").write_text("source-session", encoding="utf-8")
+    (resident._resident_dir / "session_id.txt").write_text(
+        "source-session", encoding="utf-8"
+    )
 
     completed = asyncio.run(
         resident._resume_inter_shard_travel(
@@ -317,7 +336,9 @@ def test_city_to_city_travel_retries_the_same_destination_handoff(tmp_path):
     ]
 
 
-def test_city_to_city_failure_before_source_retirement_keeps_local_life_running(tmp_path):
+def test_city_to_city_failure_before_source_retirement_keeps_local_life_running(
+    tmp_path,
+):
     class _UnavailableFederationClient(_FakeCityClient):
         async def depart_session_for_travel(self, **payload) -> dict:
             self.departures.append(payload)
@@ -334,7 +355,9 @@ def test_city_to_city_failure_before_source_retirement_keeps_local_life_running(
     unchanged = asyncio.run(
         resident._apply_travel_request(
             city,
-            TravelRequest("city", "rose-city-coop-1", "sf-portland", "rose-city-coop-1"),
+            TravelRequest(
+                "city", "rose-city-coop-1", "sf-portland", "rose-city-coop-1"
+            ),
         )
     )
 
@@ -345,7 +368,9 @@ def test_city_to_city_failure_before_source_retirement_keeps_local_life_running(
     assert _event_types(resident)[-1] == "inter_shard_travel_aborted"
 
 
-def test_unfinished_departed_trip_resumes_at_destination_without_rebooting_source(tmp_path):
+def test_unfinished_departed_trip_resumes_at_destination_without_rebooting_source(
+    tmp_path,
+):
     source = _FakeCityClient()
     destination = _FakeCityClient(base_url="https://destination.example")
     resident = Resident(
@@ -378,20 +403,28 @@ def test_unfinished_departed_trip_resumes_at_destination_without_rebooting_sourc
         destination_url="https://destination.example",
     )
 
-    completed = asyncio.run(resident._resume_inter_shard_travel(resident._pending_shard_travel()))
+    completed = asyncio.run(
+        resident._resume_inter_shard_travel(resident._pending_shard_travel())
+    )
 
     assert completed is True
     assert source.departures == []
-    assert destination.arrivals == [{"travel_id": "trip-resume", "session_id": "destination-session"}]
+    assert destination.arrivals == [
+        {"travel_id": "trip-resume", "session_id": "destination-session"}
+    ]
     assert resident._session_id == "destination-session"
 
 
-def test_start_restores_departed_trip_without_booting_a_second_source_session(tmp_path, monkeypatch):
+def test_start_restores_departed_trip_without_booting_a_second_source_session(
+    tmp_path, monkeypatch
+):
     source = _FakeCityClient()
     resident = Resident(tmp_path / "resident", source, llm=object())
     resident._identity = _identity()
     (resident._resident_dir / "memory").mkdir(parents=True)
-    (resident._resident_dir / "session_id.txt").write_text("stale-source-session", encoding="utf-8")
+    (resident._resident_dir / "session_id.txt").write_text(
+        "stale-source-session", encoding="utf-8"
+    )
     resident._record_transition(
         "inter_shard_travel_started",
         travel_id="trip-restart",
@@ -410,7 +443,9 @@ def test_start_restores_departed_trip_without_booting_a_second_source_session(tm
         destination_url="https://destination.example",
     )
     resident._identity = None
-    monkeypatch.setattr(resident_module.IdentityLoader, "load", lambda _path: _identity())
+    monkeypatch.setattr(
+        resident_module.IdentityLoader, "load", lambda _path: _identity()
+    )
 
     asyncio.run(resident.start("source-world"))
 
@@ -498,7 +533,9 @@ def test_fresh_single_resident_can_start_at_hearth_without_city_bootstrap(
 ):
     client = _FakeCityClient()
     resident = Resident(tmp_path / "resident", client, llm=object())
-    monkeypatch.setattr(resident_module.IdentityLoader, "load", lambda _path: _identity())
+    monkeypatch.setattr(
+        resident_module.IdentityLoader, "load", lambda _path: _identity()
+    )
 
     asyncio.run(resident.start("", default_attachment="hearth"))
 

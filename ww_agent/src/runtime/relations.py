@@ -27,7 +27,9 @@ def chat_utterance_id(location: str, transport_id: Any) -> str:
     return f"chat:{channel}:{message_id}" if channel and message_id else ""
 
 
-def normalize_actor_refs(items: Iterable[Mapping[str, Any]] | None) -> list[dict[str, str]]:
+def normalize_actor_refs(
+    items: Iterable[Mapping[str, Any]] | None,
+) -> list[dict[str, str]]:
     """Return one deterministic reference per actor/session without inventing IDs."""
     refs: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
@@ -53,7 +55,13 @@ def relational_event_fields(
     """Build the common, versioned envelope used by relational ledger events."""
     own_actor_id = _text(actor_id)
     refs = normalize_actor_refs(co_present)
-    co_present_ids = sorted({_text(ref.get("actor_id")) for ref in refs if _text(ref.get("actor_id")) and _text(ref.get("actor_id")) != own_actor_id})
+    co_present_ids = sorted(
+        {
+            _text(ref.get("actor_id"))
+            for ref in refs
+            if _text(ref.get("actor_id")) and _text(ref.get("actor_id")) != own_actor_id
+        }
+    )
     return {
         "edge_schema_version": RELATIONAL_EVENT_SCHEMA_VERSION,
         "actor_id": own_actor_id,
@@ -97,6 +105,7 @@ def utterance_perceived_fields(
         "speaker_actor_id": _text(payload.get("actor_id")),
         "speaker_session_id": _text(payload.get("session_id")),
         "speaker_name": _text(payload.get("speaker")),
-        "channel": _text(payload.get("channel")) or ("city" if packet_type == "city_chat_heard" else "local"),
+        "channel": _text(payload.get("channel"))
+        or ("city" if packet_type == "city_chat_heard" else "local"),
         "is_direct": bool(payload.get("is_direct")),
     }

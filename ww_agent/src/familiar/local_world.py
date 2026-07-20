@@ -41,7 +41,9 @@ from src.runtime.information import (
 from src.runtime.travel import TravelRequest, parse_world_travel
 from src.world.client import WorldAffordance
 
-_READ_RX = re.compile(r"^\s*(?:read|open|look(?:\s+at)?|cat|show|view)\s+(.+)$", re.IGNORECASE)
+_READ_RX = re.compile(
+    r"^\s*(?:read|open|look(?:\s+at)?|cat|show|view)\s+(.+)$", re.IGNORECASE
+)
 _READ_PAGE_RX = re.compile(r"\bp(?:age|g)?\.?\s+(\d+)\b", re.IGNORECASE)
 _READ_PAGE_BYTES = 12_000
 
@@ -50,7 +52,11 @@ def _safe_gift_path(value: Any) -> str:
     """Return one safe resident-owned path below ``workshop/given``."""
     raw = str(value or "").strip().replace("\\", "/")
     path = PurePosixPath(raw)
-    if not raw or path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
+    if (
+        not raw
+        or path.is_absolute()
+        or any(part in {"", ".", ".."} for part in path.parts)
+    ):
         return ""
     return path.as_posix()
 
@@ -65,9 +71,13 @@ def _normalize_read_path(raw: str, roots: list) -> str:
     ("skein/identity/SOUL.md" vs the architecture-bundle's own identity/), so it is kept and
     resolved by FileScope itself."""
     p = str(raw or "").strip().strip("\"'`").lstrip("/")
-    p = re.sub(r"^roots\s*[:/]+\s*", "", p, flags=re.IGNORECASE)  # a leading "roots:" / "roots/" label
+    p = re.sub(
+        r"^roots\s*[:/]+\s*", "", p, flags=re.IGNORECASE
+    )  # a leading "roots:" / "roots/" label
     if len(roots) == 1:
-        for r in roots:  # a leading root-directory-name prefix, e.g. "architecture-bundle/"
+        for (
+            r
+        ) in roots:  # a leading root-directory-name prefix, e.g. "architecture-bundle/"
             pre = f"{getattr(r, 'name', '')}/"
             if pre != "/" and p.startswith(pre):
                 p = p[len(pre) :]
@@ -113,7 +123,9 @@ class _Event:
 
 
 class _Chat:
-    def __init__(self, session_id: str, display_name: str, message: str, ts: str) -> None:
+    def __init__(
+        self, session_id: str, display_name: str, message: str, ts: str
+    ) -> None:
         self.id, self.session_id, self.display_name, self.message, self.ts = (
             1,
             session_id,
@@ -186,7 +198,11 @@ class LocalWorld:
 
             self._given_dir.mkdir(parents=True, exist_ok=True)
             self._gift_scope = FileScope(read_roots=[self._given_dir])
-        self._city_names = {str(name).strip().lower() for name in (city_names or set()) if str(name).strip()}
+        self._city_names = {
+            str(name).strip().lower()
+            for name in (city_names or set())
+            if str(name).strip()
+        }
         self._identity = identity
         self._pending_travel: TravelRequest | None = None
         self._reads: list[dict[str, Any]] = []
@@ -209,7 +225,10 @@ class LocalWorld:
 
     def situational_facts(self) -> dict[str, Any]:
         """Standing facts supplied by this private, one-resident world."""
-        roots = [str(getattr(root, "name", "") or "").strip() for root in (self._file_scope.roots if self._file_scope is not None else [])]
+        roots = [
+            str(getattr(root, "name", "") or "").strip()
+            for root in (self._file_scope.roots if self._file_scope is not None else [])
+        ]
         facts: dict[str, Any] = {
             "solo": True,
             "place": self.place,
@@ -228,7 +247,10 @@ class LocalWorld:
             facts["keeper"] = self.keeper_name
         if self._city_names:
             destinations = ", ".join(sorted(self._city_names))
-            facts["travel"] = f"move to {destinations} to enter the shared city; " "this private home remains yours"
+            facts["travel"] = (
+                f"move to {destinations} to enter the shared city; "
+                "this private home remains yours"
+            )
         return facts
 
     # --- time ------------------------------------------------------------
@@ -346,8 +368,13 @@ class LocalWorld:
             sources.append(
                 InformationSource(
                     name="growth",
-                    description=("inspect one of your own pending identity proposals before deciding whether " "to adopt it; query blank for the latest or use an exact proposal event ID"),
-                    run=lambda arg: read_growth_candidate(self.home_dir / "memory", arg),
+                    description=(
+                        "inspect one of your own pending identity proposals before deciding whether "
+                        "to adopt it; query blank for the latest or use an exact proposal event ID"
+                    ),
+                    run=lambda arg: read_growth_candidate(
+                        self.home_dir / "memory", arg
+                    ),
                     provenance=PROVENANCE_SELF_MEMORY,
                     freshness="remembered",
                     locality="self",
@@ -374,7 +401,13 @@ class LocalWorld:
         root_names = [getattr(root, "name", "") for root in self._file_scope.roots]
         if len(root_names) > 1:
             # Keep every root represented so one newly shared root is not crowded out.
-            top = [entry for root_name in root_names for entry in [item for item in sample if item.split("/", 1)[0] == root_name][:7]]
+            top = [
+                entry
+                for root_name in root_names
+                for entry in [
+                    item for item in sample if item.split("/", 1)[0] == root_name
+                ][:7]
+            ]
         else:
             top = sample[:14]
         example = next(
@@ -439,17 +472,32 @@ class LocalWorld:
                         "title": filename,
                         "content": delivery["note"] or "No accompanying note.",
                         "observed_at": delivery["ts"],
-                        "metadata": {"available": (self._given_dir / filename).is_file()},
+                        "metadata": {
+                            "available": (self._given_dir / filename).is_file()
+                        },
                     }
                 )
             return {"ok": True, "selection_mode": "recent", "records": records}
 
-        filename = _safe_gift_path(raw_query[6:] if raw_query.lower().startswith("given/") else raw_query)
+        filename = _safe_gift_path(
+            raw_query[6:] if raw_query.lower().startswith("given/") else raw_query
+        )
         if not filename:
             return {"ok": False, "reason": "gift_not_found", "records": []}
-        delivery = next((item for item in reversed(deliveries) if item["file"].lower() == filename.lower()), None)
+        delivery = next(
+            (
+                item
+                for item in reversed(deliveries)
+                if item["file"].lower() == filename.lower()
+            ),
+            None,
+        )
         if delivery is None and "/" not in filename:
-            basename_matches = [item for item in deliveries if PurePosixPath(item["file"]).name.lower() == filename.lower()]
+            basename_matches = [
+                item
+                for item in deliveries
+                if PurePosixPath(item["file"]).name.lower() == filename.lower()
+            ]
             if len(basename_matches) == 1:
                 delivery = basename_matches[0]
         if delivery is None or self._gift_scope is None:
@@ -460,8 +508,18 @@ class LocalWorld:
         if media.get("ok"):
             from . import visual
 
-            seen = visual.to_perception(delivery["file"], media["data"], want_images=self._vision)
-            body = "\n\n".join(part for part in (delivery["note"], str(seen.get("note") or ""), str(seen.get("text") or "")) if part)
+            seen = visual.to_perception(
+                delivery["file"], media["data"], want_images=self._vision
+            )
+            body = "\n\n".join(
+                part
+                for part in (
+                    delivery["note"],
+                    str(seen.get("note") or ""),
+                    str(seen.get("text") or ""),
+                )
+                if part
+            )
             images = list(seen.get("images") or [])
             metadata = {
                 "kind": str(seen.get("kind") or ""),
@@ -470,8 +528,18 @@ class LocalWorld:
         else:
             text = self._gift_scope.read(delivery["file"], max_bytes=_READ_PAGE_BYTES)
             if not text.get("ok"):
-                return {"ok": False, "reason": str(text.get("reason") or media.get("reason") or "unreadable"), "records": []}
-            body = "\n\n".join(part for part in (delivery["note"], str(text.get("content") or "")) if part)
+                return {
+                    "ok": False,
+                    "reason": str(
+                        text.get("reason") or media.get("reason") or "unreadable"
+                    ),
+                    "records": [],
+                }
+            body = "\n\n".join(
+                part
+                for part in (delivery["note"], str(text.get("content") or ""))
+                if part
+            )
             metadata = {
                 "kind": "text",
                 "bytes_total": int(text.get("bytes_total") or 0),
@@ -501,7 +569,9 @@ class LocalWorld:
             return f"{self.familiar_name}, {text}"
         return text
 
-    async def get_location_chat(self, location: str, since: Any = None, session_id: str | None = None) -> list[_Chat]:
+    async def get_location_chat(
+        self, location: str, since: Any = None, session_id: str | None = None
+    ) -> list[_Chat]:
         if location == "__city__":
             return []
         return [
@@ -577,7 +647,9 @@ class LocalWorld:
             )
         match = _READ_RX.match(body)
         if match is not None and self._file_scope is not None:
-            return _ActionResult("Reading is a private information reach, not a physical action. Reach source 'files' instead.")
+            return _ActionResult(
+                "Reading is a private information reach, not a physical action. Reach source 'files' instead."
+            )
         self._record_voice("do", body)
         return _ActionResult(f"You {body}.")
 
@@ -587,7 +659,9 @@ class LocalWorld:
         self._pending_travel = None
         return pending
 
-    async def access_information(self, *, kind: str, source: str, query: str = "") -> dict[str, Any]:
+    async def access_information(
+        self, *, kind: str, source: str, query: str = ""
+    ) -> dict[str, Any]:
         """Resolve a hearth source privately inside the current ignition."""
         return await self.information_sources().read(source, query)
 
@@ -688,7 +762,11 @@ class LocalWorld:
                 }
             )
             self._reads = self._reads[-6:]
-            page_note = f"page {current_page} of {page_count}; " + (f"query '{result['path']} page {current_page + 1}' for the next part" if more else "this is the end of the file")
+            page_note = f"page {current_page} of {page_count}; " + (
+                f"query '{result['path']} page {current_page + 1}' for the next part"
+                if more
+                else "this is the end of the file"
+            )
             return {
                 "ok": True,
                 "selection_mode": "exact_path",
@@ -710,7 +788,10 @@ class LocalWorld:
         if result.get("reason") == "not_a_file":
             listing = self._file_scope.listdir(path)
             if listing.get("ok"):
-                names = [(entry["name"] + "/" if entry["is_dir"] else entry["name"]) for entry in listing["entries"]]
+                names = [
+                    (entry["name"] + "/" if entry["is_dir"] else entry["name"])
+                    for entry in listing["entries"]
+                ]
                 content = ", ".join(names[:80])
                 self._reads.append(
                     {

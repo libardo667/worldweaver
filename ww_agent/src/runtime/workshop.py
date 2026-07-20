@@ -76,7 +76,9 @@ class Workshop:
             return None
         return path
 
-    def append(self, body: str, *, artifact: str = _DEFAULT_ARTIFACT, title: str = "") -> dict[str, Any]:
+    def append(
+        self, body: str, *, artifact: str = _DEFAULT_ARTIFACT, title: str = ""
+    ) -> dict[str, Any]:
         """Append a titled, dated entry to an artifact the resident owns."""
         text = str(body or "").strip()
         if not text:
@@ -105,7 +107,12 @@ class Workshop:
         if not content.startswith("<svg"):
             return {"written": False, "reason": "not_svg"}
         self._root.mkdir(parents=True, exist_ok=True)
-        stem = re.sub(r"[^a-z0-9_-]+", "-", str(base or "weave").strip().lower()).strip("-.") or "weave"
+        stem = (
+            re.sub(r"[^a-z0-9_-]+", "-", str(base or "weave").strip().lower()).strip(
+                "-."
+            )
+            or "weave"
+        )
         idx = 0
         for existing in self._root.glob(f"{stem}-*.svg"):
             match = _SERIES_INDEX.search(existing.stem)
@@ -116,7 +123,11 @@ class Workshop:
         if path is None:
             return {"written": False, "reason": "outside_workspace"}
         path.write_text(content[:20000], encoding="utf-8")
-        title = _SVG_TITLE.search(content).group(1).strip() if _SVG_TITLE.search(content) else ""
+        title = (
+            _SVG_TITLE.search(content).group(1).strip()
+            if _SVG_TITLE.search(content)
+            else ""
+        )
         return {"written": True, "artifact": name, "title": title, "ts": _utc_now_iso()}
 
     def drawings(self, *, limit: int = 6) -> list[dict[str, Any]]:
@@ -126,13 +137,22 @@ class Workshop:
         if not self._root.exists():
             return []
         out: list[dict[str, Any]] = []
-        for path in sorted(self._root.glob("*.svg"), key=lambda p: p.stat().st_mtime)[-max(1, limit) :]:
+        for path in sorted(self._root.glob("*.svg"), key=lambda p: p.stat().st_mtime)[
+            -max(1, limit) :
+        ]:
             try:
                 svg = path.read_text(encoding="utf-8")
             except OSError:
                 continue
             title = _SVG_TITLE.search(svg)
-            out.append({"artifact": path.name, "title": title.group(1).strip() if title else "", "svg": svg[:20000], "ts": _mtime_iso(path)})
+            out.append(
+                {
+                    "artifact": path.name,
+                    "title": title.group(1).strip() if title else "",
+                    "svg": svg[:20000],
+                    "ts": _mtime_iso(path),
+                }
+            )
         return out
 
     def summary(self) -> list[dict[str, Any]]:
@@ -165,7 +185,9 @@ class Workshop:
         # markup (the prompt stays cheap; the portrait reads full SVG via drawings()).
         if self._root.exists():
             series: dict[str, list[Path]] = {}
-            for path in sorted(self._root.glob("*.svg"), key=lambda p: p.stat().st_mtime):
+            for path in sorted(
+                self._root.glob("*.svg"), key=lambda p: p.stat().st_mtime
+            ):
                 stem = _SERIES_INDEX.sub("", path.stem)
                 series.setdefault(stem, []).append(path)
             for stem, files in series.items():
@@ -188,7 +210,9 @@ class Workshop:
                 )
         return out
 
-    def recent(self, n: int = 3, *, artifact: str = _DEFAULT_ARTIFACT) -> list[dict[str, Any]]:
+    def recent(
+        self, n: int = 3, *, artifact: str = _DEFAULT_ARTIFACT
+    ) -> list[dict[str, Any]]:
         """The resident's most recent entries, so it can continue its own work."""
         path = self._resolve(artifact)
         if path is None or not path.exists():

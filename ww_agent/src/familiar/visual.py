@@ -38,7 +38,12 @@ def kind_of(name: str, data: bytes = b"") -> str | None:
         return "pdf"
     if ext in _IMAGE_MIME:
         return "image"
-    if data[:8] == b"\x89PNG\r\n\x1a\n" or data[:3] == b"\xff\xd8\xff" or data[:6] in (b"GIF87a", b"GIF89a") or (data[:4] == b"RIFF" and data[8:12] == b"WEBP"):
+    if (
+        data[:8] == b"\x89PNG\r\n\x1a\n"
+        or data[:3] == b"\xff\xd8\xff"
+        or data[:6] in (b"GIF87a", b"GIF89a")
+        or (data[:4] == b"RIFF" and data[8:12] == b"WEBP")
+    ):
         return "image"
     return None
 
@@ -60,10 +65,14 @@ def _image_mime(name: str, data: bytes) -> str:
 
 def image_data_url(name: str, data: bytes) -> str:
     """Return an OpenAI-compatible data URL for one image."""
-    return f"data:{_image_mime(name, data)};base64," + base64.b64encode(data).decode("ascii")
+    return f"data:{_image_mime(name, data)};base64," + base64.b64encode(data).decode(
+        "ascii"
+    )
 
 
-def _png_encode(width: int, height: int, channels: int, raw: bytes, src_stride: int) -> bytes:
+def _png_encode(
+    width: int, height: int, channels: int, raw: bytes, src_stride: int
+) -> bytes:
     """Encode RGB/RGBA rows as PNG without adding Pillow or NumPy."""
     color_type = 6 if channels == 4 else 2
     row_len = width * channels
@@ -75,11 +84,21 @@ def _png_encode(width: int, height: int, channels: int, raw: bytes, src_stride: 
 
     def chunk(tag: bytes, payload: bytes) -> bytes:
         checksum = zlib.crc32(tag + payload) & 0xFFFFFFFF
-        return struct.pack(">I", len(payload)) + tag + payload + struct.pack(">I", checksum)
+        return (
+            struct.pack(">I", len(payload))
+            + tag
+            + payload
+            + struct.pack(">I", checksum)
+        )
 
     signature = b"\x89PNG\r\n\x1a\n"
     header = struct.pack(">IIBBBBB", width, height, 8, color_type, 0, 0, 0)
-    return signature + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(bytes(scan), 6)) + chunk(b"IEND", b"")
+    return (
+        signature
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", zlib.compress(bytes(scan), 6))
+        + chunk(b"IEND", b"")
+    )
 
 
 def _render_page_png(page: Any) -> bytes:
@@ -155,7 +174,9 @@ def to_perception(name: str, data: bytes, *, want_images: bool) -> dict[str, Any
             if perception["rendered"]:
                 scan_note = f"{perception['scanned']} scanned, {perception['rendered']} shown as images"
             elif not want_images:
-                scan_note = f"{perception['scanned']} scanned, which this resident cannot see"
+                scan_note = (
+                    f"{perception['scanned']} scanned, which this resident cannot see"
+                )
             else:
                 scan_note = f"{perception['scanned']} scanned"
             details.append(scan_note)

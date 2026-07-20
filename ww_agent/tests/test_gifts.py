@@ -46,8 +46,12 @@ def test_gifts_are_elective_records_not_ambient_scene_narration(tmp_path):
     )
 
     scene = asyncio.run(world.get_scene("resident-hearth"))
-    listing = asyncio.run(world.access_information(kind="inspect", source="gifts", query=""))
-    opened = asyncio.run(world.access_information(kind="read", source="gifts", query="picture.png"))
+    listing = asyncio.run(
+        world.access_information(kind="inspect", source="gifts", query="")
+    )
+    opened = asyncio.run(
+        world.access_information(kind="read", source="gifts", query="picture.png")
+    )
 
     assert scene.present == []
     assert scene.recent_events_here == []
@@ -64,7 +68,9 @@ def test_gifts_source_does_not_exist_without_an_explicit_grant(tmp_path):
     _deliver(home, "note.txt", b"hello")
 
     scene = asyncio.run(world.get_scene("resident-hearth"))
-    result = asyncio.run(world.access_information(kind="read", source="gifts", query="note.txt"))
+    result = asyncio.run(
+        world.access_information(kind="read", source="gifts", query="note.txt")
+    )
 
     assert "gifts" not in [affordance.name for affordance in scene.affordances]
     assert result["ok"] is False
@@ -76,9 +82,17 @@ def test_gifts_reopen_safe_nested_paths_from_a_carried_inbox(tmp_path):
     world = LocalWorld(home_dir=home, keeper_name="", gifts_enabled=True)
     _deliver(home, "inbox/72-salience.md", b"the carried page")
 
-    listing = asyncio.run(world.access_information(kind="inspect", source="gifts", query=""))
-    opened = asyncio.run(world.access_information(kind="read", source="gifts", query="given/inbox/72-salience.md"))
-    reopened_by_unique_name = asyncio.run(world.access_information(kind="read", source="gifts", query="72-salience.md"))
+    listing = asyncio.run(
+        world.access_information(kind="inspect", source="gifts", query="")
+    )
+    opened = asyncio.run(
+        world.access_information(
+            kind="read", source="gifts", query="given/inbox/72-salience.md"
+        )
+    )
+    reopened_by_unique_name = asyncio.run(
+        world.access_information(kind="read", source="gifts", query="72-salience.md")
+    )
 
     assert listing["records"][0]["title"] == "inbox/72-salience.md"
     assert opened["ok"] is True
@@ -92,10 +106,23 @@ def test_gifts_reject_a_nested_path_that_could_escape_the_archive(tmp_path):
     world = LocalWorld(home_dir=home, keeper_name="", gifts_enabled=True)
     _deliver(home, "note.txt", b"safe")
     with (home / "given.jsonl").open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps({"ts": datetime.now().astimezone().isoformat(), "file": "../outside.txt", "note": ""}) + "\n")
+        handle.write(
+            json.dumps(
+                {
+                    "ts": datetime.now().astimezone().isoformat(),
+                    "file": "../outside.txt",
+                    "note": "",
+                }
+            )
+            + "\n"
+        )
 
-    listing = asyncio.run(world.access_information(kind="inspect", source="gifts", query=""))
-    escaped = asyncio.run(world.access_information(kind="read", source="gifts", query="../outside.txt"))
+    listing = asyncio.run(
+        world.access_information(kind="inspect", source="gifts", query="")
+    )
+    escaped = asyncio.run(
+        world.access_information(kind="read", source="gifts", query="../outside.txt")
+    )
 
     assert [record["title"] for record in listing["records"]] == ["note.txt"]
     assert escaped["ok"] is False
@@ -130,7 +157,9 @@ def test_give_command_stores_a_file_for_an_enabled_resident(tmp_path):
     )
 
     assert completed.returncode == 0, completed.stderr
-    assert (home / "workshop" / "given" / "letter.txt").read_text(encoding="utf-8") == "hello from outside"
+    assert (home / "workshop" / "given" / "letter.txt").read_text(
+        encoding="utf-8"
+    ) == "hello from outside"
     notice = json.loads((home / "given.jsonl").read_text(encoding="utf-8").strip())
     assert notice["file"] == "letter.txt"
     assert notice["note"] == "for later"

@@ -50,7 +50,13 @@ class _DummyWorldClient:
         )
         return {"ok": True}
 
-    async def post_location_chat(self, location: str, session_id: str, message: str, display_name: str | None = None):
+    async def post_location_chat(
+        self,
+        location: str,
+        session_id: str,
+        message: str,
+        display_name: str | None = None,
+    ):
         self.location_chats.append((location, session_id, message, display_name))
         return {"id": 1, "ts": "2026-03-18T00:00:00+00:00"}
 
@@ -139,7 +145,11 @@ def _without_updated_at(doc: dict) -> dict:
 def _queue_research(memory_dir, query, priority="normal", source=""):
     """Append a research_queued ledger event directly (the ledger is the only state;
     the loop-era ResearchQueue writer wrapper was removed in Major 83)."""
-    append_runtime_event(memory_dir, event_type="research_queued", payload={"query": query, "priority": priority, "source": source})
+    append_runtime_event(
+        memory_dir,
+        event_type="research_queued",
+        payload={"query": query, "priority": priority, "source": source},
+    )
     write_runtime_snapshot(memory_dir)
 
 
@@ -181,18 +191,37 @@ def test_signal_queues_write_runtime_snapshot(tmp_path):
         priority=0.7,
         payload={"utterance": "Hello."},
     )
-    intent_queue.mark_status(intent.intent_id, status="failed", validation_state="invalid_payload")
-    _queue_research(memory_dir, "Clement Street farmers market hours", priority="high", source="fast_ground_intent")
+    intent_queue.mark_status(
+        intent.intent_id, status="failed", validation_state="invalid_payload"
+    )
+    _queue_research(
+        memory_dir,
+        "Clement Street farmers market hours",
+        priority="high",
+        source="fast_ground_intent",
+    )
 
-    snapshot = json.loads((memory_dir / "runtime_snapshot.json").read_text(encoding="utf-8"))
-    projection = json.loads((memory_dir / "runtime_projection.json").read_text(encoding="utf-8"))
-    ledger_lines = (memory_dir / "runtime_ledger.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    snapshot = json.loads(
+        (memory_dir / "runtime_snapshot.json").read_text(encoding="utf-8")
+    )
+    projection = json.loads(
+        (memory_dir / "runtime_projection.json").read_text(encoding="utf-8")
+    )
+    ledger_lines = (
+        (memory_dir / "runtime_ledger.jsonl")
+        .read_text(encoding="utf-8")
+        .strip()
+        .splitlines()
+    )
     assert snapshot["packet_counts"]["total"] == 1
     assert snapshot["packet_counts"]["observed"] == 1
     assert snapshot["intent_counts"]["failed"] == 1
     assert snapshot["research_queue"]["total"] == 1
     assert snapshot["research_queue"]["high"] == 1
-    assert snapshot["research_queue"]["pending_items"][0]["query"] == "Clement Street farmers market hours"
+    assert (
+        snapshot["research_queue"]["pending_items"][0]["query"]
+        == "Clement Street farmers market hours"
+    )
     assert projection["ledger_event_count"] >= 4
     assert projection["event_counts"]["packet_emitted"] == 1
     assert projection["event_counts"]["intent_staged"] == 1
@@ -203,7 +232,9 @@ def test_signal_queues_write_runtime_snapshot(tmp_path):
     assert snapshot["lineage"][0]["source_packet_ids"] == [packet.packet_id]
 
 
-def test_signal_queues_rehydrate_from_ledger_when_projection_files_are_missing(tmp_path):
+def test_signal_queues_rehydrate_from_ledger_when_projection_files_are_missing(
+    tmp_path,
+):
     resident_dir = tmp_path / "sun_li"
     memory_dir = resident_dir / "memory"
     packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
@@ -224,7 +255,9 @@ def test_signal_queues_rehydrate_from_ledger_when_projection_files_are_missing(t
         payload={"utterance": "Coming."},
     )
     packet_queue.mark_status(packet.packet_id, "observed")
-    intent_queue.mark_status(intent.intent_id, status="executed", validation_state="validated")
+    intent_queue.mark_status(
+        intent.intent_id, status="executed", validation_state="validated"
+    )
 
     # Phase 0 made the queues pure ledger views — the json shadows may not exist.
     (memory_dir / "stimulus_packets.json").unlink(missing_ok=True)
@@ -241,12 +274,22 @@ def test_signal_queues_rehydrate_from_ledger_when_projection_files_are_missing(t
 def test_runtime_snapshot_rehydrates_research_queue_from_ledger(tmp_path):
     resident_dir = tmp_path / "sun_li"
     memory_dir = resident_dir / "memory"
-    _queue_research(memory_dir, "ASL organizations in Chinatown", priority="high", source="fast_ground_intent")
+    _queue_research(
+        memory_dir,
+        "ASL organizations in Chinatown",
+        priority="high",
+        source="fast_ground_intent",
+    )
 
     write_runtime_snapshot(memory_dir)
-    snapshot = json.loads((memory_dir / "runtime_snapshot.json").read_text(encoding="utf-8"))
+    snapshot = json.loads(
+        (memory_dir / "runtime_snapshot.json").read_text(encoding="utf-8")
+    )
     assert snapshot["research_queue"]["total"] == 1
-    assert snapshot["research_queue"]["pending_items"][0]["query"] == "ASL organizations in Chinatown"
+    assert (
+        snapshot["research_queue"]["pending_items"][0]["query"]
+        == "ASL organizations in Chinatown"
+    )
     assert snapshot["research_queue"]["pending_items"][0]["priority"] == "high"
 
 
@@ -262,7 +305,9 @@ def test_runtime_reducer_matches_ledger_history(tmp_path):
         location="Chinatown",
         payload={"speaker": "Levi", "message": "Tea's ready."},
     )
-    _queue_research(memory_dir, "Chinatown tea houses", priority="normal", source="slow_reflection")
+    _queue_research(
+        memory_dir, "Chinatown tea houses", priority="normal", source="slow_reflection"
+    )
 
     events = load_runtime_events(memory_dir)
     reduced = reduce_runtime_events(events)
@@ -270,7 +315,10 @@ def test_runtime_reducer_matches_ledger_history(tmp_path):
     assert len(events) == reduced.runtime_projection["ledger_event_count"]
     assert reduced.packets[0]["packet_type"] == "chat_heard"
     assert reduced.research_queue[0]["query"] == "Chinatown tea houses"
-    predicates = {(fact["predicate"], fact["object"]) for fact in reduced.subjective_facts["facts"]}
+    predicates = {
+        (fact["predicate"], fact["object"])
+        for fact in reduced.subjective_facts["facts"]
+    }
     assert ("engaged_with", "Levi") in predicates
     assert ("curious_about", "Chinatown tea houses") in predicates
 
@@ -291,8 +339,15 @@ def test_relationship_projection_requires_prompt_delivery_and_exact_reply_edge()
             }
         ]
     )
-    assert packet_only.subjective_projection["relationship_projection"]["relationships"] == []
-    assert not [fact for fact in packet_only.subjective_facts["facts"] if fact.get("source") == "relationship_projection_v1"]
+    assert (
+        packet_only.subjective_projection["relationship_projection"]["relationships"]
+        == []
+    )
+    assert not [
+        fact
+        for fact in packet_only.subjective_facts["facts"]
+        if fact.get("source") == "relationship_projection_v1"
+    ]
 
     reduced = reduce_runtime_events(
         [
@@ -325,14 +380,20 @@ def test_relationship_projection_requires_prompt_delivery_and_exact_reply_edge()
         ]
     )
 
-    relationship = reduced.subjective_projection["relationship_projection"]["relationships"][0]
+    relationship = reduced.subjective_projection["relationship_projection"][
+        "relationships"
+    ][0]
     assert relationship["counterpart_actor_id"] == "actor-bea"
     assert relationship["counterpart_name"] == "Bea"
     assert relationship["state"] == "replied"
     assert relationship["revision"] == 2
     assert relationship["evidence_event_ids"] == ["evt-perceived", "evt-replied"]
 
-    claim = next(fact for fact in reduced.subjective_facts["facts"] if fact.get("claim_id") == relationship["claim_id"])
+    claim = next(
+        fact
+        for fact in reduced.subjective_facts["facts"]
+        if fact.get("claim_id") == relationship["claim_id"]
+    )
     assert claim == {
         "claim_id": "claim:relationship:actor-bea:current_exchange",
         "status": "active",
@@ -386,12 +447,18 @@ def test_later_perception_supersedes_current_relationship_claim():
         ]
     )
 
-    relationship = reduced.subjective_projection["relationship_projection"]["relationships"][0]
+    relationship = reduced.subjective_projection["relationship_projection"][
+        "relationships"
+    ][0]
     assert relationship["state"] == "perceived"
     assert relationship["revision"] == 3
     assert relationship["supersedes_revision"] == 2
     assert relationship["evidence_event_ids"] == ["evt-perceived-second"]
-    claim = next(fact for fact in reduced.subjective_facts["facts"] if fact.get("claim_id") == relationship["claim_id"])
+    claim = next(
+        fact
+        for fact in reduced.subjective_facts["facts"]
+        if fact.get("claim_id") == relationship["claim_id"]
+    )
     assert claim["predicate"] == "has_perceived_utterance_from"
     assert claim["revision"] == 3
     assert claim["supersedes_revision"] == 2
@@ -421,7 +488,10 @@ def test_dialogue_state_derives_open_questions_and_reply_pressure(tmp_path):
     assert dialogue_state["active_partner"] == "Levi"
     assert dialogue_state["direct_urgency"] == 1.0
     assert dialogue_state["open_questions"][0]["speaker"] == "Levi"
-    predicates = {(fact["predicate"], fact["object"]) for fact in reduced.subjective_facts["facts"]}
+    predicates = {
+        (fact["predicate"], fact["object"])
+        for fact in reduced.subjective_facts["facts"]
+    }
     assert ("owes_reply_to", "Levi") in predicates
 
 
@@ -450,11 +520,16 @@ def test_dialogue_state_ignores_overheard_unaddressed_question(tmp_path):
     assert dialogue_state["active_partner"] == ""
     assert dialogue_state["direct_urgency"] == 0.0
     assert dialogue_state["open_questions"] == []
-    predicates = {(fact["predicate"], fact["object"]) for fact in reduced.subjective_facts["facts"]}
+    predicates = {
+        (fact["predicate"], fact["object"])
+        for fact in reduced.subjective_facts["facts"]
+    }
     assert ("owes_reply_to", "Fei Fei") not in predicates
 
 
-def test_subjective_projection_tracks_mail_pressure_and_city_context_separately(tmp_path):
+def test_subjective_projection_tracks_mail_pressure_and_city_context_separately(
+    tmp_path,
+):
     resident_dir = tmp_path / "sun_li"
     memory_dir = resident_dir / "memory"
     packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
@@ -491,7 +566,9 @@ def test_subjective_projection_tracks_mail_pressure_and_city_context_separately(
     assert "city_signal" not in concern_kinds
 
 
-def test_subjective_projection_promotes_tagged_city_signal_without_fake_partner(tmp_path):
+def test_subjective_projection_promotes_tagged_city_signal_without_fake_partner(
+    tmp_path,
+):
     resident_dir = tmp_path / "sun_li"
     memory_dir = resident_dir / "memory"
     packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
@@ -554,7 +631,9 @@ def test_dialogue_state_does_not_promote_overheard_threads_to_active_partner(tmp
     )
 
     reduced = reduce_runtime_events(load_runtime_events(memory_dir))
-    assert reduced.subjective_projection["active_social_threads"][0]["name"] == "Fei Fei"
+    assert (
+        reduced.subjective_projection["active_social_threads"][0]["name"] == "Fei Fei"
+    )
     assert reduced.subjective_projection["dialogue_state"]["active_partner"] == ""
 
 
@@ -568,7 +647,11 @@ def test_subjective_projection_tracks_state_pressure_from_session_observation(tm
                 "payload": {
                     "signals": [
                         {"kind": "fatigue", "label": "low energy", "level": 0.8},
-                        {"kind": "tension", "label": "heightened tension", "level": 0.7},
+                        {
+                            "kind": "tension",
+                            "label": "heightened tension",
+                            "level": 0.7,
+                        },
                     ],
                     "raw": {"energy": 0.2, "danger_level": 2.0},
                     "context": {"time_of_day": "night", "weather": "rainy"},
@@ -578,7 +661,10 @@ def test_subjective_projection_tracks_state_pressure_from_session_observation(tm
     )
     pressure = reduced.subjective_projection["state_pressure"]
     assert pressure["signals"][0]["kind"] == "fatigue"
-    predicates = {(fact["predicate"], fact["object"]) for fact in reduced.subjective_facts["facts"]}
+    predicates = {
+        (fact["predicate"], fact["object"])
+        for fact in reduced.subjective_facts["facts"]
+    }
     assert ("pressed_by", "low energy") in predicates
 
 
@@ -590,7 +676,9 @@ def test_subjective_projection_merges_ambient_pressure_from_grounding(tmp_path):
                 "ts": "2026-03-18T03:10:00+00:00",
                 "event_type": "session_state_observed",
                 "payload": {
-                    "signals": [{"kind": "fatigue", "label": "low energy", "level": 0.8}],
+                    "signals": [
+                        {"kind": "fatigue", "label": "low energy", "level": 0.8}
+                    ],
                     "raw": {"energy": 0.2},
                     "context": {"time_of_day": "night"},
                 },
@@ -601,8 +689,16 @@ def test_subjective_projection_merges_ambient_pressure_from_grounding(tmp_path):
                 "event_type": "ambient_pressure_observed",
                 "payload": {
                     "signals": [
-                        {"kind": "bad_weather", "label": "rain pressing against the day", "level": 0.72},
-                        {"kind": "quiet", "label": "the neighborhood feels unusually quiet", "level": 0.7},
+                        {
+                            "kind": "bad_weather",
+                            "label": "rain pressing against the day",
+                            "level": 0.72,
+                        },
+                        {
+                            "kind": "quiet",
+                            "label": "the neighborhood feels unusually quiet",
+                            "level": 0.7,
+                        },
                     ],
                     "raw": {"current_present": 1, "vitality_score": 0.9},
                     "context": {
@@ -618,11 +714,16 @@ def test_subjective_projection_merges_ambient_pressure_from_grounding(tmp_path):
     kinds = {item["kind"] for item in pressure["signals"]}
     assert {"fatigue", "bad_weather", "quiet"} <= kinds
     assert pressure["context"]["neighborhood"] == "Inner Richmond"
-    predicates = {(fact["predicate"], fact["object"]) for fact in reduced.subjective_facts["facts"]}
+    predicates = {
+        (fact["predicate"], fact["object"])
+        for fact in reduced.subjective_facts["facts"]
+    }
     assert ("pressed_by", "rain pressing against the day") in predicates
 
 
-def test_subjective_projection_replaces_stale_ambient_pressure_when_scene_changes(tmp_path):
+def test_subjective_projection_replaces_stale_ambient_pressure_when_scene_changes(
+    tmp_path,
+):
     reduced = reduce_runtime_events(
         [
             {
@@ -632,11 +733,24 @@ def test_subjective_projection_replaces_stale_ambient_pressure_when_scene_change
                 "payload": {
                     "source": "ambient",
                     "signals": [
-                        {"kind": "quiet", "label": "the neighborhood feels unusually quiet", "level": 0.72, "source": "time_of_day_routine"},
-                        {"kind": "place_character", "label": "Jordan Park keeps a domestic rhythm", "level": 0.6, "source": "neighborhood"},
+                        {
+                            "kind": "quiet",
+                            "label": "the neighborhood feels unusually quiet",
+                            "level": 0.72,
+                            "source": "time_of_day_routine",
+                        },
+                        {
+                            "kind": "place_character",
+                            "label": "Jordan Park keeps a domestic rhythm",
+                            "level": 0.6,
+                            "source": "neighborhood",
+                        },
                     ],
                     "raw": {"current_present": 1, "recent_event_count": 1},
-                    "context": {"location": "Jordan Park", "neighborhood": "Jordan Park"},
+                    "context": {
+                        "location": "Jordan Park",
+                        "neighborhood": "Jordan Park",
+                    },
                 },
             },
             {
@@ -646,9 +760,24 @@ def test_subjective_projection_replaces_stale_ambient_pressure_when_scene_change
                 "payload": {
                     "source": "ambient",
                     "signals": [
-                        {"kind": "crowding", "label": "the neighborhood feels unusually busy", "level": 0.92, "source": "co_presence"},
-                        {"kind": "event_pull", "label": "there is a live current running through nearby streets", "level": 0.9, "source": "local_world_events"},
-                        {"kind": "place_character", "label": "Fillmore's storefronts set the pace", "level": 0.6, "source": "neighborhood"},
+                        {
+                            "kind": "crowding",
+                            "label": "the neighborhood feels unusually busy",
+                            "level": 0.92,
+                            "source": "co_presence",
+                        },
+                        {
+                            "kind": "event_pull",
+                            "label": "there is a live current running through nearby streets",
+                            "level": 0.9,
+                            "source": "local_world_events",
+                        },
+                        {
+                            "kind": "place_character",
+                            "label": "Fillmore's storefronts set the pace",
+                            "level": 0.6,
+                            "source": "neighborhood",
+                        },
                     ],
                     "raw": {"current_present": 7, "recent_event_count": 10},
                     "context": {"location": "Fillmore", "neighborhood": "Fillmore"},

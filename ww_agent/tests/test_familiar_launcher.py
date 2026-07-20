@@ -50,7 +50,17 @@ def test_familiar_command_runs_one_shared_resident_host_at_the_hearth(tmp_path):
     assert "through the shared resident host" in completed.stdout
     assert "the quiet room" in completed.stdout
     assert (home / "state.json").exists()
-    events = [json.loads(line) for line in (home / "memory" / "runtime_ledger.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
-    attachment = next(event for event in events if event.get("event_type") == "world_attachment_changed")
+    events = [
+        json.loads(line)
+        for line in (home / "memory" / "runtime_ledger.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip()
+    ]
+    attachment = next(
+        event
+        for event in events
+        if event.get("event_type") == "world_attachment_changed"
+    )
     assert attachment["payload"]["to_world"] == "hearth"
     assert not (home / "session_id.txt").exists()

@@ -35,7 +35,9 @@ from src.runtime.world import WorldWeaverClient
 logger = logging.getLogger(__name__)
 
 _AMBIENT_KINDS = {"crowding", "quiet", "event_pull", "bad_weather", "place_character"}
-_REQUEST_PATTERN = re.compile(r"\b(can|could|would|will|please|help|let's|meet|bring|send|tell|show|give)\b")
+_REQUEST_PATTERN = re.compile(
+    r"\b(can|could|would|will|please|help|let's|meet|bring|send|tell|show|give)\b"
+)
 
 # Real-world weather → vigilance pressure. Substring match against the grounding
 # weather string; the strongest match wins.
@@ -67,9 +69,17 @@ def _reachable_destinations(location: str, location_graph: Any) -> list[str]:
     navigation actually land."""
     if not isinstance(location_graph, dict) or not str(location).strip():
         return []
-    names_by_key = {str(n.get("key") or "").strip(): str(n.get("name") or "").strip() for n in location_graph.get("nodes") or [] if isinstance(n, dict)}
+    names_by_key = {
+        str(n.get("key") or "").strip(): str(n.get("name") or "").strip()
+        for n in location_graph.get("nodes") or []
+        if isinstance(n, dict)
+    }
     current = next(
-        (key for key, name in names_by_key.items() if name.lower() == str(location).strip().lower()),
+        (
+            key
+            for key, name in names_by_key.items()
+            if name.lower() == str(location).strip().lower()
+        ),
         f"location:{str(location).strip().lower()}",
     )
     dest_keys: set[str] = set()
@@ -82,7 +92,10 @@ def _reachable_destinations(location: str, location_graph: Any) -> list[str]:
             dest_keys.add(to)
         elif to == current and frm:
             dest_keys.add(frm)
-    names = [names_by_key.get(key) or key.replace("location:", "").strip().title() for key in dest_keys]
+    names = [
+        names_by_key.get(key) or key.replace("location:", "").strip().title()
+        for key in dest_keys
+    ]
     return sorted({name for name in names if name})
 
 
@@ -105,7 +118,9 @@ def _identity_name_variants(identity: ResidentIdentity) -> set[str]:
     return {v for v in variants if v}
 
 
-def _classify_dialogue(body: str, *, channel: str, name_variants: set[str]) -> dict[str, Any]:
+def _classify_dialogue(
+    body: str, *, channel: str, name_variants: set[str]
+) -> dict[str, Any]:
     """Compact dialogue flags: is this addressed to me, a question, a request?"""
     text = str(body or "").strip()
     normalized = re.sub(r"\s+", " ", text.lower())
@@ -118,7 +133,9 @@ def _classify_dialogue(body: str, *, channel: str, name_variants: set[str]) -> d
             "tagged": False,
             "channel": channel,
         }
-    addressed = any(re.search(rf"\b{re.escape(name)}\b", normalized) for name in name_variants)
+    addressed = any(
+        re.search(rf"\b{re.escape(name)}\b", normalized) for name in name_variants
+    )
     tagged = any(f"@{name}" in normalized for name in name_variants)
     direct = addressed or tagged
     if channel == "local":
@@ -159,7 +176,10 @@ def _heard_from_packet(packet: Any) -> dict[str, Any]:
         "message": str(payload.get("message") or ""),
         "is_direct": bool(payload.get("is_direct")),
         "is_question": bool(payload.get("is_question")),
-        "channel": str(payload.get("channel") or ("city" if packet.packet_type == "city_chat_heard" else "local")),
+        "channel": str(
+            payload.get("channel")
+            or ("city" if packet.packet_type == "city_chat_heard" else "local")
+        ),
         **({"overheard": True} if payload.get("overheard") else {}),
     }
 
@@ -201,19 +221,37 @@ def _pending_heard(
     packet_type: str,
     location: str | None = None,
 ) -> list[dict[str, Any]]:
-    pending = [packet for packet in packets.pending() if packet.packet_type == packet_type and _has_prompt_delivery_lifecycle(packet)]
+    pending = [
+        packet
+        for packet in packets.pending()
+        if packet.packet_type == packet_type and _has_prompt_delivery_lifecycle(packet)
+    ]
     if location is not None:
-        pending = [packet for packet in pending if str(packet.location or "") == location]
+        pending = [
+            packet for packet in pending if str(packet.location or "") == location
+        ]
     return [_heard_from_packet(packet) for packet in pending]
 
 
-def _sense_world_traces(*, scene: Any, location: str, packets: StimulusPacketQueue) -> list[dict[str, Any]]:
+def _sense_world_traces(
+    *, scene: Any, location: str, packets: StimulusPacketQueue
+) -> list[dict[str, Any]]:
     """Admit at most one unseen local mark into consume-on-prompt perception."""
-    pending = [packet for packet in packets.pending() if packet.packet_type == "world_trace_encountered" and _has_prompt_delivery_lifecycle(packet) and str(packet.location or "") == location]
+    pending = [
+        packet
+        for packet in packets.pending()
+        if packet.packet_type == "world_trace_encountered"
+        and _has_prompt_delivery_lifecycle(packet)
+        and str(packet.location or "") == location
+    ]
     if pending:
         return [_trace_from_packet(pending[0])]
 
-    known = {str(packet.dedupe_key or "") for packet in packets.all() if packet.packet_type == "world_trace_encountered"}
+    known = {
+        str(packet.dedupe_key or "")
+        for packet in packets.all()
+        if packet.packet_type == "world_trace_encountered"
+    }
     for trace in list(getattr(scene, "traces_here", []) or []):
         trace_id = str(getattr(trace, "trace_id", "") or "").strip()
         body = str(getattr(trace, "body", "") or "").strip()
@@ -267,7 +305,9 @@ async def _sense_chat(
     if not chat_location:
         return []
     try:
-        messages = await ww_client.get_location_chat(chat_location, session_id=session_id)
+        messages = await ww_client.get_location_chat(
+            chat_location, session_id=session_id
+        )
     except Exception as exc:
         logger.debug("[perceive] %s chat fetch failed: %s", channel, exc)
         messages = []
@@ -286,11 +326,17 @@ async def _sense_chat(
             continue
         body = str(message.message or "").strip()
         ts = str(message.ts or "").strip()
-        mid = str(getattr(message, "id", "") or "")  # Major 66: stable utterance id (reply-edge identity)
+        mid = str(
+            getattr(message, "id", "") or ""
+        )  # Major 66: stable utterance id (reply-edge identity)
         if not body:
             continue
         flags = _classify_dialogue(body, channel=channel, name_variants=name_variants)
-        source_id = chat_utterance_id(chat_location, mid) if mid else f"chat:{chat_location}:{ts}:{message.session_id}"
+        source_id = (
+            chat_utterance_id(chat_location, mid)
+            if mid
+            else f"chat:{chat_location}:{ts}:{message.session_id}"
+        )
         packets.emit_once(
             packet_type=packet_type,
             source_loop="perceive",
@@ -369,7 +415,9 @@ async def _sense_grounding(
         return {}
 
     time_of_day = str(grounding.get("time_of_day") or "").strip().lower()
-    weather = str(grounding.get("weather_description") or grounding.get("weather") or "").strip()
+    weather = str(
+        grounding.get("weather_description") or grounding.get("weather") or ""
+    ).strip()
     weather_low = weather.lower()
     bad_weather = 0.0
     for token, level in _ADVERSE_WEATHER.items():
@@ -458,12 +506,16 @@ async def perceive(
     try:
         scene = await ww_client.get_scene(session_id)
     except Exception as exc:
-        logger.debug("[%s:perceive] scene fetch failed: %s", self_name or session_id, exc)
+        logger.debug(
+            "[%s:perceive] scene fetch failed: %s", self_name or session_id, exc
+        )
         return {}
 
     display_name = identity.display_name if identity is not None else self_name
     self_lower = str(display_name or self_name or "").strip().lower()
-    others = [p for p in scene.present if str(p.name or "").strip().lower() != self_lower]
+    others = [
+        p for p in scene.present if str(p.name or "").strip().lower() != self_lower
+    ]
     co_present = [
         {
             "actor_id": str(getattr(person, "actor_id", "") or ""),
@@ -475,12 +527,18 @@ async def perceive(
     # Speech already arrives through chat with stable message identity. The engine
     # also records each utterance in the world-event log; admitting both surfaces
     # repeats the same words as two apparently independent facts in one prompt.
-    recent_events = [event for event in list(scene.recent_events_here or []) if str(getattr(event, "event_type", "") or "") != _UTTERANCE_EVENT_TYPE]
+    recent_events = [
+        event
+        for event in list(scene.recent_events_here or [])
+        if str(getattr(event, "event_type", "") or "") != _UTTERANCE_EVENT_TYPE
+    ]
     location = str(scene.location or "").strip()
     trace_encounters: list[dict[str, Any]] = []
     if identity is not None:
         trace_packets = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
-        trace_encounters = _sense_world_traces(scene=scene, location=location, packets=trace_packets)
+        trace_encounters = _sense_world_traces(
+            scene=scene, location=location, packets=trace_packets
+        )
 
     # --- real-world grounding (time + weather + circadian) ---
     grounding = await _sense_grounding(
@@ -543,8 +601,14 @@ async def perceive(
                 "kind": kind,
                 "label": str(getattr(ambient, "label", "") or kind).strip(),
                 "level": round(_clamp01(getattr(ambient, "intensity", 0.0) or 0.0), 3),
-                "source": str(getattr(ambient, "source", "") or "scene_synthesis").strip(),
-                "pressure_tags": [str(tag).strip() for tag in list(getattr(ambient, "pressure_tags", []) or []) if str(tag).strip()],
+                "source": str(
+                    getattr(ambient, "source", "") or "scene_synthesis"
+                ).strip(),
+                "pressure_tags": [
+                    str(tag).strip()
+                    for tag in list(getattr(ambient, "pressure_tags", []) or [])
+                    if str(tag).strip()
+                ],
                 "sensory_note": str(getattr(ambient, "sensory_note", "") or "").strip(),
             }
         )
@@ -583,11 +647,15 @@ async def perceive(
             self_actor_id=str(identity.actor_id or "").strip(),
             channel="local",
         )
-        mail_count = await _sense_mail(ww_client=ww_client, agent_name=identity.name, packets=packets)
+        mail_count = await _sense_mail(
+            ww_client=ww_client, agent_name=identity.name, packets=packets
+        )
 
     return {
         "location": location,
-        "present": [str(p.name or "").strip() for p in others if str(p.name or "").strip()],
+        "present": [
+            str(p.name or "").strip() for p in others if str(p.name or "").strip()
+        ],
         "co_present": co_present,
         "recent_events": [
             {
@@ -609,15 +677,23 @@ async def perceive(
                 "source_id": str(getattr(item, "source_id", "") or ""),
                 "name": str(getattr(item, "name", "") or ""),
                 "description": str(getattr(item, "description", "") or ""),
-                "provenance": str(getattr(item, "provenance", "local-knowledge") or "local-knowledge"),
+                "provenance": str(
+                    getattr(item, "provenance", "local-knowledge") or "local-knowledge"
+                ),
                 "freshness": str(getattr(item, "freshness", "unknown") or "unknown"),
                 "locality": str(getattr(item, "locality", "unknown") or "unknown"),
                 "visibility": str(getattr(item, "visibility", "private") or "private"),
-                "selection_mode": str(getattr(item, "selection_mode", "query") or "query"),
+                "selection_mode": str(
+                    getattr(item, "selection_mode", "query") or "query"
+                ),
             }
             for item in list(getattr(scene, "affordances", []) or [])
             if str(getattr(item, "name", "") or "").strip()
         ],
-        "wakefulness": float(grounding.get("wakefulness") if grounding.get("wakefulness") is not None else 1.0),
+        "wakefulness": float(
+            grounding.get("wakefulness")
+            if grounding.get("wakefulness") is not None
+            else 1.0
+        ),
         "reachable": _reachable_destinations(location, scene.location_graph),
     }

@@ -55,7 +55,9 @@ def _attachment_kind(world: Any) -> str:
     return world.__class__.__name__.lower() or "unknown"
 
 
-def _record_tick(stats: dict[str, Any], world: Any, result: dict[str, Any], tick: int) -> dict[str, Any]:
+def _record_tick(
+    stats: dict[str, Any], world: Any, result: dict[str, Any], tick: int
+) -> dict[str, Any]:
     attachment = _attachment_kind(world)
     act_result = result.get("act_executed")
     act_executed = _did_execute(act_result)
@@ -73,19 +75,41 @@ def _record_tick(stats: dict[str, Any], world: Any, result: dict[str, Any], tick
     stats["information_requests"] += information_requests
     stats["information_reads"] += information_reads
     stats["duplicate_reads_avoided"] += duplicates_avoided
-    stats["read_budget_exhaustions"] += int(bool(pulse_metrics.get("read_budget_exhausted")))
+    stats["read_budget_exhaustions"] += int(
+        bool(pulse_metrics.get("read_budget_exhausted"))
+    )
     stats["pulse_model_calls"] += int(pulse_metrics.get("model_calls") or 0)
     stats["pulse_elapsed_ms"] += float(pulse_metrics.get("elapsed_ms") or 0.0)
     stats["acts_executed"] += int(act_executed)
     stats["resting_ticks"] += int(bool(result.get("resting")))
     venture_gate = result.get("venture_gate") or {}
     venture_gate_reason = str(venture_gate.get("reason") or "unreported")
-    stats["venture_gate_reasons"][venture_gate_reason] = stats["venture_gate_reasons"].get(venture_gate_reason, 0) + 1
-    stats["ticks_by_attachment"][attachment] = stats["ticks_by_attachment"].get(attachment, 0) + 1
+    stats["venture_gate_reasons"][venture_gate_reason] = (
+        stats["venture_gate_reasons"].get(venture_gate_reason, 0) + 1
+    )
+    stats["ticks_by_attachment"][attachment] = (
+        stats["ticks_by_attachment"].get(attachment, 0) + 1
+    )
     if act_executed:
-        stats["actions_by_attachment"][attachment] = stats["actions_by_attachment"].get(attachment, 0) + 1
-        stats["action_kinds"][act_kind or "unknown"] = stats["action_kinds"].get(act_kind or "unknown", 0) + 1
-    mode = "ignition" if result.get("ignited") else "venture" if result.get("venture") else "fervor" if result.get("fervor") else "settling" if result.get("settled") else "quiet"
+        stats["actions_by_attachment"][attachment] = (
+            stats["actions_by_attachment"].get(attachment, 0) + 1
+        )
+        stats["action_kinds"][act_kind or "unknown"] = (
+            stats["action_kinds"].get(act_kind or "unknown", 0) + 1
+        )
+    mode = (
+        "ignition"
+        if result.get("ignited")
+        else (
+            "venture"
+            if result.get("venture")
+            else (
+                "fervor"
+                if result.get("fervor")
+                else "settling" if result.get("settled") else "quiet"
+            )
+        )
+    )
     return {
         "event": "resident_tick",
         "tick": tick,
@@ -117,23 +141,33 @@ def _parse_duration(value: str) -> float:
     try:
         seconds = float(number) * units[suffix]
     except ValueError as exc:
-        raise argparse.ArgumentTypeError("duration must look like 30s, 15m, or 1h") from exc
+        raise argparse.ArgumentTypeError(
+            "duration must look like 30s, 15m, or 1h"
+        ) from exc
     if not 0 < seconds <= 7200:
-        raise argparse.ArgumentTypeError("duration must be greater than zero and at most 2h")
+        raise argparse.ArgumentTypeError(
+            "duration must be greater than zero and at most 2h"
+        )
     return seconds
 
 
 def inspect_resident_home(home: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Read one home and report whether it is safe to hand to the live runner."""
     checks: list[dict[str, Any]] = []
-    checks.append(_check("resident_home", home.is_dir(), "exists" if home.is_dir() else "missing"))
+    checks.append(
+        _check("resident_home", home.is_dir(), "exists" if home.is_dir() else "missing")
+    )
     soul = home / "identity" / "SOUL.md"
     resident_id = home / "identity" / "resident_id.txt"
     checks.append(
         _check(
             "identity",
             soul.is_file() and resident_id.is_file(),
-            ("required identity files present" if soul.is_file() and resident_id.is_file() else "identity/SOUL.md or identity/resident_id.txt is missing"),
+            (
+                "required identity files present"
+                if soul.is_file() and resident_id.is_file()
+                else "identity/SOUL.md or identity/resident_id.txt is missing"
+            ),
         )
     )
     if not home.is_dir():
@@ -141,7 +175,11 @@ def inspect_resident_home(home: Path) -> tuple[list[dict[str, Any]], dict[str, A
     try:
         inventory = inventory_hearth(home)
         inventory_report = inventory.to_dict()
-        checks.append(_check("portable_inventory", not inventory.blocked, inventory_report["status"]))
+        checks.append(
+            _check(
+                "portable_inventory", not inventory.blocked, inventory_report["status"]
+            )
+        )
     except (OSError, ValueError) as exc:
         inventory_report = {"status": "invalid", "error": str(exc)}
         checks.append(_check("portable_inventory", False, str(exc)))
@@ -197,7 +235,10 @@ def _inactive_tuning_fields(home: Path) -> list[str]:
     for section in ("wander", "ground", "mail", "rest"):
         if section in raw:
             inactive.append(section)
-    for section, active_keys in (("fast", {"model", "temperature"}), ("slow", {"model"})):
+    for section, active_keys in (
+        ("fast", {"model", "temperature"}),
+        ("slow", {"model"}),
+    ):
         values = raw.get(section)
         if not isinstance(values, dict):
             continue
@@ -210,7 +251,9 @@ def _embedding_available(url: str, model: str, key: str) -> bool:
         return False
     request = urllib.request.Request(
         url.rstrip("/") + "/embeddings",
-        data=json.dumps({"model": model, "input": ["WorldWeaver preflight"]}).encode("utf-8"),
+        data=json.dumps({"model": model, "input": ["WorldWeaver preflight"]}).encode(
+            "utf-8"
+        ),
         headers={
             "Content-Type": "application/json",
             "Authorization": f"Bearer {key or 'ollama'}",
@@ -223,7 +266,11 @@ def _embedding_available(url: str, model: str, key: str) -> bool:
     except Exception:
         return False
     data = payload.get("data") if isinstance(payload, dict) else None
-    vector = data[0].get("embedding") if isinstance(data, list) and data and isinstance(data[0], dict) else None
+    vector = (
+        data[0].get("embedding")
+        if isinstance(data, list) and data and isinstance(data[0], dict)
+        else None
+    )
     return isinstance(vector, list) and bool(vector)
 
 
@@ -234,11 +281,15 @@ def _inference_checks(
     key_present = bool(str(os.environ.get("WW_INFERENCE_KEY") or "").strip())
     inference_url = str(os.environ.get("WW_INFERENCE_URL") or "").strip()
     default_model = str(os.environ.get("WW_INFERENCE_MODEL") or "").strip()
-    inference_model = str(model_override or "").strip() or _effective_model(home, default_model)
+    inference_model = str(model_override or "").strip() or _effective_model(
+        home, default_model
+    )
     embedding_url = str(os.environ.get("WW_EMBEDDING_URL") or "").strip()
     embedding_model = str(os.environ.get("WW_EMBEDDING_MODEL") or "").strip()
     embedding_key = str(os.environ.get("WW_EMBEDDING_KEY") or "ollama").strip()
-    embedding_available = _embedding_available(embedding_url, embedding_model, embedding_key)
+    embedding_available = _embedding_available(
+        embedding_url, embedding_model, embedding_key
+    )
 
     def safe_endpoint(value: str) -> str:
         if not value:
@@ -250,7 +301,9 @@ def _inference_checks(
         return urllib.parse.urlunsplit((parts.scheme, hostname, "", "", ""))
 
     return [
-        _check("inference_key", key_present, "configured" if key_present else "missing"),
+        _check(
+            "inference_key", key_present, "configured" if key_present else "missing"
+        ),
         _check("inference_endpoint", bool(inference_url), safe_endpoint(inference_url)),
         _check("inference_model", bool(inference_model), inference_model or "missing"),
         _check(
@@ -262,7 +315,12 @@ def _inference_checks(
         _check(
             "prompt_trace",
             True,
-            ("enabled for this diagnostic run" if str(os.environ.get("WW_PROMPT_TRACE", "0")).strip().lower() in {"1", "true", "yes", "on"} else "disabled (normal private default)"),
+            (
+                "enabled for this diagnostic run"
+                if str(os.environ.get("WW_PROMPT_TRACE", "0")).strip().lower()
+                in {"1", "true", "yes", "on"}
+                else "disabled (normal private default)"
+            ),
         ),
     ]
 
@@ -277,7 +335,11 @@ async def _run(args: argparse.Namespace) -> int:
         _check(
             "tuning_compatibility",
             True,
-            ("ignored loop-era fields: " + ", ".join(inactive_tuning) if inactive_tuning else "no inactive loop-era fields"),
+            (
+                "ignored loop-era fields: " + ", ".join(inactive_tuning)
+                if inactive_tuning
+                else "no inactive loop-era fields"
+            ),
         )
     )
 
@@ -386,9 +448,15 @@ async def _run(args: argparse.Namespace) -> int:
                         "resident": resident.name,
                         "ticks": args.ticks,
                         "duration_seconds": args.duration,
-                        "cadence": ("natural" if args.duration is not None else f"{args.pause}s"),
+                        "cadence": (
+                            "natural" if args.duration is not None else f"{args.pause}s"
+                        ),
                         "model": effective_model,
-                        "temperature": (args.temperature if args.temperature is not None else ("model_default" if args.model else "resident_tuning")),
+                        "temperature": (
+                            args.temperature
+                            if args.temperature is not None
+                            else ("model_default" if args.model else "resident_tuning")
+                        ),
                         "action_tendency": bool(args.action_tendency),
                         "requested_reach_continuations": args.reach_continuations,
                     },
@@ -403,19 +471,25 @@ async def _run(args: argparse.Namespace) -> int:
                 park_at_hearth_on_stop=True,
             )
             elapsed = time.monotonic() - started_at
-            pulse_attempts = stats["ignitions"] + stats["settling_pulses"] + stats["fervor_pulses"]
+            pulse_attempts = (
+                stats["ignitions"] + stats["settling_pulses"] + stats["fervor_pulses"]
+            )
             print(
                 json.dumps(
                     {
                         "event": "resident_run_summary",
                         "resident": resident.name,
                         "model": effective_model,
-                        "stop_condition": ("duration" if args.duration is not None else "ticks"),
+                        "stop_condition": (
+                            "duration" if args.duration is not None else "ticks"
+                        ),
                         "requested_duration_seconds": args.duration,
                         "requested_ticks": args.ticks,
                         "elapsed_seconds": round(elapsed, 3),
                         "pulse_attempts": pulse_attempts,
-                        "unrouted_pulse_attempts": max(0, pulse_attempts - stats["pulses_routed"]),
+                        "unrouted_pulse_attempts": max(
+                            0, pulse_attempts - stats["pulses_routed"]
+                        ),
                         **stats,
                         "inference_calls": llm.total_calls,
                         "prompt_tokens": llm.total_prompt_tokens,
@@ -478,14 +552,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--action-tendency",
         action="store_true",
-        help=("for this run only, let sustained restless fervor become a venture " "toward a reachable place"),
+        help=(
+            "for this run only, let sustained restless fervor become a venture "
+            "toward a reachable place"
+        ),
     )
     parser.add_argument(
         "--reach-continuations",
         type=int,
         choices=range(0, 9),
         metavar="0-8",
-        help=("requested reads per active pulse; the host's WW_REACH_CONTINUATION_MAX may lower it"),
+        help=(
+            "requested reads per active pulse; the host's WW_REACH_CONTINUATION_MAX may lower it"
+        ),
     )
     parser.add_argument(
         "--trace-prompts",
@@ -503,7 +582,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.ticks is None and args.duration is None:
         args.ticks = 3
     if args.duration is not None and args.pause is not None:
-        parser.error("--duration uses the resident's natural cadence; do not pass --pause")
+        parser.error(
+            "--duration uses the resident's natural cadence; do not pass --pause"
+        )
     if args.duration is None and args.pause is None:
         args.pause = 0.5
     if args.duration is not None:

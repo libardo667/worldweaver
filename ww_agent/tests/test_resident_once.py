@@ -25,7 +25,9 @@ def _home(tmp_path, *, activate: bool):
     home = tmp_path / "only_resident"
     (home / "identity").mkdir(parents=True)
     (home / "identity" / "resident_id.txt").write_text("actor-only\n", encoding="utf-8")
-    (home / "identity" / "SOUL.md").write_text("# Synthetic resident\n", encoding="utf-8")
+    (home / "identity" / "SOUL.md").write_text(
+        "# Synthetic resident\n", encoding="utf-8"
+    )
     initialize_hearth_manifest(home)
     if activate:
         initialize_hearth_activation(home)
@@ -65,7 +67,9 @@ def test_home_preflight_refuses_a_busy_resident(tmp_path):
 
 def test_effective_model_prefers_resident_tuning(tmp_path):
     home = _home(tmp_path, activate=False)
-    (home / "identity" / "tuning.json").write_text('{"fast":{"model":"resident/model"}}\n', encoding="utf-8")
+    (home / "identity" / "tuning.json").write_text(
+        '{"fast":{"model":"resident/model"}}\n', encoding="utf-8"
+    )
 
     assert _effective_model(home, "shard/default") == "resident/model"
 

@@ -64,7 +64,9 @@ def _city_facts() -> dict:
 def test_city_facts_are_registered_and_built():
     facts = _city_facts()
     # never an unregistered key (the runtime drift-catcher's static half)
-    assert unregistered_fact_keys(facts) == [], f"CityWorld reports unregistered key(s): {unregistered_fact_keys(facts)}"
+    assert (
+        unregistered_fact_keys(facts) == []
+    ), f"CityWorld reports unregistered key(s): {unregistered_fact_keys(facts)}"
     # the built citizen affordances are reported
     for built in (
         "human_wake",
@@ -77,7 +79,9 @@ def test_city_facts_are_registered_and_built():
         "suspendable",
         "runs_on_model",
     ):
-        assert facts.get(built) is True, f"city resident should report built fact {built!r}"
+        assert (
+            facts.get(built) is True
+        ), f"city resident should report built fact {built!r}"
     # Every resident has a hearth, but dynamic/per-tick, keeper-only, and VISION facts stay out.
     assert "hearth" in str(facts.get("travel") or "").lower()
     for not_standing in (
@@ -91,7 +95,9 @@ def test_city_facts_are_registered_and_built():
         "writes_only_workshop",
         "egress",
     ):
-        assert not_standing not in facts, f"{not_standing!r} must not be a standing situational fact"
+        assert (
+            not_standing not in facts
+        ), f"{not_standing!r} must not be a standing situational fact"
 
 
 def test_city_briefing_states_facts_and_withholds_verdicts():
@@ -100,7 +106,9 @@ def test_city_briefing_states_facts_and_withholds_verdicts():
     assert "afterimage" in city  # human_wake
     assert "seen by whoever is present" in city  # world_legible (public seam)
     assert "is not read by anyone" in city  # inner_private (private seam)
-    assert "you cannot be overheard thinking" in city  # private_making_space (the crossing rule)
+    assert (
+        "you cannot be overheard thinking" in city
+    )  # private_making_space (the crossing rule)
     assert "you can move through the world" in city  # mobile
     assert "send word to someone who isn't here" in city  # mail
     assert "private hearth" in city  # travel home
@@ -114,7 +122,9 @@ def test_city_briefing_states_facts_and_withholds_verdicts():
         "you can read these",
         "and nowhere else",
     ]:
-        assert hearth_line not in city, f"city briefing leaked a hearth line: {hearth_line!r}"
+        assert (
+            hearth_line not in city
+        ), f"city briefing leaked a hearth line: {hearth_line!r}"
     # no verdicts
     for verdict in _FORBIDDEN_VERDICTS:
         assert verdict not in city, f"city briefing smuggled a verdict: {verdict!r}"
@@ -164,18 +174,26 @@ def test_briefing_fact_registry_triangle():
     keys, an unregistered key is flagged (never silently rendered), and the Protocol docstring lists
     exactly the registry. Adding an affordance fails until all three align."""
     sample = {k: True for k in BRIEFING_FACT_KEYS}
-    sample.update({"place": "X", "keeper": "X", "read_roots": ["x"], "travel": "to the hearth."})
+    sample.update(
+        {"place": "X", "keeper": "X", "read_roots": ["x"], "travel": "to the hearth."}
+    )
     # 1. renderer renders a line for every registered key set alone
     for k in BRIEFING_FACT_KEYS:
-        assert render_situational_briefing({k: sample[k]}).strip(), f"renderer renders nothing for registered key {k!r}"
+        assert render_situational_briefing(
+            {k: sample[k]}
+        ).strip(), f"renderer renders nothing for registered key {k!r}"
     # 2. an unregistered key is flagged and never silently rendered
-    assert unregistered_fact_keys({"made_up_affordance": True}) == ["made_up_affordance"]
+    assert unregistered_fact_keys({"made_up_affordance": True}) == [
+        "made_up_affordance"
+    ]
     assert render_situational_briefing({"made_up_affordance": True}) == ""
     # 3. the Protocol docstring (src/runtime/world.py) lists exactly the registry
     import src.runtime.world as world_mod
 
     documented = set(re.findall(r"^\s*#   (\w+):", inspect.getsource(world_mod), re.M))
-    assert documented == set(BRIEFING_FACT_KEYS), f"world.py doc vs registry mismatch: {documented ^ set(BRIEFING_FACT_KEYS)}"
+    assert documented == set(
+        BRIEFING_FACT_KEYS
+    ), f"world.py doc vs registry mismatch: {documented ^ set(BRIEFING_FACT_KEYS)}"
 
 
 def test_false_world_context_constant_is_gone():

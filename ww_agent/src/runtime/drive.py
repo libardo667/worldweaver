@@ -119,21 +119,30 @@ class DeterministicEmbedder:
 class RemoteEmbedder:
     """Embeddings from any OpenAI-compatible ``/v1/embeddings`` endpoint."""
 
-    def __init__(self, *, base_url: str, api_key: str, model: str, timeout: float = 30.0) -> None:
+    def __init__(
+        self, *, base_url: str, api_key: str, model: str, timeout: float = 30.0
+    ) -> None:
         self._model = model
         self._client = httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
             timeout=httpx.Timeout(timeout),
         )
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
-        resp = await self._client.post("/embeddings", json={"model": self._model, "input": list(texts)})
+        resp = await self._client.post(
+            "/embeddings", json={"model": self._model, "input": list(texts)}
+        )
         resp.raise_for_status()
         data = resp.json().get("data") or []
-        return [_l2norm([float(x) for x in (item.get("embedding") or [])]) for item in data]
+        return [
+            _l2norm([float(x) for x in (item.get("embedding") or [])]) for item in data
+        ]
 
     async def close(self) -> None:
         await self._client.aclose()
@@ -157,7 +166,11 @@ class DriveVector:
         reveries: Any = (),
     ) -> "DriveVector":
         slices: dict[str, list[tuple[str, list[float]]]] = {}
-        for name, source in (("constitution", constitution), ("growth", growth), ("reverie", reveries)):
+        for name, source in (
+            ("constitution", constitution),
+            ("growth", growth),
+            ("reverie", reveries),
+        ):
             frags = _fragment(source)
             vecs = await embedder.embed(frags) if frags else []
             slices[name] = [(frag, vec) for frag, vec in zip(frags, vecs) if vec]
@@ -181,7 +194,9 @@ class DriveVector:
         if not query:
             return {"magnitude": 0.0, "resonant": [], "by_slice": {}}
 
-        scored: list[tuple[str, float, str, float]] = []  # slice, weight, fragment, cosine
+        scored: list[tuple[str, float, str, float]] = (
+            []
+        )  # slice, weight, fragment, cosine
         by_slice: dict[str, float] = {}
         for name, frags in self.slices.items():
             weight = SLICE_WEIGHTS.get(name, 0.3)
@@ -198,7 +213,9 @@ class DriveVector:
         magnitude = round(top[0][1] * top[0][3], 4) if top else 0.0
         return {
             "magnitude": magnitude,
-            "resonant": [{"slice": s[0], "text": s[2], "score": round(s[3], 4)} for s in top],
+            "resonant": [
+                {"slice": s[0], "text": s[2], "score": round(s[3], 4)} for s in top
+            ],
             "by_slice": by_slice,
         }
 
@@ -212,7 +229,9 @@ class DriveVector:
         edits that simply are not rooted in who the resident is.
         """
         result = await self.resonance(str(body or ""))
-        constitution_score = float(result.get("by_slice", {}).get("constitution") or 0.0)
+        constitution_score = float(
+            result.get("by_slice", {}).get("constitution") or 0.0
+        )
         if constitution_score < CONTRADICTION_FLOOR:
             return "clamp"
         return None

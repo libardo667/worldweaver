@@ -68,7 +68,9 @@ PULSE_MAX_TOKENS = int(os.environ.get("WW_PULSE_MAX_TOKENS") or "4000")
 # sometimes strays, exposing the unchosen and breaking the homophily collision. Default argmax
 # (unchanged behaviour); the A/B flips this one axis. The full candidate ranking is logged either
 # way (raw observable) so homophily is directly measurable — did they go to the most-similar place?
-VENTURE_TARGET_MODE = (os.environ.get("WW_VENTURE_TARGET_MODE") or "argmax").strip().lower()
+VENTURE_TARGET_MODE = (
+    (os.environ.get("WW_VENTURE_TARGET_MODE") or "argmax").strip().lower()
+)
 VENTURE_TARGET_TEMP = float(os.environ.get("WW_VENTURE_TARGET_TEMP") or "0.25")
 
 # Act-trace self-knowledge — the act-KIND mirror to the self-sameness groove block above.
@@ -82,7 +84,9 @@ VENTURE_TARGET_TEMP = float(os.environ.get("WW_VENTURE_TARGET_TEMP") or "0.25")
 ACT_TRACE_ENABLED = os.environ.get("WW_ACT_TRACE", "1") != "0"
 ACT_TRACE_WINDOW = 20  # how many recent acts to reflect
 ACT_TRACE_MIN = 8  # below this the groove is not yet real — stay silent
-ACT_TRACE_MAX_VERBS = 2  # if recent acts span more than this many doors, it's varied — stay silent
+ACT_TRACE_MAX_VERBS = (
+    2  # if recent acts span more than this many doors, it's varied — stay silent
+)
 _ACT_VERBS = ("write", "speak", "move", "do")
 
 # Voice register (Major 49 reconnection of the orphaned VoiceDeck/soul_with_voice idea). The pulse
@@ -115,11 +119,17 @@ VOICE_RECENT_N = int(os.environ.get("WW_VOICE_RECENT_N") or "3")
 VARIED_EXAMPLE_ENABLED = os.environ.get("WW_VARIED_EXAMPLE", "1") != "0"
 
 
-def _recent_act_kinds(events: list[dict[str, Any]], window: int = ACT_TRACE_WINDOW) -> list[str]:
+def _recent_act_kinds(
+    events: list[dict[str, Any]], window: int = ACT_TRACE_WINDOW
+) -> list[str]:
     """The verbs of this resident's last `window` acts — a read-time reducer over the ledger's
     pulse_act_emitted events (same shape as the self-sameness read, no extra I/O at the call site).
     """
-    kinds = [str((e.get("payload") or {}).get("kind") or "").strip().lower() for e in events if e.get("event_type") == "pulse_act_emitted"]
+    kinds = [
+        str((e.get("payload") or {}).get("kind") or "").strip().lower()
+        for e in events
+        if e.get("event_type") == "pulse_act_emitted"
+    ]
     return [k for k in kinds if k][-window:]
 
 
@@ -155,7 +165,11 @@ def _act_trace_block(kinds: list[str], *, include_mark: bool = False) -> str:
         return ""  # every door used — nothing to point to
     tail = ", nor ".join(unused)
     lead = "words" if set(counts) <= {"write", "speak"} else "the same few moves"
-    return f"Your recent acts have all been {lead} — {used}, in the last {len(kinds)}. " f"You have not {tail}. The world keeps those doors open. " f"Or this stillness is simply yours — that's a real answer too.\n\n"
+    return (
+        f"Your recent acts have all been {lead} — {used}, in the last {len(kinds)}. "
+        f"You have not {tail}. The world keeps those doors open. "
+        f"Or this stillness is simply yours — that's a real answer too.\n\n"
+    )
 
 
 _PULSE_CONTRACT_TEMPLATE = """\
@@ -302,16 +316,28 @@ def _pulse_contract(
     """
     axes = ", ".join(live_senses) if live_senses else "your own state"
     eg = _DRIVE_NUDGES_EG_CLEAN if clean_drive_nudges else _DRIVE_NUDGES_EG
-    act_kinds = "speak, move, do, write, mark" if can_mark_world else "speak, move, do, write"
-    mark_guide = "- mark leaves a slow physical trace at this exact place for later visitors. Put what remains in body and the surface/object in target. It is not speech and does not broadcast." if can_mark_world else ""
-    contract = _PULSE_CONTRACT_TEMPLATE.replace("__FEEL_AXES__", axes).replace("__DRIVE_NUDGES_EG__", eg).replace("__ACT_KINDS__", act_kinds).replace("__MARK_GUIDE__", mark_guide).replace("__EXAMPLE__", example or _DEFAULT_EXAMPLE)
+    act_kinds = (
+        "speak, move, do, write, mark" if can_mark_world else "speak, move, do, write"
+    )
+    mark_guide = (
+        "- mark leaves a slow physical trace at this exact place for later visitors. Put what remains in body and the surface/object in target. It is not speech and does not broadcast."
+        if can_mark_world
+        else ""
+    )
+    contract = (
+        _PULSE_CONTRACT_TEMPLATE.replace("__FEEL_AXES__", axes)
+        .replace("__DRIVE_NUDGES_EG__", eg)
+        .replace("__ACT_KINDS__", act_kinds)
+        .replace("__MARK_GUIDE__", mark_guide)
+        .replace("__EXAMPLE__", example or _DEFAULT_EXAMPLE)
+    )
     if not allow_reach:
         contract = contract.replace(
             '"reach": null OR { "kind": "inspect", "source": "the exact name of an available source", "query": "what you choose to seek there" },',
             '"reach": null,',
         ).replace(
             "- reach is a PRIVATE, elective information request, exactly one of inspect, read,\n"
-            "  or attend. Use an exact source name shown under \"Things you can USE\". A reach\n"
+            '  or attend. Use an exact source name shown under "Things you can USE". A reach\n'
             "  is not a physical act: its result returns inside this same waking moment, where\n"
             "  you may reach again, act outwardly, or do nothing. Never emit reach and act together.",
             "- reach must be null: this pulse's private reading window is finished. You may act outwardly once or do nothing.",
@@ -335,14 +361,20 @@ def _excerpt(text: str, limit: int = 200) -> str:
 
 
 def _format_field(field: dict[str, dict[str, float]] | dict[str, Any]) -> str:
-    by_scope = field.get("by_scope") if isinstance(field, dict) and "by_scope" in field else field
+    by_scope = (
+        field.get("by_scope")
+        if isinstance(field, dict) and "by_scope" in field
+        else field
+    )
     if not isinstance(by_scope, dict) or not by_scope:
         return "  (nothing predicted — the afterimage has faded)"
     lines: list[str] = []
     for scope, tags in by_scope.items():
         if not isinstance(tags, dict) or not tags:
             continue
-        rendered = ", ".join(f"{tag}={round(float(val), 2)}" for tag, val in tags.items())
+        rendered = ", ".join(
+            f"{tag}={round(float(val), 2)}" for tag, val in tags.items()
+        )
         lines.append(f"  {scope}: {rendered}")
     return "\n".join(lines) or "  (nothing predicted)"
 
@@ -367,7 +399,9 @@ class LLMPulseProducer:
         self._model = model
         self._temperature = temperature
         self._max_tokens = max_tokens
-        self._prompt_trace = PromptTraceRecorder(memory_dir, resident_name=identity.name)
+        self._prompt_trace = PromptTraceRecorder(
+            memory_dir, resident_name=identity.name
+        )
         # Optional drive vector (Phase 4): the resident's own affect, used to
         # surface what *this* soul resonates with so it answers in its own voice.
         self.drive_vector = drive_vector
@@ -413,8 +447,14 @@ class LLMPulseProducer:
         mode: str = "react",
         tendency: dict[str, Any] | None = None,
     ) -> Pulse | None:
-        system_prompt = self._identity.soul_with_voice(self._voice_samples(), self.world_briefing) if VOICE_REGISTER_ENABLED else self._identity.composed_system_prompt(self.world_briefing)
-        prompt_context = PulseContext.from_perception(self.latest_perception or {}, mode=mode)
+        system_prompt = (
+            self._identity.soul_with_voice(self._voice_samples(), self.world_briefing)
+            if VOICE_REGISTER_ENABLED
+            else self._identity.composed_system_prompt(self.world_briefing)
+        )
+        prompt_context = PulseContext.from_perception(
+            self.latest_perception or {}, mode=mode
+        )
         self._active_prompt_context = prompt_context
         resonance = await self._resonance(prompt_context) if mode == "react" else None
         recalled = await self._recall(prompt_context)
@@ -438,7 +478,11 @@ class LLMPulseProducer:
         # Sight: a reactive pulse on a vision-capable model carries the images in view as content
         # blocks. A quiet self-directed pulse (settling/fervor) stays text — the mind isn't looking
         # at anything then. A text-only mind never sends images (the world also withholds them).
-        images = list(self.pending_images) if (self.vision and self.pending_images and mode == "react") else None
+        images = (
+            list(self.pending_images)
+            if (self.vision and self.pending_images and mode == "react")
+            else None
+        )
         prompt_trace_id = self._prompt_trace.record_prompt(
             phase="pulse",
             system_prompt=system_prompt,
@@ -474,7 +518,9 @@ class LLMPulseProducer:
             self._prompt_trace.record_failure(prompt_trace_id, exc)
             logger.warning("[%s:pulse] inference failed: %s", self._identity.name, exc)
             return None
-        except Exception as exc:  # transport/timeout/anything else: must NOT escape and stall the rhythm
+        except (
+            Exception
+        ) as exc:  # transport/timeout/anything else: must NOT escape and stall the rhythm
             self._prompt_trace.record_failure(prompt_trace_id, exc)
             logger.warning(
                 "[%s:pulse] pulse call failed (%s): %s",
@@ -488,7 +534,9 @@ class LLMPulseProducer:
             pulse = Pulse.from_dict(raw)
         except PulseValidationError as exc:
             self._prompt_trace.record_validation_failure(prompt_trace_id, exc)
-            logger.warning("[%s:pulse] invalid pulse dropped: %s", self._identity.name, exc)
+            logger.warning(
+                "[%s:pulse] invalid pulse dropped: %s", self._identity.name, exc
+            )
             return None
         return await self._dedup_keepsakes(pulse)
 
@@ -504,7 +552,9 @@ class LLMPulseProducer:
         try:
             novel = set(await recall.novel(notes, existing))
         except Exception as exc:  # never block a pulse on memory hygiene
-            logger.debug("[%s:pulse] keepsake dedup failed: %s", self._identity.name, exc)
+            logger.debug(
+                "[%s:pulse] keepsake dedup failed: %s", self._identity.name, exc
+            )
             return pulse
         if len(novel) == len(notes):
             return pulse
@@ -520,7 +570,9 @@ class LLMPulseProducer:
         actual aloud lines (current register), newest first. Read-time over the ledger, no side
         store. Recent lines are deliberately few: they add live voice without drowning the authored
         register in whatever the population has drifted toward."""
-        seed = [str(s).strip() for s in (self._identity.voice_seed or []) if str(s).strip()]
+        seed = [
+            str(s).strip() for s in (self._identity.voice_seed or []) if str(s).strip()
+        ]
         samples = list(seed)
         if VOICE_RECENT_N > 0:
             recent: list[str] = []
@@ -542,7 +594,9 @@ class LLMPulseProducer:
         the shared default example (control)."""
         if not VARIED_EXAMPLE_ENABLED or not _EXAMPLE_POOL:
             return None
-        idx = int(hashlib.sha1(self._identity.name.encode("utf-8")).hexdigest(), 16) % len(_EXAMPLE_POOL)
+        idx = int(
+            hashlib.sha1(self._identity.name.encode("utf-8")).hexdigest(), 16
+        ) % len(_EXAMPLE_POOL)
         return _EXAMPLE_POOL[idx]
 
     async def _resonance(self, prompt_context: PulseContext) -> dict[str, Any] | None:
@@ -574,7 +628,9 @@ class LLMPulseProducer:
         try:
             hits = await recall.recall(notes, moment, top_k=8)
         except Exception as exc:
-            logger.debug("[%s:pulse] memory recall failed: %s", self._identity.name, exc)
+            logger.debug(
+                "[%s:pulse] memory recall failed: %s", self._identity.name, exc
+            )
             return []
         return [h["note"] for h in hits]
 
@@ -588,7 +644,11 @@ class LLMPulseProducer:
         recall = self.memory_recall
         if recall is None:
             return 0.0
-        makings = [str(m).strip() for m in (self.latest_perception or {}).get("recent_makings") or [] if str(m).strip()]
+        makings = [
+            str(m).strip()
+            for m in (self.latest_perception or {}).get("recent_makings") or []
+            if str(m).strip()
+        ]
         if len(makings) < 4:
             return 0.0
         key = tuple(makings)
@@ -597,7 +657,9 @@ class LLMPulseProducer:
         try:
             vecs = await recall.embedder.embed(makings)
         except Exception as exc:
-            logger.debug("[%s:pulse] self-sameness embed failed: %s", self._identity.name, exc)
+            logger.debug(
+                "[%s:pulse] self-sameness embed failed: %s", self._identity.name, exc
+            )
             return 0.0
         latest, prior = vecs[-1], [v for v in vecs[:-1] if v]
         if not latest or not prior:
@@ -615,7 +677,11 @@ class LLMPulseProducer:
         A/B and homophily are measurable downstream). Falls back to the first reachable when there
         is no embedder; "" if nowhere."""
         perception = self.latest_perception or {}
-        reachable = [str(r).strip() for r in (perception.get("reachable") or []) if str(r).strip()]
+        reachable = [
+            str(r).strip()
+            for r in (perception.get("reachable") or [])
+            if str(r).strip()
+        ]
         if not reachable:
             return ""
         drive = self.drive_vector
@@ -624,13 +690,19 @@ class LLMPulseProducer:
         scored: list[tuple[str, float]] = []
         for place in reachable:
             try:
-                score = float((await drive.resonance(place) or {}).get("magnitude") or 0.0)
+                score = float(
+                    (await drive.resonance(place) or {}).get("magnitude") or 0.0
+                )
             except Exception:
                 score = 0.0
             scored.append((place, score))
         if VENTURE_TARGET_MODE == "sampled" and len(scored) > 1:
             weights = [math.exp(s / max(1e-3, VENTURE_TARGET_TEMP)) for _, s in scored]
-            chosen = random.choices([p for p, _ in scored], weights=weights, k=1)[0] if sum(weights) > 0 else scored[0][0]
+            chosen = (
+                random.choices([p for p, _ in scored], weights=weights, k=1)[0]
+                if sum(weights) > 0
+                else scored[0][0]
+            )
         else:
             chosen = max(scored, key=lambda ps: ps[1])[0]
         try:
@@ -670,19 +742,30 @@ class LLMPulseProducer:
         if self_baseline:
             top = sorted(self_baseline.items(), key=lambda kv: -float(kv[1]))[:5]
             settled = ", ".join(f"{tag} {round(float(val), 2)}" for tag, val in top)
-            settled_block = "Your settled self lately — how you have usually felt (the steady ground you notice changes against):\n" f"  {settled}\n\n"
+            settled_block = (
+                "Your settled self lately — how you have usually felt (the steady ground you notice changes against):\n"
+                f"  {settled}\n\n"
+            )
         else:
             settled_block = ""
 
         if recalled:
             # Relevance recall: the memories this very moment stirs back up.
             lines = "\n".join(f"  · {note}" for note in recalled)
-            memory_block = "What this moment brings back to you — memories it stirs (your own, kept across days):\n" f"{lines}\n\n"
+            memory_block = (
+                "What this moment brings back to you — memories it stirs (your own, kept across days):\n"
+                f"{lines}\n\n"
+            )
         else:
             kept = memories(self._memory_dir, limit=10)
             if kept:
-                lines = "\n".join(f"  · {m['note']}" for m in reversed(kept))  # oldest → newest
-                memory_block = "What you have come to know and chosen to remember (your memory — these persist across days, oldest to newest):\n" f"{lines}\n\n"
+                lines = "\n".join(
+                    f"  · {m['note']}" for m in reversed(kept)
+                )  # oldest → newest
+                memory_block = (
+                    "What you have come to know and chosen to remember (your memory — these persist across days, oldest to newest):\n"
+                    f"{lines}\n\n"
+                )
             else:
                 memory_block = ""
 
@@ -692,20 +775,29 @@ class LLMPulseProducer:
                 continue
             activation = float(node.get("activation") or 0.0)
             if activation >= 0.2:
-                felt_lines.append(f"  {node_id}: {node.get('mode', '')} ({round(activation, 2)})")
+                felt_lines.append(
+                    f"  {node_id}: {node.get('mode', '')} ({round(activation, 2)})"
+                )
         felt = "\n".join(felt_lines) or "  (calm — nothing strongly active)"
 
         trace_lines: list[str] = []
         for trace in traces[:6]:
             for feature in list(trace.get("features") or [])[:3]:
-                trace_lines.append(f"  [{feature.get('delta')}] {feature.get('scope')}::{feature.get('tag')} " f"— now {feature.get('stimulus')}, you expected {feature.get('predicted')} (trace {trace.get('trace_id')})")
+                trace_lines.append(
+                    f"  [{feature.get('delta')}] {feature.get('scope')}::{feature.get('tag')} "
+                    f"— now {feature.get('stimulus')}, you expected {feature.get('predicted')} (trace {trace.get('trace_id')})"
+                )
         surprises = "\n".join(trace_lines) or "  (a diffuse, unplaceable surprise)"
 
         perception = self.latest_perception or {}
-        prompt_context = prompt_context or PulseContext.from_perception(perception, mode=mode)
+        prompt_context = prompt_context or PulseContext.from_perception(
+            perception, mode=mode
+        )
         moment_block = render_pulse_context(prompt_context)
         reachable = list(prompt_context.reachable)
-        venture_strength = float((tendency or {}).get("strength") or 0.0) if mode == "venture" else 0.0
+        venture_strength = (
+            float((tendency or {}).get("strength") or 0.0) if mode == "venture" else 0.0
+        )
         venture_hard = mode == "venture" and venture_strength >= VENTURE_HARD_STRENGTH
         workshop = perception.get("workshop") or []
         if workshop:
@@ -715,10 +807,15 @@ class LLMPulseProducer:
                 count = int(w.get("count") or 0)
                 last = _excerpt(str(w.get("last_excerpt") or ""))
                 when = str(w.get("last_ts") or "")[:10]
-                lines.append(f"  · your {name} ({count} so far, last {when}): {last}".rstrip())
+                lines.append(
+                    f"  · your {name} ({count} so far, last {when}): {last}".rstrip()
+                )
             # These are FINISHED, earlier pages across the things you are making —
             # context to build ON across days, never a sentence to finish mid-word.
-            workshop_block = "Your workshop holds what you have been making (each a separate, ongoing thing — finished pages, for reference):\n" f"{chr(10).join(lines)}\n\n"
+            workshop_block = (
+                "Your workshop holds what you have been making (each a separate, ongoing thing — finished pages, for reference):\n"
+                f"{chr(10).join(lines)}\n\n"
+            )
         else:
             workshop_block = "You keep a workshop of your own — a journal, and whatever else you choose to make in it.\n\n"
         workshop_block += 'If you turn to it (act: write), pick ONE target and write a NEW, self-contained entry: "journal" for the day\'s small record; "zine" for a continuing zine; or "workshop:<project-name>" for another project you name. A letter instead uses the exact person\'s name. Never paraphrase a target. Begin fresh — never pick up a previous page mid-thought.\n'
@@ -730,27 +827,51 @@ class LLMPulseProducer:
             workshop_block += "But note: your recent making has worn a groove — it keeps returning to the same shape or theme, and that pattern's pleasure is spent. If you make now, strike out somewhere genuinely DIFFERENT (a new subject, a new form, a thread you haven't pulled), or let it rest — do not polish the same thing again.\n"
         workshop_block += "\n"
         if venture_hard:
-            workshop_block = ""  # the body goes first — withhold the page's pull this pulse
+            workshop_block = (
+                ""  # the body goes first — withhold the page's pull this pulse
+            )
 
         # Anchors currently mix inner history with names extracted from this poll's
         # heard/event records and do not yet retain per-anchor provenance. Until
         # they do, only a reactive envelope may surface them; otherwise a withheld
         # social line could leak into a settling pulse under an "inner" label.
-        anchors = ((self.latest_perception or {}).get("anchors") or []) if mode == "react" else []
-        anchor_names = ", ".join(str(a.get("anchor") or "").strip() for a in anchors[:8] if str(a.get("anchor") or "").strip())
+        anchors = (
+            ((self.latest_perception or {}).get("anchors") or [])
+            if mode == "react"
+            else []
+        )
+        anchor_names = ", ".join(
+            str(a.get("anchor") or "").strip()
+            for a in anchors[:8]
+            if str(a.get("anchor") or "").strip()
+        )
         if anchor_names:
             example = str(anchors[0].get("anchor") or "the hearth").strip()
-            anchors_block = "The concrete things your attention keeps returning to — the anchors of your inner world right now:\n" f"  {anchor_names}\n" f'If one of these (or another concrete thing you name) will hold, deepen, or slip away, you may predict it: an expectation with scope "anchors", e.g. {{"features": {{"{example}": 0.6}}, "scope": "anchors"}}. This is predicting what your world is made OF, not only how you feel.\n\n'
+            anchors_block = (
+                "The concrete things your attention keeps returning to — the anchors of your inner world right now:\n"
+                f"  {anchor_names}\n"
+                f'If one of these (or another concrete thing you name) will hold, deepen, or slip away, you may predict it: an expectation with scope "anchors", e.g. {{"features": {{"{example}": 0.6}}, "scope": "anchors"}}. This is predicting what your world is made OF, not only how you feel.\n\n'
+            )
         else:
             anchors_block = ""
 
-        act_trace_block = _act_trace_block(_recent_act_kinds(events), include_mark=self.can_mark_world) if ACT_TRACE_ENABLED else ""
+        act_trace_block = (
+            _act_trace_block(
+                _recent_act_kinds(events), include_mark=self.can_mark_world
+            )
+            if ACT_TRACE_ENABLED
+            else ""
+        )
 
         resonance_block = ""
         if resonance and resonance.get("resonant"):
             frag = str(resonance["resonant"][0].get("text") or "").strip()
             if frag:
-                resonance_block = "What this moment stirs in YOU — from your own nature, not the voices around you:\n" f'  "{frag}"\n' "Answer from that, in your own register and concerns. Do not echo how others here are framing it.\n\n"
+                resonance_block = (
+                    "What this moment stirs in YOU — from your own nature, not the voices around you:\n"
+                    f'  "{frag}"\n'
+                    "Answer from that, in your own register and concerns. Do not echo how others here are framing it.\n\n"
+                )
 
         if mode == "settling":
             opener = "The day has gone quiet around you — nothing presses, nothing surprises. This still moment is yours.\n\n"
@@ -758,24 +879,52 @@ class LLMPulseProducer:
             invitation = "If you wish, take it: turn something over in your mind, or make something of your own — your workshop (a journal page, a zine, a project you're carrying). Or simply rest. No one is waiting; nothing is owed. An empty act is a fine answer.\n\n"
         elif mode == "fervor":
             opener = "You are wound tight and nothing has asked for it — no one waiting, nothing to answer, just the restless charge of you with nowhere to put it.\n\n"
-            interior = f"What you feel right now:\n{felt}\n\n" f"What has you wound up:\n{surprises}\n\n"
+            interior = (
+                f"What you feel right now:\n{felt}\n\n"
+                f"What has you wound up:\n{surprises}\n\n"
+            )
             invitation = "Put it somewhere of your own before it turns to dust: make something in your workshop — chase the loose thread, set the questions down, build the thing you keep meaning to. Or fling a word into the room. Don't just sit on it. (You don't have to — but this charge wants spending.)\n\n"
         elif mode == "venture":
             target = str((tendency or {}).get("target") or "").strip()
             dest = target or (reachable[0] if reachable else "out there")
             others = ", ".join(reachable) if reachable else dest
             opener = "You are wound tight and it does not want the page — it wants OUT: the door, the air, the going.\n\n"
-            interior = f"What you feel right now:\n{felt}\n\n" f"What has you wound up:\n{surprises}\n\n"
+            interior = (
+                f"What you feel right now:\n{felt}\n\n"
+                f"What has you wound up:\n{surprises}\n\n"
+            )
             if venture_hard:
-                invitation = f'So you go. The pull is toward {dest}. Set act.kind to "move" and choose where — one of: {others} — and let ' "the body of it say what it is to rise from this spot and head there. (Or put your hands to a thing right here: " 'act "do".) The words can wait; tonight you move.\n\n'
+                invitation = (
+                    f'So you go. The pull is toward {dest}. Set act.kind to "move" and choose where — one of: {others} — and let '
+                    "the body of it say what it is to rise from this spot and head there. (Or put your hands to a thing right here: "
+                    'act "do".) The words can wait; tonight you move.\n\n'
+                )
             else:
-                invitation = f'Something in you leans toward {dest} — you could go to it (act "move", one of: {others}), or turn your hands to ' 'a thing here (act "do"). You may still answer in words if that is truer, but feel the pull outward first.\n\n'
+                invitation = (
+                    f'Something in you leans toward {dest} — you could go to it (act "move", one of: {others}), or turn your hands to '
+                    'a thing here (act "do"). You may still answer in words if that is truer, but feel the pull outward first.\n\n'
+                )
         else:
             opener = f"You have woken to attention (arousal {round(float(arousal), 2)} crossed your threshold).\n\n"
-            interior = f"What you predicted would hold (your afterimage):\n{_format_field(afterimage)}\n\n" f"What you actually feel right now:\n{felt}\n\n" f"What surprised you (most surprising first):\n{surprises}\n\n"
+            interior = (
+                f"What you predicted would hold (your afterimage):\n{_format_field(afterimage)}\n\n"
+                f"What you actually feel right now:\n{felt}\n\n"
+                f"What surprised you (most surprising first):\n{surprises}\n\n"
+            )
             invitation = resonance_block
 
-        return f"{opener}" f"{moment_block}" f"{act_trace_block}" f"{memory_block}" f"{workshop_block}" f"{settled_block}" f"{anchors_block}" f"{interior}" f"{invitation}" f"{_pulse_contract(self.live_senses, self.clean_drive_nudges, example=self._pulse_example(), can_mark_world=self.can_mark_world)}"
+        return (
+            f"{opener}"
+            f"{moment_block}"
+            f"{act_trace_block}"
+            f"{memory_block}"
+            f"{workshop_block}"
+            f"{settled_block}"
+            f"{anchors_block}"
+            f"{interior}"
+            f"{invitation}"
+            f"{_pulse_contract(self.live_senses, self.clean_drive_nudges, example=self._pulse_example(), can_mark_world=self.can_mark_world)}"
+        )
 
     # --- elective reach loop: continue within one ignition after chosen information ---
 
@@ -811,19 +960,39 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
         """A lighter LLM call within the same ignition: the resident reached a source,
         here's what happened, now decide the next step. No re-perception, no re-surprise —
         the world is frozen from the initial prompt; only the chosen result is new."""
-        structured_result = dict(result or {}) if isinstance(result, dict) else {"detail": str(result or "")}
-        images = [str(image) for image in list(structured_result.get("images") or []) if str(image or "").strip()] if self.vision else []
+        structured_result = (
+            dict(result or {})
+            if isinstance(result, dict)
+            else {"detail": str(result or "")}
+        )
+        images = (
+            [
+                str(image)
+                for image in list(structured_result.get("images") or [])
+                if str(image or "").strip()
+            ]
+            if self.vision
+            else []
+        )
         traced_result = dict(structured_result)
         if images:
             traced_result["images"] = {
                 "count": len(images),
                 "captured_as_digests": True,
             }
-        result_text = str(structured_result.get("detail") or structured_result.get("result") or "")
+        result_text = str(
+            structured_result.get("detail") or structured_result.get("result") or ""
+        )
         result_text = result_text[:4000] if len(result_text) > 4000 else result_text
-        active_context = self._active_prompt_context or PulseContext.from_perception(self.latest_perception or {}, mode="react")
+        active_context = self._active_prompt_context or PulseContext.from_perception(
+            self.latest_perception or {}, mode="react"
+        )
         reading_closed = reaches_remaining is not None and reaches_remaining <= 0
-        available = "  (reading window closed for this pulse)" if reading_closed else render_affordance_catalog(active_context)
+        available = (
+            "  (reading window closed for this pulse)"
+            if reading_closed
+            else render_affordance_catalog(active_context)
+        )
         continuation_instruction = (
             "This was the final private read available in this pulse. Set reach to null. "
             "You may act outwardly once, or rest with both reach and act null."
@@ -838,7 +1007,9 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
             result=result_text,
             available=available.rstrip() or "  (none)",
             continuation_instruction=continuation_instruction,
-            provenance_guidance=provenance_guidance(str(structured_result.get("provenance") or "")),
+            provenance_guidance=provenance_guidance(
+                str(structured_result.get("provenance") or "")
+            ),
             contract=_pulse_contract(
                 self.live_senses,
                 self.clean_drive_nudges,
@@ -847,7 +1018,11 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
                 allow_reach=not reading_closed,
             ),
         )
-        system_prompt = self._identity.soul_with_voice(self._voice_samples(), self.world_briefing) if VOICE_REGISTER_ENABLED else self._identity.composed_system_prompt(self.world_briefing)
+        system_prompt = (
+            self._identity.soul_with_voice(self._voice_samples(), self.world_briefing)
+            if VOICE_REGISTER_ENABLED
+            else self._identity.composed_system_prompt(self.world_briefing)
+        )
         prompt_trace_id = self._prompt_trace.record_prompt(
             phase="reach_continue",
             system_prompt=system_prompt,
@@ -917,6 +1092,10 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
             )
             return None
 
-    def render_prompt_for_debug(self, *, traces=None, stimulus=None, arousal=0.0) -> str:
+    def render_prompt_for_debug(
+        self, *, traces=None, stimulus=None, arousal=0.0
+    ) -> str:
         """Expose the assembled prompt for inspection without calling the LLM."""
-        return self._build_prompt(traces=list(traces or []), stimulus=dict(stimulus or {}), arousal=arousal)
+        return self._build_prompt(
+            traces=list(traces or []), stimulus=dict(stimulus or {}), arousal=arousal
+        )

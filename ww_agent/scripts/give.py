@@ -28,21 +28,34 @@ def _append_jsonl(path: Path, record: dict) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Leave a file in a resident's private gift source.")
+    parser = argparse.ArgumentParser(
+        description="Leave a file in a resident's private gift source."
+    )
     parser.add_argument("home", help="resident home directory")
     parser.add_argument("file", help="file to give")
-    parser.add_argument("--as", dest="rename", default="", help="name used inside workshop/given")
+    parser.add_argument(
+        "--as", dest="rename", default="", help="name used inside workshop/given"
+    )
     parser.add_argument("--note", default="", help="private note stored with the gift")
-    parser.add_argument("--say", default="", help="optional keeper whisper, which also rouses the resident")
+    parser.add_argument(
+        "--say",
+        default="",
+        help="optional keeper whisper, which also rouses the resident",
+    )
     args = parser.parse_args()
 
     home = Path(args.home).expanduser().resolve()
     if not home.is_dir() or not (home / "identity").is_dir():
-        print(f"error: {home} is not a resident home (missing identity/)", file=sys.stderr)
+        print(
+            f"error: {home} is not a resident home (missing identity/)", file=sys.stderr
+        )
         return 2
     config = HearthConfig.load(home)
     if not config.gifts:
-        print(f'error: gifts are not enabled for {home}; add "gifts": true to hearth.json', file=sys.stderr)
+        print(
+            f'error: gifts are not enabled for {home}; add "gifts": true to hearth.json',
+            file=sys.stderr,
+        )
         return 2
     if str(args.say or "").strip() and not config.keeper:
         print("error: --say requires a configured keeper", file=sys.stderr)
@@ -84,7 +97,9 @@ def main() -> int:
             {"ts": timestamp, "text": str(args.say).strip()},
         )
 
-    print(f"gave {home.name} workshop/given/{name} ({destination.stat().st_size} bytes)")
+    print(
+        f"gave {home.name} workshop/given/{name} ({destination.stat().st_size} bytes)"
+    )
     print("the resident can inspect it through the private gifts source")
     return 0
 

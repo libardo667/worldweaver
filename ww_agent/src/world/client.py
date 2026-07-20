@@ -172,7 +172,9 @@ def scene_to_prose(scene: SceneData, character_name: str) -> str:
             # Prefer role (character/player name) over name (session slug)
             display = p.role if p.role and p.role != p.name else p.name
             if p.last_action:
-                presence_parts.append(f"{display} is here — {p.last_action.rstrip('.')}")
+                presence_parts.append(
+                    f"{display} is here — {p.last_action.rstrip('.')}"
+                )
             else:
                 presence_parts.append(f"{display} is here")
         parts.append(" ".join(presence_parts) + ".")
@@ -180,7 +182,9 @@ def scene_to_prose(scene: SceneData, character_name: str) -> str:
         parts.append("No one else is here right now.")
 
     if scene.ambient_presence:
-        labels = [item.label.rstrip(".") for item in scene.ambient_presence[:3] if item.label]
+        labels = [
+            item.label.rstrip(".") for item in scene.ambient_presence[:3] if item.label
+        ]
         if labels:
             parts.append("Around the edges: " + ". ".join(labels) + ".")
 
@@ -263,7 +267,9 @@ class WorldWeaverClient:
         except Exception:
             return False
 
-    async def wait_for_ready(self, timeout_seconds: float = 120.0, poll_interval: float = 2.0) -> None:
+    async def wait_for_ready(
+        self, timeout_seconds: float = 120.0, poll_interval: float = 2.0
+    ) -> None:
         deadline = asyncio.get_event_loop().time() + timeout_seconds
         while asyncio.get_event_loop().time() < deadline:
             if await self.health():
@@ -401,7 +407,9 @@ class WorldWeaverClient:
         )
         return resp.json()
 
-    async def accept_object_exchange(self, session_id: str, exchange_id: str, idempotency_key: str) -> dict[str, Any]:
+    async def accept_object_exchange(
+        self, session_id: str, exchange_id: str, idempotency_key: str
+    ) -> dict[str, Any]:
         """Accept an exact open exchange and its atomic swap."""
         resp = await self._post(
             f"/api/world/exchanges/{exchange_id}/accept",
@@ -410,7 +418,9 @@ class WorldWeaverClient:
         )
         return resp.json()
 
-    async def decline_object_exchange(self, session_id: str, exchange_id: str, idempotency_key: str) -> dict[str, Any]:
+    async def decline_object_exchange(
+        self, session_id: str, exchange_id: str, idempotency_key: str
+    ) -> dict[str, Any]:
         """Decline an exact open exchange without moving either object."""
         resp = await self._post(
             f"/api/world/exchanges/{exchange_id}/decline",
@@ -419,7 +429,9 @@ class WorldWeaverClient:
         )
         return resp.json()
 
-    async def cancel_object_exchange(self, session_id: str, exchange_id: str, idempotency_key: str) -> dict[str, Any]:
+    async def cancel_object_exchange(
+        self, session_id: str, exchange_id: str, idempotency_key: str
+    ) -> dict[str, Any]:
         """Cancel an exchange this actor proposed."""
         resp = await self._post(
             f"/api/world/exchanges/{exchange_id}/cancel",
@@ -428,7 +440,9 @@ class WorldWeaverClient:
         )
         return resp.json()
 
-    async def get_space_access_status(self, session_id: str, location: str) -> dict[str, Any]:
+    async def get_space_access_status(
+        self, session_id: str, location: str
+    ) -> dict[str, Any]:
         """Inspect this actor's access relationship to one exact place."""
         resp = await self._get(
             "/api/world/access",
@@ -437,7 +451,9 @@ class WorldWeaverClient:
         )
         return resp.json()
 
-    async def get_pending_space_access_requests(self, session_id: str, location: str) -> dict[str, Any]:
+    async def get_pending_space_access_requests(
+        self, session_id: str, location: str
+    ) -> dict[str, Any]:
         """Review pending requests for one place controlled by this actor."""
         resp = await self._get(
             "/api/world/access/requests",
@@ -446,7 +462,9 @@ class WorldWeaverClient:
         )
         return resp.json()
 
-    async def request_space_access(self, session_id: str, location: str, idempotency_key: str) -> dict[str, Any]:
+    async def request_space_access(
+        self, session_id: str, location: str, idempotency_key: str
+    ) -> dict[str, Any]:
         """Ask to enter one requestable exact place."""
         resp = await self._post(
             "/api/world/access/requests",
@@ -548,7 +566,9 @@ class WorldWeaverClient:
         )
         return resp.json()
 
-    async def browse_world_stoop(self, session_id: str, stoop_id: str) -> dict[str, Any]:
+    async def browse_world_stoop(
+        self, session_id: str, stoop_id: str
+    ) -> dict[str, Any]:
         """Open one local stoop after the resident elects to inspect it."""
         resp = await self._get(
             f"/api/world/stoops/{stoop_id}",
@@ -604,7 +624,9 @@ class WorldWeaverClient:
         )
         return resp.json()
 
-    async def _get_roster_directory(self, session_id: str | None = None) -> list[dict[str, Any]]:
+    async def _get_roster_directory(
+        self, session_id: str | None = None
+    ) -> list[dict[str, Any]]:
         cache_key = session_id or ""
         now_monotonic = time.monotonic()
         cached = self._roster_directory_cache.get(cache_key)
@@ -622,7 +644,11 @@ class WorldWeaverClient:
             roster,
         )
         if len(self._roster_directory_cache) > 8:
-            expired = [key for key, value in self._roster_directory_cache.items() if value[0] <= now_monotonic]
+            expired = [
+                key
+                for key, value in self._roster_directory_cache.items()
+                if value[0] <= now_monotonic
+            ]
             for key in expired:
                 self._roster_directory_cache.pop(key, None)
         return roster
@@ -661,7 +687,9 @@ class WorldWeaverClient:
             names: list[str] = []
             seen: set[str] = set()
             for entry in roster:
-                value = str(entry.get("display_name") or entry.get("player_name") or "").strip()
+                value = str(
+                    entry.get("display_name") or entry.get("player_name") or ""
+                ).strip()
                 if not value:
                     continue
                 normalized = value.lower()
@@ -684,7 +712,9 @@ class WorldWeaverClient:
         seen: set[tuple[str, str]] = set()
         for entry in roster:
             session_id = str(entry.get("session_id") or "").strip()
-            label = str(entry.get("display_name") or entry.get("player_name") or "").strip()
+            label = str(
+                entry.get("display_name") or entry.get("player_name") or ""
+            ).strip()
             recipient_key = str(entry.get("recipient_key") or "").strip()
             recipient_type = str(entry.get("recipient_type") or "").strip() or "agent"
             if not session_id or not label:
@@ -695,9 +725,13 @@ class WorldWeaverClient:
                     continue
                 agent_key = _agent_key_from_session_id(session_id)
                 if agent_key:
-                    recipient = DMRecipient(label=label, recipient_key=agent_key, recipient_type="agent")
+                    recipient = DMRecipient(
+                        label=label, recipient_key=agent_key, recipient_type="agent"
+                    )
                 else:
-                    recipient = DMRecipient(label=label, recipient_key=session_id, recipient_type="player")
+                    recipient = DMRecipient(
+                        label=label, recipient_key=session_id, recipient_type="player"
+                    )
             else:
                 recipient = DMRecipient(
                     label=label,
@@ -722,15 +756,27 @@ class WorldWeaverClient:
         if not roster:
             return None
 
-        exact_matches = [item for item in roster if item.label.strip().lower() == lowered]
+        exact_matches = [
+            item for item in roster if item.label.strip().lower() == lowered
+        ]
         if len(exact_matches) == 1:
             return exact_matches[0]
 
-        compact_matches = [item for item in roster if item.label.strip().lower().replace("_", " ").replace("-", " ") == compact or item.recipient_key.strip().lower().replace("_", " ").replace("-", " ") == compact]
+        compact_matches = [
+            item
+            for item in roster
+            if item.label.strip().lower().replace("_", " ").replace("-", " ") == compact
+            or item.recipient_key.strip().lower().replace("_", " ").replace("-", " ")
+            == compact
+        ]
         if len(compact_matches) == 1:
             return compact_matches[0]
 
-        first_name_matches = [item for item in roster if item.label.split(" ", 1)[0].strip().lower() == lowered]
+        first_name_matches = [
+            item
+            for item in roster
+            if item.label.split(" ", 1)[0].strip().lower() == lowered
+        ]
         if len(first_name_matches) == 1:
             return first_name_matches[0]
 
@@ -767,7 +813,11 @@ class WorldWeaverClient:
         if entry_location:
             payload["entry_location"] = entry_location
 
-        path = "/api/session/bootstrap/resident" if self._resident_signer is not None else "/api/session/bootstrap"
+        path = (
+            "/api/session/bootstrap/resident"
+            if self._resident_signer is not None
+            else "/api/session/bootstrap"
+        )
         resp = await self._post(path, payload, timeout=60.0)
         return resp.json()
 
@@ -841,7 +891,9 @@ class WorldWeaverClient:
     # ------------------------------------------------------------------
 
     async def get_scene(self, session_id: str) -> SceneData:
-        resp = await self._get_with_retry(f"/api/world/scene/{session_id}", timeout=self._timeout_scene)
+        resp = await self._get_with_retry(
+            f"/api/world/scene/{session_id}", timeout=self._timeout_scene
+        )
         data = resp.json()
 
         present = [
@@ -862,7 +914,11 @@ class WorldWeaverClient:
                 source=str(item.get("source", "")),
                 intensity=float(item.get("intensity", 0.0) or 0.0),
                 ttl_seconds=int(item.get("ttl_seconds", 0) or 0),
-                pressure_tags=[str(tag) for tag in list(item.get("pressure_tags") or []) if str(tag)],
+                pressure_tags=[
+                    str(tag)
+                    for tag in list(item.get("pressure_tags") or [])
+                    if str(tag)
+                ],
                 sensory_note=str(item.get("sensory_note", "")),
             )
             for item in data.get("ambient_presence", [])
@@ -873,7 +929,9 @@ class WorldWeaverClient:
                 source_id=str(item.get("source_id", "") or ""),
                 name=str(item.get("name", "") or ""),
                 description=str(item.get("description", "") or ""),
-                provenance=str(item.get("provenance", "local-knowledge") or "local-knowledge"),
+                provenance=str(
+                    item.get("provenance", "local-knowledge") or "local-knowledge"
+                ),
                 freshness=str(item.get("freshness", "unknown") or "unknown"),
                 locality=str(item.get("locality", "unknown") or "unknown"),
                 visibility=str(item.get("visibility", "private") or "private"),
@@ -903,11 +961,15 @@ class WorldWeaverClient:
                 body=str(item.get("body", "") or ""),
                 created_at=str(item.get("created_at", "") or ""),
                 expires_at=str(item.get("expires_at", "") or ""),
-                provenance=str(item.get("provenance", "physical_trace") or "physical_trace"),
+                provenance=str(
+                    item.get("provenance", "physical_trace") or "physical_trace"
+                ),
                 freshness=str(item.get("freshness", "active") or "active"),
                 locality=str(item.get("locality", "") or ""),
                 visibility=str(item.get("visibility", "local") or "local"),
-                selection_mode=str(item.get("selection_mode", "embodied_local") or "embodied_local"),
+                selection_mode=str(
+                    item.get("selection_mode", "embodied_local") or "embodied_local"
+                ),
             )
             for item in data.get("traces_here", [])
             if isinstance(item, dict) and str(item.get("trace_id") or "").strip()
@@ -964,7 +1026,9 @@ class WorldWeaverClient:
             plausible=data.get("plausible", True),
         )
 
-    async def post_world_trace(self, session_id: str, body: str, target: str = "") -> dict[str, Any]:
+    async def post_world_trace(
+        self, session_id: str, body: str, target: str = ""
+    ) -> dict[str, Any]:
         """Leave a local physical trace. No action narrator and no retry."""
         resp = await self._post(
             "/api/world/traces",
@@ -977,26 +1041,42 @@ class WorldWeaverClient:
     # World memory (slow loop context)
     # ------------------------------------------------------------------
 
-    async def get_world_facts(self, query: str, session_id: str | None = None, limit: int = 5) -> list[WorldFact]:
+    async def get_world_facts(
+        self, query: str, session_id: str | None = None, limit: int = 5
+    ) -> list[WorldFact]:
         """Semantic search over world event history. Uses server-side embeddings."""
         params: dict[str, Any] = {"query": query, "limit": limit}
         if session_id:
             params["session_id"] = session_id
-        resp = await self._get_with_retry("/api/world/facts", params=params, timeout=self._timeout_scene)
+        resp = await self._get_with_retry(
+            "/api/world/facts", params=params, timeout=self._timeout_scene
+        )
         data = resp.json()
-        return [WorldFact(summary=f.get("summary", "")) for f in data.get("facts", []) if f.get("summary")]
+        return [
+            WorldFact(summary=f.get("summary", ""))
+            for f in data.get("facts", [])
+            if f.get("summary")
+        ]
 
-    async def get_graph_facts(self, query: str, session_id: str | None = None, limit: int = 5) -> list[WorldFact]:
+    async def get_graph_facts(
+        self, query: str, session_id: str | None = None, limit: int = 5
+    ) -> list[WorldFact]:
         """Semantic search over active world fact graph. Uses server-side embeddings."""
         params: dict[str, Any] = {"query": query, "limit": limit}
         if session_id:
             params["session_id"] = session_id
-        resp = await self._get_with_retry("/api/world/graph/facts", params=params, timeout=self._timeout_scene)
+        resp = await self._get_with_retry(
+            "/api/world/graph/facts", params=params, timeout=self._timeout_scene
+        )
         data = resp.json()
         return [
             WorldFact(
                 summary=f.get("summary", ""),
-                subject=(f.get("subject_node", {}).get("name", "") if isinstance(f.get("subject_node"), dict) else ""),
+                subject=(
+                    f.get("subject_node", {}).get("name", "")
+                    if isinstance(f.get("subject_node"), dict)
+                    else ""
+                ),
                 predicate=f.get("predicate", ""),
                 value=f.get("value", ""),
                 confidence=f.get("confidence", 1.0),
@@ -1011,15 +1091,25 @@ class WorldWeaverClient:
 
     async def get_inbox(self, agent_name: str) -> list[DM]:
         """Mail loop: poll for unread DMs waiting for this agent. Marks them as read."""
-        resp = await self._get_with_retry(f"/api/world/dm/inbox/{agent_name}", timeout=self._timeout_scene)
+        resp = await self._get_with_retry(
+            f"/api/world/dm/inbox/{agent_name}", timeout=self._timeout_scene
+        )
         data = resp.json()
-        return [DM(filename=letter.get("filename", ""), body=letter.get("body", "")) for letter in data.get("letters", [])]
+        return [
+            DM(filename=letter.get("filename", ""), body=letter.get("body", ""))
+            for letter in data.get("letters", [])
+        ]
 
     async def get_player_inbox(self, session_id: str) -> list[DM]:
         """Poll for DMs deposited by agents into a player session inbox."""
-        resp = await self._get_with_retry(f"/api/world/dm/my-inbox/{session_id}", timeout=self._timeout_scene)
+        resp = await self._get_with_retry(
+            f"/api/world/dm/my-inbox/{session_id}", timeout=self._timeout_scene
+        )
         data = resp.json()
-        return [DM(filename=letter.get("filename", ""), body=letter.get("body", "")) for letter in data.get("letters", [])]
+        return [
+            DM(filename=letter.get("filename", ""), body=letter.get("body", ""))
+            for letter in data.get("letters", [])
+        ]
 
     async def send_letter(
         self,
@@ -1044,7 +1134,9 @@ class WorldWeaverClient:
         )
         return resp.json()
 
-    async def reply_letter(self, from_agent: str, to_session_id: str, body: str) -> dict:
+    async def reply_letter(
+        self, from_agent: str, to_session_id: str, body: str
+    ) -> dict:
         resp = await self._post(
             "/api/world/dm/reply",
             {"from_agent": from_agent, "to_session_id": to_session_id, "body": body},
@@ -1056,7 +1148,9 @@ class WorldWeaverClient:
     # Location chat (co-located async messaging)
     # ------------------------------------------------------------------
 
-    async def get_location_chat(self, location: str, since: str | None = None, session_id: str | None = None) -> list[ChatMessage]:
+    async def get_location_chat(
+        self, location: str, since: str | None = None, session_id: str | None = None
+    ) -> list[ChatMessage]:
         """Return recent chat messages at a location. Used by fast loop.
 
         Pass the resident's session_id so the engine includes speaker
@@ -1213,7 +1307,9 @@ class WorldWeaverClient:
             logger.debug("[doula-polls] fetch failed: %s", e)
             return []
 
-    async def cast_doula_vote(self, poll_id: str, voter_session_id: str, vote: str) -> None:
+    async def cast_doula_vote(
+        self, poll_id: str, voter_session_id: str, vote: str
+    ) -> None:
         """Cast a vote on a poll. vote must be 'AGENT' or 'STATIC'."""
         await self._post(
             f"/api/world/doula/polls/{poll_id}/vote",
@@ -1284,7 +1380,9 @@ class WorldWeaverClient:
             logger.debug("[map] context fetch failed for %s: %s", location, e)
             return ""
 
-    async def get_nearby_landmarks(self, location: str, radius_km: float = 0.75) -> list[str]:
+    async def get_nearby_landmarks(
+        self, location: str, radius_km: float = 0.75
+    ) -> list[str]:
         """Return nearby landmark names for a neighborhood anchor."""
         try:
             resp = await self._get(
@@ -1341,7 +1439,9 @@ class WorldWeaverClient:
             )
         return await self._client.send(request)
 
-    async def _get(self, path: str, *, params: dict | None = None, timeout: float = 30.0) -> httpx.Response:
+    async def _get(
+        self, path: str, *, params: dict | None = None, timeout: float = 30.0
+    ) -> httpx.Response:
         try:
             resp = await self._send(
                 "GET",
@@ -1352,7 +1452,9 @@ class WorldWeaverClient:
             resp.raise_for_status()
             return resp
         except httpx.HTTPStatusError as e:
-            raise WorldClientError(f"GET {path} returned {e.response.status_code}") from e
+            raise WorldClientError(
+                f"GET {path} returned {e.response.status_code}"
+            ) from e
 
     async def _get_with_retry(
         self,
@@ -1394,7 +1496,9 @@ class WorldWeaverClient:
 
         raise last_error or WorldClientError(f"GET {path} failed")
 
-    async def _post(self, path: str, payload: dict, *, timeout: float = 60.0) -> httpx.Response:
+    async def _post(
+        self, path: str, payload: dict, *, timeout: float = 60.0
+    ) -> httpx.Response:
         try:
             resp = await self._send(
                 "POST",
@@ -1405,7 +1509,9 @@ class WorldWeaverClient:
             resp.raise_for_status()
             return resp
         except httpx.HTTPStatusError as e:
-            raise WorldClientError(f"POST {path} returned {e.response.status_code}: {e.response.text[:200]}") from e
+            raise WorldClientError(
+                f"POST {path} returned {e.response.status_code}: {e.response.text[:200]}"
+            ) from e
 
     async def close(self) -> None:
         await self._client.aclose()

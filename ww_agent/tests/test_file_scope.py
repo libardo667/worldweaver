@@ -52,7 +52,10 @@ def test_visual_read_keeps_scope_and_secret_guards(tmp_path):
 
 def test_default_deny_hides_secrets_even_without_gitignore(tmp_path):
     fs = _tree(tmp_path)
-    assert fs.read(".env") == {"ok": False, "reason": "ignored"} or fs.read(".env")["reason"] == "ignored"
+    assert (
+        fs.read(".env") == {"ok": False, "reason": "ignored"}
+        or fs.read(".env")["reason"] == "ignored"
+    )
     assert fs.read("config.key")["ok"] is False  # *.key
     assert fs.read("secrets/token.txt")["ok"] is False  # *secret* dir
 
@@ -60,7 +63,9 @@ def test_default_deny_hides_secrets_even_without_gitignore(tmp_path):
 def test_gitignore_is_respected(tmp_path):
     fs = _tree(tmp_path)
     assert fs.read("run.log")["ok"] is False  # *.log
-    assert fs.read("build/out.txt")["ok"] is False  # build/ dir-only pattern hides contents
+    assert (
+        fs.read("build/out.txt")["ok"] is False
+    )  # build/ dir-only pattern hides contents
 
 
 def test_cannot_escape_the_root(tmp_path):
@@ -74,7 +79,9 @@ def test_tree_and_listdir_omit_hidden(tmp_path):
     fs = _tree(tmp_path)
     tree = fs.tree(max_depth=3, max_entries=100)
     assert "notes.md" in tree and "src/main.py" in tree
-    assert not any(".env" in t or "build" in t or ".log" in t or "secrets" in t for t in tree)
+    assert not any(
+        ".env" in t or "build" in t or ".log" in t or "secrets" in t for t in tree
+    )
     names = [e["name"] for e in fs.listdir()["entries"]]
     assert "notes.md" in names and ".env" not in names and "secrets" not in names
 
@@ -126,7 +133,9 @@ def test_local_world_exposes_files_as_typed_private_information(tmp_path):
     (root / "notes.md").write_text("a private page about blue herons", encoding="utf-8")
     home = tmp_path / "home"
     (home / "memory").mkdir(parents=True)
-    (home / "memory" / "kept_memory.jsonl").write_text('{"note":"the red kettle belongs by the window"}\n', encoding="utf-8")
+    (home / "memory" / "kept_memory.jsonl").write_text(
+        '{"note":"the red kettle belongs by the window"}\n', encoding="utf-8"
+    )
     world = LocalWorld(home_dir=home, file_scope=FileScope(read_roots=[root]))
 
     scene = asyncio.run(world.get_scene("familiar-1"))
@@ -140,14 +149,18 @@ def test_local_world_exposes_files_as_typed_private_information(tmp_path):
     assert files.provenance == "scoped-reading"
     assert isinstance(world.information_sources(), InformationSourceRegistry)
 
-    result = asyncio.run(world.access_information(kind="read", source="files", query="notes.md"))
+    result = asyncio.run(
+        world.access_information(kind="read", source="files", query="notes.md")
+    )
     assert result["ok"] is True
     assert "blue herons" in result["records"][0]["content"]
     assert result["provenance"] == "scoped-reading"
     assert result["records"][0]["provenance"] == "scoped-reading"
     assert result["selection_mode"] == "exact_path"
 
-    recalled = asyncio.run(world.access_information(kind="inspect", source="recall", query="kettle"))
+    recalled = asyncio.run(
+        world.access_information(kind="inspect", source="recall", query="kettle")
+    )
     assert recalled["provenance"] == "self-memory"
     assert "red kettle" in recalled["records"][0]["content"]
 
@@ -174,7 +187,9 @@ def test_scoped_read_pages_large_files_and_names_the_next_page(tmp_path):
         file_scope=FileScope(read_roots=[root]),
     )
 
-    first = asyncio.run(world.access_information(kind="read", source="files", query="long.txt"))
+    first = asyncio.run(
+        world.access_information(kind="read", source="files", query="long.txt")
+    )
     second = asyncio.run(
         world.access_information(
             kind="read",
@@ -225,8 +240,12 @@ def test_scoped_visual_read_returns_images_only_with_explicit_vision(tmp_path):
         file_scope=FileScope(read_roots=[root]),
     )
 
-    seen = asyncio.run(sighted.access_information(kind="read", source="files", query="picture.png"))
-    unseen = asyncio.run(text_only.access_information(kind="read", source="files", query="picture.png"))
+    seen = asyncio.run(
+        sighted.access_information(kind="read", source="files", query="picture.png")
+    )
+    unseen = asyncio.run(
+        text_only.access_information(kind="read", source="files", query="picture.png")
+    )
 
     assert seen["images"][0].startswith("data:image/png;base64,")
     assert unseen.get("images", []) == []
@@ -248,7 +267,9 @@ def test_local_world_does_not_treat_read_syntax_as_physical_do(tmp_path):
     root = tmp_path / "shared"
     root.mkdir()
     (root / "notes.md").write_text("private", encoding="utf-8")
-    world = LocalWorld(home_dir=tmp_path / "home", file_scope=FileScope(read_roots=[root]))
+    world = LocalWorld(
+        home_dir=tmp_path / "home", file_scope=FileScope(read_roots=[root])
+    )
 
     result = asyncio.run(world.post_action("familiar-1", "read notes.md"))
 

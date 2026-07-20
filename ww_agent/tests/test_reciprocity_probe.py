@@ -6,7 +6,9 @@ from pathlib import Path
 
 
 def _probe_module():
-    path = Path(__file__).resolve().parents[2] / "research" / "probes" / "reciprocity.py"
+    path = (
+        Path(__file__).resolve().parents[2] / "research" / "probes" / "reciprocity.py"
+    )
     spec = importlib.util.spec_from_file_location("reciprocity_probe", path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -17,10 +19,14 @@ def _probe_module():
 def _write_ledger(root: Path, resident: str, events: list[dict]) -> None:
     resident_dir = root / "residents" / resident
     (resident_dir / "identity").mkdir(parents=True)
-    (resident_dir / "identity" / "IDENTITY.md").write_text(f"# {resident.title()}\n", encoding="utf-8")
+    (resident_dir / "identity" / "IDENTITY.md").write_text(
+        f"# {resident.title()}\n", encoding="utf-8"
+    )
     memory_dir = resident_dir / "memory"
     memory_dir.mkdir()
-    (memory_dir / "runtime_ledger.jsonl").write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+    (memory_dir / "runtime_ledger.jsonl").write_text(
+        "".join(json.dumps(event) + "\n" for event in events), encoding="utf-8"
+    )
 
 
 def test_reciprocity_probe_reads_prompt_delivery_and_co_present_edges(tmp_path):

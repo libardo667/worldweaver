@@ -92,7 +92,9 @@ class FileScope:
                 f = root / name
                 if f.exists():
                     try:
-                        lines += f.read_text(encoding="utf-8", errors="ignore").splitlines()
+                        lines += f.read_text(
+                            encoding="utf-8", errors="ignore"
+                        ).splitlines()
                     except OSError:
                         pass
             self._specs[root] = pathspec.PathSpec.from_lines("gitignore", lines)
@@ -155,7 +157,9 @@ class FileScope:
             return True
         # a path is hidden if any ancestor directory is ignored
         parts = rel.split("/")
-        return any(spec.match_file("/".join(parts[:i]) + "/") for i in range(1, len(parts)))
+        return any(
+            spec.match_file("/".join(parts[:i]) + "/") for i in range(1, len(parts))
+        )
 
     def _display(self, resolved: Path, root: Path) -> str:
         """How a path is shown and typed. With one root it's relative to that root;
@@ -243,10 +247,15 @@ class FileScope:
         """List the (non-ignored) entries of a directory inside a root."""
         resolved, root = self._resolve(subpath or (self.roots[0] if self.roots else ""))
         if resolved is None or root is None or not resolved.is_dir():
-            return {"ok": False, "reason": "outside_scope" if resolved is None else "not_a_dir"}
+            return {
+                "ok": False,
+                "reason": "outside_scope" if resolved is None else "not_a_dir",
+            }
         entries: list[dict[str, Any]] = []
         try:
-            children = sorted(resolved.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
+            children = sorted(
+                resolved.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())
+            )
         except OSError:
             return {"ok": False, "reason": "unreadable"}
         for child in children:
@@ -257,7 +266,12 @@ class FileScope:
             except OSError:
                 size = None
             entries.append({"name": child.name, "is_dir": child.is_dir(), "size": size})
-        return {"ok": True, "path": self._display(resolved, root) or ".", "root": root.name, "entries": entries}
+        return {
+            "ok": True,
+            "path": self._display(resolved, root) or ".",
+            "root": root.name,
+            "entries": entries,
+        }
 
     def find_by_name(
         self,
@@ -292,7 +306,9 @@ class FileScope:
                             break
         return matches
 
-    def tree(self, subpath: Any = "", *, max_depth: int = 2, max_entries: int = 120) -> list[str]:
+    def tree(
+        self, subpath: Any = "", *, max_depth: int = 2, max_entries: int = 120
+    ) -> list[str]:
         """A flat, scoped listing of relative paths (dirs marked with a trailing
         slash), for the agent to get its bearings. Ignored paths never appear."""
         out: list[str] = []
@@ -311,7 +327,9 @@ class FileScope:
             while stack and len(out) < max_entries:
                 d, depth = stack.pop()
                 try:
-                    children = sorted(d.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
+                    children = sorted(
+                        d.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())
+                    )
                 except OSError:
                     continue
                 for child in children:

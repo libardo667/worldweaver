@@ -63,7 +63,12 @@ def chronotype(identity_or_name: Any, *, explicit: float | None = None) -> float
     to this function.
     """
     if explicit is not None:
-        return round(max(-CHRONOTYPE_SPREAD_HOURS, min(CHRONOTYPE_SPREAD_HOURS, float(explicit))), 2)
+        return round(
+            max(
+                -CHRONOTYPE_SPREAD_HOURS, min(CHRONOTYPE_SPREAD_HOURS, float(explicit))
+            ),
+            2,
+        )
     key = _identity_key(identity_or_name)
     if not key:
         return 0.0

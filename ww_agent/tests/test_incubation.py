@@ -29,7 +29,10 @@ def test_just_arrived_is_incubating():
 def test_below_floor_holds_even_when_already_grounded():
     now = datetime.now(timezone.utc)
     arrival = now - timedelta(seconds=INCUBATION_MIN_SECONDS / 2)
-    events = [_ev(arrival)] + [_ev(arrival, "workshop_entry") for _ in range(INCUBATION_GROUNDING_THRESHOLD + 3)]
+    events = [_ev(arrival)] + [
+        _ev(arrival, "workshop_entry")
+        for _ in range(INCUBATION_GROUNDING_THRESHOLD + 3)
+    ]
     assert is_incubating(events, now=now) is True  # the floor always buys a real beat
 
 
@@ -42,10 +45,14 @@ def test_above_ceiling_lifts_even_when_not_grounded():
 
 def test_between_floor_and_ceiling_lifts_once_grounded():
     now = datetime.now(timezone.utc)
-    arrival = now - timedelta(seconds=(INCUBATION_MIN_SECONDS + INCUBATION_MAX_SECONDS) / 2)
+    arrival = now - timedelta(
+        seconds=(INCUBATION_MIN_SECONDS + INCUBATION_MAX_SECONDS) / 2
+    )
     ungrounded = [_ev(arrival)]
     assert is_incubating(ungrounded, now=now) is True
-    grounded = [_ev(arrival)] + [_ev(arrival, "workshop_entry") for _ in range(INCUBATION_GROUNDING_THRESHOLD)]
+    grounded = [_ev(arrival)] + [
+        _ev(arrival, "workshop_entry") for _ in range(INCUBATION_GROUNDING_THRESHOLD)
+    ]
     assert is_incubating(grounded, now=now) is False
 
 
@@ -68,7 +75,9 @@ def test_disabled_path_is_caller_side():
 
 
 class _FakeSource:
-    def __init__(self, name: str, description: str, provenance: str = "local-knowledge"):
+    def __init__(
+        self, name: str, description: str, provenance: str = "local-knowledge"
+    ):
         self.name = name
         self.description = description
         self.provenance = provenance
@@ -89,7 +98,10 @@ class _FakeRegistry:
 
     async def read(self, name: str, arg: str) -> dict:
         self.reads.append((name, arg))
-        return {"ok": True, "records": [{"record_id": f"{name}:one", "content": f"read {name}"}]}
+        return {
+            "ok": True,
+            "records": [{"record_id": f"{name}:one", "content": f"read {name}"}],
+        }
 
     def bind_drive(self, drive) -> None:
         pass
@@ -105,14 +117,19 @@ class _FakeClient:
 
 
 def _advert(scene) -> str:
-    return " ".join(getattr(item, "description", "") for item in (scene.affordances or []))
+    return " ".join(
+        getattr(item, "description", "") for item in (scene.affordances or [])
+    )
 
 
 def test_cityworld_advertises_and_runs_chatter_when_not_incubating():
     from src.world.city_world import CityWorld
 
     registry = _FakeRegistry(
-        [_FakeSource("chatter", "listen in on the citywide chatter"), _FakeSource("eats", "recommend a good bite nearby")]
+        [
+            _FakeSource("chatter", "listen in on the citywide chatter"),
+            _FakeSource("eats", "recommend a good bite nearby"),
+        ]
     )
     world = CityWorld(_FakeClient(), registry)
     world.incubating = False
@@ -127,7 +144,10 @@ def test_cityworld_seals_chatter_during_incubation():
     from src.world.city_world import CityWorld
 
     registry = _FakeRegistry(
-        [_FakeSource("chatter", "listen in on the citywide chatter"), _FakeSource("eats", "recommend a good bite nearby")]
+        [
+            _FakeSource("chatter", "listen in on the citywide chatter"),
+            _FakeSource("eats", "recommend a good bite nearby"),
+        ]
     )
     world = CityWorld(_FakeClient(), registry)
     world.incubating = True

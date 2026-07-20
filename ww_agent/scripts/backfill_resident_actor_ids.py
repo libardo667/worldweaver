@@ -73,8 +73,12 @@ def main(argv: list[str] | None = None) -> int:
     script_dir = Path(__file__).resolve().parent
     # historical hand-authored residents moved out of ww_agent/ to research/artifacts/ (they're artifacts,
     # not runtime). Live residents are per-shard; pass --roots for those.
-    default_root = script_dir.parent.parent / "research" / "artifacts" / "historical-residents"
-    roots = [Path(root).resolve() for root in args.roots] if args.roots else [default_root]
+    default_root = (
+        script_dir.parent.parent / "research" / "artifacts" / "historical-residents"
+    )
+    roots = (
+        [Path(root).resolve() for root in args.roots] if args.roots else [default_root]
+    )
 
     created = 0
     exists = 0
@@ -84,7 +88,9 @@ def main(argv: list[str] | None = None) -> int:
     for root in roots:
         print(f"[root] {root}")
         for resident_dir in iter_resident_dirs(root):
-            status, message = ensure_resident_id(resident_dir, known_ids, dry_run=args.dry_run)
+            status, message = ensure_resident_id(
+                resident_dir, known_ids, dry_run=args.dry_run
+            )
             print(f"  [{status}] {message}")
             if status == "created":
                 created += 1
@@ -95,7 +101,9 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 skipped += 1
 
-    print(f"\nSummary: created={created} exists={exists} rewritten={rewritten} skipped={skipped}")
+    print(
+        f"\nSummary: created={created} exists={exists} rewritten={rewritten} skipped={skipped}"
+    )
     return 0
 
 

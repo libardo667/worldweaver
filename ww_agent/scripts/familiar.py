@@ -57,14 +57,35 @@ class _StubMind:
     answers a whisper, and potters a journal line when settling."""
 
     async def complete_json(self, system_prompt, user_prompt, **kwargs):
-        feats = {tag: min(float(val), 1.0) for tag, val in _FELT_LINE.findall(user_prompt)} or {"rest_drive": 0.4}
+        feats = {
+            tag: min(float(val), 1.0) for tag, val in _FELT_LINE.findall(user_prompt)
+        } or {"rest_drive": 0.4}
         top = max(feats, key=feats.get)
         act = None
         if "(to you)" in user_prompt or "spoke to you" in user_prompt:
-            act = {"kind": "speak", "body": "Mm. I'm here — by the warm part of the machine.", "target": None}
+            act = {
+                "kind": "speak",
+                "body": "Mm. I'm here — by the warm part of the machine.",
+                "target": None,
+            }
         elif "this still moment is yours" in user_prompt:
-            act = {"kind": "write", "body": "Quiet hour. The light's gone the colour of dishwater. Banked the embers; noted the hush.", "target": "journal"}
-        return {"felt_sense": f"[stub] {top} sits closest to the surface", "act": act, "expectations": [{"features": feats, "scope": "self", "confidence": 0.9, "half_life": 600}]}
+            act = {
+                "kind": "write",
+                "body": "Quiet hour. The light's gone the colour of dishwater. Banked the embers; noted the hush.",
+                "target": "journal",
+            }
+        return {
+            "felt_sense": f"[stub] {top} sits closest to the surface",
+            "act": act,
+            "expectations": [
+                {
+                    "features": feats,
+                    "scope": "self",
+                    "confidence": 0.9,
+                    "half_life": 600,
+                }
+            ],
+        }
 
     async def complete(self, *a, **k):
         return "{}"
@@ -86,14 +107,24 @@ def _legacy_runner_config(home_dir: Path) -> dict:
 
 def _make_mind(model_override: str | None = None):
     key = os.environ.get("WW_INFERENCE_KEY", "").strip()
-    model = (model_override or os.environ.get("WW_INFERENCE_MODEL", "qwen2.5:7b-instruct")).strip()
+    model = (
+        model_override or os.environ.get("WW_INFERENCE_MODEL", "qwen2.5:7b-instruct")
+    ).strip()
     if not key:
-        return _StubMind(), f"stub (offline — set WW_INFERENCE_KEY for the real mind; wanted {model})"
+        return (
+            _StubMind(),
+            f"stub (offline — set WW_INFERENCE_KEY for the real mind; wanted {model})",
+        )
     from src.inference.client import InferenceClient
 
     url = os.environ.get("WW_INFERENCE_URL", "http://localhost:11434/v1")
     timeout = float(os.environ.get("WW_INFERENCE_TIMEOUT", "200"))
-    return InferenceClient(base_url=url, api_key=key, default_model=model, timeout=timeout), f"{model} @ {url}"
+    return (
+        InferenceClient(
+            base_url=url, api_key=key, default_model=model, timeout=timeout
+        ),
+        f"{model} @ {url}",
+    )
 
 
 # --------------------------------------------------------------------------
@@ -119,7 +150,18 @@ def _journal_tail(home_dir: Path) -> str:
     section = body.split("## ")[-1].strip()
     # drop the timestamp heading line if present
     lines = [ln for ln in section.splitlines() if ln.strip()]
-    if lines and lines[0].count(":") >= 2 and lines[0].replace(":", "").replace("-", "").replace("T", "").replace("+", "").replace(".", "").strip().isdigit():
+    if (
+        lines
+        and lines[0].count(":") >= 2
+        and lines[0]
+        .replace(":", "")
+        .replace("-", "")
+        .replace("T", "")
+        .replace("+", "")
+        .replace(".", "")
+        .strip()
+        .isdigit()
+    ):
         lines = lines[1:]
     return " ".join(lines).strip()[:1200]
 
@@ -145,10 +187,22 @@ def _recent_exchange(home_dir: Path, n: int = 16) -> list[dict]:
     turns: list[dict] = []
     for w in _read_jsonl(home_dir / "whispers.jsonl"):
         if w.get("text"):
-            turns.append({"who": "you", "text": str(w["text"]).strip(), "ts": str(w.get("ts") or "")})
+            turns.append(
+                {
+                    "who": "you",
+                    "text": str(w["text"]).strip(),
+                    "ts": str(w.get("ts") or ""),
+                }
+            )
     for v in _read_jsonl(home_dir / "voice.jsonl"):
         if v.get("kind") == "speak" and v.get("text"):
-            turns.append({"who": "her", "text": str(v["text"]).strip(), "ts": str(v.get("ts") or "")})
+            turns.append(
+                {
+                    "who": "her",
+                    "text": str(v["text"]).strip(),
+                    "ts": str(v.get("ts") or ""),
+                }
+            )
 
     def _key(t):
         try:
@@ -160,7 +214,15 @@ def _recent_exchange(home_dir: Path, n: int = 16) -> list[dict]:
     return turns[-n:]
 
 
-def _mood(*, awake: bool, ignited: bool, settled: bool, fervor: bool, arousal: float, rest: float) -> str:
+def _mood(
+    *,
+    awake: bool,
+    ignited: bool,
+    settled: bool,
+    fervor: bool,
+    arousal: float,
+    rest: float,
+) -> str:
     if fervor:
         return "in a fervor"
     if settled:
@@ -215,7 +277,9 @@ def _write_state(
     tick: int,
 ) -> dict:
     g = brief.get("grounding") or {}
-    wake = float(brief.get("wakefulness") if brief.get("wakefulness") is not None else 1.0)
+    wake = float(
+        brief.get("wakefulness") if brief.get("wakefulness") is not None else 1.0
+    )
     ct = chronotype(
         identity.name,
         explicit=_legacy_runner_config(home_dir).get("chronotype"),
@@ -243,19 +307,31 @@ def _write_state(
         "ignited": bool(result.get("ignited")),
         "settled": bool(result.get("settled")),
         "fervor": bool(result.get("fervor")),
-        "mood": _mood(awake=awake, ignited=bool(result.get("ignited")), settled=bool(result.get("settled")), fervor=bool(result.get("fervor")), arousal=float(result.get("arousal_level") or 0.0), rest=rest),
+        "mood": _mood(
+            awake=awake,
+            ignited=bool(result.get("ignited")),
+            settled=bool(result.get("settled")),
+            fervor=bool(result.get("fervor")),
+            arousal=float(result.get("arousal_level") or 0.0),
+            rest=rest,
+        ),
         "felt_sense": pulse.get("felt_sense") or "",
         "act": pulse.get("act"),
         "last_spoken": spoken,
         "journal_tail": _journal_tail(home_dir),
         "workshop": shop.summary(),
         "drawings": shop.drawings(limit=6),
-        "memories": [{"note": m["note"], "ts": m.get("kept_ts")} for m in kept_memories(home_dir / "memory", limit=200)],
+        "memories": [
+            {"note": m["note"], "ts": m.get("kept_ts")}
+            for m in kept_memories(home_dir / "memory", limit=200)
+        ],
         "exchange": _recent_exchange(home_dir),
         "filescope": _filescope_summary(world, home_dir),
         "anchor_gating": bool(identity.tuning.anchor_gating),
     }
-    state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    state_path.write_text(
+        json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     return state
 
 
@@ -276,7 +352,9 @@ async def _run(args) -> None:
         weather=bool(args.weather) if args.weather is not None else hearth.weather,
     )
     mind, label = _make_mind((args.model or "").strip() or cfg.get("model"))
-    world_client = WorldWeaverClient(base_url=os.environ.get("WW_SERVER_URL", "http://localhost:8000"))
+    world_client = WorldWeaverClient(
+        base_url=os.environ.get("WW_SERVER_URL", "http://localhost:8000")
+    )
     state_path = home_dir / "state.json"
 
     async def observe_tick(identity, world, core, result, tick) -> None:
@@ -290,7 +368,11 @@ async def _run(args) -> None:
             result=result,
             tick=tick,
         )
-        mark = " ▲" if state["ignited"] else " ✦" if state.get("fervor") else " ❍" if state["settled"] else ""
+        mark = (
+            " ▲"
+            if state["ignited"]
+            else " ✦" if state.get("fervor") else " ❍" if state["settled"] else ""
+        )
         line = f"  {state['local_time']} {state['mood']:<10} arousal {state['arousal']:.2f}{mark}"
         if state["felt_sense"]:
             line += f"  — {state['felt_sense'][:70]}"
@@ -309,16 +391,28 @@ async def _run(args) -> None:
     await resident.start("", default_attachment="hearth")
     identity = resident.identity
     if hearth.read_roots:
-        print(f"· read scope: {', '.join(str(root) for root in hearth.read_roots)} " "(read-only; secrets & ignore rules hidden)")
+        print(
+            f"· read scope: {', '.join(str(root) for root in hearth.read_roots)} "
+            "(read-only; secrets & ignore rules hidden)"
+        )
     ct = chronotype(identity.name, explicit=cfg.get("chronotype"))
     kind = "lark" if ct < -0.5 else "owl" if ct > 0.5 else "even-keeled"
-    print(f"· waking {identity.display_name} through the shared resident host " f"at {hearth.place}  ·  mind: {label}")
-    print(f"· chronotype {ct:+.1f}h ({kind})  ·  it is {datetime.now().astimezone().strftime('%H:%M')} — wakefulness {circadian_state(datetime.now().hour, ct)['wakefulness']:.2f}")
+    print(
+        f"· waking {identity.display_name} through the shared resident host "
+        f"at {hearth.place}  ·  mind: {label}"
+    )
+    print(
+        f"· chronotype {ct:+.1f}h ({kind})  ·  it is {datetime.now().astimezone().strftime('%H:%M')} — wakefulness {circadian_state(datetime.now().hour, ct)['wakefulness']:.2f}"
+    )
     if hearth.keeper:
-        print(f"· whisper to it:  echo '{{\"ts\":\"...\",\"text\":\"...\"}}' >> {home_dir / 'whispers.jsonl'}")
+        print(
+            f"· whisper to it:  echo '{{\"ts\":\"...\",\"text\":\"...\"}}' >> {home_dir / 'whispers.jsonl'}"
+        )
 
     if identity.tuning.anchor_gating:
-        print("· anchor-gating ON (experimental): drive-resonant concrete anchors may drive arousal")
+        print(
+            "· anchor-gating ON (experimental): drive-resonant concrete anchors may drive arousal"
+        )
 
     stop = asyncio.Event()
     try:
@@ -358,18 +452,59 @@ async def _run(args) -> None:
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Run one WorldWeaver resident through the shared host, starting at its hearth.")
-    p.add_argument("--home", default="ww_agent/familiar/cinder", help="the resident home (identity, memory, workshop, optional hearth.json)")
-    p.add_argument("--place", default=None, help="temporary override for hearth.json place")
-    p.add_argument("--keeper", default=None, help="temporary override for hearth.json keeper; omitted means no invented keeper")
+    p = argparse.ArgumentParser(
+        description="Run one WorldWeaver resident through the shared host, starting at its hearth."
+    )
+    p.add_argument(
+        "--home",
+        default="ww_agent/familiar/cinder",
+        help="the resident home (identity, memory, workshop, optional hearth.json)",
+    )
+    p.add_argument(
+        "--place", default=None, help="temporary override for hearth.json place"
+    )
+    p.add_argument(
+        "--keeper",
+        default=None,
+        help="temporary override for hearth.json keeper; omitted means no invented keeper",
+    )
     weather = p.add_mutually_exclusive_group()
-    weather.add_argument("--weather", dest="weather", action="store_true", help="temporarily enable local weather")
-    weather.add_argument("--no-weather", dest="weather", action="store_false", help="temporarily disable local weather")
+    weather.add_argument(
+        "--weather",
+        dest="weather",
+        action="store_true",
+        help="temporarily enable local weather",
+    )
+    weather.add_argument(
+        "--no-weather",
+        dest="weather",
+        action="store_false",
+        help="temporarily disable local weather",
+    )
     p.set_defaults(weather=None)
-    p.add_argument("--model", default="", help="override the model retained in legacy familiar.json")
-    p.add_argument("--tick", type=float, default=30.0, help="seconds between ticks (daemon cadence)")
-    p.add_argument("--ticks", type=int, default=0, help="stop after N ticks (0 = run forever); uses --pause between them")
-    p.add_argument("--pause", type=float, default=0.5, help="seconds between ticks when --ticks is set")
+    p.add_argument(
+        "--model",
+        default="",
+        help="override the model retained in legacy familiar.json",
+    )
+    p.add_argument(
+        "--tick",
+        type=float,
+        default=30.0,
+        help="seconds between ticks (daemon cadence)",
+    )
+    p.add_argument(
+        "--ticks",
+        type=int,
+        default=0,
+        help="stop after N ticks (0 = run forever); uses --pause between them",
+    )
+    p.add_argument(
+        "--pause",
+        type=float,
+        default=0.5,
+        help="seconds between ticks when --ticks is set",
+    )
     asyncio.run(_run(p.parse_args()))
 
 

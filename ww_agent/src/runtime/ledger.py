@@ -151,7 +151,9 @@ def _intents_dir(memory_dir: Path) -> Path:
 
 
 def _mail_intent_filename(mail_intent_id: str, recipient: str) -> str:
-    safe_recipient = re.sub(r"[^a-z0-9]+", "_", recipient.lower()).strip("_") or "unknown"
+    safe_recipient = (
+        re.sub(r"[^a-z0-9]+", "_", recipient.lower()).strip("_") or "unknown"
+    )
     return f"intent_{mail_intent_id}_{safe_recipient}.md"
 
 
@@ -198,7 +200,13 @@ def _merge_pressure_payload(
     *,
     ts: str = "",
 ) -> dict[str, Any]:
-    ambient_signal_kinds = {"crowding", "quiet", "event_pull", "bad_weather", "place_character"}
+    ambient_signal_kinds = {
+        "crowding",
+        "quiet",
+        "event_pull",
+        "bad_weather",
+        "place_character",
+    }
     session_signal_kinds = {"danger", "tension", "fatigue", "melancholy", "loneliness"}
     ambient_raw_keys = {
         "scene_present_count",
@@ -235,13 +243,27 @@ def _merge_pressure_payload(
     payload = incoming if isinstance(incoming, dict) else {}
     source = str(payload.get("source") or "").strip()
     if source == "ambient":
-        merged["signals"] = [item for item in list(merged.get("signals") or []) if not (isinstance(item, dict) and str(item.get("kind") or "").strip() in ambient_signal_kinds)]
+        merged["signals"] = [
+            item
+            for item in list(merged.get("signals") or [])
+            if not (
+                isinstance(item, dict)
+                and str(item.get("kind") or "").strip() in ambient_signal_kinds
+            )
+        ]
         for key in ambient_raw_keys:
             merged["raw"].pop(key, None)
         for key in ambient_context_keys:
             merged["context"].pop(key, None)
     elif source == "session_state":
-        merged["signals"] = [item for item in list(merged.get("signals") or []) if not (isinstance(item, dict) and str(item.get("kind") or "").strip() in session_signal_kinds)]
+        merged["signals"] = [
+            item
+            for item in list(merged.get("signals") or [])
+            if not (
+                isinstance(item, dict)
+                and str(item.get("kind") or "").strip() in session_signal_kinds
+            )
+        ]
         for key in session_raw_keys:
             merged["raw"].pop(key, None)
         for key in session_context_keys:
@@ -288,7 +310,9 @@ def _merge_pressure_payload(
             merged["signals"].append(normalized)
             continue
         existing = merged["signals"][existing_idx]
-        existing_level = _coerce_float(existing.get("level")) if isinstance(existing, dict) else None
+        existing_level = (
+            _coerce_float(existing.get("level")) if isinstance(existing, dict) else None
+        )
         if existing_level is None or normalized["level"] >= existing_level:
             merged["signals"][existing_idx] = normalized
     merged["raw"].update(dict(payload.get("raw") or {}))
@@ -334,11 +358,7 @@ def _build_world_salience_projection(
         )
 
     total = sum(float(item["intensity"]) for item in features)
-    shares = [
-        float(item["intensity"]) / total
-        for item in features
-        if total > 0.0
-    ]
+    shares = [float(item["intensity"]) / total for item in features if total > 0.0]
     concentration = sum(share * share for share in shares)
     source_count = len({str(item["source"]) for item in features})
     return {
@@ -349,7 +369,9 @@ def _build_world_salience_projection(
         "independent_source_count": source_count,
         "plural": len(features) >= 2 and source_count >= 2,
         "dominant_share": round(max(shares), 3) if shares else 0.0,
-        "effective_feature_count": round(1.0 / concentration, 3) if concentration > 0.0 else 0.0,
+        "effective_feature_count": (
+            round(1.0 / concentration, 3) if concentration > 0.0 else 0.0
+        ),
     }
 
 
@@ -414,7 +436,10 @@ def load_runtime_reducer_events(
     """
     requested_window = float(window_seconds)
     if requested_window < LONGEST_RUNTIME_REDUCER_HALF_LIFE_SECONDS:
-        raise ValueError("runtime reducer window must exceed the longest reducer half-life " f"({LONGEST_RUNTIME_REDUCER_HALF_LIFE_SECONDS:.0f}s)")
+        raise ValueError(
+            "runtime reducer window must exceed the longest reducer half-life "
+            f"({LONGEST_RUNTIME_REDUCER_HALF_LIFE_SECONDS:.0f}s)"
+        )
     path = _ledger_path(memory_dir)
     if not path.exists():
         return []
@@ -437,7 +462,10 @@ def load_runtime_reducer_events(
                 break
         selected.append(raw)
         if len(selected) > RUNTIME_READ_MAX_EVENTS:
-            raise RuntimeError("runtime reducer horizon exceeds the safe event-density ceiling; " "add or advance an incremental reducer checkpoint")
+            raise RuntimeError(
+                "runtime reducer horizon exceeds the safe event-density ceiling; "
+                "add or advance an incremental reducer checkpoint"
+            )
     selected.reverse()
     return selected
 
@@ -489,7 +517,11 @@ def _derive_packets_from_events(events: list[dict[str, Any]]) -> list[dict[str, 
         elif event_type == "packet_status_changed":
             packet_id = str(payload.get("packet_id") or "").strip()
             if packet_id and packet_id in packets:
-                packets[packet_id]["status"] = str(payload.get("status") or packets[packet_id].get("status") or "pending").strip()
+                packets[packet_id]["status"] = str(
+                    payload.get("status")
+                    or packets[packet_id].get("status")
+                    or "pending"
+                ).strip()
     ordered = sorted(
         packets.values(),
         key=lambda item: str(item.get("created_at") or ""),
@@ -513,7 +545,11 @@ def _derive_intents_from_events(events: list[dict[str, Any]]) -> list[dict[str, 
         elif event_type == "intent_status_changed":
             intent_id = str(payload.get("intent_id") or "").strip()
             if intent_id and intent_id in intents:
-                intents[intent_id]["status"] = str(payload.get("status") or intents[intent_id].get("status") or "pending").strip()
+                intents[intent_id]["status"] = str(
+                    payload.get("status")
+                    or intents[intent_id].get("status")
+                    or "pending"
+                ).strip()
                 validation_state = str(payload.get("validation_state") or "").strip()
                 if validation_state:
                     intents[intent_id]["validation_state"] = validation_state
@@ -602,9 +638,12 @@ def _derive_research_queue_from_events(
         if event_type == "research_queued":
             queued[key] = {
                 "query": query,
-                "priority": str(payload.get("priority") or "normal").strip() or "normal",
+                "priority": str(payload.get("priority") or "normal").strip()
+                or "normal",
                 "source": str(payload.get("source") or "").strip(),
-                "added_ts": str(payload.get("added_ts") or event.get("ts") or "").strip(),
+                "added_ts": str(
+                    payload.get("added_ts") or event.get("ts") or ""
+                ).strip(),
             }
         elif event_type == "research_popped":
             queued.pop(key, None)
@@ -666,7 +705,9 @@ def _build_runtime_projection(
             last_mail = {
                 "ts": str(event.get("ts") or "").strip(),
                 "event_type": event_type,
-                "recipient": str(payload.get("recipient") or payload.get("sender_name") or "").strip(),
+                "recipient": str(
+                    payload.get("recipient") or payload.get("sender_name") or ""
+                ).strip(),
                 "vote": str(payload.get("vote") or "").strip(),
             }
         elif event_type in {
@@ -750,7 +791,9 @@ def _build_subjective_projection(
 
     for packet in packets:
         packet_type = str(packet.get("packet_type") or "").strip()
-        payload = packet.get("payload") if isinstance(packet.get("payload"), dict) else {}
+        payload = (
+            packet.get("payload") if isinstance(packet.get("payload"), dict) else {}
+        )
         ts = str(packet.get("created_at") or "").strip()
         if packet_type in {"chat_heard", "city_chat_heard"}:
             speaker = str(payload.get("speaker") or "").strip()
@@ -758,9 +801,21 @@ def _build_subjective_projection(
             is_direct = bool(payload.get("is_direct"))
             is_question = bool(payload.get("is_question"))
             is_request = bool(payload.get("is_request"))
-            channel = str(payload.get("channel") or ("local" if packet_type == "chat_heard" else "city")).strip()
+            channel = str(
+                payload.get("channel")
+                or ("local" if packet_type == "chat_heard" else "city")
+            ).strip()
             packet_ts = _parse_iso_ts(ts)
-            is_followup_direct = packet_type == "chat_heard" and not is_direct and speaker and speaker == direct_partner and packet_ts is not None and direct_partner_ts is not None and packet_ts - direct_partner_ts <= followup_window and (is_question or is_request)
+            is_followup_direct = (
+                packet_type == "chat_heard"
+                and not is_direct
+                and speaker
+                and speaker == direct_partner
+                and packet_ts is not None
+                and direct_partner_ts is not None
+                and packet_ts - direct_partner_ts <= followup_window
+                and (is_question or is_request)
+            )
             touch_thread(speaker, kind=packet_type, ts=ts)
             if packet_type == "city_chat_heard" and speaker and message:
                 city_signals.append(
@@ -785,7 +840,12 @@ def _build_subjective_projection(
                 }
                 direct_partner = speaker
                 direct_partner_ts = packet_ts
-            if (is_direct or is_followup_direct) and is_question and speaker and message:
+            if (
+                (is_direct or is_followup_direct)
+                and is_question
+                and speaker
+                and message
+            ):
                 open_questions.append(
                     {
                         "speaker": speaker,
@@ -793,7 +853,9 @@ def _build_subjective_projection(
                         "ts": ts,
                     }
                 )
-            elif (is_direct or is_followup_direct) and is_request and speaker and message:
+            elif (
+                (is_direct or is_followup_direct) and is_request and speaker and message
+            ):
                 open_requests.append(
                     {
                         "speaker": speaker,
@@ -817,13 +879,21 @@ def _build_subjective_projection(
     latest_direct_ts = _parse_iso_ts(str((latest_direct or {}).get("ts") or ""))
     for item in open_questions[-4:]:
         item_ts = _parse_iso_ts(str(item.get("ts") or ""))
-        if latest_direct_ts is None or item_ts is None or latest_direct_ts - item_ts <= dialogue_expiry_window:
+        if (
+            latest_direct_ts is None
+            or item_ts is None
+            or latest_direct_ts - item_ts <= dialogue_expiry_window
+        ):
             freshest_direct_questions.append(item)
 
     freshest_direct_requests: list[dict[str, Any]] = []
     for item in open_requests[-4:]:
         item_ts = _parse_iso_ts(str(item.get("ts") or ""))
-        if latest_direct_ts is None or item_ts is None or latest_direct_ts - item_ts <= dialogue_expiry_window:
+        if (
+            latest_direct_ts is None
+            or item_ts is None
+            or latest_direct_ts - item_ts <= dialogue_expiry_window
+        ):
             freshest_direct_requests.append(item)
 
     for event in events:
@@ -846,7 +916,14 @@ def _build_subjective_projection(
                 ts=ts,
             )
 
-    salient_city_signals = [item for item in city_signals if bool(item.get("tagged")) or bool(item.get("is_direct")) or bool(item.get("is_question")) or bool(item.get("is_request"))]
+    salient_city_signals = [
+        item
+        for item in city_signals
+        if bool(item.get("tagged"))
+        or bool(item.get("is_direct"))
+        or bool(item.get("is_question"))
+        or bool(item.get("is_request"))
+    ]
 
     active_social_threads = sorted(
         thread_state.values(),
@@ -901,7 +978,12 @@ def _build_subjective_projection(
                 "detail": "recent city-channel signal",
             }
         )
-    social_pressure = bool(freshest_direct_questions or freshest_direct_requests or pending_mail or mail_intents)
+    social_pressure = bool(
+        freshest_direct_questions
+        or freshest_direct_requests
+        or pending_mail
+        or mail_intents
+    )
     for signal in list(state_pressure.get("signals") or [])[:3]:
         if not isinstance(signal, dict):
             continue
@@ -951,15 +1033,24 @@ def _build_subjective_projection(
         "updated_at": _utc_now_iso(),
         "active_social_threads": active_social_threads,
         "dialogue_state": {
-            "active_partner": str((latest_direct or {}).get("speaker") or ((pending_mail[-1] if pending_mail else {}).get("sender") or "")).strip(),
+            "active_partner": str(
+                (latest_direct or {}).get("speaker")
+                or ((pending_mail[-1] if pending_mail else {}).get("sender") or "")
+            ).strip(),
             "last_direct_message": latest_direct,
             "open_questions": freshest_direct_questions,
             "open_requests": freshest_direct_requests,
-            "direct_urgency": (1.0 if freshest_direct_questions else 0.8 if freshest_direct_requests else 0.0),
+            "direct_urgency": (
+                1.0
+                if freshest_direct_questions
+                else 0.8 if freshest_direct_requests else 0.0
+            ),
         },
         "mail_state": {
             "pending_inbox_count": len(pending_mail),
-            "latest_sender": str((pending_mail[-1] if pending_mail else {}).get("sender") or "").strip(),
+            "latest_sender": str(
+                (pending_mail[-1] if pending_mail else {}).get("sender") or ""
+            ).strip(),
             "pending_letters": pending_mail[-4:],
         },
         "city_context": {
@@ -1016,7 +1107,9 @@ def _build_memory_projection(
         elif event_type in {"move_executed", "movement_arrived", "movement_blocked"}:
             experience = {
                 "kind": "movement",
-                "label": str(payload.get("destination") or payload.get("arrived_at") or "").strip(),
+                "label": str(
+                    payload.get("destination") or payload.get("arrived_at") or ""
+                ).strip(),
                 "detail": event_type,
                 "ts": ts,
             }
@@ -1028,7 +1121,9 @@ def _build_memory_projection(
         }:
             experience = {
                 "kind": "mail",
-                "label": str(payload.get("recipient") or payload.get("sender_name") or "").strip(),
+                "label": str(
+                    payload.get("recipient") or payload.get("sender_name") or ""
+                ).strip(),
                 "detail": event_type,
                 "ts": ts,
             }
@@ -1086,7 +1181,11 @@ def _build_relationship_projection(events: list[dict[str, Any]]) -> dict[str, An
             if not utterance_id or not counterpart_actor_id:
                 continue
             current = relationships.get(counterpart_actor_id)
-            display_name = str(payload.get("speaker_name") or (current or {}).get("counterpart_name") or "").strip()
+            display_name = str(
+                payload.get("speaker_name")
+                or (current or {}).get("counterpart_name")
+                or ""
+            ).strip()
             revision = int((current or {}).get("revision") or 0) + 1
             relationship_id = f"relationship:{counterpart_actor_id}"
             claim_id = f"claim:{relationship_id}:current_exchange"
@@ -1102,7 +1201,10 @@ def _build_relationship_projection(events: list[dict[str, Any]]) -> dict[str, An
                 "updated_at": event_ts,
                 "location": str(payload.get("location") or "").strip(),
                 "utterance_id": utterance_id,
-                "perceived_utterance_count": int((current or {}).get("perceived_utterance_count") or 0) + 1,
+                "perceived_utterance_count": int(
+                    (current or {}).get("perceived_utterance_count") or 0
+                )
+                + 1,
                 "reply_count": int((current or {}).get("reply_count") or 0),
                 "evidence_event_ids": [event_id],
             }
@@ -1117,7 +1219,12 @@ def _build_relationship_projection(events: list[dict[str, Any]]) -> dict[str, An
             }
             continue
 
-        if event_type not in {"chat_sent", "city_broadcast_sent", "speech_carried", "mail_intent_sent"}:
+        if event_type not in {
+            "chat_sent",
+            "city_broadcast_sent",
+            "speech_carried",
+            "mail_intent_sent",
+        }:
             continue
         if payload.get("edge_schema_version") != RELATIONAL_EVENT_SCHEMA_VERSION:
             continue
@@ -1132,7 +1239,9 @@ def _build_relationship_projection(events: list[dict[str, Any]]) -> dict[str, An
         revision = int(current.get("revision") or 0) + 1
         relationships[counterpart_actor_id] = {
             **current,
-            "counterpart_name": str(current.get("counterpart_name") or perceived["display_name"]).strip(),
+            "counterpart_name": str(
+                current.get("counterpart_name") or perceived["display_name"]
+            ).strip(),
             "state": "replied",
             "revision": revision,
             "supersedes_revision": revision - 1,
@@ -1169,16 +1278,27 @@ def _build_subjective_facts(
     thread_counts: dict[str, int] = {}
     for packet in packets:
         packet_type = str(packet.get("packet_type") or "").strip()
-        payload = packet.get("payload") if isinstance(packet.get("payload"), dict) else {}
+        payload = (
+            packet.get("payload") if isinstance(packet.get("payload"), dict) else {}
+        )
         if packet_type in {"chat_heard", "city_chat_heard"}:
             speaker = str(payload.get("speaker") or "").strip()
             if speaker:
                 key = speaker.lower()
                 thread_counts[key] = thread_counts.get(key, 0) + 1
 
-    for name_key, count in sorted(thread_counts.items(), key=lambda pair: (-pair[1], pair[0]))[:8]:
+    for name_key, count in sorted(
+        thread_counts.items(), key=lambda pair: (-pair[1], pair[0])
+    )[:8]:
         display_name = next(
-            (str((packet.get("payload") or {}).get("speaker") or "").strip() for packet in packets if str((packet.get("payload") or {}).get("speaker") or "").strip().lower() == name_key),
+            (
+                str((packet.get("payload") or {}).get("speaker") or "").strip()
+                for packet in packets
+                if str((packet.get("payload") or {}).get("speaker") or "")
+                .strip()
+                .lower()
+                == name_key
+            ),
             name_key.title(),
         )
         facts.append(
@@ -1193,11 +1313,22 @@ def _build_subjective_facts(
         )
 
     latest_direct_question = next(
-        (packet for packet in reversed(packets) if str(packet.get("packet_type") or "").strip() == "chat_heard" and bool((packet.get("payload") or {}).get("is_direct")) and bool((packet.get("payload") or {}).get("is_question")) and str((packet.get("payload") or {}).get("speaker") or "").strip()),
+        (
+            packet
+            for packet in reversed(packets)
+            if str(packet.get("packet_type") or "").strip() == "chat_heard"
+            and bool((packet.get("payload") or {}).get("is_direct"))
+            and bool((packet.get("payload") or {}).get("is_question"))
+            and str((packet.get("payload") or {}).get("speaker") or "").strip()
+        ),
         None,
     )
     if latest_direct_question is not None:
-        payload = latest_direct_question.get("payload") if isinstance(latest_direct_question.get("payload"), dict) else {}
+        payload = (
+            latest_direct_question.get("payload")
+            if isinstance(latest_direct_question.get("payload"), dict)
+            else {}
+        )
         speaker = str(payload.get("speaker") or "").strip()
         message = str(payload.get("message") or "").strip()
         if speaker and message:
@@ -1240,7 +1371,9 @@ def _build_subjective_facts(
                     "subject": "self",
                     "predicate": "pressed_by",
                     "object": label,
-                    "confidence": min(0.95, max(0.4, level if level is not None else 0.6)),
+                    "confidence": min(
+                        0.95, max(0.4, level if level is not None else 0.6)
+                    ),
                     "evidence": {"kind": kind, "level": level},
                     "source": "derived_from_runtime_ledger",
                 }
@@ -1264,7 +1397,9 @@ def _build_subjective_facts(
                 "subject": "self",
                 "predicate": "curious_about",
                 "object": str(item.get("query") or "").strip(),
-                "confidence": (0.85 if str(item.get("priority") or "") == "high" else 0.65),
+                "confidence": (
+                    0.85 if str(item.get("priority") or "") == "high" else 0.65
+                ),
                 "evidence": {"priority": str(item.get("priority") or "").strip()},
                 "source": "derived_from_runtime_ledger",
             }
@@ -1277,14 +1412,23 @@ def _build_subjective_facts(
                 "predicate": "wants_to_write",
                 "object": str(item.get("recipient") or "").strip(),
                 "confidence": 0.8,
-                "evidence": {"mail_intent_id": str(item.get("mail_intent_id") or "").strip()},
+                "evidence": {
+                    "mail_intent_id": str(item.get("mail_intent_id") or "").strip()
+                },
                 "source": "derived_from_runtime_ledger",
             }
         )
 
-    if any(str(event.get("event_type") or "").strip() == "movement_blocked" for event in events[-10:]):
+    if any(
+        str(event.get("event_type") or "").strip() == "movement_blocked"
+        for event in events[-10:]
+    ):
         blocked = next(
-            (str((event.get("payload") or {}).get("destination") or "").strip() for event in reversed(events) if str(event.get("event_type") or "").strip() == "movement_blocked"),
+            (
+                str((event.get("payload") or {}).get("destination") or "").strip()
+                for event in reversed(events)
+                if str(event.get("event_type") or "").strip() == "movement_blocked"
+            ),
             "",
         )
         if blocked:
@@ -1302,7 +1446,9 @@ def _build_subjective_facts(
     for relationship in list(relationship_projection.get("relationships") or []):
         if not isinstance(relationship, dict):
             continue
-        counterpart_actor_id = str(relationship.get("counterpart_actor_id") or "").strip()
+        counterpart_actor_id = str(
+            relationship.get("counterpart_actor_id") or ""
+        ).strip()
         claim_id = str(relationship.get("claim_id") or "").strip()
         state = str(relationship.get("state") or "").strip()
         evidence_event_ids = [
@@ -1310,7 +1456,12 @@ def _build_subjective_facts(
             for event_id in list(relationship.get("evidence_event_ids") or [])
             if str(event_id).strip()
         ]
-        if not counterpart_actor_id or not claim_id or state not in {"perceived", "replied"} or not evidence_event_ids:
+        if (
+            not counterpart_actor_id
+            or not claim_id
+            or state not in {"perceived", "replied"}
+            or not evidence_event_ids
+        ):
             continue
         facts.append(
             {
@@ -1319,8 +1470,14 @@ def _build_subjective_facts(
                 "revision": int(relationship.get("revision") or 1),
                 "supersedes_revision": relationship.get("supersedes_revision"),
                 "subject": "self",
-                "predicate": "has_replied_to" if state == "replied" else "has_perceived_utterance_from",
-                "object": str(relationship.get("counterpart_name") or counterpart_actor_id).strip(),
+                "predicate": (
+                    "has_replied_to"
+                    if state == "replied"
+                    else "has_perceived_utterance_from"
+                ),
+                "object": str(
+                    relationship.get("counterpart_name") or counterpart_actor_id
+                ).strip(),
                 "object_actor_id": counterpart_actor_id,
                 "confidence": 0.9 if state == "replied" else 0.7,
                 "observed_at": str(relationship.get("updated_at") or "").strip(),
@@ -1359,7 +1516,10 @@ def _build_cognitive_projection(
     mail_state = subjective_projection.get("mail_state") or {}
     social_threads = list(subjective_projection.get("active_social_threads") or [])
     runtime_events = list(runtime_projection.get("recent_events") or [])
-    last_event_ts = str((runtime_events[-1] if runtime_events else {}).get("ts") or "").strip() or None
+    last_event_ts = (
+        str((runtime_events[-1] if runtime_events else {}).get("ts") or "").strip()
+        or None
+    )
 
     def signal_ref(kind: str) -> dict[str, Any] | None:
         signal = pressure_by_kind.get(kind)
@@ -1374,7 +1534,11 @@ def _build_cognitive_projection(
 
     def concern_ref(kind: str) -> dict[str, Any] | None:
         item = next(
-            (entry for entry in concerns if str(entry.get("kind") or "").strip() == kind),
+            (
+                entry
+                for entry in concerns
+                if str(entry.get("kind") or "").strip() == kind
+            ),
             None,
         )
         if item is None:
@@ -1399,8 +1563,14 @@ def _build_cognitive_projection(
     ) -> dict[str, Any]:
         normalized_activation = round(_clamp01(activation), 3)
         evidence_count = len(evidence_refs)
-        stability = round(_clamp01(0.2 + (0.22 * evidence_count) + (0.45 * normalized_activation)), 3)
-        sticky_until = _plus_minutes_iso(last_transition_at or "", sticky_minutes) if sticky_minutes is not None and persistence_class == "sticky" else None
+        stability = round(
+            _clamp01(0.2 + (0.22 * evidence_count) + (0.45 * normalized_activation)), 3
+        )
+        sticky_until = (
+            _plus_minutes_iso(last_transition_at or "", sticky_minutes)
+            if sticky_minutes is not None and persistence_class == "sticky"
+            else None
+        )
         return {
             "node_id": node_id,
             "mode": mode,
@@ -1428,15 +1598,31 @@ def _build_cognitive_projection(
                 "destination": str(blocked_movement.get("destination") or "").strip(),
             }
         )
-    vigilance_activation = max([_coerce_float((pressure_by_kind.get(kind) or {}).get("level")) or 0.0 for kind in ("danger", "tension", "bad_weather", "crowding")] + ([0.72] if str(blocked_movement.get("event_type") or "").strip() == "movement_blocked" else [0.0]))
-    vigilance_mode = "alarmed" if vigilance_activation >= 0.75 else "wary" if vigilance_activation >= 0.35 else "calm"
+    vigilance_activation = max(
+        [
+            _coerce_float((pressure_by_kind.get(kind) or {}).get("level")) or 0.0
+            for kind in ("danger", "tension", "bad_weather", "crowding")
+        ]
+        + (
+            [0.72]
+            if str(blocked_movement.get("event_type") or "").strip()
+            == "movement_blocked"
+            else [0.0]
+        )
+    )
+    vigilance_mode = (
+        "alarmed"
+        if vigilance_activation >= 0.75
+        else "wary" if vigilance_activation >= 0.35 else "calm"
+    )
     vigilance = node(
         "vigilance",
         mode=vigilance_mode,
         activation=vigilance_activation,
         evidence_refs=vigilance_refs,
         persistence_class="sticky" if vigilance_activation >= 0.6 else "ephemeral",
-        last_transition_at=str(blocked_movement.get("ts") or last_event_ts or "") or None,
+        last_transition_at=str(blocked_movement.get("ts") or last_event_ts or "")
+        or None,
         sticky_minutes=20.0,
         neighbor_bias=(
             [
@@ -1464,17 +1650,27 @@ def _build_cognitive_projection(
             {
                 "kind": "social_threads",
                 "count": len(social_threads),
-                "top_partner": str((social_threads[0] if social_threads else {}).get("name") or "").strip(),
+                "top_partner": str(
+                    (social_threads[0] if social_threads else {}).get("name") or ""
+                ).strip(),
             }
         )
-    social_activation = max(direct_urgency, min(1.0, inbox_count * 0.3), thread_strength * 0.55)
-    social_mode = "engaged" if social_activation >= 0.72 else "receptive" if social_activation >= 0.28 else "withdrawn"
+    social_activation = max(
+        direct_urgency, min(1.0, inbox_count * 0.3), thread_strength * 0.55
+    )
+    social_mode = (
+        "engaged"
+        if social_activation >= 0.72
+        else "receptive" if social_activation >= 0.28 else "withdrawn"
+    )
     social_pull = node(
         "social_pull",
         mode=social_mode,
         activation=social_activation,
         evidence_refs=social_refs,
-        persistence_class=("sticky" if (direct_urgency >= 0.8 or inbox_count > 0) else "ephemeral"),
+        persistence_class=(
+            "sticky" if (direct_urgency >= 0.8 or inbox_count > 0) else "ephemeral"
+        ),
         last_transition_at=last_event_ts,
         sticky_minutes=25.0,
         neighbor_bias=(
@@ -1503,16 +1699,33 @@ def _build_cognitive_projection(
         ref = concern_ref(key)
         if ref is not None:
             mobility_refs.append(ref)
-    event_pull_level = _coerce_float((pressure_by_kind.get("event_pull") or {}).get("level")) or 0.0
-    mobility_activation = 0.92 if route is not None else max(event_pull_level, 0.52 if concern_ref("research") else 0.08)
-    mobility_mode = "goal_directed" if mobility_activation >= 0.8 else "wandering" if mobility_activation >= 0.32 else "rooted"
+    event_pull_level = (
+        _coerce_float((pressure_by_kind.get("event_pull") or {}).get("level")) or 0.0
+    )
+    mobility_activation = (
+        0.92
+        if route is not None
+        else max(event_pull_level, 0.52 if concern_ref("research") else 0.08)
+    )
+    mobility_mode = (
+        "goal_directed"
+        if mobility_activation >= 0.8
+        else "wandering" if mobility_activation >= 0.32 else "rooted"
+    )
     mobility_drive = node(
         "mobility_drive",
         mode=mobility_mode,
         activation=mobility_activation,
         evidence_refs=mobility_refs,
-        persistence_class=("sticky" if route is not None or event_pull_level >= 0.6 else "ephemeral"),
-        last_transition_at=str((runtime_projection.get("last_movement") or {}).get("ts") or last_event_ts or "") or None,
+        persistence_class=(
+            "sticky" if route is not None or event_pull_level >= 0.6 else "ephemeral"
+        ),
+        last_transition_at=str(
+            (runtime_projection.get("last_movement") or {}).get("ts")
+            or last_event_ts
+            or ""
+        )
+        or None,
         sticky_minutes=30.0,
         neighbor_bias=(
             [
@@ -1541,18 +1754,31 @@ def _build_cognitive_projection(
             {
                 "kind": "mail_intents",
                 "count": len(mail_intents),
-                "latest_recipient": str((mail_intents[0] if mail_intents else {}).get("recipient") or "").strip(),
+                "latest_recipient": str(
+                    (mail_intents[0] if mail_intents else {}).get("recipient") or ""
+                ).strip(),
             }
         )
-    correspondence_activation = max(min(1.0, inbox_count * 0.4), min(1.0, len(mail_intents) * 0.28))
-    correspondence_mode = "urgent" if correspondence_activation >= 0.75 else "pulling" if correspondence_activation >= 0.25 else "dormant"
+    correspondence_activation = max(
+        min(1.0, inbox_count * 0.4), min(1.0, len(mail_intents) * 0.28)
+    )
+    correspondence_mode = (
+        "urgent"
+        if correspondence_activation >= 0.75
+        else "pulling" if correspondence_activation >= 0.25 else "dormant"
+    )
     correspondence_pull = node(
         "correspondence_pull",
         mode=correspondence_mode,
         activation=correspondence_activation,
         evidence_refs=correspondence_refs,
-        persistence_class=("sticky" if (inbox_count > 0 or bool(mail_intents)) else "ephemeral"),
-        last_transition_at=str((runtime_projection.get("last_mail") or {}).get("ts") or last_event_ts or "") or None,
+        persistence_class=(
+            "sticky" if (inbox_count > 0 or bool(mail_intents)) else "ephemeral"
+        ),
+        last_transition_at=str(
+            (runtime_projection.get("last_mail") or {}).get("ts") or last_event_ts or ""
+        )
+        or None,
         sticky_minutes=45.0,
         neighbor_bias=(
             [
@@ -1567,8 +1793,14 @@ def _build_cognitive_projection(
         ),
     )
 
-    fatigue_level = _coerce_float((pressure_by_kind.get("fatigue") or {}).get("level")) or 0.0
-    time_of_day = str((state_pressure.get("context") or {}).get("time_of_day") or "").strip().lower()
+    fatigue_level = (
+        _coerce_float((pressure_by_kind.get("fatigue") or {}).get("level")) or 0.0
+    )
+    time_of_day = (
+        str((state_pressure.get("context") or {}).get("time_of_day") or "")
+        .strip()
+        .lower()
+    )
     rest_refs: list[dict[str, Any]] = []
     fatigue_ref = signal_ref("fatigue")
     if fatigue_ref is not None:
@@ -1579,7 +1811,11 @@ def _build_cognitive_projection(
         fatigue_level,
         0.62 if time_of_day in {"night", "late_evening", "sleep_window"} else 0.0,
     )
-    rest_mode = "shutting_down" if rest_activation >= 0.82 else "tired" if rest_activation >= 0.38 else "active"
+    rest_mode = (
+        "shutting_down"
+        if rest_activation >= 0.82
+        else "tired" if rest_activation >= 0.38 else "active"
+    )
     rest_drive = node(
         "rest_drive",
         mode=rest_mode,
@@ -1656,7 +1892,9 @@ def reduce_runtime_events(events: list[dict[str, Any]]) -> ResidentReducedState:
     active_route = _derive_active_route_from_events(events)
     active_mail_intents = _derive_active_mail_intents_from_events(events)
     research_queue = _derive_research_queue_from_events(events)
-    runtime_projection = _build_runtime_projection(events, research_queue=research_queue)
+    runtime_projection = _build_runtime_projection(
+        events, research_queue=research_queue
+    )
     subjective_projection = _build_subjective_projection(
         events,
         packets=packets,
@@ -1715,7 +1953,9 @@ def _write_json(path: Path, payload: dict[str, Any] | list[dict[str, Any]]) -> N
         temporary.unlink(missing_ok=True)
 
 
-def _checkpoint_payload(memory_dir: Path, reduced: ResidentReducedState) -> dict[str, Any]:
+def _checkpoint_payload(
+    memory_dir: Path, reduced: ResidentReducedState
+) -> dict[str, Any]:
     ledger = _ledger_path(memory_dir)
     last_event = reduced.events[-1] if reduced.events else {}
     return {
@@ -1724,7 +1964,10 @@ def _checkpoint_payload(memory_dir: Path, reduced: ResidentReducedState) -> dict
         "projection_versions": dict(PROJECTION_FORMAT_VERSIONS),
         "ledger": {
             "byte_offset": ledger.stat().st_size if ledger.exists() else 0,
-            "event_count": int(reduced.runtime_projection.get("ledger_event_count") or len(reduced.events)),
+            "event_count": int(
+                reduced.runtime_projection.get("ledger_event_count")
+                or len(reduced.events)
+            ),
             "last_event_id": str(last_event.get("event_id") or "").strip() or None,
         },
         "state": {
@@ -1742,7 +1985,9 @@ def _checkpoint_payload(memory_dir: Path, reduced: ResidentReducedState) -> dict
     }
 
 
-def load_runtime_checkpoint(memory_dir: Path, *, require_current: bool = True) -> dict[str, Any] | None:
+def load_runtime_checkpoint(
+    memory_dir: Path, *, require_current: bool = True
+) -> dict[str, Any] | None:
     """Load a compatible derived checkpoint, or ``None`` when cold-ledger replay is required."""
     path = _checkpoint_path(memory_dir)
     try:
@@ -1797,7 +2042,8 @@ def _advance_runtime_projection(
     runtime_projection.update(
         {
             "updated_at": _utc_now_iso(),
-            "ledger_event_count": int(runtime_projection.get("ledger_event_count") or 0) + 1,
+            "ledger_event_count": int(runtime_projection.get("ledger_event_count") or 0)
+            + 1,
             "event_counts": event_counts,
             "recent_events": recent_events[-20:],
         }
@@ -1827,7 +2073,9 @@ def _advance_runtime_projection(
         runtime_projection["last_mail"] = {
             "ts": str(event.get("ts") or "").strip(),
             "event_type": event_type,
-            "recipient": str(payload.get("recipient") or payload.get("sender_name") or "").strip(),
+            "recipient": str(
+                payload.get("recipient") or payload.get("sender_name") or ""
+            ).strip(),
             "vote": str(payload.get("vote") or "").strip(),
         }
     elif event_type in {
@@ -1844,7 +2092,9 @@ def _advance_runtime_projection(
     return runtime_projection
 
 
-def _reduced_after_simple_checkpoint_event(checkpoint: dict[str, Any], event: dict[str, Any]) -> ResidentReducedState:
+def _reduced_after_simple_checkpoint_event(
+    checkpoint: dict[str, Any], event: dict[str, Any]
+) -> ResidentReducedState:
     state = checkpoint["state"]
     runtime_projection = _advance_runtime_projection(state["runtime_projection"], event)
     event_type = str(event.get("event_type") or "").strip()
@@ -1855,21 +2105,36 @@ def _reduced_after_simple_checkpoint_event(checkpoint: dict[str, Any], event: di
         packet_id = str(payload.get("packet_id") or "").strip()
         for packet in packets:
             if str(packet.get("packet_id") or "").strip() == packet_id:
-                packet["status"] = str(payload.get("status") or packet.get("status") or "pending").strip()
+                packet["status"] = str(
+                    payload.get("status") or packet.get("status") or "pending"
+                ).strip()
                 break
     elif event_type == "intent_staged":
         intent_id = str(payload.get("intent_id") or "").strip()
         if intent_id:
-            intents = [item for item in intents if str(item.get("intent_id") or "").strip() != intent_id]
+            intents = [
+                item
+                for item in intents
+                if str(item.get("intent_id") or "").strip() != intent_id
+            ]
             intents.append(dict(payload))
-            intents = sorted(intents, key=lambda item: str(item.get("created_at") or ""))[-INTENT_PROJECTION_LIMIT:]
-            intents.sort(key=lambda item: (-float(item.get("priority") or 0.5), str(item.get("created_at") or "")))
+            intents = sorted(
+                intents, key=lambda item: str(item.get("created_at") or "")
+            )[-INTENT_PROJECTION_LIMIT:]
+            intents.sort(
+                key=lambda item: (
+                    -float(item.get("priority") or 0.5),
+                    str(item.get("created_at") or ""),
+                )
+            )
     elif event_type == "intent_status_changed":
         intent_id = str(payload.get("intent_id") or "").strip()
         for intent in intents:
             if str(intent.get("intent_id") or "").strip() != intent_id:
                 continue
-            intent["status"] = str(payload.get("status") or intent.get("status") or "pending").strip()
+            intent["status"] = str(
+                payload.get("status") or intent.get("status") or "pending"
+            ).strip()
             validation_state = str(payload.get("validation_state") or "").strip()
             if validation_state:
                 intent["validation_state"] = validation_state
@@ -1912,7 +2177,9 @@ def _reduced_after_bounded_replay(
     event: dict[str, Any],
 ) -> ResidentReducedState:
     replayed = reduce_runtime_events(load_runtime_projection_events(memory_dir))
-    runtime_projection = _advance_runtime_projection(checkpoint["state"]["runtime_projection"], event)
+    runtime_projection = _advance_runtime_projection(
+        checkpoint["state"]["runtime_projection"], event
+    )
     return ResidentReducedState(
         events=replayed.events,
         packets=replayed.packets,
@@ -1935,7 +2202,9 @@ def _reduced_after_bounded_replay(
     )
 
 
-def _write_runtime_compatibility_projections(memory_dir: Path, state: ResidentReducedState) -> None:
+def _write_runtime_compatibility_projections(
+    memory_dir: Path, state: ResidentReducedState
+) -> None:
     # Packets and intents are pure event-log views (see signals.py); they are
     # never written as json shadows. Only the sidecars still read directly by
     # loops — the active route and staged mail intents — are materialized here.
@@ -1959,7 +2228,13 @@ def _write_runtime_compatibility_projections(memory_dir: Path, state: ResidentRe
         filename = _mail_intent_filename(mail_intent_id, recipient)
         wanted.add(filename)
         (intents_dir / filename).write_text(
-            (f"Mail-Intent-ID: {mail_intent_id}\n" f"To: {recipient}\n" f"Staged-At: {staged_at}\n\n" "Context:\n" f"{context}"),
+            (
+                f"Mail-Intent-ID: {mail_intent_id}\n"
+                f"To: {recipient}\n"
+                f"Staged-At: {staged_at}\n\n"
+                "Context:\n"
+                f"{context}"
+            ),
             encoding="utf-8",
         )
     for path in intents_dir.glob("intent_*.md"):
@@ -1968,7 +2243,9 @@ def _write_runtime_compatibility_projections(memory_dir: Path, state: ResidentRe
 
 
 def sync_runtime_compatibility_projections(memory_dir: Path) -> None:
-    _write_runtime_compatibility_projections(memory_dir, reduce_runtime_events(_load_events(memory_dir)))
+    _write_runtime_compatibility_projections(
+        memory_dir, reduce_runtime_events(_load_events(memory_dir))
+    )
 
 
 def write_runtime_projection(memory_dir: Path) -> None:
@@ -2006,7 +2283,9 @@ def write_cognitive_projection(memory_dir: Path) -> None:
     )
 
 
-def _write_reduced_runtime_artifacts(memory_dir: Path, reduced: ResidentReducedState) -> None:
+def _write_reduced_runtime_artifacts(
+    memory_dir: Path, reduced: ResidentReducedState
+) -> None:
     _write_runtime_compatibility_projections(memory_dir, reduced)
     _write_json(_projection_path(memory_dir), reduced.runtime_projection)
     _write_json(_subjective_projection_path(memory_dir), reduced.subjective_projection)
@@ -2021,7 +2300,9 @@ def rebuild_runtime_artifacts(
     *,
     events: list[dict[str, Any]] | None = None,
 ) -> ResidentReducedState:
-    reduced = reduce_runtime_events(list(events) if events is not None else _load_events(memory_dir))
+    reduced = reduce_runtime_events(
+        list(events) if events is not None else _load_events(memory_dir)
+    )
     _write_reduced_runtime_artifacts(memory_dir, reduced)
     return reduced
 
@@ -2040,8 +2321,13 @@ def append_runtime_event(
         "payload": dict(payload or {}),
     }
     _append_event(memory_dir, event)
-    if checkpoint is not None and (event["event_type"] not in PROJECTION_STATE_EVENT_TYPES or event["event_type"] in SIMPLE_CHECKPOINT_EVENT_TYPES):
-        _write_reduced_runtime_artifacts(memory_dir, _reduced_after_simple_checkpoint_event(checkpoint, event))
+    if checkpoint is not None and (
+        event["event_type"] not in PROJECTION_STATE_EVENT_TYPES
+        or event["event_type"] in SIMPLE_CHECKPOINT_EVENT_TYPES
+    ):
+        _write_reduced_runtime_artifacts(
+            memory_dir, _reduced_after_simple_checkpoint_event(checkpoint, event)
+        )
     elif checkpoint is not None:
         _write_reduced_runtime_artifacts(
             memory_dir,

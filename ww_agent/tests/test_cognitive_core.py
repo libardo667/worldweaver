@@ -43,11 +43,19 @@ def _identity(name: str = "sun_li") -> ResidentIdentity:
 
 
 def _events_by_type(memory_dir, event_type):
-    return [e for e in load_runtime_events(memory_dir) if str(e.get("event_type") or "").strip() == event_type]
+    return [
+        e
+        for e in load_runtime_events(memory_dir)
+        if str(e.get("event_type") or "").strip() == event_type
+    ]
 
 
 def _packets_of_type(memory_dir, packet_type):
-    return [p for p in derive_packets(memory_dir) if str(p.get("packet_type") or "").strip() == packet_type]
+    return [
+        p
+        for p in derive_packets(memory_dir)
+        if str(p.get("packet_type") or "").strip() == packet_type
+    ]
 
 
 def test_pulse_contract_keeps_source_names_out_of_reach_kind():
@@ -87,7 +95,9 @@ class _Person:
 
 
 class _Event:
-    def __init__(self, who, summary, *, event_id="event-1", event_type="freeform_action"):
+    def __init__(
+        self, who, summary, *, event_id="event-1", event_type="freeform_action"
+    ):
         self.who = who
         self.summary = summary
         self.ts = ""
@@ -121,7 +131,15 @@ class _WorldTrace:
 
 
 class _Chat:
-    def __init__(self, session_id, display_name, message, ts="2026-06-02T12:00:00+00:00", *, actor_id=""):
+    def __init__(
+        self,
+        session_id,
+        display_name,
+        message,
+        ts="2026-06-02T12:00:00+00:00",
+        *,
+        actor_id="",
+    ):
         self.id = 1
         self.session_id = session_id
         self.actor_id = actor_id
@@ -180,8 +198,12 @@ class _StubWorld:
     async def get_place_names(self):
         return set(self.place_names)
 
-    async def post_location_chat(self, location, session_id, message, display_name=None):
-        self.location_chats.append({"location": location, "message": message, "display_name": display_name})
+    async def post_location_chat(
+        self, location, session_id, message, display_name=None
+    ):
+        self.location_chats.append(
+            {"location": location, "message": message, "display_name": display_name}
+        )
         return {"id": 1}
 
     async def post_map_move(self, session_id, destination):
@@ -206,20 +228,42 @@ class _StubWorld:
         }
 
     async def place_world_object(self, session_id, object_id, idempotency_key):
-        self.object_commands.append({"command": "place", "object_id": object_id, "idempotency_key": idempotency_key})
+        self.object_commands.append(
+            {
+                "command": "place",
+                "object_id": object_id,
+                "idempotency_key": idempotency_key,
+            }
+        )
         return {
-            "object": {"object_id": object_id, "name": "Small clay cup", "attachment": {"kind": "place", "location": "Alderbank Workshop"}},
+            "object": {
+                "object_id": object_id,
+                "name": "Small clay cup",
+                "attachment": {"kind": "place", "location": "Alderbank Workshop"},
+            },
             "receipt": {"receipt_id": "receipt-place"},
         }
 
     async def pick_up_world_object(self, session_id, object_id, idempotency_key):
-        self.object_commands.append({"command": "pick_up", "object_id": object_id, "idempotency_key": idempotency_key})
+        self.object_commands.append(
+            {
+                "command": "pick_up",
+                "object_id": object_id,
+                "idempotency_key": idempotency_key,
+            }
+        )
         return {
-            "object": {"object_id": object_id, "name": "Small clay cup", "attachment": {"kind": "custody", "actor_id": "actor-123"}},
+            "object": {
+                "object_id": object_id,
+                "name": "Small clay cup",
+                "attachment": {"kind": "custody", "actor_id": "actor-123"},
+            },
             "receipt": {"receipt_id": "receipt-pick-up"},
         }
 
-    async def give_world_object(self, session_id, object_id, recipient_session_id, idempotency_key):
+    async def give_world_object(
+        self, session_id, object_id, recipient_session_id, idempotency_key
+    ):
         self.given_objects.append(
             {
                 "session_id": session_id,
@@ -229,11 +273,22 @@ class _StubWorld:
             }
         )
         return {
-            "object": {"object_id": object_id, "name": "Small clay cup", "attachment": {"kind": "custody", "actor_id": "actor-riley"}},
+            "object": {
+                "object_id": object_id,
+                "name": "Small clay cup",
+                "attachment": {"kind": "custody", "actor_id": "actor-riley"},
+            },
             "receipt": {"receipt_id": "receipt-give"},
         }
 
-    async def offer_object_exchange(self, session_id, recipient_session_id, offered_object_id, requested_object_id, idempotency_key):
+    async def offer_object_exchange(
+        self,
+        session_id,
+        recipient_session_id,
+        offered_object_id,
+        requested_object_id,
+        idempotency_key,
+    ):
         self.exchange_commands.append(
             {
                 "command": "offer",
@@ -254,13 +309,19 @@ class _StubWorld:
         }
 
     async def accept_object_exchange(self, session_id, exchange_id, idempotency_key):
-        return self._resolve_exchange("accept", exchange_id, idempotency_key, "completed")
+        return self._resolve_exchange(
+            "accept", exchange_id, idempotency_key, "completed"
+        )
 
     async def decline_object_exchange(self, session_id, exchange_id, idempotency_key):
-        return self._resolve_exchange("decline", exchange_id, idempotency_key, "declined")
+        return self._resolve_exchange(
+            "decline", exchange_id, idempotency_key, "declined"
+        )
 
     async def cancel_object_exchange(self, session_id, exchange_id, idempotency_key):
-        return self._resolve_exchange("cancel", exchange_id, idempotency_key, "cancelled")
+        return self._resolve_exchange(
+            "cancel", exchange_id, idempotency_key, "cancelled"
+        )
 
     def _resolve_exchange(self, command, exchange_id, idempotency_key, status):
         self.exchange_commands.append(
@@ -281,42 +342,82 @@ class _StubWorld:
         }
 
     async def request_space_access(self, session_id, location, idempotency_key):
-        return self._access_result("request", idempotency_key, {"request": {"location": location}})
+        return self._access_result(
+            "request", idempotency_key, {"request": {"location": location}}
+        )
 
     async def set_space_access_mode(self, session_id, location, mode, idempotency_key):
-        return self._access_result("mode", idempotency_key, {"after": {"mode": mode, "location": location}})
+        return self._access_result(
+            "mode", idempotency_key, {"after": {"mode": mode, "location": location}}
+        )
 
-    async def invite_to_space(self, session_id, recipient_session_id, location, idempotency_key):
-        return self._access_result("invite", idempotency_key, {"grant": {"location": location, "session_id": recipient_session_id}})
+    async def invite_to_space(
+        self, session_id, recipient_session_id, location, idempotency_key
+    ):
+        return self._access_result(
+            "invite",
+            idempotency_key,
+            {"grant": {"location": location, "session_id": recipient_session_id}},
+        )
 
-    async def revoke_space_access(self, session_id, recipient_session_id, location, idempotency_key):
-        return self._access_result("revoke", idempotency_key, {"grant": {"location": location, "session_id": recipient_session_id}})
+    async def revoke_space_access(
+        self, session_id, recipient_session_id, location, idempotency_key
+    ):
+        return self._access_result(
+            "revoke",
+            idempotency_key,
+            {"grant": {"location": location, "session_id": recipient_session_id}},
+        )
 
-    async def resolve_space_access_request(self, session_id, request_id, decision, idempotency_key):
-        return self._access_result("admit" if decision == "admitted" else "deny", idempotency_key, {"request": {"request_id": request_id, "status": decision}})
+    async def resolve_space_access_request(
+        self, session_id, request_id, decision, idempotency_key
+    ):
+        return self._access_result(
+            "admit" if decision == "admitted" else "deny",
+            idempotency_key,
+            {"request": {"request_id": request_id, "status": decision}},
+        )
 
     def _access_result(self, command, idempotency_key, result):
-        self.access_commands.append({"command": command, "idempotency_key": idempotency_key})
+        self.access_commands.append(
+            {"command": command, "idempotency_key": idempotency_key}
+        )
         return {"receipt": {"receipt_id": f"receipt-{command}", "result": result}}
 
-    async def leave_object_on_stoop(self, session_id, stoop_id, object_id, idempotency_key):
-        self.stoop_commands.append({"command": "leave", "stoop_id": stoop_id, "object_id": object_id})
+    async def leave_object_on_stoop(
+        self, session_id, stoop_id, object_id, idempotency_key
+    ):
+        self.stoop_commands.append(
+            {"command": "leave", "stoop_id": stoop_id, "object_id": object_id}
+        )
         return {
-            "entry": {"entry_id": "entry-1", "stoop_id": stoop_id, "object": {"object_id": object_id, "name": "Small clay cup"}},
+            "entry": {
+                "entry_id": "entry-1",
+                "stoop_id": stoop_id,
+                "object": {"object_id": object_id, "name": "Small clay cup"},
+            },
             "receipt": {"receipt_id": "receipt-leave"},
         }
 
     async def take_object_from_stoop(self, session_id, entry_id, idempotency_key):
         self.stoop_commands.append({"command": "take", "entry_id": entry_id})
         return {
-            "entry": {"entry_id": entry_id, "stoop_id": "commons-stoop", "object": {"object_id": "cup-1", "name": "Small clay cup"}},
+            "entry": {
+                "entry_id": entry_id,
+                "stoop_id": "commons-stoop",
+                "object": {"object_id": "cup-1", "name": "Small clay cup"},
+            },
             "receipt": {"receipt_id": "receipt-take"},
         }
 
     async def withdraw_object_from_stoop(self, session_id, entry_id, idempotency_key):
         self.stoop_commands.append({"command": "withdraw", "entry_id": entry_id})
         return {
-            "entry": {"entry_id": entry_id, "stoop_id": "commons-stoop", "object": {"object_id": "cup-1", "name": "Small clay cup"}},
+            "entry": {
+                "entry_id": entry_id,
+                "stoop_id": "commons-stoop",
+                "object": {"object_id": "cup-1", "name": "Small clay cup"},
+            },
             "receipt": {"receipt_id": "receipt-withdraw"},
         }
 
@@ -331,8 +432,12 @@ class _StubWorld:
         self.world_traces.append(trace)
         return {"ok": True, "trace": trace}
 
-    async def send_letter(self, from_name, to_agent, body, session_id, *, recipient_type="agent"):
-        self.letters.append({"from_name": from_name, "to_agent": to_agent, "body": body})
+    async def send_letter(
+        self, from_name, to_agent, body, session_id, *, recipient_type="agent"
+    ):
+        self.letters.append(
+            {"from_name": from_name, "to_agent": to_agent, "body": body}
+        )
         return {"ok": True}
 
 
@@ -361,7 +466,9 @@ def test_effector_speak_routes_local_and_city(tmp_path):
         memory_dir=tmp_path,
         location_hint="Chinatown",
     )
-    eff.co_present = [{"actor_id": "actor-levi", "session_id": "levi-1", "name": "Levi"}]
+    eff.co_present = [
+        {"actor_id": "actor-levi", "session_id": "levi-1", "name": "Levi"}
+    ]
 
     asyncio.run(eff(Act(kind="speak", body="Tea's fresh.", target=None)))
     asyncio.run(eff(Act(kind="speak", body="Market opens at dawn!", target="city")))
@@ -392,14 +499,22 @@ def test_effector_carries_absent_address_privately(tmp_path):
     )
     eff.present = ["Levi"]  # Levi is here; Anika is across the city
 
-    asyncio.run(eff(Act(kind="speak", body="Here's your tea.", target="Levi")))  # co-located → the room
-    asyncio.run(eff(Act(kind="speak", body="The hum is tighter, Anika.", target="Anika Vance")))  # absent → carry
+    asyncio.run(
+        eff(Act(kind="speak", body="Here's your tea.", target="Levi"))
+    )  # co-located → the room
+    asyncio.run(
+        eff(Act(kind="speak", body="The hum is tighter, Anika.", target="Anika Vance"))
+    )  # absent → carry
 
-    assert world.location_chats[0]["location"] == "Chinatown"  # present target → the room
+    assert (
+        world.location_chats[0]["location"] == "Chinatown"
+    )  # present target → the room
     assert len(world.location_chats) == 1  # the absent one did NOT hit any chat
     assert world.letters[-1]["to_agent"] == "Anika Vance"  # it was carried privately
     assert len(_events_by_type(tmp_path, "chat_sent")) == 1
-    assert len(_events_by_type(tmp_path, "city_broadcast_sent")) == 0  # nothing saturated the commons
+    assert (
+        len(_events_by_type(tmp_path, "city_broadcast_sent")) == 0
+    )  # nothing saturated the commons
     assert len(_events_by_type(tmp_path, "speech_carried")) == 1
 
 
@@ -420,12 +535,18 @@ def test_effector_seals_speech_to_workshop_during_incubation(tmp_path):
     )
     eff.incubating = True
 
-    res = asyncio.run(eff(Act(kind="speak", body="The fog is thick on the hill today.", target="city")))
+    res = asyncio.run(
+        eff(
+            Act(kind="speak", body="The fog is thick on the hill today.", target="city")
+        )
+    )
 
     assert res["executed"] and res.get("incubated") is True
     assert world.location_chats == []  # nothing reached the commons
     assert len(_events_by_type(tmp_path, "city_broadcast_sent")) == 0
-    assert len(_events_by_type(tmp_path, "workshop_entry")) == 1  # it became a making instead
+    assert (
+        len(_events_by_type(tmp_path, "workshop_entry")) == 1
+    )  # it became a making instead
 
     # And once it hatches, speech reaches the world normally again.
     eff.incubating = False
@@ -454,12 +575,16 @@ def test_effector_mail_stamps_reply_edge_when_recipient_was_heard(tmp_path):
         }
     ]
 
-    asyncio.run(eff(Act(kind="write", body="Not yet — needs a new coil.", target="Levi")))
+    asyncio.run(
+        eff(Act(kind="write", body="Not yet — needs a new coil.", target="Levi"))
+    )
     asyncio.run(eff(Act(kind="write", body="Thinking of you.", target="Anika Vance")))
 
     mail = _events_by_type(tmp_path, "mail_intent_sent")
     assert len(mail) == 2
-    by_recipient = {e["payload"]["recipient"]: e["payload"].get("in_reply_to") for e in mail}
+    by_recipient = {
+        e["payload"]["recipient"]: e["payload"].get("in_reply_to") for e in mail
+    }
     assert by_recipient["Levi"] == "msg-42"  # heard this tick → reply-edge
     assert by_recipient["Anika Vance"] is None  # not heard → unprompted, no edge
     assert mail[0]["payload"]["reply_to_utterance_id"] == "chat:Chinatown:msg-42"
@@ -479,13 +604,21 @@ def test_effector_rations_the_megaphone(tmp_path):
     )
     eff._broadcast_refractory = 300.0
 
-    asyncio.run(eff(Act(kind="speak", body="Hear me, city!", target="city")))  # 1st → broadcast
-    asyncio.run(eff(Act(kind="speak", body="And again!", target="city")))  # 2nd → rationed to the room
+    asyncio.run(
+        eff(Act(kind="speak", body="Hear me, city!", target="city"))
+    )  # 1st → broadcast
+    asyncio.run(
+        eff(Act(kind="speak", body="And again!", target="city"))
+    )  # 2nd → rationed to the room
 
     assert world.location_chats[0]["location"] == "__city__"
-    assert world.location_chats[1]["location"] == "Chinatown"  # cooldown sent it to the room
+    assert (
+        world.location_chats[1]["location"] == "Chinatown"
+    )  # cooldown sent it to the room
     assert len(_events_by_type(tmp_path, "city_broadcast_sent")) == 1
-    assert len(_events_by_type(tmp_path, "chat_sent")) == 1  # the rationed one logged as local
+    assert (
+        len(_events_by_type(tmp_path, "chat_sent")) == 1
+    )  # the rationed one logged as local
 
 
 def test_effector_move_do_write(tmp_path):
@@ -500,7 +633,9 @@ def test_effector_move_do_write(tmp_path):
 
     move = asyncio.run(eff(Act(kind="move", body="", target="North Beach")))
     do = asyncio.run(eff(Act(kind="do", body="straighten the tea cups", target=None)))
-    write = asyncio.run(eff(Act(kind="write", body="Come by the stall.", target="Levi")))
+    write = asyncio.run(
+        eff(Act(kind="write", body="Come by the stall.", target="Levi"))
+    )
 
     assert move["executed"] and world.moves == ["North Beach"]
     assert do["executed"] and world.actions == ["straighten the tea cups"]
@@ -557,8 +692,20 @@ def test_effector_routes_place_and_pick_up_as_typed_object_commands(tmp_path):
         location_hint="Alderbank Workshop",
     )
 
-    placed = asyncio.run(eff(Act(kind="do", body="I set the cup on the bench.", target="object-place:cup-1")))
-    picked_up = asyncio.run(eff(Act(kind="do", body="I pick my cup back up.", target="object-pick-up:cup-1")))
+    placed = asyncio.run(
+        eff(
+            Act(
+                kind="do",
+                body="I set the cup on the bench.",
+                target="object-place:cup-1",
+            )
+        )
+    )
+    picked_up = asyncio.run(
+        eff(
+            Act(kind="do", body="I pick my cup back up.", target="object-pick-up:cup-1")
+        )
+    )
 
     assert placed["executed"] is True
     assert placed["attachment"] == {"kind": "place", "location": "Alderbank Workshop"}
@@ -566,7 +713,10 @@ def test_effector_routes_place_and_pick_up_as_typed_object_commands(tmp_path):
     assert picked_up["attachment"] == {"kind": "custody", "actor_id": "actor-123"}
     assert world.actions == []
     assert [item["command"] for item in world.object_commands] == ["place", "pick_up"]
-    assert all(item["idempotency_key"].startswith("resident-") for item in world.object_commands)
+    assert all(
+        item["idempotency_key"].startswith("resident-")
+        for item in world.object_commands
+    )
 
 
 def test_effector_routes_direct_giving_without_narration(tmp_path):
@@ -619,20 +769,60 @@ def test_effector_routes_exchange_offer_and_decisions_without_narration(tmp_path
             )
         )
     )
-    accepted = asyncio.run(eff(Act(kind="do", body="I accept the exact swap.", target="exchange-accept:exchange-1")))
-    declined = asyncio.run(eff(Act(kind="do", body="I decline the offer.", target="exchange-decline:exchange-2")))
-    cancelled = asyncio.run(eff(Act(kind="do", body="I cancel my offer.", target="exchange-cancel:exchange-3")))
+    accepted = asyncio.run(
+        eff(
+            Act(
+                kind="do",
+                body="I accept the exact swap.",
+                target="exchange-accept:exchange-1",
+            )
+        )
+    )
+    declined = asyncio.run(
+        eff(
+            Act(
+                kind="do",
+                body="I decline the offer.",
+                target="exchange-decline:exchange-2",
+            )
+        )
+    )
+    cancelled = asyncio.run(
+        eff(
+            Act(
+                kind="do",
+                body="I cancel my offer.",
+                target="exchange-cancel:exchange-3",
+            )
+        )
+    )
 
-    assert [offered["command"], accepted["command"], declined["command"], cancelled["command"]] == [
+    assert [
+        offered["command"],
+        accepted["command"],
+        declined["command"],
+        cancelled["command"],
+    ] == [
         "exchange_offer",
         "exchange_accept",
         "exchange_decline",
         "exchange_cancel",
     ]
-    assert [item["command"] for item in world.exchange_commands] == ["offer", "accept", "decline", "cancel"]
-    assert all(item["idempotency_key"].startswith("resident-exchange-") for item in world.exchange_commands)
+    assert [item["command"] for item in world.exchange_commands] == [
+        "offer",
+        "accept",
+        "decline",
+        "cancel",
+    ]
+    assert all(
+        item["idempotency_key"].startswith("resident-exchange-")
+        for item in world.exchange_commands
+    )
     assert world.actions == []
-    assert _events_by_type(tmp_path, "game_object_exchange_accept")[0]["payload"]["status"] == "completed"
+    assert (
+        _events_by_type(tmp_path, "game_object_exchange_accept")[0]["payload"]["status"]
+        == "completed"
+    )
 
 
 def test_effector_routes_space_access_decisions_without_narration(tmp_path):
@@ -646,12 +836,60 @@ def test_effector_routes_space_access_decisions_without_narration(tmp_path):
     )
 
     results = [
-        asyncio.run(eff(Act(kind="do", body="I ask to enter.", target="access-request:Wayfarer Back Room"))),
-        asyncio.run(eff(Act(kind="do", body="I make it requestable.", target="access-mode:requestable:Wayfarer Back Room"))),
-        asyncio.run(eff(Act(kind="do", body="I invite Riley.", target="access-invite:resident-riley:Wayfarer Back Room"))),
-        asyncio.run(eff(Act(kind="do", body="I end Riley's future access.", target="access-revoke:resident-riley:Wayfarer Back Room"))),
-        asyncio.run(eff(Act(kind="do", body="I admit the request.", target="access-admit:request-1"))),
-        asyncio.run(eff(Act(kind="do", body="I deny the request.", target="access-deny:request-2"))),
+        asyncio.run(
+            eff(
+                Act(
+                    kind="do",
+                    body="I ask to enter.",
+                    target="access-request:Wayfarer Back Room",
+                )
+            )
+        ),
+        asyncio.run(
+            eff(
+                Act(
+                    kind="do",
+                    body="I make it requestable.",
+                    target="access-mode:requestable:Wayfarer Back Room",
+                )
+            )
+        ),
+        asyncio.run(
+            eff(
+                Act(
+                    kind="do",
+                    body="I invite Riley.",
+                    target="access-invite:resident-riley:Wayfarer Back Room",
+                )
+            )
+        ),
+        asyncio.run(
+            eff(
+                Act(
+                    kind="do",
+                    body="I end Riley's future access.",
+                    target="access-revoke:resident-riley:Wayfarer Back Room",
+                )
+            )
+        ),
+        asyncio.run(
+            eff(
+                Act(
+                    kind="do",
+                    body="I admit the request.",
+                    target="access-admit:request-1",
+                )
+            )
+        ),
+        asyncio.run(
+            eff(
+                Act(
+                    kind="do",
+                    body="I deny the request.",
+                    target="access-deny:request-2",
+                )
+            )
+        ),
     ]
 
     assert [item["command"] for item in results] == [
@@ -662,8 +900,18 @@ def test_effector_routes_space_access_decisions_without_narration(tmp_path):
         "access_admit",
         "access_deny",
     ]
-    assert [item["command"] for item in world.access_commands] == ["request", "mode", "invite", "revoke", "admit", "deny"]
-    assert all(item["idempotency_key"].startswith("resident-access-") for item in world.access_commands)
+    assert [item["command"] for item in world.access_commands] == [
+        "request",
+        "mode",
+        "invite",
+        "revoke",
+        "admit",
+        "deny",
+    ]
+    assert all(
+        item["idempotency_key"].startswith("resident-access-")
+        for item in world.access_commands
+    )
     assert world.actions == []
 
 
@@ -677,29 +925,62 @@ def test_effector_routes_stoop_permission_commands_without_narration(tmp_path):
         location_hint="Alderbank Commons",
     )
 
-    left = asyncio.run(eff(Act(kind="do", body="I leave the cup for a visitor.", target="stoop-leave:commons-stoop:cup-1")))
-    taken = asyncio.run(eff(Act(kind="do", body="I accept the offered cup.", target="stoop-take:entry-1")))
-    withdrawn = asyncio.run(eff(Act(kind="do", body="I reclaim the cup I left.", target="stoop-withdraw:entry-2")))
+    left = asyncio.run(
+        eff(
+            Act(
+                kind="do",
+                body="I leave the cup for a visitor.",
+                target="stoop-leave:commons-stoop:cup-1",
+            )
+        )
+    )
+    taken = asyncio.run(
+        eff(
+            Act(
+                kind="do", body="I accept the offered cup.", target="stoop-take:entry-1"
+            )
+        )
+    )
+    withdrawn = asyncio.run(
+        eff(
+            Act(
+                kind="do",
+                body="I reclaim the cup I left.",
+                target="stoop-withdraw:entry-2",
+            )
+        )
+    )
 
     assert [left["command"], taken["command"], withdrawn["command"]] == [
         "stoop_leave",
         "stoop_take",
         "stoop_withdraw",
     ]
-    assert [item["command"] for item in world.stoop_commands] == ["leave", "take", "withdraw"]
+    assert [item["command"] for item in world.stoop_commands] == [
+        "leave",
+        "take",
+        "withdraw",
+    ]
     assert world.actions == []
 
 
 def test_effector_leaves_a_narrator_free_physical_trace(tmp_path):
     world = _StubWorld(_Scene())
-    eff = WorldEffector(ww_client=world, session_id="s1", identity=_identity(), memory_dir=tmp_path)
+    eff = WorldEffector(
+        ww_client=world, session_id="s1", identity=_identity(), memory_dir=tmp_path
+    )
 
-    result = asyncio.run(eff(Act(kind="mark", body="three blue chalk lines", target="the lintel")))
+    result = asyncio.run(
+        eff(Act(kind="mark", body="three blue chalk lines", target="the lintel"))
+    )
 
     assert result["executed"] is True
     assert world.world_traces[0]["body"] == "three blue chalk lines"
     assert world.actions == []
-    assert _events_by_type(tmp_path, "world_trace_left")[0]["payload"]["trace_id"] == "trace:1"
+    assert (
+        _events_by_type(tmp_path, "world_trace_left")[0]["payload"]["trace_id"]
+        == "trace:1"
+    )
 
 
 def test_effector_records_action_shaped_world_travel_as_a_request(tmp_path):
@@ -732,7 +1013,9 @@ def test_effector_records_action_shaped_world_travel_as_a_request(tmp_path):
 
 
 def test_mark_is_advertised_only_when_the_world_has_a_trace_commons():
-    assert "kind is exactly one of speak, move, do, write, mark" in _pulse_contract(can_mark_world=True)
+    assert "kind is exactly one of speak, move, do, write, mark" in _pulse_contract(
+        can_mark_world=True
+    )
     familiar_contract = _pulse_contract(can_mark_world=False)
     assert "kind is exactly one of speak, move, do, write." in familiar_contract
     assert "mark leaves a slow physical trace" not in familiar_contract
@@ -749,7 +1032,9 @@ def test_pulse_contract_explains_the_physical_reach_of_speech():
 
 def test_effector_write_without_recipient_is_dropped(tmp_path):
     world = _StubWorld(_Scene())
-    eff = WorldEffector(ww_client=world, session_id="s1", identity=_identity(), memory_dir=tmp_path)
+    eff = WorldEffector(
+        ww_client=world, session_id="s1", identity=_identity(), memory_dir=tmp_path
+    )
     result = asyncio.run(eff(Act(kind="write", body="orphan letter", target=None)))
     assert result["executed"] is False and world.letters == []
 
@@ -768,8 +1053,12 @@ def test_effector_routes_self_record_and_named_project_to_own_workshop(tmp_path)
         workshop=workshop,
     )
 
-    own_record = asyncio.run(eff(Act(kind="write", body="A private note.", target="my_own_record")))
-    named_project = asyncio.run(eff(Act(kind="write", body="A project note.", target="workshop:threshold log")))
+    own_record = asyncio.run(
+        eff(Act(kind="write", body="A private note.", target="my_own_record"))
+    )
+    named_project = asyncio.run(
+        eff(Act(kind="write", body="A project note.", target="workshop:threshold log"))
+    )
 
     assert own_record["executed"] is True
     assert named_project["executed"] is True
@@ -792,11 +1081,18 @@ def test_perceive_emits_ambient_pressure_and_returns_brief(tmp_path):
             recent=[_Event("Levi", "set down a crate")],
         )
     )
-    brief = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, self_name="Sun Li"))
+    brief = asyncio.run(
+        perceive(
+            ww_client=world, session_id="s1", memory_dir=tmp_path, self_name="Sun Li"
+        )
+    )
 
     assert brief["location"] == "Chinatown"
     assert brief["present"] == ["Levi", "Mei"]  # self excluded
-    assert [item["actor_id"] for item in brief["co_present"]] == ["actor-levi", "actor-mei"]
+    assert [item["actor_id"] for item in brief["co_present"]] == [
+        "actor-levi",
+        "actor-mei",
+    ]
     assert len(_events_by_type(tmp_path, "ambient_pressure_observed")) == 1
     ambient = _events_by_type(tmp_path, "ambient_pressure_observed")[0]["payload"]
     assert ambient["co_present"] == ["actor-levi", "actor-mei"]
@@ -845,8 +1141,16 @@ def test_physical_trace_is_bounded_and_consume_on_prompt(tmp_path):
         )
     )
 
-    first = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
-    second = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
+    first = asyncio.run(
+        perceive(
+            ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()
+        )
+    )
+    second = asyncio.run(
+        perceive(
+            ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()
+        )
+    )
     assert [item["trace_id"] for item in first["traces"]] == ["trace:1"]
     assert [item["trace_id"] for item in second["traces"]] == ["trace:1"]
 
@@ -855,9 +1159,15 @@ def test_physical_trace_is_bounded_and_consume_on_prompt(tmp_path):
     assert "three blue chalk lines" in rendered
     assert "a paper crane" not in rendered
     packet_id = context.prompted_packet_ids[0]
-    StimulusPacketQueue(tmp_path / "stimulus_packets.json").mark_status(packet_id, "observed")
+    StimulusPacketQueue(tmp_path / "stimulus_packets.json").mark_status(
+        packet_id, "observed"
+    )
 
-    third = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
+    third = asyncio.run(
+        perceive(
+            ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()
+        )
+    )
     assert [item["trace_id"] for item in third["traces"]] == ["trace:2"]
     settling = PulseContext.from_perception(third, mode="settling")
     assert settling.selected_physical_traces == ()
@@ -868,10 +1178,18 @@ def test_physical_trace_is_bounded_and_consume_on_prompt(tmp_path):
 def test_perceive_senses_direct_chat_and_mail(tmp_path):
     world = _StubWorld(
         _Scene(present=[_Person("Levi")]),
-        local_chat=[_Chat("other-1", "Levi", "Sun Li, can you bring tea?", actor_id="actor-levi")],
+        local_chat=[
+            _Chat(
+                "other-1", "Levi", "Sun Li, can you bring tea?", actor_id="actor-levi"
+            )
+        ],
         inbox=[_Letter("from_mei_20260602.md", "Are you well?")],
     )
-    brief = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
+    brief = asyncio.run(
+        perceive(
+            ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()
+        )
+    )
 
     # A direct, addressed request is heard and laid down as a chat packet.
     assert any(h["is_direct"] for h in brief["heard"])
@@ -893,13 +1211,27 @@ def test_perceive_does_not_hear_its_own_speech_from_an_older_city_session(tmp_pa
         local_chat=[
             _Chat("old-session", "Sun Li", "My earlier words.", actor_id="actor-123"),
             _Chat("legacy-session", "Sun Li", "My legacy words without an actor ID."),
-            _Chat("other-session", "Sun Li", "A different person with my name.", actor_id="actor-other"),
+            _Chat(
+                "other-session",
+                "Sun Li",
+                "A different person with my name.",
+                actor_id="actor-other",
+            ),
         ],
     )
 
-    brief = asyncio.run(perceive(ww_client=world, session_id="new-session", memory_dir=tmp_path, identity=_identity()))
+    brief = asyncio.run(
+        perceive(
+            ww_client=world,
+            session_id="new-session",
+            memory_dir=tmp_path,
+            identity=_identity(),
+        )
+    )
 
-    assert [item["message"] for item in brief["heard"]] == ["A different person with my name."]
+    assert [item["message"] for item in brief["heard"]] == [
+        "A different person with my name."
+    ]
     assert brief["heard"][0]["speaker_actor_id"] == "actor-other"
 
 
@@ -919,7 +1251,11 @@ def test_perceive_surfaces_reachable_destinations(tmp_path):
     }
     world = _StubWorld(_Scene(location="Inner Richmond"))
     world._scene.location_graph = graph
-    brief = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
+    brief = asyncio.run(
+        perceive(
+            ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()
+        )
+    )
     # Adjacency works in both edge directions; non-adjacent Castro is excluded.
     assert brief["reachable"] == ["Laurel Heights", "Presidio"]
 
@@ -962,7 +1298,11 @@ def test_perceive_grounds_in_real_time_and_weather(tmp_path):
             "day_of_week": "Friday",
         },
     )
-    brief = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
+    brief = asyncio.run(
+        perceive(
+            ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()
+        )
+    )
 
     assert brief["grounding"]["time_of_day"] == "night"
     assert brief["grounding"]["resting_hours"] is True
@@ -978,8 +1318,16 @@ def test_perceive_dedupes_repeated_chat_and_mail(tmp_path):
         local_chat=[_Chat("other-1", "Levi", "Morning!")],
         inbox=[_Letter("from_levi_1.md", "hi")],
     )
-    asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
-    asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
+    asyncio.run(
+        perceive(
+            ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()
+        )
+    )
+    asyncio.run(
+        perceive(
+            ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()
+        )
+    )
     # Re-polling the same chat/mail does not double-emit (emit_once dedup).
     assert len(_packets_of_type(tmp_path, "chat_heard")) == 1
     assert len(_packets_of_type(tmp_path, "mail_received")) == 1
@@ -991,8 +1339,16 @@ def test_heard_chat_stays_pending_until_prompt_consumption(tmp_path):
         local_chat=[_Chat("other-1", "Levi", "The kettle is ready.")],
     )
 
-    first = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
-    second = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
+    first = asyncio.run(
+        perceive(
+            ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()
+        )
+    )
+    second = asyncio.run(
+        perceive(
+            ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()
+        )
+    )
 
     # Re-polling does not manufacture a second encounter, but a quiet tick also
     # cannot erase the first one before any prompt has carried it.
@@ -1000,8 +1356,14 @@ def test_heard_chat_stays_pending_until_prompt_consumption(tmp_path):
     assert second["heard"] == first["heard"]
     packet_id = first["heard"][0]["packet_id"]
 
-    StimulusPacketQueue(tmp_path / "stimulus_packets.json").mark_status(packet_id, "observed")
-    third = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
+    StimulusPacketQueue(tmp_path / "stimulus_packets.json").mark_status(
+        packet_id, "observed"
+    )
+    third = asyncio.run(
+        perceive(
+            ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()
+        )
+    )
 
     assert third["heard"] == []
     assert _packets_of_type(tmp_path, "chat_heard")[0]["status"] == "observed"
@@ -1011,7 +1373,9 @@ def test_perceive_does_not_repeat_utterance_as_world_event(tmp_path):
     world = _StubWorld(
         _Scene(
             recent=[
-                _Event("Levi", "Levi said hello.", event_id="41", event_type="utterance"),
+                _Event(
+                    "Levi", "Levi said hello.", event_id="41", event_type="utterance"
+                ),
                 _Event(
                     "Mei",
                     "Mei entered the market.",
@@ -1023,11 +1387,17 @@ def test_perceive_does_not_repeat_utterance_as_world_event(tmp_path):
         local_chat=[_Chat("other-1", "Levi", "hello")],
     )
 
-    brief = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
+    brief = asyncio.run(
+        perceive(
+            ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()
+        )
+    )
 
     assert [event["event_id"] for event in brief["recent_events"]] == ["42"]
     assert brief["recent_events"][0]["event_type"] == "movement"
-    assert [line["message"] for line in brief["heard"] if line["channel"] == "local"] == ["hello"]
+    assert [
+        line["message"] for line in brief["heard"] if line["channel"] == "local"
+    ] == ["hello"]
 
 
 def test_legacy_pending_city_chat_is_not_replayed(tmp_path):
@@ -1047,7 +1417,11 @@ def test_legacy_pending_city_chat_is_not_replayed(tmp_path):
         city_chat=[_Chat("fresh-1", "Mei", "Fresh oranges at the corner.")],
     )
 
-    brief = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
+    brief = asyncio.run(
+        perceive(
+            ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()
+        )
+    )
 
     assert brief["heard"] == []
 
@@ -1056,9 +1430,15 @@ def test_legacy_pending_city_chat_is_not_replayed(tmp_path):
 
 
 def test_perceive_does_not_fetch_or_admit_citywide_speech(tmp_path):
-    city = [_Chat(f"o{i}", f"Person{i}", f"citywide message number {i}") for i in range(12)]
+    city = [
+        _Chat(f"o{i}", f"Person{i}", f"citywide message number {i}") for i in range(12)
+    ]
     world = _StubWorld(_Scene(present=[_Person("Levi")]), city_chat=city)
-    brief = asyncio.run(perceive(ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()))
+    brief = asyncio.run(
+        perceive(
+            ww_client=world, session_id="s1", memory_dir=tmp_path, identity=_identity()
+        )
+    )
 
     assert brief["heard"] == []
     assert not _packets_of_type(tmp_path, "city_chat_heard")
@@ -1119,7 +1499,9 @@ def test_pulse_engine_produces_valid_pulse(tmp_path):
     assert "Sun Li" in llm.calls[0]["system"]
 
 
-def test_pulse_engine_records_exact_private_prompt_trace_outside_ledger(tmp_path, monkeypatch):
+def test_pulse_engine_records_exact_private_prompt_trace_outside_ledger(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("WW_PROMPT_TRACE", "1")
     llm = _StubLLM(json_response={"felt_sense": "steam and footsteps", "act": None})
     producer = LLMPulseProducer(
@@ -1131,7 +1513,9 @@ def test_pulse_engine_records_exact_private_prompt_trace_outside_ledger(tmp_path
     )
     producer.latest_perception = {
         "location": "Chinatown",
-        "heard": [{"id": "msg-7", "speaker": "Mei", "message": "Tea?", "channel": "local"}],
+        "heard": [
+            {"id": "msg-7", "speaker": "Mei", "message": "Tea?", "channel": "local"}
+        ],
         "recent_events": [{"event_id": "world-9", "summary": "A cart arrived."}],
     }
     traces = [
@@ -1149,10 +1533,17 @@ def test_pulse_engine_records_exact_private_prompt_trace_outside_ledger(tmp_path
         }
     ]
 
-    pulse = asyncio.run(producer(traces=traces, stimulus={"self": {"social_pull": 0.6}}, arousal=1.1))
+    pulse = asyncio.run(
+        producer(traces=traces, stimulus={"self": {"social_pull": 0.6}}, arousal=1.1)
+    )
 
     assert pulse is not None
-    records = [json.loads(line) for line in (tmp_path / "prompt_traces.jsonl").read_text(encoding="utf-8").splitlines()]
+    records = [
+        json.loads(line)
+        for line in (tmp_path / "prompt_traces.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
     assert [record["record_type"] for record in records] == [
         "prompt_assembled",
         "completion_received",
@@ -1168,18 +1559,24 @@ def test_pulse_engine_records_exact_private_prompt_trace_outside_ledger(tmp_path
     assert prompt["source_context"]["perception"]["heard"][0]["id"] == "msg-7"
     assert prompt["source_context"]["traces"][0]["trace_id"] == "tr-1"
     assert completion["raw_response"]["felt_sense"] == "steam and footsteps"
-    assert load_runtime_events(tmp_path) == []  # diagnostics never enter the cognitive ledger
+    assert (
+        load_runtime_events(tmp_path) == []
+    )  # diagnostics never enter the cognitive ledger
 
 
 def test_prompt_trace_is_disabled_by_default(tmp_path, monkeypatch):
     monkeypatch.delenv("WW_PROMPT_TRACE", raising=False)
-    producer = LLMPulseProducer(llm=_StubLLM(json_response={}), identity=_identity(), memory_dir=tmp_path)
+    producer = LLMPulseProducer(
+        llm=_StubLLM(json_response={}), identity=_identity(), memory_dir=tmp_path
+    )
 
     assert asyncio.run(producer(traces=[], stimulus={}, arousal=1.0)) is not None
     assert not (tmp_path / "prompt_traces.jsonl").exists()
 
 
-def test_settling_prompt_withholds_rolling_social_and_event_material(tmp_path, monkeypatch):
+def test_settling_prompt_withholds_rolling_social_and_event_material(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("WW_PROMPT_TRACE", "1")
     llm = _StubLLM(json_response={"felt_sense": "the quiet belongs to me", "act": None})
     producer = LLMPulseProducer(llm=llm, identity=_identity(), memory_dir=tmp_path)
@@ -1223,14 +1620,18 @@ def test_settling_prompt_withholds_rolling_social_and_event_material(tmp_path, m
     prompt = llm.calls[0]["user"]
     assert "Chinatown" in prompt and "It is evening" in prompt
     assert "North Beach" in prompt  # concrete movement remains available
-    assert "recommend a good bite nearby" in prompt  # typed capability, not a recent event
+    assert (
+        "recommend a good bite nearby" in prompt
+    )  # typed capability, not a recent event
     assert '"reach": null OR' in prompt
     assert "conduit fault" not in prompt
     assert "civic relay" not in prompt
     assert "Letters waiting" not in prompt
     assert producer.take_prompted_packet_ids() == []
 
-    trace = json.loads((tmp_path / "prompt_traces.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    trace = json.loads(
+        (tmp_path / "prompt_traces.jsonl").read_text(encoding="utf-8").splitlines()[0]
+    )
     context = trace["source_context"]["prompt_context"]
     assert context["policy"]["include_heard"] is False
     assert context["selected"]["heard"] == []
@@ -1263,14 +1664,20 @@ def test_reactive_prompt_selects_only_rendered_encounter_ids(tmp_path, monkeypat
     assert "line 0" not in llm.calls[0]["user"]
     assert all(f"line {index}" in llm.calls[0]["user"] for index in range(1, 5))
     assert producer.take_prompted_packet_ids() == ["pkt-1", "pkt-2", "pkt-3", "pkt-4"]
-    trace = json.loads((tmp_path / "prompt_traces.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    trace = json.loads(
+        (tmp_path / "prompt_traces.jsonl").read_text(encoding="utf-8").splitlines()[0]
+    )
     context = trace["source_context"]["prompt_context"]
     assert [item["packet_id"] for item in context["withheld"]["heard"]] == ["pkt-0"]
 
 
-def test_reach_continuation_returns_chosen_result_without_reperception(tmp_path, monkeypatch):
+def test_reach_continuation_returns_chosen_result_without_reperception(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("WW_PROMPT_TRACE", "1")
-    llm = _StubLLM(json_response={"felt_sense": "the market answer is enough", "act": None})
+    llm = _StubLLM(
+        json_response={"felt_sense": "the market answer is enough", "act": None}
+    )
     producer = LLMPulseProducer(llm=llm, identity=_identity(), memory_dir=tmp_path)
     producer.latest_perception = {
         "affordances": [
@@ -1318,14 +1725,26 @@ def test_reach_continuation_returns_chosen_result_without_reperception(tmp_path,
     assert "query: North Beach" in prompt
     assert "Grant Bakery" in prompt and "opens at six" in prompt
     assert 'source "places": inspect nearby landmarks' in prompt
-    records = [json.loads(line) for line in (tmp_path / "prompt_traces.jsonl").read_text(encoding="utf-8").splitlines()]
+    records = [
+        json.loads(line)
+        for line in (tmp_path / "prompt_traces.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
     assert records[0]["phase"] == "reach_continue"
     assert records[0]["source_context"]["request"]["source"] == "eats"
-    assert records[0]["source_context"]["result"]["records"][0]["selection_mode"] == "neighborhood_match"
-    assert [item["name"] for item in records[0]["source_context"]["available_sources"]] == ["eats", "places"]
+    assert (
+        records[0]["source_context"]["result"]["records"][0]["selection_mode"]
+        == "neighborhood_match"
+    )
+    assert [
+        item["name"] for item in records[0]["source_context"]["available_sources"]
+    ] == ["eats", "places"]
 
 
-def test_final_reach_continuation_closes_reading_and_drops_an_extra_request(tmp_path, monkeypatch):
+def test_final_reach_continuation_closes_reading_and_drops_an_extra_request(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("WW_PROMPT_TRACE", "1")
     llm = _StubLLM(
         json_response={
@@ -1348,7 +1767,11 @@ def test_final_reach_continuation_closes_reading_and_drops_an_extra_request(tmp_
 
     pulse = asyncio.run(
         producer.continue_reach(
-            request={"kind": "inspect", "source": "places", "query": "the neighborhood"},
+            request={
+                "kind": "inspect",
+                "source": "places",
+                "query": "the neighborhood",
+            },
             result={"detail": "One nearby cafe."},
             prior_felt="still curious",
             reaches_remaining=0,
@@ -1361,7 +1784,9 @@ def test_final_reach_continuation_closes_reading_and_drops_an_extra_request(tmp_
     assert "reading window closed for this pulse" in prompt
     assert "You may reach toward another available source" not in prompt
     assert '"reach": null,' in prompt
-    trace = json.loads((tmp_path / "prompt_traces.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    trace = json.loads(
+        (tmp_path / "prompt_traces.jsonl").read_text(encoding="utf-8").splitlines()[0]
+    )
     assert trace["source_context"]["reaches_remaining"] == 0
 
 
@@ -1432,7 +1857,9 @@ def test_reach_continuation_sends_requested_images_only_when_vision_is_enabled(
 
     assert pulse is not None
     assert llm.calls[0]["images"] == [image]
-    trace = json.loads((tmp_path / "prompt_traces.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    trace = json.loads(
+        (tmp_path / "prompt_traces.jsonl").read_text(encoding="utf-8").splitlines()[0]
+    )
     assert trace["images"][0]["bytes"] == len(image.encode("utf-8"))
 
 
@@ -1453,9 +1880,13 @@ def test_pulse_prompt_surfaces_drive_resonance(tmp_path):
             "expectations": [{"features": {"vigilance": 0.5}, "scope": "self"}],
         }
     )
-    producer = LLMPulseProducer(llm=llm, identity=_identity(), memory_dir=tmp_path, drive_vector=dv)
+    producer = LLMPulseProducer(
+        llm=llm, identity=_identity(), memory_dir=tmp_path, drive_vector=dv
+    )
     producer.latest_perception = {
-        "heard": [{"speaker": "Levi", "message": "the broken engine in the yard won't start"}],
+        "heard": [
+            {"speaker": "Levi", "message": "the broken engine in the yard won't start"}
+        ],
         "location": "Chinatown",
     }
 
@@ -1466,12 +1897,16 @@ def test_pulse_prompt_surfaces_drive_resonance(tmp_path):
 
 
 def test_pulse_engine_fails_closed_on_inference_error(tmp_path):
-    producer = LLMPulseProducer(llm=_StubLLM(raise_inference=True), identity=_identity(), memory_dir=tmp_path)
+    producer = LLMPulseProducer(
+        llm=_StubLLM(raise_inference=True), identity=_identity(), memory_dir=tmp_path
+    )
     pulse = asyncio.run(producer(traces=[], stimulus={}, arousal=1.0))
     assert pulse is None
 
 
-def test_private_inference_diagnostic_stays_in_private_prompt_trace(tmp_path, monkeypatch):
+def test_private_inference_diagnostic_stays_in_private_prompt_trace(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("WW_PROMPT_TRACE", "1")
 
     class _PrivateFailureLLM:
@@ -1488,7 +1923,12 @@ def test_private_inference_diagnostic_stays_in_private_prompt_trace(tmp_path, mo
     )
 
     assert asyncio.run(producer(traces=[], stimulus={}, arousal=1.0)) is None
-    records = [json.loads(line) for line in (tmp_path / "prompt_traces.jsonl").read_text(encoding="utf-8").splitlines()]
+    records = [
+        json.loads(line)
+        for line in (tmp_path / "prompt_traces.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
     failure = records[-1]
     assert failure["record_type"] == "completion_failed"
     assert failure["error"] == "Response was not valid JSON: truncated"
@@ -1571,7 +2011,9 @@ def test_cognitive_core_closes_loop_end_to_end(tmp_path):
 def test_cognitive_core_observes_only_chat_included_in_a_prompt(tmp_path):
     world = _StubWorld(
         _Scene(present=[_Person("Levi", actor_id="actor-levi", session_id="other-1")]),
-        local_chat=[_Chat("other-1", "Levi", "The blue cup is yours.", actor_id="actor-levi")],
+        local_chat=[
+            _Chat("other-1", "Levi", "The blue cup is yours.", actor_id="actor-levi")
+        ],
     )
     llm = _StubLLM(json_response={"felt_sense": "Levi's offer lands", "act": None})
     core = CognitiveCore(
@@ -1608,7 +2050,9 @@ def test_cognitive_core_observes_only_chat_included_in_a_prompt(tmp_path):
 
     # The server still returns the same rolling-window line, but its stable
     # encounter is already consumed and therefore absent from the next prompt.
-    asyncio.run(core.tick_once(now=(T0 + timedelta(seconds=1)).isoformat(), force_ignite=True))
+    asyncio.run(
+        core.tick_once(now=(T0 + timedelta(seconds=1)).isoformat(), force_ignite=True)
+    )
     assert len(_packets_of_type(memory_dir, "chat_heard")) == 1
     assert "The blue cup is yours." not in llm.calls[1]["user"]
     assert len(_events_by_type(memory_dir, "utterance_perceived")) == 1

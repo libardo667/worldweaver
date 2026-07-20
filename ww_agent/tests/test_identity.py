@@ -58,9 +58,15 @@ def test_identity_loader_composes_canonical_and_growth_layers(tmp_path):
     resident_dir = tmp_path / "maya_chen"
     identity_dir = resident_dir / "identity"
     identity_dir.mkdir(parents=True, exist_ok=True)
-    (identity_dir / "SOUL.canonical.md").write_text("Canonical soul.\n", encoding="utf-8")
-    (identity_dir / "soul_growth.md").write_text("Learned to pause before speaking.\n", encoding="utf-8")
-    (identity_dir / "SOUL.md").write_text("stale compatibility export\n", encoding="utf-8")
+    (identity_dir / "SOUL.canonical.md").write_text(
+        "Canonical soul.\n", encoding="utf-8"
+    )
+    (identity_dir / "soul_growth.md").write_text(
+        "Learned to pause before speaking.\n", encoding="utf-8"
+    )
+    (identity_dir / "SOUL.md").write_text(
+        "stale compatibility export\n", encoding="utf-8"
+    )
     (identity_dir / "IDENTITY.md").write_text("# Test Resident\n", encoding="utf-8")
 
     identity = IdentityLoader.load(resident_dir)
@@ -76,12 +82,16 @@ def test_identity_loader_save_soul_writes_growth_and_composed_soul(tmp_path):
     resident_dir = tmp_path / "maya_chen"
     identity_dir = resident_dir / "identity"
     identity_dir.mkdir(parents=True, exist_ok=True)
-    (identity_dir / "SOUL.canonical.md").write_text("Canonical soul.\n", encoding="utf-8")
+    (identity_dir / "SOUL.canonical.md").write_text(
+        "Canonical soul.\n", encoding="utf-8"
+    )
     (identity_dir / "SOUL.md").write_text("Canonical soul.\n", encoding="utf-8")
 
     IdentityLoader.save_soul(resident_dir, "Now steadier under pressure.")
 
-    assert (identity_dir / "soul_growth.md").read_text(encoding="utf-8") == "Now steadier under pressure.\n"
+    assert (identity_dir / "soul_growth.md").read_text(
+        encoding="utf-8"
+    ) == "Now steadier under pressure.\n"
     composed = (identity_dir / "SOUL.md").read_text(encoding="utf-8")
     assert "Canonical soul." in composed
     assert "What has deepened through lived experience:" in composed

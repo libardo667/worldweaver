@@ -43,7 +43,12 @@ class _DriveHolder:
 class CitySourceRegistry(InformationSourceRegistry):
     """City-contributed providers over the shared resident source registry."""
 
-    def __init__(self, sources: list[InformationSource], *, drive_holder: "_DriveHolder | None" = None):
+    def __init__(
+        self,
+        sources: list[InformationSource],
+        *,
+        drive_holder: "_DriveHolder | None" = None,
+    ):
         super().__init__(sources)
         self._drive_holder = drive_holder
 
@@ -60,20 +65,78 @@ class CitySourceRegistry(InformationSourceRegistry):
 # Real, long-running SF spots keyed by neighborhood. A resident's local knowledge of
 # where to eat — feels like reaching out, never leaves the machine.
 _SF_EATS: dict[str, list[tuple[str, str]]] = {
-    "mission": [("La Taqueria", "the burrito, no rice, since '73"), ("Tartine Bakery", "the morning bread is worth the line"), ("Bi-Rite Creamery", "a cone after, salted caramel"), ("Foreign Cinema", "brunch in the courtyard")],
-    "north beach": [("Tony's Pizza Napoletana", "the slice line at Golden Boy next door too"), ("Molinari Delicatessen", "a salami sandwich to go"), ("Caffe Trieste", "an espresso and the old murals"), ("Sotto Mare", "cioppino, no reservations")],
-    "chinatown": [("R&G Lounge", "the salt-and-pepper crab"), ("Z & Y", "numbing Sichuan, go early"), ("Good Mong Kok", "dim sum off the steam tray, cash"), ("Mister Jiu's", "if it's a special night")],
-    "castro": [("Anchor Oyster Bar", "marble counter, the cioppino"), ("Frances", "the bacon beignets, book ahead"), ("La Méditerranée", "the chicken pomegranate")],
-    "hayes valley": [("Rich Table", "the sardine chips"), ("Souvla", "a Greek salad and frozen Greek yogurt"), ("Zuni Café", "the roast chicken for two, an hour's wait")],
-    "richmond": [("Burma Superstar", "the tea leaf salad, expect a line"), ("Pizzetta 211", "a thin pie on a foggy corner"), ("Hai Ky Mi Gia", "duck noodle soup")],
-    "sunset": [("Outerlands", "brunch by Ocean Beach, the eggs in jail"), ("San Tung", "the dry-fried chicken wings"), ("Hot Sauce and Panko", "wings, oddly, behind a hot-sauce shop")],
-    "soma": [("Yank Sing", "dim sum carts, a splurge"), ("Marlowe", "the burger"), ("The Cavalier", "British, by the ballpark")],
-    "marina": [("A16", "the Neapolitan pizza and the wine list"), ("Causwells", "the Americana burger, Tuesdays"), ("Tacolicious", "a quick taco and a margarita")],
-    "nob hill": [("Swan Oyster Depot", "the counter, the crab, cash, since 1912"), ("Cheese Plus", "a grilled cheese done right")],
-    "tenderloin": [("Saigon Sandwich", "a banh mi for four dollars"), ("Lers Ros", "real Thai, open late"), ("Brenda's French Soul Food", "the beignet flight, a morning wait")],
-    "haight": [("Cha Cha Cha", "tapas and sangria, loud"), ("Magnolia", "a burger and a house pint"), ("Zazie", "Cole Valley brunch, the gingerbread pancakes")],
-    "bernal heights": [("Red Hill Station", "oysters up the hill"), ("Good Frikin' Chicken", "the rotisserie plate"), ("Pinhole Coffee", "a pour-over and the view")],
-    "dogpatch": [("Piccino", "the yellow corner, a pizza and a Coffee Bar cortado"), ("Just For You Cafe", "the beignets and grits"), ("Long Bridge Pizza", "a square slice")],
+    "mission": [
+        ("La Taqueria", "the burrito, no rice, since '73"),
+        ("Tartine Bakery", "the morning bread is worth the line"),
+        ("Bi-Rite Creamery", "a cone after, salted caramel"),
+        ("Foreign Cinema", "brunch in the courtyard"),
+    ],
+    "north beach": [
+        ("Tony's Pizza Napoletana", "the slice line at Golden Boy next door too"),
+        ("Molinari Delicatessen", "a salami sandwich to go"),
+        ("Caffe Trieste", "an espresso and the old murals"),
+        ("Sotto Mare", "cioppino, no reservations"),
+    ],
+    "chinatown": [
+        ("R&G Lounge", "the salt-and-pepper crab"),
+        ("Z & Y", "numbing Sichuan, go early"),
+        ("Good Mong Kok", "dim sum off the steam tray, cash"),
+        ("Mister Jiu's", "if it's a special night"),
+    ],
+    "castro": [
+        ("Anchor Oyster Bar", "marble counter, the cioppino"),
+        ("Frances", "the bacon beignets, book ahead"),
+        ("La Méditerranée", "the chicken pomegranate"),
+    ],
+    "hayes valley": [
+        ("Rich Table", "the sardine chips"),
+        ("Souvla", "a Greek salad and frozen Greek yogurt"),
+        ("Zuni Café", "the roast chicken for two, an hour's wait"),
+    ],
+    "richmond": [
+        ("Burma Superstar", "the tea leaf salad, expect a line"),
+        ("Pizzetta 211", "a thin pie on a foggy corner"),
+        ("Hai Ky Mi Gia", "duck noodle soup"),
+    ],
+    "sunset": [
+        ("Outerlands", "brunch by Ocean Beach, the eggs in jail"),
+        ("San Tung", "the dry-fried chicken wings"),
+        ("Hot Sauce and Panko", "wings, oddly, behind a hot-sauce shop"),
+    ],
+    "soma": [
+        ("Yank Sing", "dim sum carts, a splurge"),
+        ("Marlowe", "the burger"),
+        ("The Cavalier", "British, by the ballpark"),
+    ],
+    "marina": [
+        ("A16", "the Neapolitan pizza and the wine list"),
+        ("Causwells", "the Americana burger, Tuesdays"),
+        ("Tacolicious", "a quick taco and a margarita"),
+    ],
+    "nob hill": [
+        ("Swan Oyster Depot", "the counter, the crab, cash, since 1912"),
+        ("Cheese Plus", "a grilled cheese done right"),
+    ],
+    "tenderloin": [
+        ("Saigon Sandwich", "a banh mi for four dollars"),
+        ("Lers Ros", "real Thai, open late"),
+        ("Brenda's French Soul Food", "the beignet flight, a morning wait"),
+    ],
+    "haight": [
+        ("Cha Cha Cha", "tapas and sangria, loud"),
+        ("Magnolia", "a burger and a house pint"),
+        ("Zazie", "Cole Valley brunch, the gingerbread pancakes"),
+    ],
+    "bernal heights": [
+        ("Red Hill Station", "oysters up the hill"),
+        ("Good Frikin' Chicken", "the rotisserie plate"),
+        ("Pinhole Coffee", "a pour-over and the view"),
+    ],
+    "dogpatch": [
+        ("Piccino", "the yellow corner, a pizza and a Coffee Bar cortado"),
+        ("Just For You Cafe", "the beignets and grits"),
+        ("Long Bridge Pizza", "a square slice"),
+    ],
 }
 
 # Common ways a resident might name a neighborhood → its canonical key.
@@ -101,11 +164,15 @@ _EATS_ALIASES: dict[str, str] = {
     "cole valley": "haight",
 }
 
-_STRIP = re.compile(r"\b(district|neighborhood|neighbourhood|area|sf|san francisco)\b", re.IGNORECASE)
+_STRIP = re.compile(
+    r"\b(district|neighborhood|neighbourhood|area|sf|san francisco)\b", re.IGNORECASE
+)
 
 
 def _eats_key(arg: str) -> str | None:
-    raw = re.sub(r"\s+", " ", _STRIP.sub("", str(arg or "")).strip().lower()).strip(" ,.")
+    raw = re.sub(r"\s+", " ", _STRIP.sub("", str(arg or "")).strip().lower()).strip(
+        " ,."
+    )
     if not raw:
         return None
     if raw in _SF_EATS:
@@ -172,7 +239,14 @@ def _make_news_source(client: Any) -> InformationSource:
             ]
         }
 
-    return InformationSource(name="news", description="catch the day's San Francisco news (query may be blank)", run=_run, locality="San Francisco", visibility="public", selection_mode="chronological")
+    return InformationSource(
+        name="news",
+        description="catch the day's San Francisco news (query may be blank)",
+        run=_run,
+        locality="San Francisco",
+        visibility="public",
+        selection_mode="chronological",
+    )
 
 
 def _make_places_source(client: Any) -> InformationSource:
@@ -194,7 +268,14 @@ def _make_places_source(client: Any) -> InformationSource:
             ]
         }
 
-    return InformationSource(name="places", description="see what landmarks are near a place (query: place)", run=_run, locality="city", visibility="public", selection_mode="proximity")
+    return InformationSource(
+        name="places",
+        description="see what landmarks are near a place (query: place)",
+        run=_run,
+        locality="city",
+        visibility="public",
+        selection_mode="proximity",
+    )
 
 
 def _make_surroundings_source(client: Any, session_id: str) -> InformationSource:
@@ -218,8 +299,14 @@ def _make_surroundings_source(client: Any, session_id: str) -> InformationSource
             label = str(getattr(item, "label", "") or "").strip()
             sensory_note = str(getattr(item, "sensory_note", "") or "").strip()
             source = str(getattr(item, "source", "") or "scene").strip()
-            pressure_tags = [str(tag).strip() for tag in list(getattr(item, "pressure_tags", []) or []) if str(tag).strip()]
-            searchable = " ".join([kind, label, sensory_note, source, *pressure_tags]).lower()
+            pressure_tags = [
+                str(tag).strip()
+                for tag in list(getattr(item, "pressure_tags", []) or [])
+                if str(tag).strip()
+            ]
+            searchable = " ".join(
+                [kind, label, sensory_note, source, *pressure_tags]
+            ).lower()
             if not label or (query and query not in searchable):
                 continue
             records.append(
@@ -276,10 +363,13 @@ def _make_objects_source(client: Any, session_id: str) -> InformationSource:
             recipients = [
                 {
                     "session_id": str(getattr(person, "session_id", "") or "").strip(),
-                    "name": str(getattr(person, "role", "") or getattr(person, "name", "") or "").strip(),
+                    "name": str(
+                        getattr(person, "role", "") or getattr(person, "name", "") or ""
+                    ).strip(),
                 }
                 for person in list(getattr(scene, "present", []) or [])
-                if str(getattr(person, "session_id", "") or "").strip() not in {"", session_id}
+                if str(getattr(person, "session_id", "") or "").strip()
+                not in {"", session_id}
             ][:4]
         except Exception:
             recipients = []
@@ -294,13 +384,18 @@ def _make_objects_source(client: Any, session_id: str) -> InformationSource:
             relation = str(item.get("relation") or "here").strip()
             can_pick_up = bool(item.get("can_pick_up"))
             object_id = str(item.get("object_id") or "").strip()
-            searchable = " ".join((name, description, kind, relation, object_id)).lower()
+            searchable = " ".join(
+                (name, description, kind, relation, object_id)
+            ).lower()
             if not name or (query and query not in searchable):
                 continue
             if relation == "carried":
                 relation_text = f'You are carrying it. To place it here, act with kind "do" and target "object-place:{object_id}".'
                 if recipients:
-                    give_choices = " ".join(f'To give it immediately to {recipient["name"]}, act with kind "do" and target "object-give:{object_id}:{recipient["session_id"]}".' for recipient in recipients)
+                    give_choices = " ".join(
+                        f'To give it immediately to {recipient["name"]}, act with kind "do" and target "object-give:{object_id}:{recipient["session_id"]}".'
+                        for recipient in recipients
+                    )
                     relation_text = f"{relation_text} {give_choices}"
             elif can_pick_up:
                 relation_text = f'It is here with you. You placed it here; to pick it back up, act with kind "do" and target "object-pick-up:{object_id}".'
@@ -310,7 +405,9 @@ def _make_objects_source(client: Any, session_id: str) -> InformationSource:
                 {
                     "record_id": f"object:{object_id}",
                     "title": name,
-                    "content": " ".join(part for part in (description, relation_text) if part),
+                    "content": " ".join(
+                        part for part in (description, relation_text) if part
+                    ),
                     "freshness": "live",
                     "locality": "carried" if relation == "carried" else "current place",
                     "visibility": "private" if relation == "carried" else "local",
@@ -387,8 +484,16 @@ def _make_making_source(client: Any, session_id: str) -> InformationSource:
             searchable = " ".join((recipe_id, title, description)).lower()
             if query and query not in searchable:
                 continue
-            availability = "The materials are available now." if can_make else "Some required materials are not available now."
-            choice = f'To choose this recipe, act with kind "do" and target "recipe:{recipe_id}".' if can_make else ""
+            availability = (
+                "The materials are available now."
+                if can_make
+                else "Some required materials are not available now."
+            )
+            choice = (
+                f'To choose this recipe, act with kind "do" and target "recipe:{recipe_id}".'
+                if can_make
+                else ""
+            )
             records.append(
                 {
                     "record_id": f"recipe:{recipe_id}:{location}",
@@ -435,8 +540,22 @@ def _make_exchanges_source(client: Any, session_id: str) -> InformationSource:
         except Exception:
             return {"ok": False, "reason": "source_unavailable", "records": []}
 
-        actor_names = {str(getattr(person, "actor_id", "") or "").strip(): str(getattr(person, "role", "") or getattr(person, "name", "") or "another person").strip() for person in list(getattr(scene, "present", []) or []) if str(getattr(person, "actor_id", "") or "").strip()}
-        carried = [item for item in list(objects_payload.get("objects") or []) if isinstance(item, dict) and str(item.get("relation") or "") == "carried"][:6]
+        actor_names = {
+            str(getattr(person, "actor_id", "") or "")
+            .strip(): str(
+                getattr(person, "role", "")
+                or getattr(person, "name", "")
+                or "another person"
+            )
+            .strip()
+            for person in list(getattr(scene, "present", []) or [])
+            if str(getattr(person, "actor_id", "") or "").strip()
+        }
+        carried = [
+            item
+            for item in list(objects_payload.get("objects") or [])
+            if isinstance(item, dict) and str(item.get("relation") or "") == "carried"
+        ][:6]
         records: list[dict[str, Any]] = []
 
         for item in list(payload.get("exchanges") or []):
@@ -446,17 +565,31 @@ def _make_exchanges_source(client: Any, session_id: str) -> InformationSource:
             offered = dict(item.get("offered_object") or {})
             requested = dict(item.get("requested_object") or {})
             role = str(item.get("viewer_role") or "").strip()
-            counterpart_actor_id = str(item.get("proposer_actor_id") if role == "recipient" else item.get("recipient_actor_id") or "").strip()
+            counterpart_actor_id = str(
+                item.get("proposer_actor_id")
+                if role == "recipient"
+                else item.get("recipient_actor_id") or ""
+            ).strip()
             counterpart = actor_names.get(counterpart_actor_id, "the other person")
             status = str(item.get("status") or "unknown").strip()
             choices: list[str] = []
             if bool(item.get("can_accept")):
-                choices.append(f'To accept this exact swap, act with kind "do" and target "exchange-accept:{exchange_id}".')
+                choices.append(
+                    f'To accept this exact swap, act with kind "do" and target "exchange-accept:{exchange_id}".'
+                )
             if bool(item.get("can_decline")):
-                choices.append(f'To decline it, act with kind "do" and target "exchange-decline:{exchange_id}".')
+                choices.append(
+                    f'To decline it, act with kind "do" and target "exchange-decline:{exchange_id}".'
+                )
             if bool(item.get("can_cancel")):
-                choices.append(f'To cancel your offer, act with kind "do" and target "exchange-cancel:{exchange_id}".')
-            terms = f'{counterpart} offered their "{offered.get("name", "object")}" for your "{requested.get("name", "object")}".' if role == "recipient" else f'You offered your "{offered.get("name", "object")}" for {counterpart}\'s "{requested.get("name", "object")}".'
+                choices.append(
+                    f'To cancel your offer, act with kind "do" and target "exchange-cancel:{exchange_id}".'
+                )
+            terms = (
+                f'{counterpart} offered their "{offered.get("name", "object")}" for your "{requested.get("name", "object")}".'
+                if role == "recipient"
+                else f'You offered your "{offered.get("name", "object")}" for {counterpart}\'s "{requested.get("name", "object")}".'
+            )
             content = f"{terms} Status: {status}. {' '.join(choices)}".strip()
             searchable = f"{counterpart} {content}".lower()
             if query and query not in searchable:
@@ -467,7 +600,11 @@ def _make_exchanges_source(client: Any, session_id: str) -> InformationSource:
                     "title": f'{offered.get("name", "Object")} for {requested.get("name", "object")}',
                     "content": content,
                     "freshness": "live",
-                    "locality": "current place" if bool(item.get("counterpart_present")) else "actor-scoped",
+                    "locality": (
+                        "current place"
+                        if bool(item.get("counterpart_present"))
+                        else "actor-scoped"
+                    ),
                     "visibility": "private",
                     "selection_mode": "text_match" if query else "actor_scoped",
                     "metadata": {**item, "counterpart_name": counterpart},
@@ -488,8 +625,15 @@ def _make_exchanges_source(client: Any, session_id: str) -> InformationSource:
                 for offered in carried:
                     offered_id = str(offered.get("object_id") or "").strip()
                     offered_name = str(offered.get("name") or "object").strip()
-                    content = f'To offer {offered_name} for {recipient_name}\'s {requested_name}, act with kind "do" and target ' f'"exchange-offer:{recipient_session_id}:{offered_id}:{requested_id}". Nothing moves unless they later accept.'
-                    if query and query not in f"{recipient_name} {offered_name} {requested_name}".lower():
+                    content = (
+                        f'To offer {offered_name} for {recipient_name}\'s {requested_name}, act with kind "do" and target '
+                        f'"exchange-offer:{recipient_session_id}:{offered_id}:{requested_id}". Nothing moves unless they later accept.'
+                    )
+                    if (
+                        query
+                        and query
+                        not in f"{recipient_name} {offered_name} {requested_name}".lower()
+                    ):
                         continue
                     records.append(
                         {
@@ -499,7 +643,9 @@ def _make_exchanges_source(client: Any, session_id: str) -> InformationSource:
                             "freshness": "live",
                             "locality": "current place",
                             "visibility": "private",
-                            "selection_mode": "text_match" if query else "embodied_local",
+                            "selection_mode": (
+                                "text_match" if query else "embodied_local"
+                            ),
                             "metadata": {
                                 "recipient_session_id": recipient_session_id,
                                 "recipient_name": recipient_name,
@@ -557,22 +703,44 @@ def _make_access_source(client: Any, session_id: str) -> InformationSource:
         note = str(access.get("note") or "").strip()
         choices: list[str] = []
         if bool(access.get("can_request")):
-            choices.append(f'To ask for entry, act with kind "do" and target "access-request:{location}".')
+            choices.append(
+                f'To ask for entry, act with kind "do" and target "access-request:{location}".'
+            )
         if bool(access.get("is_controller")):
             for next_mode in ("public", "requestable", "private", "closed"):
                 if next_mode != mode:
-                    choices.append(f'To change this place to {next_mode}, act with kind "do" and target "access-mode:{next_mode}:{location}".')
+                    choices.append(
+                        f'To change this place to {next_mode}, act with kind "do" and target "access-mode:{next_mode}:{location}".'
+                    )
 
         present = list(getattr(scene, "present", []) or [])
-        names_by_actor = {str(getattr(person, "actor_id", "") or "").strip(): str(getattr(person, "role", "") or getattr(person, "name", "") or "another person").strip() for person in present if str(getattr(person, "actor_id", "") or "").strip()}
-        granted_actor_ids = {str(item.get("actor_id") or "").strip() for item in list(access.get("active_grants") or []) if isinstance(item, dict)}
+        names_by_actor = {
+            str(getattr(person, "actor_id", "") or "")
+            .strip(): str(
+                getattr(person, "role", "")
+                or getattr(person, "name", "")
+                or "another person"
+            )
+            .strip()
+            for person in present
+            if str(getattr(person, "actor_id", "") or "").strip()
+        }
+        granted_actor_ids = {
+            str(item.get("actor_id") or "").strip()
+            for item in list(access.get("active_grants") or [])
+            if isinstance(item, dict)
+        }
         if bool(access.get("is_controller")):
             for person in present[:8]:
                 actor_id = str(getattr(person, "actor_id", "") or "").strip()
-                recipient_session_id = str(getattr(person, "session_id", "") or "").strip()
+                recipient_session_id = str(
+                    getattr(person, "session_id", "") or ""
+                ).strip()
                 name = names_by_actor.get(actor_id, "the other person")
                 if recipient_session_id and actor_id not in granted_actor_ids:
-                    choices.append(f'To invite {name}, act with kind "do" and target "access-invite:{recipient_session_id}:{location}".')
+                    choices.append(
+                        f'To invite {name}, act with kind "do" and target "access-invite:{recipient_session_id}:{location}".'
+                    )
             for grant in list(access.get("active_grants") or [])[:8]:
                 if not isinstance(grant, dict):
                     continue
@@ -580,13 +748,18 @@ def _make_access_source(client: Any, session_id: str) -> InformationSource:
                 recipient_session_id = str(grant.get("session_id") or "").strip()
                 if recipient_session_id:
                     name = names_by_actor.get(actor_id, "that admitted person")
-                    choices.append(f'To end {name}\'s future entry without ejecting them, act with kind "do" and target "access-revoke:{recipient_session_id}:{location}".')
+                    choices.append(
+                        f'To end {name}\'s future entry without ejecting them, act with kind "do" and target "access-revoke:{recipient_session_id}:{location}".'
+                    )
 
         records = [
             {
                 "record_id": f"access:{location}",
                 "title": f"Access to {location}",
-                "content": (f"Mode: {mode}. You {'can' if access.get('can_enter') else 'cannot'} enter. " f"{note} {' '.join(choices)}").strip(),
+                "content": (
+                    f"Mode: {mode}. You {'can' if access.get('can_enter') else 'cannot'} enter. "
+                    f"{note} {' '.join(choices)}"
+                ).strip(),
                 "freshness": "live",
                 "locality": location,
                 "visibility": "private",
@@ -596,21 +769,28 @@ def _make_access_source(client: Any, session_id: str) -> InformationSource:
         ]
         if bool(access.get("is_controller")):
             try:
-                request_payload = await client.get_pending_space_access_requests(session_id, location)
+                request_payload = await client.get_pending_space_access_requests(
+                    session_id, location
+                )
             except Exception:
                 request_payload = {"requests": []}
             for request in list(request_payload.get("requests") or [])[:12]:
                 if not isinstance(request, dict):
                     continue
                 request_id = str(request.get("request_id") or "").strip()
-                requester_actor_id = str(request.get("requester_actor_id") or "").strip()
+                requester_actor_id = str(
+                    request.get("requester_actor_id") or ""
+                ).strip()
                 requester_name = names_by_actor.get(requester_actor_id, "Someone")
                 request_note = str(request.get("note") or "").strip()
                 records.append(
                     {
                         "record_id": f"access-request:{request_id}",
                         "title": f"Request from {requester_name}",
-                        "content": (f'{request_note or "They left no note."} To admit them, act with kind "do" and target "access-admit:{request_id}". ' f'To deny this request, act with kind "do" and target "access-deny:{request_id}".'),
+                        "content": (
+                            f'{request_note or "They left no note."} To admit them, act with kind "do" and target "access-admit:{request_id}". '
+                            f'To deny this request, act with kind "do" and target "access-deny:{request_id}".'
+                        ),
                         "freshness": "live",
                         "locality": location,
                         "visibility": "private",
@@ -643,10 +823,17 @@ def _make_stoops_source(client: Any, session_id: str) -> InformationSource:
             return {"ok": False, "reason": "source_unavailable", "records": []}
 
         location = str(payload.get("location") or "current place").strip()
-        stoops = [item for item in list(payload.get("stoops") or []) if isinstance(item, dict)]
+        stoops = [
+            item for item in list(payload.get("stoops") or []) if isinstance(item, dict)
+        ]
         if query:
             lowered = query.lower()
-            matches = [item for item in stoops if lowered in str(item.get("stoop_id") or "").lower() or lowered in str(item.get("title") or "").lower()]
+            matches = [
+                item
+                for item in stoops
+                if lowered in str(item.get("stoop_id") or "").lower()
+                or lowered in str(item.get("title") or "").lower()
+            ]
             if len(matches) == 1:
                 stoop_id = str(matches[0].get("stoop_id") or "").strip()
                 try:
@@ -657,7 +844,11 @@ def _make_stoops_source(client: Any, session_id: str) -> InformationSource:
                 for entry in list(opened.get("entries") or []):
                     if not isinstance(entry, dict):
                         continue
-                    item = entry.get("object") if isinstance(entry.get("object"), dict) else {}
+                    item = (
+                        entry.get("object")
+                        if isinstance(entry.get("object"), dict)
+                        else {}
+                    )
                     object_id = str(item.get("object_id") or "").strip()
                     title = str(item.get("name") or "object").strip()
                     description = str(item.get("description") or "").strip()
@@ -711,7 +902,10 @@ def _make_stoops_source(client: Any, session_id: str) -> InformationSource:
             except Exception:
                 objects_payload = {"objects": []}
             for carried in list(objects_payload.get("objects") or []):
-                if not isinstance(carried, dict) or str(carried.get("relation") or "") != "carried":
+                if (
+                    not isinstance(carried, dict)
+                    or str(carried.get("relation") or "") != "carried"
+                ):
                     continue
                 object_id = str(carried.get("object_id") or "").strip()
                 object_name = str(carried.get("name") or "object").strip()
@@ -719,12 +913,19 @@ def _make_stoops_source(client: Any, session_id: str) -> InformationSource:
                     {
                         "record_id": f"stoop-leave:{stoop_id}:{object_id}",
                         "title": f"Leave {object_name}",
-                        "content": ("Leaving this object is explicit permission for another visitor to take it. " f'To do that, act with kind "do" and target "stoop-leave:{stoop_id}:{object_id}".'),
+                        "content": (
+                            "Leaving this object is explicit permission for another visitor to take it. "
+                            f'To do that, act with kind "do" and target "stoop-leave:{stoop_id}:{object_id}".'
+                        ),
                         "freshness": "live",
                         "locality": location,
                         "visibility": "private",
                         "selection_mode": "embodied_local",
-                        "metadata": {"stoop_id": stoop_id, "object_id": object_id, "command": "leave"},
+                        "metadata": {
+                            "stoop_id": stoop_id,
+                            "object_id": object_id,
+                            "command": "leave",
+                        },
                     }
                 )
         return {"selection_mode": "embodied_local", "records": records}
@@ -753,7 +954,8 @@ def _make_stoops_source(client: Any, session_id: str) -> InformationSource:
 async def _drive_scores(drive: Any, texts: list[str]) -> list[float]:
     """Soul-resonance score for each text: one batched embed of all candidates, each
     scored by its weighted peak cosine against the resident's identity fragments.
-    Returns parallel zeros when there is no drive vector / embedder (recency fallback)."""
+    Returns parallel zeros when there is no drive vector / embedder (recency fallback).
+    """
     if drive is None or getattr(drive, "is_empty", lambda: True)() or not texts:
         return [0.0] * len(texts)
     try:
@@ -774,12 +976,20 @@ async def _drive_scores(drive: Any, texts: list[str]) -> list[float]:
     return scores
 
 
-def _make_chatter_source(client: Any, holder: "_DriveHolder", session_id: str) -> InformationSource:
-    def _message_record(message: Any, *, score: float, selection_mode: str) -> dict[str, Any]:
+def _make_chatter_source(
+    client: Any, holder: "_DriveHolder", session_id: str
+) -> InformationSource:
+    def _message_record(
+        message: Any, *, score: float, selection_mode: str
+    ) -> dict[str, Any]:
         message_id = str(getattr(message, "id", "") or "")
         speaker = str(getattr(message, "display_name", "") or "").strip()
         return {
-            "record_id": f"chat:{message_id}" if message_id else f"chat:{getattr(message, 'session_id', '')}:{getattr(message, 'ts', '')}",
+            "record_id": (
+                f"chat:{message_id}"
+                if message_id
+                else f"chat:{getattr(message, 'session_id', '')}:{getattr(message, 'ts', '')}"
+            ),
             "title": speaker,
             "content": str(getattr(message, "message", "") or "").strip(),
             "observed_at": str(getattr(message, "ts", "") or ""),
@@ -787,7 +997,11 @@ def _make_chatter_source(client: Any, holder: "_DriveHolder", session_id: str) -
             "locality": "citywide",
             "visibility": "public",
             "selection_mode": selection_mode,
-            "metadata": {"speaker": speaker, "session_id": str(getattr(message, "session_id", "") or ""), "resonance_score": round(float(score), 4)},
+            "metadata": {
+                "speaker": speaker,
+                "session_id": str(getattr(message, "session_id", "") or ""),
+                "resonance_score": round(float(score), 4),
+            },
         }
 
     async def _run(arg: str) -> dict[str, Any]:
@@ -796,22 +1010,40 @@ def _make_chatter_source(client: Any, holder: "_DriveHolder", session_id: str) -
             messages = await client.get_location_chat("__city__", session_id=session_id)
         except Exception:
             return {"ok": False, "reason": "source_unavailable", "records": []}
-        pool = [m for m in messages if str(getattr(m, "session_id", "") or "") != session_id and str(getattr(m, "message", "") or "").strip()]
+        pool = [
+            m
+            for m in messages
+            if str(getattr(m, "session_id", "") or "") != session_id
+            and str(getattr(m, "message", "") or "").strip()
+        ]
         if not pool:
             return {"records": [], "selection_mode": "chronological"}
         # Follow a specific peer: the argument names someone speaking (the relational pull).
         if query:
             ql = query.lower()
-            by_peer = [m for m in pool if ql in str(getattr(m, "display_name", "") or "").lower()]
+            by_peer = [
+                m
+                for m in pool
+                if ql in str(getattr(m, "display_name", "") or "").lower()
+            ]
             if by_peer:
-                return {"selection_mode": "named_peer", "records": [_message_record(message, score=0.0, selection_mode="named_peer") for message in by_peer[-4:]]}
+                return {
+                    "selection_mode": "named_peer",
+                    "records": [
+                        _message_record(message, score=0.0, selection_mode="named_peer")
+                        for message in by_peer[-4:]
+                    ],
+                }
         # Otherwise rank the recent feed by soul-resonance (blank) or topic+resonance (a word).
         recent = pool[-14:]
         bodies = [str(m.message or "").strip() for m in recent]
         scores = await _drive_scores(holder.drive, bodies)
         if query:
             ql = query.lower()
-            scores = [s + (0.5 if ql in body.lower() else 0.0) for s, body in zip(scores, bodies)]
+            scores = [
+                s + (0.5 if ql in body.lower() else 0.0)
+                for s, body in zip(scores, bodies)
+            ]
         ranked = sorted(zip(recent, scores), key=lambda pair: -pair[1])
         if all(s <= 0.0 for _m, s in ranked):  # no resonance available → recency
             ranked = list(zip(reversed(recent), [0.0] * len(recent)))
@@ -821,7 +1053,13 @@ def _make_chatter_source(client: Any, holder: "_DriveHolder", session_id: str) -
         else:
             selection_mode = "soul_resonance"
         top = ranked[:4]
-        return {"selection_mode": selection_mode, "records": [_message_record(message, score=score, selection_mode=selection_mode) for message, score in top]}
+        return {
+            "selection_mode": selection_mode,
+            "records": [
+                _message_record(message, score=score, selection_mode=selection_mode)
+                for message, score in top
+            ],
+        }
 
     return InformationSource(
         name="chatter",
@@ -838,7 +1076,9 @@ def _make_investigate_source(client: Any, session_id: str) -> InformationSource:
         query = str(arg or "").strip()
         if not query:
             return {"ok": False, "reason": "query_required", "records": []}
-        facts = await client.get_world_facts(query, session_id=session_id or None, limit=5)
+        facts = await client.get_world_facts(
+            query, session_id=session_id or None, limit=5
+        )
         return {
             "records": [
                 {
@@ -855,7 +1095,15 @@ def _make_investigate_source(client: Any, session_id: str) -> InformationSource:
             ]
         }
 
-    return InformationSource(name="investigate", description="look into the world's history and goings-on (query: what you want to know)", run=_run, freshness="historical", locality="world", visibility="shared", selection_mode="text_match")
+    return InformationSource(
+        name="investigate",
+        description="look into the world's history and goings-on (query: what you want to know)",
+        run=_run,
+        freshness="historical",
+        locality="world",
+        visibility="shared",
+        selection_mode="text_match",
+    )
 
 
 def _make_travel_source(client: Any) -> InformationSource:
@@ -875,12 +1123,29 @@ def _make_travel_source(client: Any) -> InformationSource:
             route_id = str(route.get("route_id") or "").strip()
             destination_city = str(route.get("to_city_id") or "").strip()
             mode = str(route.get("mode") or "travel").strip() or "travel"
-            departure_hub = str(route.get("departure_hub") or "local travel hub").strip()
-            arrival_hub = str(route.get("arrival_hub") or "destination travel hub").strip()
+            departure_hub = str(
+                route.get("departure_hub") or "local travel hub"
+            ).strip()
+            arrival_hub = str(
+                route.get("arrival_hub") or "destination travel hub"
+            ).strip()
             duration = route.get("duration_hours")
-            duration_text = f", about {duration:g} hours" if isinstance(duration, (int, float)) else ""
-            nodes = [node for node in list(route.get("nodes") or []) if isinstance(node, dict)]
-            available_nodes = [node for node in nodes if str(node.get("status") or "").strip() in {"healthy", "degraded"} and str(node.get("shard_url") or "").strip()]
+            duration_text = (
+                f", about {duration:g} hours"
+                if isinstance(duration, (int, float))
+                else ""
+            )
+            nodes = [
+                node
+                for node in list(route.get("nodes") or [])
+                if isinstance(node, dict)
+            ]
+            available_nodes = [
+                node
+                for node in nodes
+                if str(node.get("status") or "").strip() in {"healthy", "degraded"}
+                and str(node.get("shard_url") or "").strip()
+            ]
             searchable = " ".join(
                 [
                     route_id,
@@ -899,9 +1164,14 @@ def _make_travel_source(client: Any) -> InformationSource:
                     shard_id = str(node.get("shard_id") or "").strip()
                     records.append(
                         {
-                            "record_id": information_record_id("travel", route_id, shard_id),
+                            "record_id": information_record_id(
+                                "travel", route_id, shard_id
+                            ),
                             "title": destination_city.replace("_", " ") or shard_id,
-                            "content": (f"{mode} from {departure_hub} to {arrival_hub}{duration_text}. " f"The live destination node is {shard_id}. To choose this trip, travel to {shard_id}."),
+                            "content": (
+                                f"{mode} from {departure_hub} to {arrival_hub}{duration_text}. "
+                                f"The live destination node is {shard_id}. To choose this trip, travel to {shard_id}."
+                            ),
                             "freshness": "live",
                             "locality": f"{destination_city}:{shard_id}",
                             "visibility": "federation",
@@ -910,17 +1180,27 @@ def _make_travel_source(client: Any) -> InformationSource:
                                 "route_id": route_id,
                                 "destination_city_id": destination_city,
                                 "destination_shard": shard_id,
-                                "destination_url": str(node.get("shard_url") or "").strip(),
-                                "departure_hub_id": str(route.get("departure_hub_id") or "").strip(),
-                                "arrival_hub_id": str(route.get("arrival_hub_id") or "").strip(),
+                                "destination_url": str(
+                                    node.get("shard_url") or ""
+                                ).strip(),
+                                "departure_hub_id": str(
+                                    route.get("departure_hub_id") or ""
+                                ).strip(),
+                                "arrival_hub_id": str(
+                                    route.get("arrival_hub_id") or ""
+                                ).strip(),
                             },
                         }
                     )
             else:
-                availability = str(route.get("availability") or "unknown").strip() or "unknown"
+                availability = (
+                    str(route.get("availability") or "unknown").strip() or "unknown"
+                )
                 records.append(
                     {
-                        "record_id": information_record_id("travel", route_id, availability),
+                        "record_id": information_record_id(
+                            "travel", route_id, availability
+                        ),
                         "title": destination_city.replace("_", " ") or route_id,
                         "content": f"A {mode} route exists from {departure_hub} to {arrival_hub}, but no destination node is currently available ({availability}).",
                         "freshness": "live",

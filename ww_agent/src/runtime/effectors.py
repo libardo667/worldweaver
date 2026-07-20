@@ -96,7 +96,9 @@ class WorldEffector:
         # lands in the resident's ROOM instead — so the commons stops being a free firehose
         # the loud majority can saturate. Law-safe: it limits HOW OFTEN you address everyone,
         # never WHAT you may say. Tracked in-memory for the run's lifetime.
-        self._broadcast_refractory = max(0.0, float(os.environ.get("WW_BROADCAST_REFRACTORY_SECONDS") or 0.0))
+        self._broadcast_refractory = max(
+            0.0, float(os.environ.get("WW_BROADCAST_REFRACTORY_SECONDS") or 0.0)
+        )
         self._last_broadcast_epoch = 0.0
 
     def relational_context(self, *, location: str | None = None) -> dict[str, Any]:
@@ -120,7 +122,9 @@ class WorldEffector:
             if act.kind == "mark":
                 return await self._mark(act)
         except Exception as exc:  # effector failures must never crash the rhythm
-            logger.warning("[%s:effector] %s act failed: %s", self._identity.name, act.kind, exc)
+            logger.warning(
+                "[%s:effector] %s act failed: %s", self._identity.name, act.kind, exc
+            )
             return {"executed": False, "kind": act.kind, "reason": "exception"}
         return {"executed": False, "kind": act.kind, "reason": "unknown_kind"}
 
@@ -189,7 +193,11 @@ class WorldEffector:
         # This changes *who can hear*, never *what may be said* — world-physics, law-safe.
         if target_lower in _CITY_TARGETS:
             now_epoch = datetime.now(timezone.utc).timestamp()
-            if self._broadcast_refractory > 0.0 and (now_epoch - self._last_broadcast_epoch) < self._broadcast_refractory:
+            if (
+                self._broadcast_refractory > 0.0
+                and (now_epoch - self._last_broadcast_epoch)
+                < self._broadcast_refractory
+            ):
                 # Megaphone on cooldown — the words land in the room the resident is in,
                 # not the citywide feed (logged as a local chat_sent so the shift is legible).
                 location = await self._current_location()
@@ -264,7 +272,9 @@ class WorldEffector:
                 "addressed": target_name or None,
                 "addressed_actor_id": addressed_actor_id,
             }
-        if target_name and target_norm not in {normalize_reference(p) for p in (self.present or [])}:
+        if target_name and target_norm not in {
+            normalize_reference(p) for p in (self.present or [])
+        }:
             # absent specific person → a private directed carry, not a citywide broadcast
             await self._ww.send_letter(
                 from_name=self._identity.display_name,
@@ -355,7 +365,9 @@ class WorldEffector:
             names = await self._ww.get_place_names()
         except Exception:
             names = set()
-        matched = next((n for n in names if n.lower() == destination.lower()), destination)
+        matched = next(
+            (n for n in names if n.lower() == destination.lower()), destination
+        )
         departure_context = self.relational_context()
         result = await self._ww.post_map_move(self._session_id, matched)
         moved = bool(result.get("moved"))
@@ -409,13 +421,23 @@ class WorldEffector:
 
     async def _do(self, act: Act) -> dict[str, Any]:
         target = str(act.target or "").strip()
-        growth_adoption = re.fullmatch(r"growth-adopt:(evt-[a-f0-9]{12})", target, re.IGNORECASE)
+        growth_adoption = re.fullmatch(
+            r"growth-adopt:(evt-[a-f0-9]{12})", target, re.IGNORECASE
+        )
         if target.lower().startswith("growth-adopt:") and growth_adoption is None:
-            return {"executed": False, "kind": "do", "reason": "invalid_growth_candidate"}
+            return {
+                "executed": False,
+                "kind": "do",
+                "reason": "invalid_growth_candidate",
+            }
         if growth_adoption:
             adopt = getattr(self._ww, "adopt_identity_growth", None)
             if not callable(adopt):
-                return {"executed": False, "kind": "do", "reason": "identity_growth_unavailable"}
+                return {
+                    "executed": False,
+                    "kind": "do",
+                    "reason": "identity_growth_unavailable",
+                }
             result = await adopt(growth_adoption.group(1).lower())
             payload = dict(result or {}) if isinstance(result, dict) else {}
             adopted = bool(payload.get("ok") and payload.get("adopted"))
@@ -424,32 +446,69 @@ class WorldEffector:
                 "kind": "do",
                 "command": "adopt_identity_growth",
                 "identity_growth_adopted": adopted,
-                "candidate_id": str(payload.get("candidate_id") or growth_adoption.group(1).lower()),
+                "candidate_id": str(
+                    payload.get("candidate_id") or growth_adoption.group(1).lower()
+                ),
                 "adoption_event_id": str(payload.get("adoption_event_id") or ""),
                 "replayed": bool(payload.get("replayed")),
-                **({} if adopted else {"reason": str(payload.get("reason") or "identity_growth_declined")}),
+                **(
+                    {}
+                    if adopted
+                    else {
+                        "reason": str(
+                            payload.get("reason") or "identity_growth_declined"
+                        )
+                    }
+                ),
             }
         access_request = re.fullmatch(r"access-request:(.+)", target, re.IGNORECASE)
-        access_mode = re.fullmatch(r"access-mode:(public|requestable|private|closed):(.+)", target, re.IGNORECASE)
-        access_admission = re.fullmatch(r"access-(invite|revoke):([^:]+):(.+)", target, re.IGNORECASE)
-        access_resolution = re.fullmatch(r"access-(admit|deny):([^:]+)", target, re.IGNORECASE)
+        access_mode = re.fullmatch(
+            r"access-mode:(public|requestable|private|closed):(.+)",
+            target,
+            re.IGNORECASE,
+        )
+        access_admission = re.fullmatch(
+            r"access-(invite|revoke):([^:]+):(.+)", target, re.IGNORECASE
+        )
+        access_resolution = re.fullmatch(
+            r"access-(admit|deny):([^:]+)", target, re.IGNORECASE
+        )
         if access_request or access_mode or access_admission or access_resolution:
             if access_request:
                 command = "request"
                 location = access_request.group(1).strip()
                 execute = getattr(self._ww, "request_space_access", None)
-                args = (self._session_id, location, f"resident-access-request:{uuid.uuid4().hex}")
+                args = (
+                    self._session_id,
+                    location,
+                    f"resident-access-request:{uuid.uuid4().hex}",
+                )
             elif access_mode:
                 command = "mode"
                 mode, location = (part.strip().lower() for part in access_mode.groups())
                 execute = getattr(self._ww, "set_space_access_mode", None)
-                args = (self._session_id, location, mode, f"resident-access-mode:{uuid.uuid4().hex}")
+                args = (
+                    self._session_id,
+                    location,
+                    mode,
+                    f"resident-access-mode:{uuid.uuid4().hex}",
+                )
             elif access_admission:
-                command, recipient_session_id, location = (part.strip() for part in access_admission.groups())
+                command, recipient_session_id, location = (
+                    part.strip() for part in access_admission.groups()
+                )
                 command = command.lower()
                 if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", recipient_session_id):
-                    return {"executed": False, "kind": "do", "reason": "invalid_access_recipient"}
-                execute = getattr(self._ww, "invite_to_space" if command == "invite" else "revoke_space_access", None)
+                    return {
+                        "executed": False,
+                        "kind": "do",
+                        "reason": "invalid_access_recipient",
+                    }
+                execute = getattr(
+                    self._ww,
+                    "invite_to_space" if command == "invite" else "revoke_space_access",
+                    None,
+                )
                 args = (
                     self._session_id,
                     recipient_session_id,
@@ -457,9 +516,15 @@ class WorldEffector:
                     f"resident-access-{command}:{uuid.uuid4().hex}",
                 )
             else:
-                command, request_id = (part.strip().lower() for part in access_resolution.groups())
+                command, request_id = (
+                    part.strip().lower() for part in access_resolution.groups()
+                )
                 if not re.fullmatch(r"[A-Za-z0-9-]{1,64}", request_id):
-                    return {"executed": False, "kind": "do", "reason": "invalid_access_request"}
+                    return {
+                        "executed": False,
+                        "kind": "do",
+                        "reason": "invalid_access_request",
+                    }
                 decision = "admitted" if command == "admit" else "denied"
                 execute = getattr(self._ww, "resolve_space_access_request", None)
                 args = (
@@ -469,17 +534,31 @@ class WorldEffector:
                     f"resident-access-{command}:{uuid.uuid4().hex}",
                 )
             if not access_resolution and not str(location or "").strip():
-                return {"executed": False, "kind": "do", "reason": "invalid_access_location"}
+                return {
+                    "executed": False,
+                    "kind": "do",
+                    "reason": "invalid_access_location",
+                }
             if not callable(execute):
-                return {"executed": False, "kind": "do", "reason": f"access_{command}_unavailable"}
+                return {
+                    "executed": False,
+                    "kind": "do",
+                    "reason": f"access_{command}_unavailable",
+                }
             result = await execute(*args)
-            receipt = dict(result.get("receipt") or {}) if isinstance(result, dict) else {}
+            receipt = (
+                dict(result.get("receipt") or {}) if isinstance(result, dict) else {}
+            )
             receipt_id = str(receipt.get("receipt_id") or "").strip()
             receipt_result = dict(receipt.get("result") or {})
             executed = bool(receipt_id)
             append_runtime_event(
                 self._memory_dir,
-                event_type=f"game_space_access_{command}" if executed else "game_command_declined",
+                event_type=(
+                    f"game_space_access_{command}"
+                    if executed
+                    else "game_command_declined"
+                ),
                 payload={
                     **self.relational_context(),
                     "command": f"access_{command}",
@@ -496,17 +575,36 @@ class WorldEffector:
                 "result": receipt_result,
             }
 
-        exchange_offer = re.fullmatch(r"exchange-offer:([^:]+):([^:]+):([^:]+)", target, re.IGNORECASE)
-        exchange_resolution = re.fullmatch(r"exchange-(accept|decline|cancel):([^:]+)", target, re.IGNORECASE)
+        exchange_offer = re.fullmatch(
+            r"exchange-offer:([^:]+):([^:]+):([^:]+)", target, re.IGNORECASE
+        )
+        exchange_resolution = re.fullmatch(
+            r"exchange-(accept|decline|cancel):([^:]+)", target, re.IGNORECASE
+        )
         if exchange_offer or exchange_resolution:
             if exchange_offer:
                 command = "offer"
-                recipient_session_id, offered_object_id, requested_object_id = (part.strip() for part in exchange_offer.groups())
-                if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", recipient_session_id) or not all(re.fullmatch(r"[A-Za-z0-9-]{1,64}", object_id) for object_id in (offered_object_id, requested_object_id)):
-                    return {"executed": False, "kind": "do", "reason": "invalid_exchange_offer"}
+                recipient_session_id, offered_object_id, requested_object_id = (
+                    part.strip() for part in exchange_offer.groups()
+                )
+                if not re.fullmatch(
+                    r"[A-Za-z0-9_-]{1,64}", recipient_session_id
+                ) or not all(
+                    re.fullmatch(r"[A-Za-z0-9-]{1,64}", object_id)
+                    for object_id in (offered_object_id, requested_object_id)
+                ):
+                    return {
+                        "executed": False,
+                        "kind": "do",
+                        "reason": "invalid_exchange_offer",
+                    }
                 execute = getattr(self._ww, "offer_object_exchange", None)
                 if not callable(execute):
-                    return {"executed": False, "kind": "do", "reason": "exchange_offer_unavailable"}
+                    return {
+                        "executed": False,
+                        "kind": "do",
+                        "reason": "exchange_offer_unavailable",
+                    }
                 result = await execute(
                     self._session_id,
                     recipient_session_id,
@@ -515,33 +613,57 @@ class WorldEffector:
                     f"resident-exchange-offer:{uuid.uuid4().hex}",
                 )
             else:
-                command, exchange_id = (part.strip().lower() for part in exchange_resolution.groups())
+                command, exchange_id = (
+                    part.strip().lower() for part in exchange_resolution.groups()
+                )
                 if not re.fullmatch(r"[A-Za-z0-9-]{1,64}", exchange_id):
-                    return {"executed": False, "kind": "do", "reason": "invalid_exchange_id"}
+                    return {
+                        "executed": False,
+                        "kind": "do",
+                        "reason": "invalid_exchange_id",
+                    }
                 execute = getattr(self._ww, f"{command}_object_exchange", None)
                 if not callable(execute):
-                    return {"executed": False, "kind": "do", "reason": f"exchange_{command}_unavailable"}
+                    return {
+                        "executed": False,
+                        "kind": "do",
+                        "reason": f"exchange_{command}_unavailable",
+                    }
                 result = await execute(
                     self._session_id,
                     exchange_id,
                     f"resident-exchange-{command}:{uuid.uuid4().hex}",
                 )
-            exchange = dict(result.get("exchange") or {}) if isinstance(result, dict) else {}
-            receipt = dict(result.get("receipt") or {}) if isinstance(result, dict) else {}
+            exchange = (
+                dict(result.get("exchange") or {}) if isinstance(result, dict) else {}
+            )
+            receipt = (
+                dict(result.get("receipt") or {}) if isinstance(result, dict) else {}
+            )
             exchange_id = str(exchange.get("exchange_id") or "").strip()
             receipt_id = str(receipt.get("receipt_id") or "").strip()
             executed = bool(receipt_id)
             status = str(exchange.get("status") or "").strip()
             append_runtime_event(
                 self._memory_dir,
-                event_type=f"game_object_exchange_{command}" if executed else "game_command_declined",
+                event_type=(
+                    f"game_object_exchange_{command}"
+                    if executed
+                    else "game_command_declined"
+                ),
                 payload={
                     **self.relational_context(),
                     "command": f"exchange_{command}",
                     "exchange_id": exchange_id,
                     "status": status or ("executed" if executed else "declined"),
-                    "offered_object_id": str(dict(exchange.get("offered_object") or {}).get("object_id") or ""),
-                    "requested_object_id": str(dict(exchange.get("requested_object") or {}).get("object_id") or ""),
+                    "offered_object_id": str(
+                        dict(exchange.get("offered_object") or {}).get("object_id")
+                        or ""
+                    ),
+                    "requested_object_id": str(
+                        dict(exchange.get("requested_object") or {}).get("object_id")
+                        or ""
+                    ),
                     "receipt_id": receipt_id,
                 },
             )
@@ -554,7 +676,9 @@ class WorldEffector:
                 "receipt_id": receipt_id,
             }
 
-        stoop_match = re.fullmatch(r"stoop-(leave|take|withdraw):([^:]+)(?::([^:]+))?", target, re.IGNORECASE)
+        stoop_match = re.fullmatch(
+            r"stoop-(leave|take|withdraw):([^:]+)(?::([^:]+))?", target, re.IGNORECASE
+        )
         if stoop_match:
             command = stoop_match.group(1).lower()
             primary_id = stoop_match.group(2).strip()
@@ -562,7 +686,11 @@ class WorldEffector:
             if command == "leave":
                 execute = getattr(self._ww, "leave_object_on_stoop", None)
                 if not object_id or not callable(execute):
-                    return {"executed": False, "kind": "do", "reason": "stoop_leave_unavailable"}
+                    return {
+                        "executed": False,
+                        "kind": "do",
+                        "reason": "stoop_leave_unavailable",
+                    }
                 result = await execute(
                     self._session_id,
                     primary_id,
@@ -570,28 +698,48 @@ class WorldEffector:
                     f"resident-stoop-leave:{uuid.uuid4().hex}",
                 )
             else:
-                method_name = "take_object_from_stoop" if command == "take" else "withdraw_object_from_stoop"
+                method_name = (
+                    "take_object_from_stoop"
+                    if command == "take"
+                    else "withdraw_object_from_stoop"
+                )
                 execute = getattr(self._ww, method_name, None)
                 if not callable(execute):
-                    return {"executed": False, "kind": "do", "reason": f"stoop_{command}_unavailable"}
+                    return {
+                        "executed": False,
+                        "kind": "do",
+                        "reason": f"stoop_{command}_unavailable",
+                    }
                 result = await execute(
                     self._session_id,
                     primary_id,
                     f"resident-stoop-{command}:{uuid.uuid4().hex}",
                 )
-            receipt = dict(result.get("receipt") or {}) if isinstance(result, dict) else {}
+            receipt = (
+                dict(result.get("receipt") or {}) if isinstance(result, dict) else {}
+            )
             entry = dict(result.get("entry") or {}) if isinstance(result, dict) else {}
             entry_object = dict(entry.get("object") or {})
-            entry_id = str(entry.get("entry_id") or (primary_id if command != "leave" else ""))
+            entry_id = str(
+                entry.get("entry_id") or (primary_id if command != "leave" else "")
+            )
             receipt_id = str(receipt.get("receipt_id") or "").strip()
             executed = bool(receipt_id)
             append_runtime_event(
                 self._memory_dir,
-                event_type=f"game_stoop_object_{command}" if executed else "game_command_declined",
+                event_type=(
+                    f"game_stoop_object_{command}"
+                    if executed
+                    else "game_command_declined"
+                ),
                 payload={
                     **self.relational_context(),
                     "command": f"stoop_{command}",
-                    "stoop_id": primary_id if command == "leave" else str(entry.get("stoop_id") or ""),
+                    "stoop_id": (
+                        primary_id
+                        if command == "leave"
+                        else str(entry.get("stoop_id") or "")
+                    ),
                     "entry_id": entry_id,
                     "object_id": str(entry_object.get("object_id") or object_id),
                     "object_name": str(entry_object.get("name") or ""),
@@ -626,8 +774,12 @@ class WorldEffector:
                 recipient_session_id,
                 f"resident-give:{uuid.uuid4().hex}",
             )
-            changed_object = dict(result.get("object") or {}) if isinstance(result, dict) else {}
-            receipt = dict(result.get("receipt") or {}) if isinstance(result, dict) else {}
+            changed_object = (
+                dict(result.get("object") or {}) if isinstance(result, dict) else {}
+            )
+            receipt = (
+                dict(result.get("receipt") or {}) if isinstance(result, dict) else {}
+            )
             receipt_id = str(receipt.get("receipt_id") or "").strip()
             executed = bool(receipt_id)
             append_runtime_event(
@@ -662,19 +814,29 @@ class WorldEffector:
                 return {"executed": False, "kind": "do", "reason": "invalid_object_id"}
             execute = getattr(self._ww, method_name, None)
             if not callable(execute):
-                return {"executed": False, "kind": "do", "reason": f"{command}_unavailable"}
+                return {
+                    "executed": False,
+                    "kind": "do",
+                    "reason": f"{command}_unavailable",
+                }
             result = await execute(
                 self._session_id,
                 object_id,
                 f"resident-{command}:{uuid.uuid4().hex}",
             )
-            changed_object = dict(result.get("object") or {}) if isinstance(result, dict) else {}
-            receipt = dict(result.get("receipt") or {}) if isinstance(result, dict) else {}
+            changed_object = (
+                dict(result.get("object") or {}) if isinstance(result, dict) else {}
+            )
+            receipt = (
+                dict(result.get("receipt") or {}) if isinstance(result, dict) else {}
+            )
             receipt_id = str(receipt.get("receipt_id") or "").strip()
             executed = bool(receipt_id)
             append_runtime_event(
                 self._memory_dir,
-                event_type=f"game_object_{command}" if executed else "game_command_declined",
+                event_type=(
+                    f"game_object_{command}" if executed else "game_command_declined"
+                ),
                 payload={
                     **self.relational_context(),
                     "command": command,
@@ -707,8 +869,12 @@ class WorldEffector:
                 recipe_id,
                 f"resident-make:{uuid.uuid4().hex}",
             )
-            made_object = dict(result.get("object") or {}) if isinstance(result, dict) else {}
-            receipt = dict(result.get("receipt") or {}) if isinstance(result, dict) else {}
+            made_object = (
+                dict(result.get("object") or {}) if isinstance(result, dict) else {}
+            )
+            receipt = (
+                dict(result.get("receipt") or {}) if isinstance(result, dict) else {}
+            )
             object_id = str(made_object.get("object_id") or "").strip()
             executed = bool(object_id)
             append_runtime_event(
@@ -781,15 +947,23 @@ class WorldEffector:
             }
         result = await leave_trace(self._session_id, act.body, str(act.target or ""))
         trace = dict(result.get("trace") or {}) if isinstance(result, dict) else {}
-        executed = bool(isinstance(result, dict) and result.get("ok") and trace.get("trace_id"))
+        executed = bool(
+            isinstance(result, dict) and result.get("ok") and trace.get("trace_id")
+        )
         if executed:
             append_runtime_event(
                 self._memory_dir,
                 event_type="world_trace_left",
                 payload={
-                    **self.relational_context(location=str(trace.get("location") or await self._current_location())),
+                    **self.relational_context(
+                        location=str(
+                            trace.get("location") or await self._current_location()
+                        )
+                    ),
                     "trace_id": str(trace.get("trace_id") or ""),
-                    "location": str(trace.get("location") or await self._current_location()),
+                    "location": str(
+                        trace.get("location") or await self._current_location()
+                    ),
                     "target": str(trace.get("target") or ""),
                     "body": str(trace.get("body") or act.body),
                     "expires_at": str(trace.get("expires_at") or ""),
@@ -807,14 +981,23 @@ class WorldEffector:
         normalized_recipient = re.sub(r"[^a-z0-9]+", "_", recipient.lower()).strip("_")
         named_workshop_project = recipient.lower().startswith("workshop:")
         # A write to the resident's OWN workshop — output it owns, sandboxed.
-        to_workshop = self._workshop is not None and (self._all_writes_to_workshop or normalized_recipient in _WORKSHOP_TARGETS or named_workshop_project)
+        to_workshop = self._workshop is not None and (
+            self._all_writes_to_workshop
+            or normalized_recipient in _WORKSHOP_TARGETS
+            or named_workshop_project
+        )
         if to_workshop:
             body = str(act.body or "").strip()
             # A write whose body is an SVG is a *drawing*, kept as a picture (a
             # versioned file) rather than appended as prose — for residents who
             # would rather draw than write.
             if body.startswith("<svg"):
-                base = recipient.lower() if recipient and recipient.lower() not in {"journal", "diary", "log", "notes"} else "weave"
+                base = (
+                    recipient.lower()
+                    if recipient
+                    and recipient.lower() not in {"journal", "diary", "log", "notes"}
+                    else "weave"
+                )
                 result = self._workshop.draw(body, base=base)
                 if result.get("written"):
                     append_runtime_event(
@@ -832,8 +1015,16 @@ class WorldEffector:
                     "drawing": result.get("artifact"),
                     "reason": result.get("reason"),
                 }
-            kind = recipient.split(":", 1)[1].strip() if named_workshop_project else recipient.lower()
-            artifact = "journal.md" if kind in {"journal", "diary", "log", "notes", ""} else f"{kind}.md"
+            kind = (
+                recipient.split(":", 1)[1].strip()
+                if named_workshop_project
+                else recipient.lower()
+            )
+            artifact = (
+                "journal.md"
+                if kind in {"journal", "diary", "log", "notes", ""}
+                else f"{kind}.md"
+            )
             result = self._workshop.append(body, artifact=artifact)
             if result.get("written"):
                 append_runtime_event(

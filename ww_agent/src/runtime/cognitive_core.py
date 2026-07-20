@@ -77,7 +77,11 @@ ABSOLUTE_REACH_CONTINUATION_MAX = 8
 def resolve_reach_continuation_limit(requested: int | None = None) -> int:
     """Resolve a run's read limit without letting it exceed the host's maximum."""
     try:
-        host_max = int(os.environ.get("WW_REACH_CONTINUATION_MAX", DEFAULT_HOST_REACH_CONTINUATION_MAX))
+        host_max = int(
+            os.environ.get(
+                "WW_REACH_CONTINUATION_MAX", DEFAULT_HOST_REACH_CONTINUATION_MAX
+            )
+        )
     except (TypeError, ValueError):
         host_max = DEFAULT_HOST_REACH_CONTINUATION_MAX
     host_max = max(0, min(host_max, ABSOLUTE_REACH_CONTINUATION_MAX))
@@ -104,7 +108,8 @@ def _embedder_from_env() -> Any:
     return RemoteEmbedder(
         base_url=url,
         api_key=os.environ.get("WW_EMBEDDING_KEY", "ollama").strip() or "ollama",
-        model=os.environ.get("WW_EMBEDDING_MODEL", "nomic-embed-text").strip() or "nomic-embed-text",
+        model=os.environ.get("WW_EMBEDDING_MODEL", "nomic-embed-text").strip()
+        or "nomic-embed-text",
     )
 
 
@@ -147,7 +152,9 @@ class CognitiveCore:
         # A run-scoped override for the existing venture tendency. None retains
         # the shard environment default; True/False is explicit for this host.
         self._action_tendency = action_tendency
-        self._reach_continuation_limit = resolve_reach_continuation_limit(reach_continuation_limit)
+        self._reach_continuation_limit = resolve_reach_continuation_limit(
+            reach_continuation_limit
+        )
         # Min gap between arousal-driven ignitions (None = substrate default). A direct
         # address always bypasses it; this only stops a hot talker echoing itself a
         # paraphrase every tick into the gap before the keeper replies. Per-familiar.
@@ -168,8 +175,12 @@ class CognitiveCore:
             model=pulse_model,
             temperature=pulse_temperature,
         )
-        self._producer.live_senses = tuple(s for s in SELF_SENSES if s not in self._muted_senses)
-        self._producer.can_mark_world = callable(getattr(ww_client, "post_world_trace", None))
+        self._producer.live_senses = tuple(
+            s for s in SELF_SENSES if s not in self._muted_senses
+        )
+        self._producer.can_mark_world = callable(
+            getattr(ww_client, "post_world_trace", None)
+        )
         # Rollout flag: drop the phantom "curiosity" drive_nudges example for this familiar.
         self._producer.clean_drive_nudges = bool(clean_drive_nudges)
         # Sight (Major 55): does this mind's model accept images? The world only renders/holds
@@ -303,17 +314,27 @@ class CognitiveCore:
             # The recent sequence of its OWN makings, for self-output novelty: the
             # last journal entries + drawing titles, newest last.
             makings = [str(e.get("body") or "") for e in self._workshop.recent(6)]
-            makings += [str(d.get("title") or "") for d in self._workshop.drawings(limit=6)]
+            makings += [
+                str(d.get("title") or "") for d in self._workshop.drawings(limit=6)
+            ]
             brief["recent_makings"] = [m for m in makings if m.strip()][-8:]
             # Concrete anchors (Major 51 granularity): the things THIS resident's
             # inner world is actually about, lifted from its own recent felt sense
             # plus the entities perceived. Surfaced to the pulse so it can predict
             # them by name; snapshotted as the realized field for offline scoring.
             # Scored-but-quiet: anchors never touch the arousal/ignition rhythm.
-            prose = [str((e.get("payload") or {}).get("felt_sense") or "") for e in events if str(e.get("event_type") or "") == "felt_sense_logged"][-10:]
+            prose = [
+                str((e.get("payload") or {}).get("felt_sense") or "")
+                for e in events
+                if str(e.get("event_type") or "") == "felt_sense_logged"
+            ][-10:]
             structured = list(brief.get("present") or [])
-            structured += [str(e.get("who") or "") for e in (brief.get("recent_events") or [])]
-            structured += [str(h.get("speaker") or "") for h in (brief.get("heard") or [])]
+            structured += [
+                str(e.get("who") or "") for e in (brief.get("recent_events") or [])
+            ]
+            structured += [
+                str(h.get("speaker") or "") for h in (brief.get("heard") or [])
+            ]
             anchors = extract_anchors(prose, structured=structured, top_k=8)
             brief["anchors"] = anchors
             record_anchors(self._memory_dir, anchors, now=now, events=events)
@@ -321,16 +342,28 @@ class CognitiveCore:
             # Sight: the images in view (the most-recent visual read), pulled off the world by its
             # duck-typed surface. A WorldClient without it (the city shard) simply offers none.
             _pending = getattr(self._ww, "pending_images", None)
-            self._producer.pending_images = list(_pending() or []) if callable(_pending) else []
+            self._producer.pending_images = (
+                list(_pending() or []) if callable(_pending) else []
+            )
             anchor_stimulus = await self._anchor_stimulus(anchors)
             self._effector.present = list(brief.get("present") or [])
-            self._effector.co_present = [dict(item) for item in brief.get("co_present") or [] if isinstance(item, dict)]
-            self._effector.heard = list(brief.get("heard") or [])  # Major 66: read-from reply-edge source
+            self._effector.co_present = [
+                dict(item)
+                for item in brief.get("co_present") or []
+                if isinstance(item, dict)
+            ]
+            self._effector.heard = list(
+                brief.get("heard") or []
+            )  # Major 66: read-from reply-edge source
             location = str(brief.get("location") or "").strip()
             if location:
                 self._effector.location = location
             # Circadian wakefulness scales the rhythm: the town quiets after dark.
-            reactivity = float(brief.get("wakefulness") if brief.get("wakefulness") is not None else 1.0)
+            reactivity = float(
+                brief.get("wakefulness")
+                if brief.get("wakefulness") is not None
+                else 1.0
+            )
         else:
             # A failed scene read must not make a later act claim yesterday's
             # co-presence or speech as if it were still current.
@@ -366,7 +399,9 @@ class CognitiveCore:
         # engine inbox endpoint marks letters read during the HTTP poll itself.
         prompted_packet_ids = self._producer.take_prompted_packet_ids()
         if prompted_packet_ids:
-            packet_queue = StimulusPacketQueue(self._memory_dir / "stimulus_packets.json")
+            packet_queue = StimulusPacketQueue(
+                self._memory_dir / "stimulus_packets.json"
+            )
             for packet_id in prompted_packet_ids:
                 packet = packet_queue.mark_status(packet_id, "observed")
                 perceived = (
@@ -387,7 +422,9 @@ class CognitiveCore:
                     )
         return result
 
-    async def _anchor_stimulus(self, anchors: list[dict[str, Any]]) -> dict[str, dict[str, float]] | None:
+    async def _anchor_stimulus(
+        self, anchors: list[dict[str, Any]]
+    ) -> dict[str, dict[str, float]] | None:
         """The realized anchor field that may drive arousal — only when this resident
         has anchor-gating on, and only the anchors whose soul-resonance clears
         ``ANCHOR_GATE_MATTERING`` (the price on boring, in the gate). Needs the drive
@@ -399,11 +436,18 @@ class CognitiveCore:
         if drive is None or getattr(drive, "is_empty", lambda: True)():
             return None
         try:
-            weights = await tag_mattering(drive, [str(a.get("anchor") or "") for a in anchors])
+            weights = await tag_mattering(
+                drive, [str(a.get("anchor") or "") for a in anchors]
+            )
         except Exception as exc:
             logger.debug("[%s] anchor gating weights failed: %s", self.name, exc)
             return None
-        field = {str(a["anchor"]): float(a.get("salience") or 0.0) for a in anchors if str(a.get("anchor") or "") and weights.get(str(a.get("anchor") or ""), 0.0) >= ANCHOR_GATE_MATTERING}
+        field = {
+            str(a["anchor"]): float(a.get("salience") or 0.0)
+            for a in anchors
+            if str(a.get("anchor") or "")
+            and weights.get(str(a.get("anchor") or ""), 0.0) >= ANCHOR_GATE_MATTERING
+        }
         if not field:
             return None
         # Concept-space matching (minor 46): rename realized anchors to the predicted
@@ -420,7 +464,9 @@ class CognitiveCore:
         novelty still surprises). Best-effort — on any embedder failure, return as-is.
         """
         embedder = self._embedder
-        predicted = list((predict(self._memory_dir).get("by_scope") or {}).get("anchors", {}).keys())
+        predicted = list(
+            (predict(self._memory_dir).get("by_scope") or {}).get("anchors", {}).keys()
+        )
         if embedder is None or not predicted:
             return field
         realized = list(field.keys())
@@ -441,5 +487,7 @@ class CognitiveCore:
                         c = _cosine(rv, pv)
                         if c >= best_cos:
                             best_key, best_cos = p, c
-            aligned[best_key] = max(aligned.get(best_key, 0.0), field[r])  # merge if two realized map to one
+            aligned[best_key] = max(
+                aligned.get(best_key, 0.0), field[r]
+            )  # merge if two realized map to one
         return aligned

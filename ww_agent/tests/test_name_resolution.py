@@ -3,6 +3,7 @@
 These lock the behavior the A1-elective verdict depends on, using the ww_pdx_grow collision cases
 (three Aris; the Jihoon Cho / Ji-Hoon Park / Jiahao Chen homophone cluster).
 """
+
 from src.runtime.naming import normalize_reference, resolve_reference
 
 # slug -> display name, the real collision-laden roster shape
@@ -18,9 +19,22 @@ ROSTER = {
 
 
 def test_normalize_folds_separators_without_merging_homophones():
-    assert normalize_reference("Ji Hoon Park") == normalize_reference("Ji-Hoon Park") == "ji hoon park"
+    assert (
+        normalize_reference("Ji Hoon Park")
+        == normalize_reference("Ji-Hoon Park")
+        == "ji hoon park"
+    )
     # the three look-alikes stay distinct after folding — resolvable, not corrupting
-    assert len({normalize_reference("Jihoon Cho"), normalize_reference("Ji-Hoon Park"), normalize_reference("Jiahao Chen")}) == 3
+    assert (
+        len(
+            {
+                normalize_reference("Jihoon Cho"),
+                normalize_reference("Ji-Hoon Park"),
+                normalize_reference("Jiahao Chen"),
+            }
+        )
+        == 3
+    )
 
 
 def test_full_name_resolves_including_hyphen_space_variant():
@@ -36,7 +50,9 @@ def test_bare_collision_first_name_is_flagged_not_guessed():
     r = resolve_reference("Ari", ROSTER)
     assert r.status == "ambiguous"
     assert set(r.candidates) == {"ari_goldstein", "ari_levin", "ari_rosenbaum"}
-    assert r.slug is None  # never silently picks one — that is the corruption we are preventing
+    assert (
+        r.slug is None
+    )  # never silently picks one — that is the corruption we are preventing
 
 
 def test_unique_bare_first_name_is_weak_not_strong():

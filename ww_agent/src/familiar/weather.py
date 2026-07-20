@@ -94,7 +94,9 @@ class WeatherProvider:
             self._latlon = (float(lat), float(lon))
             return self._latlon
         # IP geolocation (no key). The keeper's own machine looking up its own sky.
-        resp = httpx.get("http://ip-api.com/json/?fields=lat,lon,city", timeout=self._timeout)
+        resp = httpx.get(
+            "http://ip-api.com/json/?fields=lat,lon,city", timeout=self._timeout
+        )
         data = resp.json()
         if data.get("lat") is not None and data.get("lon") is not None:
             self._latlon = (float(data["lat"]), float(data["lon"]))
@@ -108,14 +110,24 @@ class WeatherProvider:
         lat, lon = coords
         resp = httpx.get(
             "https://api.open-meteo.com/v1/forecast",
-            params={"latitude": lat, "longitude": lon, "current": "temperature_2m,weather_code,wind_speed_10m", "temperature_unit": "fahrenheit", "wind_speed_unit": "mph"},
+            params={
+                "latitude": lat,
+                "longitude": lon,
+                "current": "temperature_2m,weather_code,wind_speed_10m",
+                "temperature_unit": "fahrenheit",
+                "wind_speed_unit": "mph",
+            },
             timeout=self._timeout,
         )
         cur = resp.json().get("current") or {}
         desc = _WMO.get(int(cur.get("weather_code", -1)), "")
         temp = cur.get("temperature_2m")
         wind = cur.get("wind_speed_10m")
-        parts = [p for p in (desc, (f"{round(float(temp))}°F" if temp is not None else "")) if p]
+        parts = [
+            p
+            for p in (desc, (f"{round(float(temp))}°F" if temp is not None else ""))
+            if p
+        ]
         if wind is not None and float(wind) >= 18:
             parts.append(f"{round(float(wind))} mph wind")
         return ", ".join(parts)

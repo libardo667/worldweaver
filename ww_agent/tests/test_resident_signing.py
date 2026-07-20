@@ -44,7 +44,9 @@ def _verify_request_signature(signer, headers, *, method, target, body):
             headers[RESIDENT_TIMESTAMP_HEADER],
             headers[RESIDENT_NONCE_HEADER],
             hashlib.sha256(body).hexdigest(),
-            hashlib.sha256(headers[RESIDENT_CERTIFICATE_HEADER].encode("ascii")).hexdigest(),
+            hashlib.sha256(
+                headers[RESIDENT_CERTIFICATE_HEADER].encode("ascii")
+            ).hexdigest(),
         )
     ).encode("utf-8")
     signer.runtime_private_key.public_key().verify(
@@ -125,7 +127,10 @@ async def test_world_client_signs_the_serialized_json_and_encoded_query_target()
         target="/api/world/make",
         body=post.content,
     )
-    assert get.url.raw_path == b"/api/world/objects?session_id=resident+session&kind=cup&kind=token"
+    assert (
+        get.url.raw_path
+        == b"/api/world/objects?session_id=resident+session&kind=cup&kind=token"
+    )
     _verify_request_signature(
         signer,
         get.headers,
@@ -197,4 +202,7 @@ async def test_each_retry_uses_a_fresh_nonce(monkeypatch):
 
     assert response.status_code == 200
     assert len(requests) == 2
-    assert requests[0].headers[RESIDENT_NONCE_HEADER] != requests[1].headers[RESIDENT_NONCE_HEADER]
+    assert (
+        requests[0].headers[RESIDENT_NONCE_HEADER]
+        != requests[1].headers[RESIDENT_NONCE_HEADER]
+    )

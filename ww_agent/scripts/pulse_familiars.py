@@ -49,7 +49,10 @@ def familiars(root: Path, only: set[str] | None) -> list[Path]:
 
 
 def drop(home: Path, text: str) -> None:
-    line = json.dumps({"ts": datetime.now().astimezone().isoformat(), "text": text}, ensure_ascii=False)
+    line = json.dumps(
+        {"ts": datetime.now().astimezone().isoformat(), "text": text},
+        ensure_ascii=False,
+    )
     with (home / "whispers.jsonl").open("a", encoding="utf-8") as fh:
         fh.write(line + "\n")
 
@@ -62,16 +65,31 @@ def pulse(homes: list[Path], text: str) -> None:
 
 
 def load_prompts(path: Path) -> list[str]:
-    return [ln.strip() for ln in path.read_text(encoding="utf-8").splitlines() if ln.strip() and not ln.lstrip().startswith("#")]
+    return [
+        ln.strip()
+        for ln in path.read_text(encoding="utf-8").splitlines()
+        if ln.strip() and not ln.lstrip().startswith("#")
+    ]
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Drop a familiar-wide whisper pulse.")
-    ap.add_argument("message", nargs="?", default="", help="the whisper text (omit if using --prompts)")
-    ap.add_argument("--root", default=str(DEFAULT_ROOT), help="dir holding the familiar homes")
+    ap.add_argument(
+        "message",
+        nargs="?",
+        default="",
+        help="the whisper text (omit if using --prompts)",
+    )
+    ap.add_argument(
+        "--root", default=str(DEFAULT_ROOT), help="dir holding the familiar homes"
+    )
     ap.add_argument("--who", default="", help="comma-separated subset (default: all)")
-    ap.add_argument("--loop", type=float, default=0.0, help="repeat every N seconds (0 = one-shot)")
-    ap.add_argument("--prompts", default="", help="file of prompts to rotate through (one per line)")
+    ap.add_argument(
+        "--loop", type=float, default=0.0, help="repeat every N seconds (0 = one-shot)"
+    )
+    ap.add_argument(
+        "--prompts", default="", help="file of prompts to rotate through (one per line)"
+    )
     args = ap.parse_args()
 
     root = Path(args.root).resolve()
@@ -81,7 +99,11 @@ def main() -> None:
         print(f"no familiars under {root}", file=sys.stderr)
         sys.exit(1)
 
-    prompts = load_prompts(Path(args.prompts)) if args.prompts else ([args.message] if args.message else [])
+    prompts = (
+        load_prompts(Path(args.prompts))
+        if args.prompts
+        else ([args.message] if args.message else [])
+    )
     if not prompts:
         print("nothing to send — give a message or --prompts file", file=sys.stderr)
         sys.exit(1)
@@ -90,7 +112,9 @@ def main() -> None:
         pulse(homes, prompts[0])
         return
 
-    print(f"· pulsing {len(homes)} familiars every {args.loop:g}s, rotating {len(prompts)} prompt(s). Ctrl-C to stop.")
+    print(
+        f"· pulsing {len(homes)} familiars every {args.loop:g}s, rotating {len(prompts)} prompt(s). Ctrl-C to stop."
+    )
     i = 0
     try:
         while True:

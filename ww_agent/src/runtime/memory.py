@@ -63,7 +63,9 @@ def _load_kept_records(memory_dir: Path) -> list[dict[str, Any]]:
             continue
         note = str(data.get("note") or "").strip()
         if note:
-            out.append({"note": note, "kept_ts": str(data.get("kept_ts") or "").strip()})
+            out.append(
+                {"note": note, "kept_ts": str(data.get("kept_ts") or "").strip()}
+            )
     return out
 
 
@@ -77,7 +79,13 @@ def record_kept(memory_dir: Path, note: str, *, kept_ts: str = "") -> None:
     path = _kept_path(memory_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps({"note": note, "kept_ts": str(kept_ts or _now_iso())}, ensure_ascii=False) + "\n")
+        fh.write(
+            json.dumps(
+                {"note": note, "kept_ts": str(kept_ts or _now_iso())},
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
 
 
 def _ledger_kept_records(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -88,14 +96,28 @@ def _ledger_kept_records(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
         note = str(payload.get("note") or "").strip()
         if note:
-            recs.append({"note": note, "kept_ts": str(payload.get("kept_ts") or event.get("ts") or "").strip()})
+            recs.append(
+                {
+                    "note": note,
+                    "kept_ts": str(
+                        payload.get("kept_ts") or event.get("ts") or ""
+                    ).strip(),
+                }
+            )
     return recs
 
 
 def _records_to_events(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Wrap kept records as synthetic ``memory_kept`` events so the one derive path
     (newest-first, exact-dup collapse) serves both the durable store and the ledger."""
-    return [{"event_type": "memory_kept", "ts": r.get("kept_ts", ""), "payload": {"note": r["note"], "kept_ts": r.get("kept_ts", "")}} for r in records]
+    return [
+        {
+            "event_type": "memory_kept",
+            "ts": r.get("kept_ts", ""),
+            "payload": {"note": r["note"], "kept_ts": r.get("kept_ts", "")},
+        }
+        for r in records
+    ]
 
 
 def _parse_dt(value: Any) -> datetime | None:
@@ -109,7 +131,9 @@ def _parse_dt(value: Any) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
-def derive_memories(events: list[dict[str, Any]], *, limit: int = DEFAULT_MEMORY_LIMIT) -> list[dict[str, Any]]:
+def derive_memories(
+    events: list[dict[str, Any]], *, limit: int = DEFAULT_MEMORY_LIMIT
+) -> list[dict[str, Any]]:
     """The resident's kept memories, most recent first.
 
     Exact-text duplicates are collapsed to their latest occurrence, so a memory
@@ -140,7 +164,9 @@ def derive_memories(events: list[dict[str, Any]], *, limit: int = DEFAULT_MEMORY
     return out
 
 
-def memories(memory_dir: Path, *, limit: int = DEFAULT_MEMORY_LIMIT) -> list[dict[str, Any]]:
+def memories(
+    memory_dir: Path, *, limit: int = DEFAULT_MEMORY_LIMIT
+) -> list[dict[str, Any]]:
     """The resident's durable kept memories, most recent first — what it carries
     across days. Reads the historical side store and copies any ledger-only
     keepsakes into it. The append-only ledger now preserves both; this synchronization
@@ -178,7 +204,9 @@ class MemoryRecall:
                 if vec:
                     self._cache[note] = vec
 
-    async def recall(self, notes: list[str], moment: str, *, top_k: int = 6, diversity: float = 0.45) -> list[dict[str, Any]]:
+    async def recall(
+        self, notes: list[str], moment: str, *, top_k: int = 6, diversity: float = 0.45
+    ) -> list[dict[str, Any]]:
         """The memories most relevant to the moment, picked for relevance AND
         mutual diversity (maximal marginal relevance). Without the diversity term a
         cluster of near-duplicate memories (e.g. a dozen lines all circling the
@@ -198,7 +226,14 @@ class MemoryRecall:
         while candidates and len(selected) < top_k:
 
             def mmr(n: str) -> float:
-                redundancy = max((_cosine(self._cache[n], self._cache[s]) for s in selected if s in self._cache), default=0.0)
+                redundancy = max(
+                    (
+                        _cosine(self._cache[n], self._cache[s])
+                        for s in selected
+                        if s in self._cache
+                    ),
+                    default=0.0,
+                )
                 return (1.0 - diversity) * rel[n] - diversity * redundancy
 
             best = max(candidates, key=mmr)
@@ -206,7 +241,9 @@ class MemoryRecall:
             candidates.remove(best)
         return [{"note": n, "score": round(rel[n], 4)} for n in selected]
 
-    async def novel(self, candidates: list[str], existing: list[str], *, threshold: float = 0.78) -> list[str]:
+    async def novel(
+        self, candidates: list[str], existing: list[str], *, threshold: float = 0.78
+    ) -> list[str]:
         """Of the candidate notes, those that are NOT a near-duplicate of an already
         held memory (nor of each other). Stops a resident from re-storing the same
         understanding in fresh words — which would otherwise pile up and re-prime a

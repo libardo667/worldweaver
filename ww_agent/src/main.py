@@ -20,6 +20,7 @@ Optional:
     WW_DOULA_MODEL      Model override for soul seeding (defaults to WW_INFERENCE_MODEL)
     WW_LOG_LEVEL        Logging level (default: INFO)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -33,10 +34,10 @@ from dotenv import load_dotenv
 
 load_dotenv()  # loads .env from cwd or any parent directory
 
-from src.inference.client import InferenceClient
-from src.runtime.doula import DoulaLoop
-from src.resident import Resident
-from src.world.client import WorldWeaverClient
+from src.inference.client import InferenceClient  # noqa: E402
+from src.runtime.doula import DoulaLoop  # noqa: E402
+from src.resident import Resident  # noqa: E402
+from src.world.client import WorldWeaverClient  # noqa: E402
 
 
 def _configure_logging() -> None:
@@ -95,7 +96,9 @@ async def _drain_spawn_queue(
             running_tasks.add(task)
             task.add_done_callback(running_tasks.discard)
         except Exception as e:
-            logging.getLogger(__name__).warning("failed to boot %s: %s", resident_dir.name, e)
+            logging.getLogger(__name__).warning(
+                "failed to boot %s: %s", resident_dir.name, e
+            )
 
 
 async def main() -> None:
@@ -103,27 +106,35 @@ async def main() -> None:
     log = logging.getLogger(__name__)
 
     # -- Config --
-    ww_url       = os.environ.get("WW_SERVER_URL", "http://localhost:8000")
-    llm_url      = os.environ.get("WW_INFERENCE_URL", "https://openrouter.ai/api/v1")
-    llm_key      = os.environ.get("WW_INFERENCE_KEY", "")
-    llm_model    = os.environ.get("WW_INFERENCE_MODEL", "google/gemini-3-flash-preview")
+    ww_url = os.environ.get("WW_SERVER_URL", "http://localhost:8000")
+    llm_url = os.environ.get("WW_INFERENCE_URL", "https://openrouter.ai/api/v1")
+    llm_key = os.environ.get("WW_INFERENCE_KEY", "")
+    llm_model = os.environ.get("WW_INFERENCE_MODEL", "google/gemini-3-flash-preview")
     residents_dir = Path(os.environ.get("WW_RESIDENTS_DIR", "residents"))
     doula_enabled = os.environ.get("WW_DOULA", "").lower() in ("1", "true", "yes")
-    doula_model  = os.environ.get("WW_DOULA_MODEL") or None
+    doula_model = os.environ.get("WW_DOULA_MODEL") or None
     try:
-        doula_max_spawns_per_day = int(os.environ.get("WW_DOULA_MAX_SPAWNS_PER_DAY", "5"))
+        doula_max_spawns_per_day = int(
+            os.environ.get("WW_DOULA_MAX_SPAWNS_PER_DAY", "5")
+        )
     except ValueError:
         doula_max_spawns_per_day = 5
     try:
-        boot_stagger_seconds = max(0.0, float(os.environ.get("WW_BOOT_STAGGER_SECONDS", "1.5")))
+        boot_stagger_seconds = max(
+            0.0, float(os.environ.get("WW_BOOT_STAGGER_SECONDS", "1.5"))
+        )
     except ValueError:
         boot_stagger_seconds = 1.5
     try:
-        boot_jitter_seconds = max(0.0, float(os.environ.get("WW_BOOT_JITTER_SECONDS", "0.75")))
+        boot_jitter_seconds = max(
+            0.0, float(os.environ.get("WW_BOOT_JITTER_SECONDS", "0.75"))
+        )
     except ValueError:
         boot_jitter_seconds = 0.75
     try:
-        spawn_boot_delay_seconds = max(0.0, float(os.environ.get("WW_SPAWN_BOOT_DELAY_SECONDS", "0.5")))
+        spawn_boot_delay_seconds = max(
+            0.0, float(os.environ.get("WW_SPAWN_BOOT_DELAY_SECONDS", "0.5"))
+        )
     except ValueError:
         spawn_boot_delay_seconds = 0.5
 
@@ -165,7 +176,11 @@ async def main() -> None:
         try:
             if index > 0 and (boot_stagger_seconds > 0 or boot_jitter_seconds > 0):
                 delay = boot_stagger_seconds + random.uniform(0.0, boot_jitter_seconds)
-                log.info("startup stagger: waiting %.2fs before booting %s", delay, resident_dir.name)
+                log.info(
+                    "startup stagger: waiting %.2fs before booting %s",
+                    delay,
+                    resident_dir.name,
+                )
                 await asyncio.sleep(delay)
             task = await _boot_resident(resident_dir, ww_client, llm, world_id)
             running_tasks.add(task)

@@ -13,13 +13,24 @@ T0 = datetime(2026, 6, 2, 12, 0, 0, tzinfo=timezone.utc)
 
 
 def _events_by_type(memory_dir, event_type):
-    return [e for e in load_runtime_events(memory_dir) if str(e.get("event_type") or "").strip() == event_type]
+    return [
+        e
+        for e in load_runtime_events(memory_dir)
+        if str(e.get("event_type") or "").strip() == event_type
+    ]
 
 
 def _seed_danger(memory_dir, level=0.9):
     from src.runtime.ledger import append_runtime_event
 
-    append_runtime_event(memory_dir, event_type="session_state_observed", payload={"source": "session_state", "signals": [{"kind": "danger", "label": "danger", "level": level}]})
+    append_runtime_event(
+        memory_dir,
+        event_type="session_state_observed",
+        payload={
+            "source": "session_state",
+            "signals": [{"kind": "danger", "label": "danger", "level": level}],
+        },
+    )
 
 
 # --- the curve ------------------------------------------------------------
@@ -37,7 +48,9 @@ def test_chronotype_is_stable_and_varies_between_residents():
     assert a == chronotype("saoirse_quinn")  # deterministic — a stable trait
     assert abs(a) <= CHRONOTYPE_SPREAD_HOURS
     # Different people land in different places (lark vs owl exists in the pool).
-    spread = {chronotype(n) for n in ("ana", "ben", "cy", "dee", "eli", "fox", "gus", "hana")}
+    spread = {
+        chronotype(n) for n in ("ana", "ben", "cy", "dee", "eli", "fox", "gus", "hana")
+    }
     assert max(spread) > 0.5 and min(spread) < -0.5
 
 
@@ -66,11 +79,20 @@ def test_same_stimulus_ignites_by_day_but_not_deep_night(tmp_path_factory):
         _seed_danger(d, 0.9)
         observe_surprise(d, now=T0.isoformat())
         observe_surprise(d, now=(T0 + timedelta(seconds=1)).isoformat())
-        r = asyncio.run(tick(d, pulse_producer=_quiet_producer, reactivity=react, now=(T0 + timedelta(seconds=2)).isoformat()))
+        r = asyncio.run(
+            tick(
+                d,
+                pulse_producer=_quiet_producer,
+                reactivity=react,
+                now=(T0 + timedelta(seconds=2)).isoformat(),
+            )
+        )
         globals()[f"_fired_{int(react*100)}"] = r["ignited"]
     assert globals()["_fired_100"] is True  # by day, the danger wakes them
     night_react = int(circadian_state(3.5)["wakefulness"] * 100)
-    assert globals()[f"_fired_{night_react}"] is False  # at 3:30am the same input doesn't
+    assert (
+        globals()[f"_fired_{night_react}"] is False
+    )  # at 3:30am the same input doesn't
 
 
 def test_night_lets_a_mildly_aroused_resident_settle(tmp_path):
@@ -78,7 +100,15 @@ def test_night_lets_a_mildly_aroused_resident_settle(tmp_path):
     record_ignition(tmp_path, now=T0.isoformat())
     _seed_danger(tmp_path, 0.6)
     observe_surprise(tmp_path, now=(T0 + timedelta(seconds=400)).isoformat())
-    day = check_settling(tmp_path, now=(T0 + timedelta(seconds=400)).isoformat(), reactivity=1.0)
-    night = check_settling(tmp_path, now=(T0 + timedelta(seconds=400)).isoformat(), reactivity=circadian_state(3.5)["wakefulness"])
+    day = check_settling(
+        tmp_path, now=(T0 + timedelta(seconds=400)).isoformat(), reactivity=1.0
+    )
+    night = check_settling(
+        tmp_path,
+        now=(T0 + timedelta(seconds=400)).isoformat(),
+        reactivity=circadian_state(3.5)["wakefulness"],
+    )
     assert day["settle"] is False  # by day, still too keyed up to settle
-    assert night["settle"] is True  # at night the same arousal drops below the ceiling → rest/potter
+    assert (
+        night["settle"] is True
+    )  # at night the same arousal drops below the ceiling → rest/potter

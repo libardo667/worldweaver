@@ -43,7 +43,10 @@ ANCHOR_SCOPE = "anchors"
 # "the cooling room", "a copper button", "the keeper's voice" — an article (or
 # possessive) followed by up to three lowercase words. felt_sense tends to be
 # lowercase, so this is the workhorse; proper-name capitalization is unreliable.
-_ARTICLE_NP = re.compile(r"\b(?:the|a|an|my|your|our|her|his|its|their)\s+([a-z][a-z']*(?:\s+[a-z][a-z']*){0,3})", re.IGNORECASE)
+_ARTICLE_NP = re.compile(
+    r"\b(?:the|a|an|my|your|our|her|his|its|their)\s+([a-z][a-z']*(?:\s+[a-z][a-z']*){0,3})",
+    re.IGNORECASE,
+)
 
 # Words that end a noun phrase or are not themselves anchors — prepositions and
 # conjunctions (split the phrase), plus abstract/function nouns that are about
@@ -52,15 +55,93 @@ _ARTICLE_NP = re.compile(r"\b(?:the|a|an|my|your|our|her|his|its|their)\s+([a-z]
 # the commonest copular verbs — so "the house has settled" cuts to "house", not
 # "house has settled". (Full verb detection needs POS; this catches the leakage.)
 _PREPS = {
-    "in", "on", "of", "at", "with", "to", "for", "and", "or", "but", "as", "by", "from", "into", "that",
-    "which", "who", "like", "than", "is", "are", "was", "were", "it", "i", "me", "my", "so",
-    "has", "have", "had", "having", "be", "been", "being", "do", "does", "did", "will", "would",
-    "hums", "settled", "settles", "holds", "holding", "feels", "felt", "goes", "gone", "went",
+    "in",
+    "on",
+    "of",
+    "at",
+    "with",
+    "to",
+    "for",
+    "and",
+    "or",
+    "but",
+    "as",
+    "by",
+    "from",
+    "into",
+    "that",
+    "which",
+    "who",
+    "like",
+    "than",
+    "is",
+    "are",
+    "was",
+    "were",
+    "it",
+    "i",
+    "me",
+    "my",
+    "so",
+    "has",
+    "have",
+    "had",
+    "having",
+    "be",
+    "been",
+    "being",
+    "do",
+    "does",
+    "did",
+    "will",
+    "would",
+    "hums",
+    "settled",
+    "settles",
+    "holds",
+    "holding",
+    "feels",
+    "felt",
+    "goes",
+    "gone",
+    "went",
 }
 _ABSTRACT = {
-    "moment", "sense", "feeling", "feelings", "way", "ways", "thing", "things", "kind", "sort", "bit", "lot",
-    "part", "point", "idea", "nothing", "everything", "something", "anything", "self", "one", "time", "times",
-    "while", "more", "less", "rest", "edge", "edges", "side", "middle", "end", "start", "place", "places",
+    "moment",
+    "sense",
+    "feeling",
+    "feelings",
+    "way",
+    "ways",
+    "thing",
+    "things",
+    "kind",
+    "sort",
+    "bit",
+    "lot",
+    "part",
+    "point",
+    "idea",
+    "nothing",
+    "everything",
+    "something",
+    "anything",
+    "self",
+    "one",
+    "time",
+    "times",
+    "while",
+    "more",
+    "less",
+    "rest",
+    "edge",
+    "edges",
+    "side",
+    "middle",
+    "end",
+    "start",
+    "place",
+    "places",
 }
 _MIN_WORD_LEN = 3
 
@@ -94,7 +175,9 @@ def _clean_entity(raw: str) -> str:
     return s if s and s not in _ABSTRACT else ""
 
 
-def extract_anchors(texts: Any, *, structured: Any = (), top_k: int = 10) -> list[dict[str, Any]]:
+def extract_anchors(
+    texts: Any, *, structured: Any = (), top_k: int = 10
+) -> list[dict[str, Any]]:
     """The concrete anchors a resident is dwelling on, by recurrence.
 
     ``texts`` are prose (felt_sense lines, journal bodies); ``structured`` are
@@ -133,7 +216,13 @@ def _parse_dt(value: Any) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
-def record_anchors(memory_dir: Path, anchors: list[dict[str, Any]], *, now: Any = None, events: list[dict[str, Any]] | None = None) -> bool:
+def record_anchors(
+    memory_dir: Path,
+    anchors: list[dict[str, Any]],
+    *,
+    now: Any = None,
+    events: list[dict[str, Any]] | None = None,
+) -> bool:
     """Snapshot the resident's currently-salient anchors to the ledger as the
     realized field the offline scorer reconciles predictions against. Rate-limited
     to one per ``ANCHOR_SNAPSHOT_INTERVAL``; returns whether a snapshot was written."""
@@ -145,14 +234,25 @@ def record_anchors(memory_dir: Path, anchors: list[dict[str, Any]], *, now: Any 
     last: datetime | None = None
     for e in events:
         if str(e.get("event_type") or "").strip() == "anchor_observed":
-            ts = _parse_dt((e.get("payload") or {}).get("observed_ts")) or _parse_dt(e.get("ts"))
+            ts = _parse_dt((e.get("payload") or {}).get("observed_ts")) or _parse_dt(
+                e.get("ts")
+            )
             if ts is not None and (last is None or ts > last):
                 last = ts
-    if last is not None and (now_dt - last).total_seconds() < ANCHOR_SNAPSHOT_INTERVAL_SECONDS:
+    if (
+        last is not None
+        and (now_dt - last).total_seconds() < ANCHOR_SNAPSHOT_INTERVAL_SECONDS
+    ):
         return False
     append_runtime_event(
         memory_dir,
         event_type="anchor_observed",
-        payload={"observed_ts": now_dt.isoformat(), "anchors": [{"anchor": a["anchor"], "salience": a.get("salience", 1.0)} for a in anchors]},
+        payload={
+            "observed_ts": now_dt.isoformat(),
+            "anchors": [
+                {"anchor": a["anchor"], "salience": a.get("salience", 1.0)}
+                for a in anchors
+            ],
+        },
     )
     return True

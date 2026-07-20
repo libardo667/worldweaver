@@ -38,14 +38,22 @@ def write_runtime_snapshot(memory_dir: Path) -> None:
     packet_status_counts: dict[str, int] = {}
     packet_type_counts: dict[str, int] = {}
     for packet in packets:
-        packet_status_counts[packet.status] = packet_status_counts.get(packet.status, 0) + 1
-        packet_type_counts[packet.packet_type] = packet_type_counts.get(packet.packet_type, 0) + 1
+        packet_status_counts[packet.status] = (
+            packet_status_counts.get(packet.status, 0) + 1
+        )
+        packet_type_counts[packet.packet_type] = (
+            packet_type_counts.get(packet.packet_type, 0) + 1
+        )
 
     intent_status_counts: dict[str, int] = {}
     intent_type_counts: dict[str, int] = {}
     for intent in intents:
-        intent_status_counts[intent.status] = intent_status_counts.get(intent.status, 0) + 1
-        intent_type_counts[intent.intent_type] = intent_type_counts.get(intent.intent_type, 0) + 1
+        intent_status_counts[intent.status] = (
+            intent_status_counts.get(intent.status, 0) + 1
+        )
+        intent_type_counts[intent.intent_type] = (
+            intent_type_counts.get(intent.intent_type, 0) + 1
+        )
 
     recent_failures = [
         {
@@ -124,9 +132,22 @@ def write_runtime_snapshot(memory_dir: Path) -> None:
         },
         "research_queue": {
             "total": len(research_items),
-            "high": sum(1 for item in research_items if isinstance(item, dict) and str(item.get("priority") or "") == "high"),
-            "normal": sum(1 for item in research_items if isinstance(item, dict) and str(item.get("priority") or "") == "normal"),
-            "low": sum(1 for item in research_items if isinstance(item, dict) and str(item.get("priority") or "") == "low"),
+            "high": sum(
+                1
+                for item in research_items
+                if isinstance(item, dict) and str(item.get("priority") or "") == "high"
+            ),
+            "normal": sum(
+                1
+                for item in research_items
+                if isinstance(item, dict)
+                and str(item.get("priority") or "") == "normal"
+            ),
+            "low": sum(
+                1
+                for item in research_items
+                if isinstance(item, dict) and str(item.get("priority") or "") == "low"
+            ),
             "pending_items": [
                 {
                     "query": str(item.get("query") or "").strip(),
@@ -145,7 +166,9 @@ def write_runtime_snapshot(memory_dir: Path) -> None:
     }
 
     snapshot_path = memory_dir / "runtime_snapshot.json"
-    snapshot_path.write_text(json.dumps(snapshot, indent=2, ensure_ascii=True), encoding="utf-8")
+    snapshot_path.write_text(
+        json.dumps(snapshot, indent=2, ensure_ascii=True), encoding="utf-8"
+    )
 
 
 def _write_runtime_snapshot(memory_dir: Path) -> None:
@@ -202,11 +225,15 @@ class StimulusPacket:
             packet_type=str(raw.get("packet_type") or "").strip(),
             created_at=str(raw.get("created_at") or _utc_now_iso()),
             source_loop=str(raw.get("source_loop") or "").strip(),
-            dedupe_key=str(raw.get("dedupe_key")).strip() if raw.get("dedupe_key") else None,
+            dedupe_key=(
+                str(raw.get("dedupe_key")).strip() if raw.get("dedupe_key") else None
+            ),
             location=str(raw.get("location")).strip() if raw.get("location") else None,
             salience=float(raw.get("salience") or 0.5),
             payload=dict(raw.get("payload") or {}),
-            expires_at=str(raw.get("expires_at")).strip() if raw.get("expires_at") else None,
+            expires_at=(
+                str(raw.get("expires_at")).strip() if raw.get("expires_at") else None
+            ),
             status=_normalize_status(
                 str(raw.get("status") or "pending"),
                 allowed={"pending", "processing", "observed", "ignored", "expired"},
@@ -248,16 +275,28 @@ class IntentQueueEntry:
             intent_id=f"int-{uuid.uuid4().hex[:12]}",
             intent_type=str(intent_type).strip(),
             created_at=_utc_now_iso(),
-            source_packet_ids=[str(item).strip() for item in source_packet_ids or [] if str(item).strip()],
+            source_packet_ids=[
+                str(item).strip()
+                for item in source_packet_ids or []
+                if str(item).strip()
+            ],
             status=_normalize_status(
                 status,
-                allowed={"pending", "claimed", "cancelled", "expired", "executed", "failed"},
+                allowed={
+                    "pending",
+                    "claimed",
+                    "cancelled",
+                    "expired",
+                    "executed",
+                    "failed",
+                },
                 default="pending",
             ),
             priority=float(priority),
             target_loop=str(target_loop).strip(),
             payload=dict(payload or {}),
-            validation_state=str(validation_state or "unvalidated").strip() or "unvalidated",
+            validation_state=str(validation_state or "unvalidated").strip()
+            or "unvalidated",
             expires_at=expires_at,
         )
 
@@ -274,14 +313,24 @@ class IntentQueueEntry:
             ],
             status=_normalize_status(
                 str(raw.get("status") or "pending"),
-                allowed={"pending", "claimed", "cancelled", "expired", "executed", "failed"},
+                allowed={
+                    "pending",
+                    "claimed",
+                    "cancelled",
+                    "expired",
+                    "executed",
+                    "failed",
+                },
                 default="pending",
             ),
             priority=float(raw.get("priority") or 0.5),
             target_loop=str(raw.get("target_loop") or "").strip(),
             payload=dict(raw.get("payload") or {}),
-            validation_state=str(raw.get("validation_state") or "unvalidated").strip() or "unvalidated",
-            expires_at=str(raw.get("expires_at")).strip() if raw.get("expires_at") else None,
+            validation_state=str(raw.get("validation_state") or "unvalidated").strip()
+            or "unvalidated",
+            expires_at=(
+                str(raw.get("expires_at")).strip() if raw.get("expires_at") else None
+            ),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -386,7 +435,9 @@ class StimulusPacketQueue:
         updated: StimulusPacket | None = None
         for item in self._load():
             if item.packet_id == packet_id:
-                updated = StimulusPacket.from_dict({**item.to_dict(), "status": normalized})
+                updated = StimulusPacket.from_dict(
+                    {**item.to_dict(), "status": normalized}
+                )
                 break
         if updated is not None:
             append_runtime_event(
@@ -407,7 +458,10 @@ class StimulusPacketQueue:
         _write_runtime_snapshot(self._path.parent)
 
     def _load(self) -> list[StimulusPacket]:
-        return [StimulusPacket.from_dict(entry) for entry in derive_packets(self._path.parent)]
+        return [
+            StimulusPacket.from_dict(entry)
+            for entry in derive_packets(self._path.parent)
+        ]
 
 
 class IntentQueue:
@@ -470,7 +524,9 @@ class IntentQueue:
         )
         if not pending:
             return None
-        chosen = IntentQueueEntry.from_dict({**pending[0].to_dict(), "status": "claimed"})
+        chosen = IntentQueueEntry.from_dict(
+            {**pending[0].to_dict(), "status": "claimed"}
+        )
         append_runtime_event(
             self._path.parent,
             event_type="intent_status_changed",
@@ -494,7 +550,14 @@ class IntentQueue:
     ) -> IntentQueueEntry | None:
         normalized_status = _normalize_status(
             status,
-            allowed={"pending", "claimed", "cancelled", "expired", "executed", "failed"},
+            allowed={
+                "pending",
+                "claimed",
+                "cancelled",
+                "expired",
+                "executed",
+                "failed",
+            },
             default="pending",
         )
         updated: IntentQueueEntry | None = None
@@ -503,7 +566,9 @@ class IntentQueue:
                 next_payload = item.to_dict()
                 next_payload["status"] = normalized_status
                 if validation_state is not None:
-                    next_payload["validation_state"] = str(validation_state).strip() or item.validation_state
+                    next_payload["validation_state"] = (
+                        str(validation_state).strip() or item.validation_state
+                    )
                 updated = IntentQueueEntry.from_dict(next_payload)
                 break
         if updated is not None:
@@ -526,4 +591,7 @@ class IntentQueue:
         _write_runtime_snapshot(self._path.parent)
 
     def _load(self) -> list[IntentQueueEntry]:
-        return [IntentQueueEntry.from_dict(entry) for entry in derive_intents(self._path.parent)]
+        return [
+            IntentQueueEntry.from_dict(entry)
+            for entry in derive_intents(self._path.parent)
+        ]

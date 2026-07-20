@@ -85,7 +85,9 @@ def _coerce_float(value: Any) -> float | None:
         return None
 
 
-def _collect(events: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def _collect(
+    events: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Split the ledger into the cast predictions and the observed surprises."""
     afterimages: list[dict[str, Any]] = []
     surprises: list[dict[str, Any]] = []
@@ -100,7 +102,9 @@ def _collect(events: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[d
             if cast_dt is None:
                 continue
             scope = str(payload.get("scope") or "here").strip() or "here"
-            claimed = {(scope, str(tag).strip()) for tag in features if str(tag).strip()}
+            claimed = {
+                (scope, str(tag).strip()) for tag in features if str(tag).strip()
+            }
             afterimages.append(
                 {
                     "pulse_id": str(payload.get("pulse_id") or "").strip(),
@@ -130,7 +134,9 @@ def _collect(events: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[d
     return afterimages, surprises
 
 
-def derive_prediction_scores(events: list[dict[str, Any]], *, weights: dict[str, float] | None = None) -> list[dict[str, Any]]:
+def derive_prediction_scores(
+    events: list[dict[str, Any]], *, weights: dict[str, float] | None = None
+) -> list[dict[str, Any]]:
     """Grade each cast afterimage against the surprise observed during its watch.
 
     For every ``afterimage_cast``, look at the ``surprise_observed`` traces that
@@ -184,7 +190,11 @@ def derive_prediction_scores(events: list[dict[str, Any]], *, weights: dict[str,
         # claim_mattering: how much, on average, this resident is drawn to the
         # features the afterimage chose to claim. LOW = it predicted furniture
         # (dull-world dark room); HIGH = it spoke about what it cares about.
-        claim_mattering = round(sum(w(tag) for _, tag in claimed) / len(claimed), 4) if (weights is not None and claimed) else None
+        claim_mattering = (
+            round(sum(w(tag) for _, tag in claimed) / len(claimed), 4)
+            if (weights is not None and claimed)
+            else None
+        )
         scores.append(
             {
                 "pulse_id": ai["pulse_id"],
@@ -197,10 +207,19 @@ def derive_prediction_scores(events: list[dict[str, Any]], *, weights: dict[str,
                 "miss_events": miss_n,
                 "blindspot_events": blind_n,
                 "traces_in_window": traces_in_window,
-                "clean": miss < SURPRISE_FLOOR,  # nothing it claimed was violated above the noise floor
+                "clean": miss
+                < SURPRISE_FLOOR,  # nothing it claimed was violated above the noise floor
                 "claim_mattering": claim_mattering,
-                "weighted_miss": round(miss_weighted_f / miss_n, 4) if (weights is not None and miss_n) else None,
-                "weighted_blindspot": round(blind_weighted_f / blind_n, 4) if (weights is not None and blind_n) else None,
+                "weighted_miss": (
+                    round(miss_weighted_f / miss_n, 4)
+                    if (weights is not None and miss_n)
+                    else None
+                ),
+                "weighted_blindspot": (
+                    round(blind_weighted_f / blind_n, 4)
+                    if (weights is not None and blind_n)
+                    else None
+                ),
             }
         )
     return scores
@@ -222,7 +241,9 @@ async def tag_mattering(drive_vector: Any, tags: list[str]) -> dict[str, float]:
     return weights
 
 
-def summarize_prediction_quality(events: list[dict[str, Any]], *, weights: dict[str, float] | None = None) -> dict[str, Any]:
+def summarize_prediction_quality(
+    events: list[dict[str, Any]], *, weights: dict[str, float] | None = None
+) -> dict[str, Any]:
     """A corpus-level read of how good a resident's predictions are.
 
     The triad that matters: ``mean_miss`` (wrong where it spoke), ``mean_blindspot``
@@ -252,14 +273,22 @@ def summarize_prediction_quality(events: list[dict[str, Any]], *, weights: dict[
         "spoke": len(claimed),
         "silent_fraction": round(silent / n, 4),
         "mean_claims": round(sum(s["claimed_n"] for s in scores) / n, 3),
-        "mean_miss": round(sum(speaking_misses) / len(speaking_misses), 4) if speaking_misses else 0.0,
+        "mean_miss": (
+            round(sum(speaking_misses) / len(speaking_misses), 4)
+            if speaking_misses
+            else 0.0
+        ),
         "mean_blindspot": round(sum(blinds) / n, 4),
         "clean_fraction": round(len(clean) / len(claimed), 4) if claimed else 0.0,
     }
     if weights is not None:
-        matterings = [s["claim_mattering"] for s in claimed if s["claim_mattering"] is not None]
+        matterings = [
+            s["claim_mattering"] for s in claimed if s["claim_mattering"] is not None
+        ]
         wmiss = [s["weighted_miss"] for s in claimed if s["weighted_miss"] is not None]
-        out["mean_claim_mattering"] = round(sum(matterings) / len(matterings), 4) if matterings else 0.0
+        out["mean_claim_mattering"] = (
+            round(sum(matterings) / len(matterings), 4) if matterings else 0.0
+        )
         out["mean_weighted_miss"] = round(sum(wmiss) / len(wmiss), 4) if wmiss else 0.0
     return out
 
@@ -272,7 +301,9 @@ def score_predictions(memory_dir: Path) -> dict[str, Any]:
 # --- the anchor lane (Major 51 granularity): predictions about concrete things ---
 
 
-def derive_anchor_scores(events: list[dict[str, Any]], *, weights: dict[str, float] | None = None) -> list[dict[str, Any]]:
+def derive_anchor_scores(
+    events: list[dict[str, Any]], *, weights: dict[str, float] | None = None
+) -> list[dict[str, Any]]:
     """Grade each anchor-scoped afterimage against the realized anchor snapshots.
 
     Anchors are predicted in their own scope and scored offline, never touching the
@@ -291,15 +322,29 @@ def derive_anchor_scores(events: list[dict[str, Any]], *, weights: dict[str, flo
     for event in events:
         etype = str(event.get("event_type") or "").strip()
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
-        if etype == "afterimage_cast" and str(payload.get("scope") or "").strip() == ANCHOR_SCOPE:
+        if (
+            etype == "afterimage_cast"
+            and str(payload.get("scope") or "").strip() == ANCHOR_SCOPE
+        ):
             feats = payload.get("features")
             if not isinstance(feats, dict) or not feats:
                 continue
             cdt = _parse_dt(payload.get("cast_ts")) or _parse_dt(event.get("ts"))
             if cdt is None:
                 continue
-            claimed = {str(t).strip(): float(v) for t, v in feats.items() if str(t).strip() and _coerce_float(v) is not None}
-            casts.append({"pulse_id": str(payload.get("pulse_id") or "").strip(), "cast_dt": cdt, "half_life": _coerce_float(payload.get("half_life")) or 0.0, "claimed": claimed})
+            claimed = {
+                str(t).strip(): float(v)
+                for t, v in feats.items()
+                if str(t).strip() and _coerce_float(v) is not None
+            }
+            casts.append(
+                {
+                    "pulse_id": str(payload.get("pulse_id") or "").strip(),
+                    "cast_dt": cdt,
+                    "half_life": _coerce_float(payload.get("half_life")) or 0.0,
+                    "claimed": claimed,
+                }
+            )
         elif etype == "anchor_observed":
             odt = _parse_dt(payload.get("observed_ts")) or _parse_dt(event.get("ts"))
             anchors = payload.get("anchors")
@@ -328,7 +373,10 @@ def derive_anchor_scores(events: list[dict[str, Any]], *, weights: dict[str, flo
                 continue
             for tag in claimed:
                 realized[tag] = max(realized.get(tag, 0.0), s["field"].get(tag, 0.0))
-        misses = [abs(intensity - realized.get(tag, 0.0)) for tag, intensity in claimed.items()]
+        misses = [
+            abs(intensity - realized.get(tag, 0.0))
+            for tag, intensity in claimed.items()
+        ]
         hits = sum(1 for tag in claimed if realized.get(tag, 0.0) >= ANCHOR_HIT_FLOOR)
         scores.append(
             {
@@ -337,13 +385,19 @@ def derive_anchor_scores(events: list[dict[str, Any]], *, weights: dict[str, flo
                 "claimed_n": len(claimed),
                 "anchor_miss": round(sum(misses) / len(misses), 4) if misses else 0.0,
                 "hit_rate": round(hits / len(claimed), 4) if claimed else 0.0,
-                "claim_mattering": round(sum(w(t) for t in claimed) / len(claimed), 4) if (weights is not None and claimed) else None,
+                "claim_mattering": (
+                    round(sum(w(t) for t in claimed) / len(claimed), 4)
+                    if (weights is not None and claimed)
+                    else None
+                ),
             }
         )
     return scores
 
 
-def summarize_anchor_prediction(events: list[dict[str, Any]], *, weights: dict[str, float] | None = None) -> dict[str, Any]:
+def summarize_anchor_prediction(
+    events: list[dict[str, Any]], *, weights: dict[str, float] | None = None
+) -> dict[str, Any]:
     """Corpus read of the anchor lane: how well a resident predicts the concrete
     things its world is made of, and (with ``weights``) how much those predictions
     are about what it cares about."""

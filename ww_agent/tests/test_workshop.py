@@ -10,12 +10,25 @@ from src.runtime.workshop import Workshop
 
 
 def _identity():
-    return ResidentIdentity(name="marina", actor_id="ws", soul="", canonical_soul="", growth_soul="", vibe="", core="", voice_seed=[], tuning=LoopTuning())
+    return ResidentIdentity(
+        name="marina",
+        actor_id="ws",
+        soul="",
+        canonical_soul="",
+        growth_soul="",
+        vibe="",
+        core="",
+        voice_seed=[],
+        tuning=LoopTuning(),
+    )
 
 
 def test_workshop_appends_and_reads_back(tmp_path):
     ws = Workshop(tmp_path / "workshop")
-    r1 = ws.append("Inspected the cornices on Steiner. Sag is worse than the report says.", title="Field note")
+    r1 = ws.append(
+        "Inspected the cornices on Steiner. Sag is worse than the report says.",
+        title="Field note",
+    )
     r2 = ws.append("Sourdough rises slower in the fog. Noted for the brick oven.")
     assert r1["written"] and r1["artifact"] == "journal.md"
     assert r2["written"]
@@ -56,7 +69,12 @@ def test_workshop_cannot_escape_its_directory(tmp_path):
     ws = Workshop(tmp_path / "marina" / "workshop")
     outside = tmp_path / "secret.md"
     # Path-traversal and absolute targets are sanitized to stay inside the workspace.
-    for hostile in ["../../secret", "../../../etc/passwd", "/etc/passwd", "..\\..\\windows"]:
+    for hostile in [
+        "../../secret",
+        "../../../etc/passwd",
+        "/etc/passwd",
+        "..\\..\\windows",
+    ]:
         res = ws.append("should not escape", artifact=hostile)
         assert res["written"] is True  # it writes — but inside the workshop
     assert not outside.exists()
@@ -83,13 +101,29 @@ def test_effector_routes_write_to_workshop_not_mail(tmp_path):
             return {"ok": True}
 
     world = _W()
-    eff = WorldEffector(ww_client=world, session_id="s", identity=_identity(), memory_dir=tmp_path, workshop=ws)
+    eff = WorldEffector(
+        ww_client=world,
+        session_id="s",
+        identity=_identity(),
+        memory_dir=tmp_path,
+        workshop=ws,
+    )
 
-    res = asyncio.run(eff(Act(kind="write", body="Today the Painted Ladies leaned a half-inch more.", target="journal")))
+    res = asyncio.run(
+        eff(
+            Act(
+                kind="write",
+                body="Today the Painted Ladies leaned a half-inch more.",
+                target="journal",
+            )
+        )
+    )
     assert res["executed"] and res["workshop"] == "journal.md"
     assert world.letters == []  # went to the workshop, not the mail system
     assert "Painted Ladies" in ws.recent(1)[0]["body"]
-    assert any(e.get("event_type") == "workshop_entry" for e in load_runtime_events(tmp_path))
+    assert any(
+        e.get("event_type") == "workshop_entry" for e in load_runtime_events(tmp_path)
+    )
 
     # A write to an actual person still goes to mail.
     asyncio.run(eff(Act(kind="write", body="Come see the foundation.", target="Leo")))

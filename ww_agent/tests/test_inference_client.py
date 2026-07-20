@@ -93,7 +93,15 @@ def test_complete_json_recovers_one_object_with_trailing_non_json_text():
     )
 
     async def fake_post(_path, _payload):
-        return {"choices": [{"message": {"content": '{"felt_sense":"kept private","reach":null,"act":null}\n```\nDone.'}}]}
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "content": '{"felt_sense":"kept private","reach":null,"act":null}\n```\nDone.'
+                    }
+                }
+            ]
+        }
 
     client._post_with_retry = fake_post
 

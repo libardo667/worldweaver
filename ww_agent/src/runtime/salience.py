@@ -32,7 +32,12 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from src.runtime.ledger import append_runtime_event, load_runtime_events, load_runtime_reducer_events, reduce_runtime_events
+from src.runtime.ledger import (
+    append_runtime_event,
+    load_runtime_events,
+    load_runtime_reducer_events,
+    reduce_runtime_events,
+)
 from src.runtime.substrate import BASELINE_EPSILON, derive_baseline, predict_combined
 
 logger = logging.getLogger(__name__)
@@ -55,11 +60,17 @@ IGNITION_REFRACTORY_SECONDS = 30.0
 # resolves only when the thing returns or the prediction itself decays (letting go).
 # (This is also the substrate for relational coupling: point the same integrator at
 # another mind's unresolved state and "stake-as-care" is the same reducer — see notes.)
-GRIEF_PREDICTION_FLOOR = 0.2  # only grieve anchors that were predicted at least this strongly
-GRIEF_HALF_LIFE_SECONDS = 600.0  # a confirmed-absence observation's weight decays this slowly
+GRIEF_PREDICTION_FLOOR = (
+    0.2  # only grieve anchors that were predicted at least this strongly
+)
+GRIEF_HALF_LIFE_SECONDS = (
+    600.0  # a confirmed-absence observation's weight decays this slowly
+)
 GRIEF_FLOOR = 0.25  # ripened grief below this is not yet felt (no arousal contribution)
 GRIEF_GAIN = 0.5  # how strongly summed ripened grief feeds arousal
-GRIEF_MAX = 0.8  # cap the grief term below IGNITION_THRESHOLD: grief makes the resident raw,
+GRIEF_MAX = (
+    0.8  # cap the grief term below IGNITION_THRESHOLD: grief makes the resident raw,
+)
 # the next small surprise tips it — grief alone never auto-ignites on a loop
 
 # Settling — the mirror of ignition (Major 50). When arousal has stayed below the
@@ -87,10 +98,18 @@ FERVOR_THRESHOLD_SECONDS = 180.0
 # gives it voice. Motor authority is strength-scaled: a mild pull is a veto-able directive, a
 # strong one withdraws the verbal escape for that pulse (basal-ganglia-proposes / cortex-disposes,
 # until the impulse is strong enough that it doesn't). Off unless WW_ACTION_TENDENCY is set.
-VENTURE_WAKE_FLOOR = 0.4  # below this circadian wakefulness, the body wants rest, not the streets
-VENTURE_WORLD_WARM_SECONDS = 300.0  # a successful move/do quiets bodily pressure for five minutes
-VENTURE_SOFT_STRENGTH = 0.5  # >= this: foreground move/do, but words stay available (veto-able)
-VENTURE_HARD_STRENGTH = 0.8  # >= this: the writing invitation is withdrawn — the body goes first
+VENTURE_WAKE_FLOOR = (
+    0.4  # below this circadian wakefulness, the body wants rest, not the streets
+)
+VENTURE_WORLD_WARM_SECONDS = (
+    300.0  # a successful move/do quiets bodily pressure for five minutes
+)
+VENTURE_SOFT_STRENGTH = (
+    0.5  # >= this: foreground move/do, but words stay available (veto-able)
+)
+VENTURE_HARD_STRENGTH = (
+    0.8  # >= this: the writing invitation is withdrawn — the body goes first
+)
 
 # The waveform vital (Minor 55): provenance of silence. A healthy mind is a
 # SAWTOOTH — arousal accumulates, crosses threshold, DISCHARGES (an ignition pulse;
@@ -102,7 +121,9 @@ VENTURE_HARD_STRENGTH = 0.8  # >= this: the writing invitation is withdrawn — 
 # quiet instant after it has decayed, reads as serene — so the vital monitors the
 # WAVEFORM (how long was it hot with no discharge?) over a window, not the bare level.
 VITAL_WINDOW_SECONDS = 1800.0  # how far back the waveform read looks
-VITAL_IGNITE_DWELL_SECONDS = 60.0  # seconds dwelling at/above ignition with NO discharge = strangled
+VITAL_IGNITE_DWELL_SECONDS = (
+    60.0  # seconds dwelling at/above ignition with NO discharge = strangled
+)
 # (a healthy mind fires within the refractory window; >60s above the fire-line with
 # nothing discharging means at least one fire-window was missed — that is the strangle)
 
@@ -122,7 +143,13 @@ ANCHOR_SCOPE = "anchors"
 # these (e.g. a mail-less LocalWorld and correspondence_pull) declares it muted; it
 # is then dropped from both the pulse's advertised senses and the surprise scope, so
 # a mind never predicts — and is never wrongly surprised by — a sense its world has.
-SELF_SENSES = ("vigilance", "social_pull", "mobility_drive", "correspondence_pull", "rest_drive")
+SELF_SENSES = (
+    "vigilance",
+    "social_pull",
+    "mobility_drive",
+    "correspondence_pull",
+    "rest_drive",
+)
 
 # Habituation (Major 49 Phase 5). The baseline is a slow exponential-moving-average
 # of lived stimulus: each tick nudges it a fraction toward what is actually felt.
@@ -187,7 +214,9 @@ def _as_by_scope(field: Any) -> dict[str, dict[str, float]]:
     return out
 
 
-def measure_surprise(stimulus: Any, afterimage: Any, *, appearance_only_scopes: tuple[str, ...] = ()) -> dict[str, Any]:
+def measure_surprise(
+    stimulus: Any, afterimage: Any, *, appearance_only_scopes: tuple[str, ...] = ()
+) -> dict[str, Any]:
     """Mismatch between the bottom-up stimulus and the top-down afterimage.
 
     For every (scope, tag) in either field, surprise is ``|stimulus - predicted|``
@@ -220,7 +249,15 @@ def measure_surprise(stimulus: Any, afterimage: Any, *, appearance_only_scopes: 
             delta = round(max(0.0, s - p) if appearance_only else abs(s - p), 4)
             if delta < FEATURE_EPSILON:
                 continue
-            features.append({"scope": scope, "tag": tag, "stimulus": round(s, 4), "predicted": round(p, 4), "delta": delta})
+            features.append(
+                {
+                    "scope": scope,
+                    "tag": tag,
+                    "stimulus": round(s, 4),
+                    "predicted": round(p, 4),
+                    "delta": delta,
+                }
+            )
             magnitude = max(magnitude, delta)
     features.sort(key=lambda item: -float(item["delta"]))
     return {"magnitude": round(magnitude, 4), "features": features}
@@ -270,7 +307,11 @@ def observe_surprise(
     # predictions can't drive arousal; gated residents keep it (a realized anchor
     # stimulus is supplied to surprise against, drive-weighted upstream).
     if not include_anchor_scope and isinstance(prediction.get("by_scope"), dict):
-        prediction["by_scope"] = {scope: tags for scope, tags in prediction["by_scope"].items() if scope != ANCHOR_SCOPE}
+        prediction["by_scope"] = {
+            scope: tags
+            for scope, tags in prediction["by_scope"].items()
+            if scope != ANCHOR_SCOPE
+        }
     # Capability scoping (Major 50): a sense the world cannot feed is muted — the mind
     # neither predicts it nor is surprised by it. Drop it from BOTH the prediction and
     # the stimulus. Dropping from prediction alone is enough only when the sense's
@@ -280,7 +321,11 @@ def observe_surprise(
     # at full delta against the now-absent prediction every tick — pumping arousal stably.
     # So mute means absent from the stimulus too.
     if muted_senses:
-        _pred_scopes = prediction.get("by_scope") if isinstance(prediction.get("by_scope"), dict) else {}
+        _pred_scopes = (
+            prediction.get("by_scope")
+            if isinstance(prediction.get("by_scope"), dict)
+            else {}
+        )
         _stim_scopes = stimulus if isinstance(stimulus, dict) else {}
         for scopes in (_pred_scopes, _stim_scopes):
             for tags in scopes.values():
@@ -290,7 +335,9 @@ def observe_surprise(
     # The anchor scope is appearance-weighted: a cared-about thing showing up
     # surprises; a held anchor merely dropping off the gated top-k does not (it was
     # manufacturing a disappearance-flood — see measure_surprise).
-    surprise = measure_surprise(stimulus, prediction, appearance_only_scopes=(ANCHOR_SCOPE,))
+    surprise = measure_surprise(
+        stimulus, prediction, appearance_only_scopes=(ANCHOR_SCOPE,)
+    )
 
     # Grief (reviewer round 4): appearance-weighting makes absence cost nothing *instantly*,
     # which is right for churn and wrong for loss. So we record, separately from instantaneous
@@ -303,14 +350,21 @@ def observe_surprise(
         stim_anchors = _as_by_scope(stimulus).get(ANCHOR_SCOPE, {})
         for tag, p in pred_anchors.items():
             pv = _coerce_float(p) or 0.0
-            if pv >= GRIEF_PREDICTION_FLOOR and float(stim_anchors.get(tag, 0.0)) < FEATURE_EPSILON:
+            if (
+                pv >= GRIEF_PREDICTION_FLOOR
+                and float(stim_anchors.get(tag, 0.0)) < FEATURE_EPSILON
+            ):
                 grief_field.append({"tag": str(tag), "predicted": round(pv, 4)})
-        anchor_present = [str(t) for t, v in stim_anchors.items() if float(v) >= FEATURE_EPSILON]
+        anchor_present = [
+            str(t) for t, v in stim_anchors.items() if float(v) >= FEATURE_EPSILON
+        ]
 
     if surprise["magnitude"] < SURPRISE_FLOOR and not grief_field:
         return None
 
-    valence = valence_fn(surprise["features"]) if valence_fn is not None else {"valence": 0.0}
+    valence = (
+        valence_fn(surprise["features"]) if valence_fn is not None else {"valence": 0.0}
+    )
     trace_id = f"tr-{uuid.uuid4().hex[:12]}"
     trace = {
         "trace_id": trace_id,
@@ -360,7 +414,10 @@ def update_baseline(
         events = load_runtime_reducer_events(memory_dir, now=now_iso)
 
     last = _last_baseline_dt(events)
-    if last is not None and (now_dt - last).total_seconds() < BASELINE_SNAPSHOT_INTERVAL_SECONDS:
+    if (
+        last is not None
+        and (now_dt - last).total_seconds() < BASELINE_SNAPSHOT_INTERVAL_SECONDS
+    ):
         return derive_baseline(events, now=now_iso)
 
     if stimulus is None:
@@ -383,7 +440,11 @@ def update_baseline(
         if field:
             by_scope[scope] = field
 
-    append_runtime_event(memory_dir, event_type="baseline_updated", payload={"updated_ts": now_iso, "by_scope": by_scope})
+    append_runtime_event(
+        memory_dir,
+        event_type="baseline_updated",
+        payload={"updated_ts": now_iso, "by_scope": by_scope},
+    )
     return {"computed_at": now_iso, "by_scope": by_scope}
 
 
@@ -446,7 +507,11 @@ def derive_grief(events: list[dict[str, Any]], *, now: Any = None) -> dict[str, 
             if ts <= seen_present:
                 continue  # this absence predates the anchor's return — resolved, not grieved
             age = max(0.0, (now_dt - ts).total_seconds())
-            total += pv * (0.5 ** (age / GRIEF_HALF_LIFE_SECONDS)) if GRIEF_HALF_LIFE_SECONDS > 0 else pv
+            total += (
+                pv * (0.5 ** (age / GRIEF_HALF_LIFE_SECONDS))
+                if GRIEF_HALF_LIFE_SECONDS > 0
+                else pv
+            )
         total = round(total, 4)
         if total >= GRIEF_FLOOR:
             grief[name] = total
@@ -463,14 +528,20 @@ def derive_arousal(events: list[dict[str, Any]], *, now: Any = None) -> dict[str
         if str(event.get("event_type") or "").strip() != "surprise_observed":
             continue
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
-        observed_dt = _parse_dt(payload.get("observed_ts")) or _parse_dt(event.get("ts"))
+        observed_dt = _parse_dt(payload.get("observed_ts")) or _parse_dt(
+            event.get("ts")
+        )
         if observed_dt is None:
             continue
         if since is not None and observed_dt <= since:
             continue  # consumed by the previous ignition
         magnitude = _coerce_float(payload.get("magnitude")) or 0.0
         age = max(0.0, (now_dt - observed_dt).total_seconds())
-        decayed = magnitude * (0.5 ** (age / AROUSAL_HALF_LIFE_SECONDS)) if AROUSAL_HALF_LIFE_SECONDS > 0 else 0.0
+        decayed = (
+            magnitude * (0.5 ** (age / AROUSAL_HALF_LIFE_SECONDS))
+            if AROUSAL_HALF_LIFE_SECONDS > 0
+            else 0.0
+        )
         if decayed <= 0.0:
             continue
         level += decayed
@@ -520,7 +591,12 @@ def _rhythm_ts(event: dict[str, Any]) -> datetime | None:
     return None
 
 
-def derive_vital(events: list[dict[str, Any]], *, now: Any = None, window_seconds: float | None = VITAL_WINDOW_SECONDS) -> dict[str, Any]:
+def derive_vital(
+    events: list[dict[str, Any]],
+    *,
+    now: Any = None,
+    window_seconds: float | None = VITAL_WINDOW_SECONDS,
+) -> dict[str, Any]:
     """The waveform vital — provenance of silence (Minor 55).
 
     Classifies the resident's recent arousal *waveform*, not its instantaneous
@@ -550,13 +626,19 @@ def derive_vital(events: list[dict[str, Any]], *, now: Any = None, window_second
         if ts is None:
             continue
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
-        mag = (_coerce_float(payload.get("magnitude")) or 0.0) if et == "surprise_observed" else 0.0
+        mag = (
+            (_coerce_float(payload.get("magnitude")) or 0.0)
+            if et == "surprise_observed"
+            else 0.0
+        )
         rhythm.append((ts, et, mag))
     rhythm.sort(key=lambda r: r[0])
 
     last_rhythm = rhythm[-1][0] if rhythm else None
     now_dt = _parse_dt(now) or last_rhythm or last_any or _utc_now_dt()
-    window_start = (now_dt - timedelta(seconds=float(window_seconds))) if window_seconds else None
+    window_start = (
+        (now_dt - timedelta(seconds=float(window_seconds))) if window_seconds else None
+    )
 
     # Single-pass leaky-arousal curve, mirroring derive_arousal exactly: ignition
     # resets the integrator, a surprise adds its magnitude, idle does NOT reset.
@@ -583,7 +665,9 @@ def derive_vital(events: list[dict[str, Any]], *, now: Any = None, window_second
             if level >= FERVOR_AROUSAL_FLOOR:
                 dwell_fervor += seg
             if AROUSAL_HALF_LIFE_SECONDS > 0:
-                level *= 0.5 ** ((ts - last_t).total_seconds() / AROUSAL_HALF_LIFE_SECONDS)
+                level *= 0.5 ** (
+                    (ts - last_t).total_seconds() / AROUSAL_HALF_LIFE_SECONDS
+                )
         in_window = window_start is None or ts >= window_start
         if et == "ignition_fired":
             level = 0.0
@@ -604,9 +688,21 @@ def derive_vital(events: list[dict[str, Any]], *, now: Any = None, window_second
         seg_start = max(last_t, window_start) if window_start is not None else last_t
         avail = max(0.0, (now_dt - seg_start).total_seconds())
         if level >= IGNITION_THRESHOLD:
-            dwell_ignite += min(avail, max(0.0, AROUSAL_HALF_LIFE_SECONDS * math.log2(level / IGNITION_THRESHOLD)))
+            dwell_ignite += min(
+                avail,
+                max(
+                    0.0,
+                    AROUSAL_HALF_LIFE_SECONDS * math.log2(level / IGNITION_THRESHOLD),
+                ),
+            )
         if level >= FERVOR_AROUSAL_FLOOR:
-            dwell_fervor += min(avail, max(0.0, AROUSAL_HALF_LIFE_SECONDS * math.log2(level / FERVOR_AROUSAL_FLOOR)))
+            dwell_fervor += min(
+                avail,
+                max(
+                    0.0,
+                    AROUSAL_HALF_LIFE_SECONDS * math.log2(level / FERVOR_AROUSAL_FLOOR),
+                ),
+            )
 
     arousal = derive_arousal(events, now=now_dt)
     current = float(arousal["level"])
@@ -614,9 +710,17 @@ def derive_vital(events: list[dict[str, Any]], *, now: Any = None, window_second
 
     last_discharge: datetime | None = None
     for ts, et, _ in rhythm:
-        if et in ("ignition_fired", "idle_fired") and ts <= now_dt and (last_discharge is None or ts > last_discharge):
+        if (
+            et in ("ignition_fired", "idle_fired")
+            and ts <= now_dt
+            and (last_discharge is None or ts > last_discharge)
+        ):
             last_discharge = ts
-    seconds_since_discharge = round((now_dt - last_discharge).total_seconds(), 1) if last_discharge is not None else None
+    seconds_since_discharge = (
+        round((now_dt - last_discharge).total_seconds(), 1)
+        if last_discharge is not None
+        else None
+    )
 
     # Distress first; then earned calm; then the healthy mid-rhythm reads.
     if discharges == 0 and dwell_ignite >= VITAL_IGNITE_DWELL_SECONDS:
@@ -653,14 +757,32 @@ def derive_vital(events: list[dict[str, Any]], *, now: Any = None, window_second
     }
 
 
-def vital_state(memory_dir: Path, *, now: Any = None, window_seconds: float | None = VITAL_WINDOW_SECONDS) -> dict[str, Any]:
-    return derive_vital(load_runtime_reducer_events(memory_dir, now=now), now=now, window_seconds=window_seconds)
+def vital_state(
+    memory_dir: Path,
+    *,
+    now: Any = None,
+    window_seconds: float | None = VITAL_WINDOW_SECONDS,
+) -> dict[str, Any]:
+    return derive_vital(
+        load_runtime_reducer_events(memory_dir, now=now),
+        now=now,
+        window_seconds=window_seconds,
+    )
 
 
-def warn_if_strangled(memory_dir: Path, *, now: Any = None, window_seconds: float | None = VITAL_WINDOW_SECONDS) -> dict[str, Any]:
+def warn_if_strangled(
+    memory_dir: Path,
+    *,
+    now: Any = None,
+    window_seconds: float | None = VITAL_WINDOW_SECONDS,
+) -> dict[str, Any]:
     """Read the waveform vital and log a warning if the resident is in distress
     (strangled / pent — arousal without discharge). Returns the vital either way."""
-    v = derive_vital(load_runtime_reducer_events(memory_dir, now=now), now=now, window_seconds=window_seconds)
+    v = derive_vital(
+        load_runtime_reducer_events(memory_dir, now=now),
+        now=now,
+        window_seconds=window_seconds,
+    )
     if v["distress"]:
         logger.warning(
             "arousal-without-discharge (%s): peak %.2f / current %.2f · %.0fs above the fire-line · %d discharges in window — the silent-strangle shape (Minor 55)",
@@ -678,7 +800,13 @@ def igniting_traces(memory_dir: Path, *, now: Any = None) -> list[dict[str, Any]
     return arousal_state(memory_dir, now=now)["traces"]
 
 
-def check_ignition(memory_dir: Path, *, now: Any = None, reactivity: float = 1.0, refractory_seconds: float | None = None) -> dict[str, Any]:
+def check_ignition(
+    memory_dir: Path,
+    *,
+    now: Any = None,
+    reactivity: float = 1.0,
+    refractory_seconds: float | None = None,
+) -> dict[str, Any]:
     """Decide whether arousal should ignite a pulse right now.
 
     ``reactivity`` scales the effective arousal (circadian wakefulness, 1.0 by
@@ -692,7 +820,11 @@ def check_ignition(memory_dir: Path, *, now: Any = None, reactivity: float = 1.0
     talker whose arousal stays hot mid-conversation won't re-ignite and echo itself
     a paraphrase every tick into the gap before the keeper has answered. Per-familiar.
     """
-    refr = IGNITION_REFRACTORY_SECONDS if refractory_seconds is None else max(0.0, float(refractory_seconds))
+    refr = (
+        IGNITION_REFRACTORY_SECONDS
+        if refractory_seconds is None
+        else max(0.0, float(refractory_seconds))
+    )
     now_iso = _as_now_iso(now)
     state = arousal_state(memory_dir, now=now_iso)
     react = max(0.0, float(reactivity))
@@ -734,7 +866,9 @@ def record_ignition(
         payload={
             "fired_ts": now_iso,
             "level": round(float(level), 4),
-            "trace_ids": [str(item).strip() for item in (trace_ids or []) if str(item).strip()],
+            "trace_ids": [
+                str(item).strip() for item in (trace_ids or []) if str(item).strip()
+            ],
         },
     )
 
@@ -744,7 +878,10 @@ def _last_pulse_dt(events: list[dict[str, Any]]) -> datetime | None:
     the calm clock; you don't potter right after you've just done something."""
     latest: datetime | None = None
     for event in events:
-        if str(event.get("event_type") or "").strip() not in {"ignition_fired", "idle_fired"}:
+        if str(event.get("event_type") or "").strip() not in {
+            "ignition_fired",
+            "idle_fired",
+        }:
             continue
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
         ts = _parse_dt(payload.get("fired_ts")) or _parse_dt(event.get("ts"))
@@ -775,7 +912,9 @@ def derive_rest(events: list[dict[str, Any]], *, now: Any = None) -> dict[str, A
         if str(event.get("event_type") or "").strip() != "session_state_observed":
             continue
         payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
-        context = payload.get("context") if isinstance(payload.get("context"), dict) else {}
+        context = (
+            payload.get("context") if isinstance(payload.get("context"), dict) else {}
+        )
         observed_at = _parse_dt(event.get("ts"))
         observed_wakefulness = _coerce_float(context.get("wakefulness"))
         if observed_at is not None and observed_wakefulness is not None:
@@ -785,19 +924,31 @@ def derive_rest(events: list[dict[str, Any]], *, now: Any = None) -> dict[str, A
     wakefulness = _coerce_float(latest_context.get("wakefulness"))
     arousal = derive_arousal(events, now=now_dt)
     effective = round(
-        float(arousal["level"]) * max(0.0, wakefulness if wakefulness is not None else 1.0),
+        float(arousal["level"])
+        * max(0.0, wakefulness if wakefulness is not None else 1.0),
         4,
     )
     low_wake_since: datetime | None = None
     if wakefulness is not None and wakefulness <= REST_WAKEFULNESS_CEILING:
-        for observed_at, observed_wakefulness, _context in reversed(circadian_observations):
+        for observed_at, observed_wakefulness, _context in reversed(
+            circadian_observations
+        ):
             if observed_wakefulness > REST_WAKEFULNESS_CEILING:
                 break
             low_wake_since = observed_at
     pulse_or_start = _last_pulse_dt(events) or _earliest_dt(events) or now_dt
-    clock_start = max(candidate for candidate in (pulse_or_start, low_wake_since) if candidate is not None)
+    clock_start = max(
+        candidate
+        for candidate in (pulse_or_start, low_wake_since)
+        if candidate is not None
+    )
     quiet_seconds = max(0.0, (now_dt - clock_start).total_seconds())
-    resting = bool(wakefulness is not None and wakefulness <= REST_WAKEFULNESS_CEILING and effective < REPOSE_AROUSAL_CEILING and quiet_seconds >= REST_QUIET_SECONDS)
+    resting = bool(
+        wakefulness is not None
+        and wakefulness <= REST_WAKEFULNESS_CEILING
+        and effective < REPOSE_AROUSAL_CEILING
+        and quiet_seconds >= REST_QUIET_SECONDS
+    )
     since = clock_start + timedelta(seconds=REST_QUIET_SECONDS) if resting else None
     if wakefulness is None:
         reason = "no_circadian_observation"
@@ -831,7 +982,9 @@ def rest_state(memory_dir: Path, *, now: Any = None) -> dict[str, Any]:
     return derive_rest(load_runtime_reducer_events(memory_dir, now=now), now=now)
 
 
-def check_settling(memory_dir: Path, *, now: Any = None, reactivity: float = 1.0) -> dict[str, Any]:
+def check_settling(
+    memory_dir: Path, *, now: Any = None, reactivity: float = 1.0
+) -> dict[str, Any]:
     """Decide whether the lull has lasted long enough to invite a quiet, inward
     pulse — the mirror of ignition. True only when arousal is genuinely calm and
     it has been settled for REPOSE_THRESHOLD_SECONDS since the last pulse.
@@ -847,7 +1000,9 @@ def check_settling(memory_dir: Path, *, now: Any = None, reactivity: float = 1.0
     effective = round(arousal["level"] * max(0.0, float(reactivity)), 4)
     clock_start = _last_pulse_dt(events) or _earliest_dt(events) or now_dt
     calm_seconds = max(0.0, (now_dt - clock_start).total_seconds())
-    settle = (effective < REPOSE_AROUSAL_CEILING) and (calm_seconds >= REPOSE_THRESHOLD_SECONDS)
+    settle = (effective < REPOSE_AROUSAL_CEILING) and (
+        calm_seconds >= REPOSE_THRESHOLD_SECONDS
+    )
     return {
         "settle": bool(settle),
         "calm_seconds": round(calm_seconds, 1),
@@ -859,7 +1014,9 @@ def check_settling(memory_dir: Path, *, now: Any = None, reactivity: float = 1.0
     }
 
 
-def check_fervor(memory_dir: Path, *, now: Any = None, reactivity: float = 1.0) -> dict[str, Any]:
+def check_fervor(
+    memory_dir: Path, *, now: Any = None, reactivity: float = 1.0
+) -> dict[str, Any]:
     """The mirror of settling, for restless temperaments. When arousal has stayed
     HIGH — at or above ``FERVOR_AROUSAL_FLOOR`` but below the ignition threshold —
     for a sustained stretch since the last pulse, the resident is keyed up with
@@ -876,7 +1033,9 @@ def check_fervor(memory_dir: Path, *, now: Any = None, reactivity: float = 1.0) 
     effective = round(arousal["level"] * max(0.0, float(reactivity)), 4)
     clock_start = _last_pulse_dt(events) or _earliest_dt(events) or now_dt
     restless_seconds = max(0.0, (now_dt - clock_start).total_seconds())
-    fire = (FERVOR_AROUSAL_FLOOR <= effective < IGNITION_THRESHOLD) and (restless_seconds >= FERVOR_THRESHOLD_SECONDS)
+    fire = (FERVOR_AROUSAL_FLOOR <= effective < IGNITION_THRESHOLD) and (
+        restless_seconds >= FERVOR_THRESHOLD_SECONDS
+    )
     return {
         "fire": bool(fire),
         "restless_seconds": round(restless_seconds, 1),
@@ -899,10 +1058,23 @@ def _last_successful_world_act_dt(events: list[dict[str, Any]]) -> datetime | No
     for event in events:
         event_type = str(event.get("event_type") or "").strip()
         payload = event.get("payload") or {}
-        successful = event_type == "action_executed" or event_type == "movement_arrived" or (event_type == "move_executed" and str(payload.get("status") or "").strip().lower() == "moved") or (event_type == "world_travel_requested" and str(payload.get("status") or "").strip().lower() == "pending")
+        successful = (
+            event_type == "action_executed"
+            or event_type == "movement_arrived"
+            or (
+                event_type == "move_executed"
+                and str(payload.get("status") or "").strip().lower() == "moved"
+            )
+            or (
+                event_type == "world_travel_requested"
+                and str(payload.get("status") or "").strip().lower() == "pending"
+            )
+        )
         if not successful:
             continue
-        occurred_at = _parse_dt(payload.get("executed_ts")) or _parse_dt(event.get("ts"))
+        occurred_at = _parse_dt(payload.get("executed_ts")) or _parse_dt(
+            event.get("ts")
+        )
         if occurred_at is not None and (latest is None or occurred_at > latest):
             latest = occurred_at
     return latest
@@ -934,17 +1106,42 @@ def check_venture(
     clock_start = _last_pulse_dt(events) or _earliest_dt(events) or now_dt
     restless_seconds = max(0.0, (now_dt - clock_start).total_seconds())
     last_world_act = _last_successful_world_act_dt(events)
-    world_warm_seconds = max(0.0, (now_dt - last_world_act).total_seconds()) if last_world_act is not None else None
-    world_cold = world_warm_seconds is None or world_warm_seconds > VENTURE_WORLD_WARM_SECONDS
+    world_warm_seconds = (
+        max(0.0, (now_dt - last_world_act).total_seconds())
+        if last_world_act is not None
+        else None
+    )
+    world_cold = (
+        world_warm_seconds is None or world_warm_seconds > VENTURE_WORLD_WARM_SECONDS
+    )
     awake = float(reactivity) >= VENTURE_WAKE_FLOOR
-    keyed = (FERVOR_AROUSAL_FLOOR <= effective < IGNITION_THRESHOLD) and (restless_seconds >= FERVOR_THRESHOLD_SECONDS)
+    keyed = (FERVOR_AROUSAL_FLOOR <= effective < IGNITION_THRESHOLD) and (
+        restless_seconds >= FERVOR_THRESHOLD_SECONDS
+    )
     # Strength combines present charge with actual world-coldness. An attempted but
     # failed bodily act is neither successful contact nor a reason to weaken the next
     # opportunity; proposal history cannot stand in for what the world allowed.
-    arousal_norm = max(0.0, min(1.0, (effective - FERVOR_AROUSAL_FLOOR) / max(1e-6, IGNITION_THRESHOLD - FERVOR_AROUSAL_FLOOR)))
-    coldness = 1.0 if world_warm_seconds is None else min(1.0, world_warm_seconds / VENTURE_WORLD_WARM_SECONDS)
+    arousal_norm = max(
+        0.0,
+        min(
+            1.0,
+            (effective - FERVOR_AROUSAL_FLOOR)
+            / max(1e-6, IGNITION_THRESHOLD - FERVOR_AROUSAL_FLOOR),
+        ),
+    )
+    coldness = (
+        1.0
+        if world_warm_seconds is None
+        else min(1.0, world_warm_seconds / VENTURE_WORLD_WARM_SECONDS)
+    )
     strength_raw = round(0.5 * arousal_norm + 0.5 * coldness, 3)
-    fire = bool(keyed and world_cold and bool(has_destination) and awake and strength_raw >= VENTURE_SOFT_STRENGTH)
+    fire = bool(
+        keyed
+        and world_cold
+        and bool(has_destination)
+        and awake
+        and strength_raw >= VENTURE_SOFT_STRENGTH
+    )
     strength = strength_raw if fire else 0.0
     if not keyed:
         reason = "not_keyed"
@@ -966,8 +1163,12 @@ def check_venture(
         "effective_level": effective,
         "restless_seconds": round(restless_seconds, 1),
         "world_cold": world_cold,
-        "last_successful_world_act_at": (last_world_act.isoformat() if last_world_act is not None else None),
-        "world_warm_seconds": (round(world_warm_seconds, 1) if world_warm_seconds is not None else None),
+        "last_successful_world_act_at": (
+            last_world_act.isoformat() if last_world_act is not None else None
+        ),
+        "world_warm_seconds": (
+            round(world_warm_seconds, 1) if world_warm_seconds is not None else None
+        ),
         "has_destination": bool(has_destination),
         "awake": awake,
         "computed_at": now_iso,
@@ -980,4 +1181,6 @@ def record_idle(memory_dir: Path, *, now: Any = None) -> dict[str, Any]:
     spends it. (Arousal is left untouched: a fervor doesn't reset the buzz, so a
     still-wound resident will fervor again after another stretch.)"""
     now_iso = _as_now_iso(now)
-    return append_runtime_event(memory_dir, event_type="idle_fired", payload={"fired_ts": now_iso})
+    return append_runtime_event(
+        memory_dir, event_type="idle_fired", payload={"fired_ts": now_iso}
+    )

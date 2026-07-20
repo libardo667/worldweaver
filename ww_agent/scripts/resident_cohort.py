@@ -66,11 +66,15 @@ def _new_presence_report(homes: list[Path]) -> dict[str, Any]:
     }
 
 
-def _sample_presence(server_url: str, homes: list[Path], report: dict[str, Any]) -> None:
+def _sample_presence(
+    server_url: str, homes: list[Path], report: dict[str, Any]
+) -> None:
     """Count resident overlap from public roster structure without reading prose."""
 
     try:
-        with urllib.request.urlopen(f"{server_url.rstrip('/')}/api/world/digest", timeout=5) as response:
+        with urllib.request.urlopen(
+            f"{server_url.rstrip('/')}/api/world/digest", timeout=5
+        ) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except Exception:
         report["read_failures"] += 1
@@ -97,7 +101,9 @@ def _sample_presence(server_url: str, homes: list[Path], report: dict[str, Any])
         report["locations_seen"][name].add(location)
         by_location.setdefault(location, []).append(name)
 
-    colocated_groups = [sorted(names) for names in by_location.values() if len(names) >= 2]
+    colocated_groups = [
+        sorted(names) for names in by_location.values() if len(names) >= 2
+    ]
     if colocated_groups:
         report["samples_with_colocation"] += 1
         report["max_colocated_residents"] = max(
@@ -107,13 +113,18 @@ def _sample_presence(server_url: str, homes: list[Path], report: dict[str, Any])
     for group in colocated_groups:
         for left, right in combinations(group, 2):
             pair = f"{left}|{right}"
-            report["colocation_pairs"][pair] = report["colocation_pairs"].get(pair, 0) + 1
+            report["colocation_pairs"][pair] = (
+                report["colocation_pairs"].get(pair, 0) + 1
+            )
 
 
 def _finalize_presence(report: dict[str, Any]) -> dict[str, Any]:
     return {
         **report,
-        "locations_seen": {name: sorted(locations) for name, locations in report["locations_seen"].items()},
+        "locations_seen": {
+            name: sorted(locations)
+            for name, locations in report["locations_seen"].items()
+        },
     }
 
 
@@ -234,15 +245,33 @@ def _run(args: argparse.Namespace) -> int:
         print(f"[{'PASS' if ok else 'FAIL'}] {home.name}: {detail}", flush=True)
 
     if not all(item["ok"] for item in preflight.values()):
-        print(json.dumps({"event": "cohort_preflight", "ready": False, "residents": preflight}, sort_keys=True))
+        print(
+            json.dumps(
+                {"event": "cohort_preflight", "ready": False, "residents": preflight},
+                sort_keys=True,
+            )
+        )
         return 1
 
-    print(json.dumps({"event": "cohort_preflight", "ready": True, "residents": sorted(preflight)}, sort_keys=True))
+    print(
+        json.dumps(
+            {
+                "event": "cohort_preflight",
+                "ready": True,
+                "residents": sorted(preflight),
+            },
+            sort_keys=True,
+        )
+    )
     if not args.wake:
         return 0
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    output_dir = Path(args.output_dir).expanduser().resolve() if args.output_dir else WORKSPACE_ROOT / ".runs" / "cohorts" / f"{timestamp}-{args.city}"
+    output_dir = (
+        Path(args.output_dir).expanduser().resolve()
+        if args.output_dir
+        else WORKSPACE_ROOT / ".runs" / "cohorts" / f"{timestamp}-{args.city}"
+    )
     output_dir.mkdir(parents=True, exist_ok=False, mode=0o700)
 
     processes: dict[str, subprocess.Popen[str]] = {}
@@ -304,7 +333,10 @@ def _run(args: argparse.Namespace) -> int:
             time.sleep(0.5)
     except KeyboardInterrupt:
         interrupted = True
-        print("[STOP] interrupt received; stopping cohort and parking every resident", flush=True)
+        print(
+            "[STOP] interrupt received; stopping cohort and parking every resident",
+            flush=True,
+        )
     finally:
         for process in processes.values():
             _terminate(process)
@@ -359,9 +391,16 @@ def _run(args: argparse.Namespace) -> int:
             totals[field] += int(summary.get(field) or 0)
         totals["pulse_elapsed_ms"] += float(summary.get("pulse_elapsed_ms") or 0.0)
         for kind, count in (summary.get("action_kinds") or {}).items():
-            totals["action_kinds"][kind] = totals["action_kinds"].get(kind, 0) + int(count or 0)
+            totals["action_kinds"][kind] = totals["action_kinds"].get(kind, 0) + int(
+                count or 0
+            )
 
-    succeeded = not interrupted and all(code == 0 for code in return_codes.values()) and all(item["ok"] for item in cleanup.values()) and len(summaries) == len(homes)
+    succeeded = (
+        not interrupted
+        and all(code == 0 for code in return_codes.values())
+        and all(item["ok"] for item in cleanup.values())
+        and len(summaries) == len(homes)
+    )
     aggregate = {
         "event": "cohort_run_summary",
         "status": "complete" if succeeded else "incomplete",
@@ -378,7 +417,9 @@ def _run(args: argparse.Namespace) -> int:
         "output_dir": str(output_dir),
     }
     summary_path = output_dir / "summary.json"
-    summary_path.write_text(json.dumps(aggregate, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    summary_path.write_text(
+        json.dumps(aggregate, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     summary_path.chmod(0o600)
     print(json.dumps(aggregate, sort_keys=True), flush=True)
     return 0 if succeeded else 130 if interrupted else 1
@@ -386,11 +427,22 @@ def _run(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--city", required=True, help="city label stored in the structural summary")
+    parser.add_argument(
+        "--city", required=True, help="city label stored in the structural summary"
+    )
     parser.add_argument("--server-url", required=True, help="selected city backend URL")
-    parser.add_argument("--home", action="append", required=True, help="exact resident home; repeat for the cohort")
-    parser.add_argument("--wake", action="store_true", help="wake after every resident passes preflight")
-    parser.add_argument("--duration", type=float, help="natural-cadence duration in seconds")
+    parser.add_argument(
+        "--home",
+        action="append",
+        required=True,
+        help="exact resident home; repeat for the cohort",
+    )
+    parser.add_argument(
+        "--wake", action="store_true", help="wake after every resident passes preflight"
+    )
+    parser.add_argument(
+        "--duration", type=float, help="natural-cadence duration in seconds"
+    )
     parser.add_argument("--model", help="temporary model shared by this run")
     parser.add_argument("--temperature", type=float)
     parser.add_argument("--action-tendency", action="store_true")
@@ -406,8 +458,12 @@ def main(argv: list[str] | None = None) -> int:
         metavar="0-8",
         help="requested reads per active pulse; the resident host may lower it",
     )
-    parser.add_argument("--stagger", type=float, default=1.5, help="seconds between resident starts")
-    parser.add_argument("--output-dir", help="optional empty destination for structural run logs")
+    parser.add_argument(
+        "--stagger", type=float, default=1.5, help="seconds between resident starts"
+    )
+    parser.add_argument(
+        "--output-dir", help="optional empty destination for structural run logs"
+    )
     args = parser.parse_args(argv)
     if args.wake and (args.duration is None or not 0 < args.duration <= 7200):
         parser.error("--wake requires --duration between 1 and 7200 seconds")

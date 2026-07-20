@@ -103,7 +103,9 @@ class Act:
             raise PulseValidationError("act must be an object")
         kind = str(raw.get("kind") or "").strip().lower()
         if kind not in _ACT_KINDS:
-            raise PulseValidationError(f"act.kind must be one of {sorted(_ACT_KINDS)}, got {kind!r}")
+            raise PulseValidationError(
+                f"act.kind must be one of {sorted(_ACT_KINDS)}, got {kind!r}"
+            )
         target_raw = raw.get("target")
         target = str(target_raw).strip() if target_raw not in (None, "") else None
         body = str(raw.get("body") or "").strip()
@@ -137,7 +139,9 @@ class Reach:
             raise PulseValidationError("reach must be an object")
         kind = str(raw.get("kind") or "").strip().lower()
         if kind not in _REACH_KINDS:
-            raise PulseValidationError(f"reach.kind must be one of {sorted(_REACH_KINDS)}, got {kind!r}")
+            raise PulseValidationError(
+                f"reach.kind must be one of {sorted(_REACH_KINDS)}, got {kind!r}"
+            )
         source = str(raw.get("source") or "").strip().lower()
         if not source:
             raise PulseValidationError("reach.source must be a non-empty string")
@@ -162,12 +166,18 @@ class Expectation:
             raise PulseValidationError("expectation must be an object")
         features = _coerce_features(raw.get("features"))
         if not features:
-            raise PulseValidationError("expectation.features must contain at least one tag:intensity")
+            raise PulseValidationError(
+                "expectation.features must contain at least one tag:intensity"
+            )
         scope = str(raw.get("scope") or "here").strip() or "here"
         confidence = _coerce_float(raw.get("confidence"))
         confidence = _clamp01(confidence) if confidence is not None else 0.5
-        half_life = _coerce_half_life(raw.get("half_life"), DEFAULT_AFTERIMAGE_HALF_LIFE_SECONDS)
-        return cls(features=features, scope=scope, confidence=confidence, half_life=half_life)
+        half_life = _coerce_half_life(
+            raw.get("half_life"), DEFAULT_AFTERIMAGE_HALF_LIFE_SECONDS
+        )
+        return cls(
+            features=features, scope=scope, confidence=confidence, half_life=half_life
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -191,8 +201,12 @@ class DriveNudge:
             raise PulseValidationError("drive_nudge must be an object")
         features = _coerce_features(raw.get("features"))
         if not features:
-            raise PulseValidationError("drive_nudge.features must contain at least one tag:intensity")
-        half_life = _coerce_half_life(raw.get("half_life"), DEFAULT_DRIVE_NUDGE_HALF_LIFE_SECONDS)
+            raise PulseValidationError(
+                "drive_nudge.features must contain at least one tag:intensity"
+            )
+        half_life = _coerce_half_life(
+            raw.get("half_life"), DEFAULT_DRIVE_NUDGE_HALF_LIFE_SECONDS
+        )
         return cls(features=features, half_life=half_life)
 
     def to_dict(self) -> dict[str, Any]:
@@ -258,10 +272,14 @@ class TraceVerdict:
             raise PulseValidationError("trace_verdict must be an object")
         trace_id = str(raw.get("trace_id") or "").strip()
         if not trace_id:
-            raise PulseValidationError("trace_verdict.trace_id must be a non-empty string")
+            raise PulseValidationError(
+                "trace_verdict.trace_id must be a non-empty string"
+            )
         verdict = str(raw.get("verdict") or "").strip().lower()
         if verdict not in _TRACE_VERDICTS:
-            raise PulseValidationError(f"trace_verdict.verdict must be one of {sorted(_TRACE_VERDICTS)}, got {verdict!r}")
+            raise PulseValidationError(
+                f"trace_verdict.verdict must be one of {sorted(_TRACE_VERDICTS)}, got {verdict!r}"
+            )
         return cls(trace_id=trace_id, verdict=verdict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -336,7 +354,11 @@ class Pulse:
         reach_raw = raw.get("reach")
         if reach_raw not in (None, "", {}) and not isinstance(reach_raw, dict):
             raise PulseValidationError("reach must be an object or null")
-        reach = Reach.from_dict(reach_raw) if isinstance(reach_raw, dict) and reach_raw else None
+        reach = (
+            Reach.from_dict(reach_raw)
+            if isinstance(reach_raw, dict) and reach_raw
+            else None
+        )
         if reach is not None and act is not None:
             raise PulseValidationError("pulse may contain reach or act, not both")
 
@@ -423,7 +445,9 @@ def constitution_gate(
                 verdict, reason = "dropped", "contradicts_immutable_direction"
             elif ruling == "clamp":
                 verdict, reason = "clamped", "tempered_against_immutable_direction"
-        decisions.append(GateDecision(kind=kind, body=body, verdict=verdict, reason=reason))
+        decisions.append(
+            GateDecision(kind=kind, body=body, verdict=verdict, reason=reason)
+        )
     return decisions
 
 
@@ -476,7 +500,11 @@ def route_pulse(
         append_runtime_event(
             memory_dir,
             event_type="pulse_act_emitted",
-            payload={"pulse_id": pulse_id, **dict(act_context or {}), **pulse.act.to_dict()},
+            payload={
+                "pulse_id": pulse_id,
+                **dict(act_context or {}),
+                **pulse.act.to_dict(),
+            },
         )
         act_routed = True
 
@@ -498,7 +526,9 @@ def route_pulse(
         )
 
     # self_delta — through the constitution gate; staged as candidate only.
-    gate_decisions = constitution_gate(pulse.self_delta, contradiction_check=gate_contradiction_check)
+    gate_decisions = constitution_gate(
+        pulse.self_delta, contradiction_check=gate_contradiction_check
+    )
     for decision in gate_decisions:
         append_runtime_event(
             memory_dir,

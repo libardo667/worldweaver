@@ -66,7 +66,9 @@ class ResidentRequestSigner:
     def __post_init__(self) -> None:
         certificate = str(self.certificate_header or "").strip()
         if not _BASE64URL_RE.fullmatch(certificate) or len(certificate) > 16_384:
-            raise ResidentSigningError("Resident runtime certificate header is invalid.")
+            raise ResidentSigningError(
+                "Resident runtime certificate header is invalid."
+            )
         object.__setattr__(self, "certificate_header", certificate)
 
     def signed_headers(
@@ -87,12 +89,18 @@ class ResidentRequestSigner:
         request_nonce = str(nonce or secrets.token_urlsafe(18)).strip()
         if not _METHOD_RE.fullmatch(request_method):
             raise ResidentSigningError("Resident request method is invalid.")
-        if not request_target.startswith("/") or "\n" in request_target or "\r" in request_target:
+        if (
+            not request_target.startswith("/")
+            or "\n" in request_target
+            or "\r" in request_target
+        ):
             raise ResidentSigningError("Resident request target is invalid.")
         try:
             request_target.encode("ascii")
         except UnicodeEncodeError as exc:
-            raise ResidentSigningError("Resident request target must use its encoded HTTP form.") from exc
+            raise ResidentSigningError(
+                "Resident request target must use its encoded HTTP form."
+            ) from exc
         if not _NONCE_RE.fullmatch(request_nonce):
             raise ResidentSigningError("Resident request nonce is invalid.")
         signature = self.runtime_private_key.sign(

@@ -1,4 +1,9 @@
-from src.runtime.travel import TravelRequest, derive_pending_shard_travel, parse_city_travel, parse_world_travel
+from src.runtime.travel import (
+    TravelRequest,
+    derive_pending_shard_travel,
+    parse_city_travel,
+    parse_world_travel,
+)
 
 
 def test_travel_parser_distinguishes_world_travel_from_city_movement():
@@ -7,7 +12,9 @@ def test_travel_parser_distinguishes_world_travel_from_city_movement():
         allow_hearth=True,
     ) == TravelRequest("hearth")
     assert parse_world_travel("home", allow_hearth=True) == TravelRequest("hearth")
-    assert parse_world_travel("your hearth", allow_hearth=True) == TravelRequest("hearth")
+    assert parse_world_travel("your hearth", allow_hearth=True) == TravelRequest(
+        "hearth"
+    )
     assert parse_world_travel(
         "travel to city",
         city_names={"city"},
@@ -33,13 +40,23 @@ def test_city_travel_requires_one_explicit_live_node():
         {
             "route_id": "sf-portland",
             "nodes": [
-                {"shard_id": "rose-city-coop-1", "shard_url": "https://pdx.example", "status": "healthy"},
-                {"shard_id": "offline-copy", "shard_url": "https://offline.example", "status": "offline"},
+                {
+                    "shard_id": "rose-city-coop-1",
+                    "shard_url": "https://pdx.example",
+                    "status": "healthy",
+                },
+                {
+                    "shard_id": "offline-copy",
+                    "shard_url": "https://offline.example",
+                    "status": "offline",
+                },
             ],
         }
     ]
 
-    assert parse_city_travel("travel to rose-city-coop-1", destinations) == TravelRequest("city", "rose-city-coop-1", "sf-portland", "rose-city-coop-1")
+    assert parse_city_travel(
+        "travel to rose-city-coop-1", destinations
+    ) == TravelRequest("city", "rose-city-coop-1", "sf-portland", "rose-city-coop-1")
     assert parse_city_travel("travel to not-rose-city-coop-1", destinations) is None
     assert parse_city_travel("travel to offline-copy", destinations) is None
     assert parse_city_travel("walk to the park", destinations) is None
@@ -67,4 +84,16 @@ def test_pending_city_travel_is_derived_from_the_ledger_until_arrival():
 
     assert pending is not None and pending.source_departed is True
     assert pending.destination_url == "https://pdx.example"
-    assert derive_pending_shard_travel([started, departed, {"event_type": "inter_shard_travel_arrived", "payload": {"travel_id": "trip-1"}}]) is None
+    assert (
+        derive_pending_shard_travel(
+            [
+                started,
+                departed,
+                {
+                    "event_type": "inter_shard_travel_arrived",
+                    "payload": {"travel_id": "trip-1"},
+                },
+            ]
+        )
+        is None
+    )

@@ -18,7 +18,9 @@ def _mode(path: Path) -> int:
     return stat.S_IMODE(path.lstat().st_mode)
 
 
-def test_secure_hearth_permissions_repairs_nested_files_without_following_links(tmp_path):
+def test_secure_hearth_permissions_repairs_nested_files_without_following_links(
+    tmp_path,
+):
     outside = tmp_path / "outside.txt"
     outside.write_text("not part of the hearth", encoding="utf-8")
     outside.chmod(0o644)
@@ -54,7 +56,9 @@ def test_secure_hearth_permissions_rejects_a_linked_root(tmp_path):
         secure_hearth_permissions(linked)
 
 
-def test_resident_start_repairs_existing_hearth_before_attachment(tmp_path, monkeypatch):
+def test_resident_start_repairs_existing_hearth_before_attachment(
+    tmp_path, monkeypatch
+):
     home = tmp_path / "resident"
     identity = home / "identity"
     identity.mkdir(parents=True)
@@ -68,7 +72,9 @@ def test_resident_start_repairs_existing_hearth_before_attachment(tmp_path, monk
         def release(self):
             return None
 
-    monkeypatch.setattr(resident_module, "acquire_hearth_runtime", lambda _home: Lease())
+    monkeypatch.setattr(
+        resident_module, "acquire_hearth_runtime", lambda _home: Lease()
+    )
     resident = Resident(home, ww_client=object(), llm=object())
 
     async def attach(_world_id, *, default_attachment="city"):

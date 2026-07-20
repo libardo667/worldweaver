@@ -71,7 +71,9 @@ def parse_world_travel(
     return None
 
 
-def parse_city_travel(text: str, destinations: list[dict[str, Any]]) -> TravelRequest | None:
+def parse_city_travel(
+    text: str, destinations: list[dict[str, Any]]
+) -> TravelRequest | None:
     """Resolve an explicit live node name without guessing between city hosts."""
     normalized = " ".join(str(text or "").split()).lower()
     if not normalized or not re.search(rf"\b{_VERB}\b", normalized):
@@ -88,9 +90,16 @@ def parse_city_travel(text: str, destinations: list[dict[str, Any]]) -> TravelRe
             shard_id = str(node.get("shard_id") or "").strip()
             shard_url = str(node.get("shard_url") or "").strip()
             status = str(node.get("status") or "").strip()
-            if not route_id or not shard_id or not shard_url or status not in {"healthy", "degraded"}:
+            if (
+                not route_id
+                or not shard_id
+                or not shard_url
+                or status not in {"healthy", "degraded"}
+            ):
                 continue
-            shard_pattern = rf"(?<![a-z0-9_-]){re.escape(shard_id.lower())}(?![a-z0-9_-])"
+            shard_pattern = (
+                rf"(?<![a-z0-9_-]){re.escape(shard_id.lower())}(?![a-z0-9_-])"
+            )
             if re.search(shard_pattern, normalized):
                 matches.append(TravelRequest("city", shard_id, route_id, shard_id))
     unique = {(match.route_id, match.destination_shard): match for match in matches}
@@ -105,7 +114,9 @@ def looks_like_city_travel(text: str) -> bool:
     return bool(re.search(r"\b(?:travel|journey|depart|set\s*out)\b", normalized))
 
 
-def derive_pending_shard_travel(events: list[dict[str, Any]]) -> PendingShardTravel | None:
+def derive_pending_shard_travel(
+    events: list[dict[str, Any]],
+) -> PendingShardTravel | None:
     """Recover the newest city trip that has not reached a destination attachment."""
     pending: dict[str, PendingShardTravel] = {}
     order: list[str] = []
@@ -124,7 +135,9 @@ def derive_pending_shard_travel(events: list[dict[str, Any]]) -> PendingShardTra
                 source_session_id=str(payload.get("source_session_id") or "").strip(),
                 destination_shard=str(payload.get("destination_shard") or "").strip(),
                 destination_url=str(payload.get("destination_url") or "").strip(),
-                destination_session_id=str(payload.get("destination_session_id") or "").strip(),
+                destination_session_id=str(
+                    payload.get("destination_session_id") or ""
+                ).strip(),
             )
             order.append(travel_id)
         elif event_type == "inter_shard_source_departed" and travel_id in pending:
@@ -132,8 +145,13 @@ def derive_pending_shard_travel(events: list[dict[str, Any]]) -> PendingShardTra
             pending[travel_id] = replace(
                 current,
                 source_departed=True,
-                destination_url=str(payload.get("destination_url") or current.destination_url).strip(),
+                destination_url=str(
+                    payload.get("destination_url") or current.destination_url
+                ).strip(),
             )
         elif event_type in {"inter_shard_travel_arrived", "inter_shard_travel_aborted"}:
             pending.pop(travel_id, None)
-    return next((pending[travel_id] for travel_id in reversed(order) if travel_id in pending), None)
+    return next(
+        (pending[travel_id] for travel_id in reversed(order) if travel_id in pending),
+        None,
+    )

@@ -68,7 +68,11 @@ def _arrival_ts(events: list[dict[str, Any]]) -> datetime | None:
 def groundedness(events: list[dict[str, Any]]) -> int:
     """How much of a self the resident has built — count of its own kept memories and
     workshop makings on the ledger. The signal that lets the quarantine end."""
-    return sum(1 for e in events if str(e.get("event_type") or "").strip() in GROUNDING_EVENT_TYPES)
+    return sum(
+        1
+        for e in events
+        if str(e.get("event_type") or "").strip() in GROUNDING_EVENT_TYPES
+    )
 
 
 def is_incubating(

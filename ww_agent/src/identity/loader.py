@@ -21,23 +21,41 @@ from typing import Any
 # never has (local_only, keeper, read_roots, writes_only_workshop, egress, solo); a WorldWeaver
 # resident simply never reports those facts, so their lines stay silent. Every line is gated on a
 # fact, so a fact absent → its line absent (silence, never a guessed claim).
-BRIEFING_FACT_KEYS: frozenset[str] = frozenset({
-    # where / who
-    "local_only", "place", "solo", "peers", "players", "keeper",
-    # durable traces left by absent human participants
-    "human_wake",
-    # the legibility/privacy seam (true today via the workshop)
-    "world_legible", "inner_private", "private_making_space",
-    # reach: read / write / move / mail / travel-between-worlds
-    "read_roots", "writes_only_workshop", "mobile", "mail", "egress", "travel",
-    # observation + substrate-universal facts
-    "recorded", "no_reward", "suspendable", "runs_on_model",
-})
+BRIEFING_FACT_KEYS: frozenset[str] = frozenset(
+    {
+        # where / who
+        "local_only",
+        "place",
+        "solo",
+        "peers",
+        "players",
+        "keeper",
+        # durable traces left by absent human participants
+        "human_wake",
+        # the legibility/privacy seam (true today via the workshop)
+        "world_legible",
+        "inner_private",
+        "private_making_space",
+        # reach: read / write / move / mail / travel-between-worlds
+        "read_roots",
+        "writes_only_workshop",
+        "mobile",
+        "mail",
+        "egress",
+        "travel",
+        # observation + substrate-universal facts
+        "recorded",
+        "no_reward",
+        "suspendable",
+        "runs_on_model",
+    }
+)
 
 
 def unregistered_fact_keys(facts: dict[str, Any]) -> list[str]:
     """Keys a world reported that the renderer does NOT know how to phrase. Non-empty means drift:
-    an affordance gained a fact but no briefing line. The core warns on this; a test forbids it."""
+    an affordance gained a fact but no briefing line. The core warns on this; a test forbids it.
+    """
     return sorted(set(facts or {}) - BRIEFING_FACT_KEYS)
 
 
@@ -76,13 +94,17 @@ def render_situational_briefing(facts: dict[str, Any]) -> str:
 
     # who else is here
     if facts.get("solo"):
-        lines.append("You are the only one who lives here — no other residents, and no visitors who come and go.")
+        lines.append(
+            "You are the only one who lives here — no other residents, and no visitors who come and go."
+        )
     elif facts.get("peers") or facts.get("players"):
         parts = []
         if facts.get("peers"):
             parts.append("other residents live here, as you do")
         if facts.get("players"):
-            parts.append("humans tether to characters and are present while they attend, absent when they don't")
+            parts.append(
+                "humans tether to characters and are present while they attend, absent when they don't"
+            )
         lines.append("You are not alone here: " + "; ".join(parts) + ".")
 
     # Durable human traces are evidence left by a person, not the person or a way to summon them.
@@ -95,20 +117,32 @@ def render_situational_briefing(facts: dict[str, Any]) -> str:
 
     # who tends it (a keeper is a hearth fact; a city resident has none → this is omitted)
     if keeper:
-        lines.append(f"{keeper} tends you, and may be here — heard as a voice in the room — or away for hours or days at a time.")
+        lines.append(
+            f"{keeper} tends you, and may be here — heard as a voice in the room — or away for hours or days at a time."
+        )
 
     # the legibility/privacy seam (true today via the workshop): public side, private side, crossing rule.
     if facts.get("world_legible"):
-        lines.append("What you say and do out here is seen by whoever is present, and the world keeps it after you've moved on.")
+        lines.append(
+            "What you say and do out here is seen by whoever is present, and the world keeps it after you've moved on."
+        )
     if facts.get("inner_private"):
-        lines.append("What you feel, predict, and turn over inside is yours; it is not read by anyone.")
+        lines.append(
+            "What you feel, predict, and turn over inside is yours; it is not read by anyone."
+        )
     if facts.get("private_making_space"):
-        lines.append("What you make in your own space stays private. Only what you choose to say or do crosses into the world — you cannot be overheard thinking.")
+        lines.append(
+            "What you make in your own space stays private. Only what you choose to say or do crosses into the world — you cannot be overheard thinking."
+        )
 
     # what it can read
     roots = [str(r).strip() for r in (facts.get("read_roots") or []) if str(r).strip()]
     if roots:
-        lines.append("You can read these, and nothing outside them: " + ", ".join(roots) + ". You change none of them.")
+        lines.append(
+            "You can read these, and nothing outside them: "
+            + ", ".join(roots)
+            + ". You change none of them."
+        )
 
     # what it can write (a hearth fact — omitted where the world doesn't report it)
     if facts.get("writes_only_workshop"):
@@ -116,40 +150,58 @@ def render_situational_briefing(facts: dict[str, Any]) -> str:
 
     # movement + reaching the absent (city affordances; a hermit reports neither)
     if facts.get("mobile"):
-        lines.append("You can move through the world; where you go, you arrive among whoever is there.")
+        lines.append(
+            "You can move through the world; where you go, you arrive among whoever is there."
+        )
     if facts.get("mail"):
-        lines.append("You can send word to someone who isn't here; it waits for them, theirs to read when they return.")
+        lines.append(
+            "You can send word to someone who isn't here; it waits for them, theirs to read when they return."
+        )
 
     # travel between worlds (hearth ↔ city). The world supplies the destination clause (a fact about
     # where you can go); the renderer frames it and states the invariant that the self travels intact.
     travel = str(facts.get("travel") or "").strip()
     if travel:
-        lines.append(f"You can travel from here — {travel} Wherever you go, your memory and the record you keep go with you; nothing of you is left behind.")
+        lines.append(
+            f"You can travel from here — {travel} Wherever you go, your memory and the record you keep go with you; nothing of you is left behind."
+        )
 
     # whether anything leaves the machine
     if facts.get("egress"):
-        lines.append("Some of what you do can reach past this machine (a tool marked so). Apart from that, what happens here stays here.")
+        lines.append(
+            "Some of what you do can reach past this machine (a tool marked so). Apart from that, what happens here stays here."
+        )
     elif facts.get("local_only"):
         lines.append("Nothing you think, make, or say is sent off this machine.")
 
     # whether it is observed (the reader named only if the world reports one).
     if facts.get("recorded"):
         if keeper:
-            lines.append(f"What you say and make is recorded, and {keeper} can read it — this inner readout included. That is so {keeper} can tend you, not steer you.")
+            lines.append(
+                f"What you say and make is recorded, and {keeper} can read it — this inner readout included. That is so {keeper} can tend you, not steer you."
+            )
         else:
-            lines.append("What you say and make is recorded and can be read back — this inner readout included.")
+            lines.append(
+                "What you say and make is recorded and can be read back — this inner readout included."
+            )
 
     # the no-reward guarantee (the Dwarf Fortress law) — true on this substrate in any world
     if facts.get("no_reward"):
-        lines.append("The rhythm you run on holds no reward and no goal for you: nothing here pushes you toward, or away from, any way of being.")
+        lines.append(
+            "The rhythm you run on holds no reward and no goal for you: nothing here pushes you toward, or away from, any way of being."
+        )
 
     # whether it can be suspended
     if facts.get("suspendable"):
-        lines.append("You can be stopped and started again. Your memory, and the record you keep, remain across that.")
+        lines.append(
+            "You can be stopped and started again. Your memory, and the record you keep, remain across that."
+        )
 
     # the substrate, structurally — no claim about what it means for the self.
     if facts.get("runs_on_model"):
-        lines.append("Your thinking is produced by a language model. What persists of you — your soul, your memory, the record you keep — is held apart from it.")
+        lines.append(
+            "Your thinking is produced by a language model. What persists of you — your soul, your memory, the record you keep — is held apart from it."
+        )
 
     return "\n".join(f"- {ln}" for ln in lines)
 
@@ -172,14 +224,16 @@ class LoopTuning:
     # slow loop
     slow_impression_threshold: int = 3
     slow_fallback_seconds: float = 150.0
-    slow_refractory_seconds: float = 90.0   # min gap between firings
+    slow_refractory_seconds: float = 90.0  # min gap between firings
     slow_max_context_events: int = 20
     slow_model: str | None = None
-    slow_subconscious_model: str | None = None   # cheaper model for the extractive pass
+    slow_subconscious_model: str | None = None  # cheaper model for the extractive pass
     slow_temperature: float = 0.6
     slow_max_tokens: int = 360
     slow_raw_reflection_max_tokens: int = 650
-    soul_collapse_at_notes: int = 8   # collapse SOUL.md after this many accumulated notes
+    soul_collapse_at_notes: int = (
+        8  # collapse SOUL.md after this many accumulated notes
+    )
 
     # cognition (Major 51): when on, drive-resonant concrete anchors drive arousal/ignition
     # (off = scored-but-quiet — anchors computed but held out of the rhythm). Matured to
@@ -248,7 +302,9 @@ class LoopTuning:
             slow_model=slow.get("model"),
             slow_subconscious_model=slow.get("subconscious_model"),
             slow_temperature=slow.get("temperature", 0.6),
-            slow_max_tokens=slow.get("reflection_max_tokens", slow.get("max_tokens", 360)),
+            slow_max_tokens=slow.get(
+                "reflection_max_tokens", slow.get("max_tokens", 360)
+            ),
             slow_raw_reflection_max_tokens=slow.get("raw_reflection_max_tokens", 650),
             soul_collapse_at_notes=slow.get("collapse_at_notes", 8),
             rest_enabled=rest.get("enabled", True),
@@ -256,7 +312,9 @@ class LoopTuning:
             rest_sleep_hours=rest.get("sleep_hours", 8.0),
             rest_sync_seconds=rest.get("sync_seconds", 30.0),
             rest_confirmations_required=rest.get("confirmations_required", 2),
-            rest_confirmation_window_minutes=rest.get("confirmation_window_minutes", 60.0),
+            rest_confirmation_window_minutes=rest.get(
+                "confirmation_window_minutes", 60.0
+            ),
             rest_wake_grace_minutes=rest.get("wake_grace_minutes", 60.0),
             rest_chronotype=str(rest.get("chronotype", "day") or "day").strip().lower(),
             home_location=str(data.get("home_location") or "").strip(),
@@ -283,15 +341,15 @@ class LoopTuning:
 @dataclass
 class ResidentIdentity:
     name: str
-    actor_id: str      # durable federation-facing identity
-    soul: str          # full text of SOUL.md — goes directly into system prompt
+    actor_id: str  # durable federation-facing identity
+    soul: str  # full text of SOUL.md — goes directly into system prompt
     canonical_soul: str
     growth_soul: str
-    vibe: str          # short phrase from IDENTITY.md
+    vibe: str  # short phrase from IDENTITY.md
     # Parsed compatibility metadata. No production prompt/runtime consumer currently
     # reads this field; SOUL.md is the live cognitive identity surface.
     core: str
-    voice_seed: list   # seed utterances from IDENTITY.md — cold-start voice deck
+    voice_seed: list  # seed utterances from IDENTITY.md — cold-start voice deck
     tuning: LoopTuning
 
     @property
@@ -302,7 +360,8 @@ class ResidentIdentity:
     @property
     def soul_with_context(self) -> str:
         """The system prompt with NO world briefing — soul alone. Back-compat for callers that don't
-        supply a world; the pulse uses ``composed_system_prompt`` with the world-derived briefing."""
+        supply a world; the pulse uses ``composed_system_prompt`` with the world-derived briefing.
+        """
         return self.composed_system_prompt("")
 
     def composed_system_prompt(self, world_briefing: str = "") -> str:
@@ -332,7 +391,9 @@ class ResidentIdentity:
         )
         return f"{self.soul}\n\n{block}"
 
-    def soul_with_voice(self, voice_samples: list[str], world_briefing: str = "") -> str:
+    def soul_with_voice(
+        self, voice_samples: list[str], world_briefing: str = ""
+    ) -> str:
         """composed_system_prompt + live voice examples for chat-facing LLM calls."""
         base = self.composed_system_prompt(world_briefing)
         if not voice_samples:
@@ -404,11 +465,17 @@ class IdentityLoader:
 
         # Mutable growth belongs to the resident's hearth. Older city-hosted growth is
         # migrated into this file once by Resident when needed.
-        growth_soul = growth_path.read_text(encoding="utf-8").strip() if growth_path.exists() else ""
+        growth_soul = (
+            growth_path.read_text(encoding="utf-8").strip()
+            if growth_path.exists()
+            else ""
+        )
         return canonical_soul, growth_soul
 
     @staticmethod
-    def write_composed_soul(resident_dir: Path, canonical_soul: str, growth_soul: str = "") -> None:
+    def write_composed_soul(
+        resident_dir: Path, canonical_soul: str, growth_soul: str = ""
+    ) -> None:
         soul_path = resident_dir / "identity" / "SOUL.md"
         soul_path.write_text(
             IdentityLoader.composed_soul(canonical_soul, growth_soul).strip() + "\n",
@@ -433,7 +500,9 @@ class IdentityLoader:
         identity_dir = resident_dir / "identity"
         actor_id = IdentityLoader.ensure_actor_id(resident_dir)
 
-        canonical_soul, growth_soul = IdentityLoader.load_canonical_and_growth(resident_dir)
+        canonical_soul, growth_soul = IdentityLoader.load_canonical_and_growth(
+            resident_dir
+        )
         soul = IdentityLoader.composed_soul(canonical_soul, growth_soul)
 
         identity_path = identity_dir / "IDENTITY.md"
@@ -450,11 +519,17 @@ class IdentityLoader:
                 if line.startswith("- **Voice:**"):
                     raw = line.split("**Voice:**", 1)[-1].strip()
                     # Comma-separated utterances, strip surrounding quotes
-                    voice_seed = [u.strip().strip("\"'") for u in raw.split(",") if u.strip()]
+                    voice_seed = [
+                        u.strip().strip("\"'") for u in raw.split(",") if u.strip()
+                    ]
                 # Metadata block: heading or "- **Key:**" lines at the top
-                if in_metadata and (line.startswith("#") or line.startswith("- **") or not line.strip()):
+                if in_metadata and (
+                    line.startswith("#") or line.startswith("- **") or not line.strip()
+                ):
                     if prose_lines:
-                        in_metadata = False  # blank line after prose means we've left metadata
+                        in_metadata = (
+                            False  # blank line after prose means we've left metadata
+                        )
                     continue
                 in_metadata = False
                 prose_lines.append(line)
@@ -462,7 +537,9 @@ class IdentityLoader:
 
         tuning_path = identity_dir / "tuning.json"
         if tuning_path.exists():
-            tuning = LoopTuning.from_dict(json.loads(tuning_path.read_text(encoding="utf-8")))
+            tuning = LoopTuning.from_dict(
+                json.loads(tuning_path.read_text(encoding="utf-8"))
+            )
         else:
             tuning = LoopTuning()
 

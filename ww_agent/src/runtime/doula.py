@@ -31,7 +31,9 @@ _FOUNDING_COHORT_MIN_POPULATION = 6
 # Soft cap on gentle expansion — how full a neighborhood the doula will grow to
 # before it stops adding residents. Tunable via env so a steward can ask for a
 # busier or quieter world without a code change.
-_GENTLE_EXPANSION_MAX_POPULATION = int(os.environ.get("WW_DOULA_TARGET_POPULATION", "12") or "12")
+_GENTLE_EXPANSION_MAX_POPULATION = int(
+    os.environ.get("WW_DOULA_TARGET_POPULATION", "12") or "12"
+)
 _FOUNDING_COHORT_RADIUS_KM = 0.75
 _SEED_PROVENANCE_SCHEMA_VERSION = 1
 
@@ -369,7 +371,9 @@ class _SpawnLedger:
         payload = {
             "window_hours": 24,
             "max_spawns": self._max,
-            "spawned_at": [ts.astimezone(timezone.utc).isoformat() for ts in sorted(timestamps)],
+            "spawned_at": [
+                ts.astimezone(timezone.utc).isoformat() for ts in sorted(timestamps)
+            ],
         }
         self._path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
@@ -440,7 +444,9 @@ class DoulaLoop:
         self._spawn_prob = spawn_probability
         self._soul_model = soul_model
         self._creation_mode = creation_mode
-        self._ledger = _SpawnLedger(residents_dir / ".doula_spawns.json", max_spawns_per_day)
+        self._ledger = _SpawnLedger(
+            residents_dir / ".doula_spawns.json", max_spawns_per_day
+        )
         # A doula process is the unit that shares one set of spawn settings.  Keep
         # that configuration in an administrative ledger rather than copying it
         # into every resident's private history or trying to reconstruct it later
@@ -450,10 +456,14 @@ class DoulaLoop:
         self._cohort_config_recorded = False
         self._decision_log_path = residents_dir / ".doula_decisions.json"
         self._running = False
-        self._seen_candidates: set[str] = set()  # don't re-evaluate same name in same day
+        self._seen_candidates: set[str] = (
+            set()
+        )  # don't re-evaluate same name in same day
         self._place_names_cache: set[str] | None = None  # refreshed each scan cycle
         self._neighborhood_vitality: dict[str, dict] = {}
-        self._recent_surnames: list[str] = []  # avoid surname clustering across de-novo spawns
+        self._recent_surnames: list[str] = (
+            []
+        )  # avoid surname clustering across de-novo spawns
 
     async def run(self) -> None:
         self._running = True
@@ -510,7 +520,9 @@ class DoulaLoop:
         # No candidates + no tethered agents = the world hasn't come alive yet.
         # Seed a founding inhabitant so the infection of agency has a patient zero.
         if not candidates and not self._tethered:
-            logger.info("[doula] cold world detected — bootstrapping founding inhabitant")
+            logger.info(
+                "[doula] cold world detected — bootstrapping founding inhabitant"
+            )
             await self._bootstrap_cold_start()
             return
 
@@ -529,12 +541,18 @@ class DoulaLoop:
             # Human players require explicit consent (identity/identity.md in their
             # resident dir) before the doula is allowed to touch their entity.
             matching_human = next(
-                (n for n in human_player_names if _name_similarity(n, name) >= _TETHER_THRESHOLD),
+                (
+                    n
+                    for n in human_player_names
+                    if _name_similarity(n, name) >= _TETHER_THRESHOLD
+                ),
                 None,
             )
             if matching_human is not None:
                 name_slug = slugify_resident_name(name)
-                consent_path = self._residents_dir / name_slug / "identity" / "identity.md"
+                consent_path = (
+                    self._residents_dir / name_slug / "identity" / "identity.md"
+                )
                 if not consent_path.exists():
                     # Live human player, no consent — skip this cycle only.
                     # Do not seal: if the player departs, their name will drop
@@ -605,7 +623,10 @@ class DoulaLoop:
                     reason="already_active",
                     weight=weight,
                     entity_class=entity_class.value,
-                    details={"detail": proximity.detail or "", "session_id": proximity.matched_session_id or ""},
+                    details={
+                        "detail": proximity.detail or "",
+                        "session_id": proximity.matched_session_id or "",
+                    },
                 )
                 continue
 
@@ -621,7 +642,10 @@ class DoulaLoop:
                         found_at,
                     )
                 if found_at is None:
-                    logger.info("[doula] %s: not near any tethered agent — skipping this cycle", name)
+                    logger.info(
+                        "[doula] %s: not near any tethered agent — skipping this cycle",
+                        name,
+                    )
                     self._record_decision(
                         name=name,
                         kind="skip",
@@ -631,7 +655,9 @@ class DoulaLoop:
                     )
                     continue
 
-            entry_location = self._rebalance_entry_location(found_at, entity_class=entity_class)
+            entry_location = self._rebalance_entry_location(
+                found_at, entity_class=entity_class
+            )
             readiness = self._score_spawn_readiness(
                 weight=weight,
                 entity_class=entity_class,
@@ -681,7 +707,9 @@ class DoulaLoop:
                     details={
                         "score": round(readiness.score, 3),
                         "threshold": round(readiness.threshold, 3),
-                        "tie_break_probability": round(readiness.tie_break_probability, 3),
+                        "tie_break_probability": round(
+                            readiness.tie_break_probability, 3
+                        ),
                         "components": readiness.components,
                         "proximity_location": found_at or "",
                         "entry_location": entry_location or "",
@@ -727,9 +755,20 @@ class DoulaLoop:
             )
 
             if entity_class == EntityClass.NOVEL:
-                await self._initiate_poll(name=name, context_lines=context_lines, found_at=entry_location, entity_class=entity_class, weight=weight)
+                await self._initiate_poll(
+                    name=name,
+                    context_lines=context_lines,
+                    found_at=entry_location,
+                    entity_class=entity_class,
+                    weight=weight,
+                )
             else:
-                await self._seed_and_spawn(name, context_lines, entry_location=entry_location, entity_class=entity_class)
+                await self._seed_and_spawn(
+                    name,
+                    context_lines,
+                    entry_location=entry_location,
+                    entity_class=entity_class,
+                )
 
             # One spawn or poll per scan cycle — let the world absorb it
             return
@@ -742,12 +781,23 @@ class DoulaLoop:
     # Polls — ask agents to vote on classification
     # ------------------------------------------------------------------
 
-    async def _initiate_poll(self, name: str, context_lines: list[str], found_at: str | None, entity_class: EntityClass, weight: float) -> None:
+    async def _initiate_poll(
+        self,
+        name: str,
+        context_lines: list[str],
+        found_at: str | None,
+        entity_class: EntityClass,
+        weight: float,
+    ) -> None:
         voters = [s for s in self._sessions if s != "system_doula"]
 
         if not voters:
-            logger.info("[doula] No voters available for poll on %s — seeding directly", name)
-            await self._seed_and_spawn(name, context_lines, entry_location=found_at, entity_class=entity_class)
+            logger.info(
+                "[doula] No voters available for poll on %s — seeding directly", name
+            )
+            await self._seed_and_spawn(
+                name, context_lines, entry_location=found_at, entity_class=entity_class
+            )
             return
 
         # Create the poll in the backend first so we have a poll_id to include in letters.
@@ -762,23 +812,47 @@ class DoulaLoop:
                 expires_in_seconds=7200,
             )
         except Exception as e:
-            logger.warning("[doula] failed to create backend poll for %s: %s — seeding directly", name, e)
-            await self._seed_and_spawn(name, context_lines, entry_location=found_at, entity_class=entity_class)
+            logger.warning(
+                "[doula] failed to create backend poll for %s: %s — seeding directly",
+                name,
+                e,
+            )
+            await self._seed_and_spawn(
+                name, context_lines, entry_location=found_at, entity_class=entity_class
+            )
             return
 
         # Notify each agent via letter. The Poll-ID header lets the mail loop
         # post the vote directly to the API rather than replying by letter.
         evidence = "\n".join(f"- {s}" for s in context_lines[:5])
-        body = f"Poll-ID: {poll_id}\n\n" f"The Doula is asking for your input on a new presence named '{name}'.\n" f"Decide whether {name} is an active character/person, " f"or a static building, business, or landmark.\n\n" f"Evidence we have:\n{evidence}"
+        body = (
+            f"Poll-ID: {poll_id}\n\n"
+            f"The Doula is asking for your input on a new presence named '{name}'.\n"
+            f"Decide whether {name} is an active character/person, "
+            f"or a static building, business, or landmark.\n\n"
+            f"Evidence we have:\n{evidence}"
+        )
 
         for voter in voters:
             try:
-                agent_name = voter.replace("agent-", "") if voter.startswith("agent-") else voter
-                await self._ww.send_letter(from_name="The Doula", to_agent=agent_name, body=body, session_id="system_doula")
+                agent_name = (
+                    voter.replace("agent-", "") if voter.startswith("agent-") else voter
+                )
+                await self._ww.send_letter(
+                    from_name="The Doula",
+                    to_agent=agent_name,
+                    body=body,
+                    session_id="system_doula",
+                )
             except Exception as e:
                 logger.warning("[doula] Failed to send poll letter to %s: %s", voter, e)
 
-        logger.info("[doula] Initiated poll %s for '%s' with %d voters", poll_id, name, len(voters))
+        logger.info(
+            "[doula] Initiated poll %s for '%s' with %d voters",
+            poll_id,
+            name,
+            len(voters),
+        )
 
     async def _check_polls(self) -> None:
         """Check open backend polls; resolve any that are expired or fully voted."""
@@ -859,7 +933,9 @@ class DoulaLoop:
         """Return True if name fuzzy-matches a canonical city-pack place."""
         if not self._place_names_cache:
             return False
-        return any(_name_similarity(name, place) >= 0.88 for place in self._place_names_cache)
+        return any(
+            _name_similarity(name, place) >= 0.88 for place in self._place_names_cache
+        )
 
     async def _is_player_actor(self, candidate_name: str) -> bool:
         """Return True if this name appears as an event actor (event.who) in any
@@ -901,7 +977,9 @@ class DoulaLoop:
         """
         metadata = {"source": "doula", "context": context_lines[:3]}
         try:
-            await self._ww.ensure_world_node(name, node_type="location", metadata=metadata)
+            await self._ww.ensure_world_node(
+                name, node_type="location", metadata=metadata
+            )
             logger.info("[doula] injected WorldNode: %s (location)", name)
         except Exception as e:
             logger.warning("[doula] failed to inject WorldNode for %s: %s", name, e)
@@ -936,7 +1014,9 @@ class DoulaLoop:
         existing: list[dict] = []
         if self._decision_log_path.exists():
             try:
-                payload = json.loads(self._decision_log_path.read_text(encoding="utf-8"))
+                payload = json.loads(
+                    self._decision_log_path.read_text(encoding="utf-8")
+                )
                 if isinstance(payload, list):
                     existing = [item for item in payload if isinstance(item, dict)]
             except Exception:
@@ -999,7 +1079,9 @@ class DoulaLoop:
             if not isinstance(payload, dict):
                 continue
             try:
-                vitality_count += int(payload.get("total_agents") or payload.get("current_agents") or 0)
+                vitality_count += int(
+                    payload.get("total_agents") or payload.get("current_agents") or 0
+                )
             except (TypeError, ValueError):
                 continue
         return max(dir_count, vitality_count, len(self._tethered))
@@ -1014,13 +1096,17 @@ class DoulaLoop:
             if not name or name.casefold() in cooling_locations:
                 continue
             try:
-                total_agents = int(payload.get("total_agents") or payload.get("current_agents") or 0)
+                total_agents = int(
+                    payload.get("total_agents") or payload.get("current_agents") or 0
+                )
             except (TypeError, ValueError):
                 total_agents = 0
             if total_agents >= 1:
                 continue
             try:
-                total_present = int(payload.get("total_present") or payload.get("current_present") or 0)
+                total_present = int(
+                    payload.get("total_present") or payload.get("current_present") or 0
+                )
             except (TypeError, ValueError):
                 total_present = 0
             try:
@@ -1050,11 +1136,17 @@ class DoulaLoop:
             except (TypeError, ValueError):
                 vitality_score = 0.0
             try:
-                current_present = int(vitality.get("total_present") or vitality.get("current_present") or 0)
+                current_present = int(
+                    vitality.get("total_present")
+                    or vitality.get("current_present")
+                    or 0
+                )
             except (TypeError, ValueError):
                 current_present = 0
             try:
-                current_agents = int(vitality.get("total_agents") or vitality.get("current_agents") or 0)
+                current_agents = int(
+                    vitality.get("total_agents") or vitality.get("current_agents") or 0
+                )
             except (TypeError, ValueError):
                 current_agents = 0
             needs_residents = bool(vitality.get("needs_residents"))
@@ -1065,7 +1157,11 @@ class DoulaLoop:
             "shadow_bonus": 0.2 if entity_class == EntityClass.PLAYER_SHADOW else 0.0,
             "session_bootstrap_bonus": 0.15 if not self._sessions else 0.0,
             "needs_residents_bonus": 0.35 if needs_residents else 0.0,
-            "low_vitality_bonus": 0.2 if vitality and vitality_score < 1.2 and current_present <= 1 else 0.0,
+            "low_vitality_bonus": (
+                0.2
+                if vitality and vitality_score < 1.2 and current_present <= 1
+                else 0.0
+            ),
             "agent_saturation_penalty": -0.12 if current_agents >= 2 else 0.0,
         }
         score = sum(components.values())
@@ -1102,7 +1198,9 @@ class DoulaLoop:
             if location_name and location_name.casefold() in cooling_locations:
                 continue
             try:
-                current_agents = int(payload.get("total_agents") or payload.get("current_agents") or 0)
+                current_agents = int(
+                    payload.get("total_agents") or payload.get("current_agents") or 0
+                )
             except (TypeError, ValueError):
                 current_agents = 0
             if current_agents >= 1:
@@ -1111,7 +1209,12 @@ class DoulaLoop:
         if not candidates:
             return False
 
-        candidates.sort(key=lambda item: (float(item.get("vitality_score") or 0.0), str(item.get("name") or "")))
+        candidates.sort(
+            key=lambda item: (
+                float(item.get("vitality_score") or 0.0),
+                str(item.get("name") or ""),
+            )
+        )
         target = candidates[0]
         location = str(target.get("name") or "").strip()
         if not location:
@@ -1124,8 +1227,12 @@ class DoulaLoop:
             location=location,
             details={
                 "vitality_score": round(float(target.get("vitality_score") or 0.0), 3),
-                "current_present": int(target.get("total_present") or target.get("current_present") or 0),
-                "current_agents": int(target.get("total_agents") or target.get("current_agents") or 0),
+                "current_present": int(
+                    target.get("total_present") or target.get("current_present") or 0
+                ),
+                "current_agents": int(
+                    target.get("total_agents") or target.get("current_agents") or 0
+                ),
             },
         )
         context_lines = [
@@ -1208,7 +1315,9 @@ class DoulaLoop:
                 return payload
         return None
 
-    def _rebalance_entry_location(self, location: str | None, *, entity_class: EntityClass) -> str | None:
+    def _rebalance_entry_location(
+        self, location: str | None, *, entity_class: EntityClass
+    ) -> str | None:
         if not location or entity_class != EntityClass.NOVEL:
             return location
         vitality = self._vitality_for_location(location)
@@ -1274,7 +1383,11 @@ class DoulaLoop:
         Falls back to a generic neighborhood if vitality is unavailable.
         """
         if self._neighborhood_vitality:
-            options = [str(payload.get("name") or "").strip() for payload in self._neighborhood_vitality.values() if isinstance(payload, dict) and str(payload.get("name") or "").strip()]
+            options = [
+                str(payload.get("name") or "").strip()
+                for payload in self._neighborhood_vitality.values()
+                if isinstance(payload, dict) and str(payload.get("name") or "").strip()
+            ]
             if options:
                 return random.choice(options)
         if self._place_names_cache:
@@ -1305,7 +1418,11 @@ class DoulaLoop:
         """Rotate the seeding model across an approved pool (WW_DOULA_MODELS, comma
         separated) so no single model's tics stamp the whole population. Falls back
         to the configured single model."""
-        pool = [m.strip() for m in os.environ.get("WW_DOULA_MODELS", "").split(",") if m.strip()]
+        pool = [
+            m.strip()
+            for m in os.environ.get("WW_DOULA_MODELS", "").split(",")
+            if m.strip()
+        ]
         return random.choice(pool) if pool else self._soul_model
 
     @staticmethod
@@ -1316,7 +1433,12 @@ class DoulaLoop:
     @staticmethod
     def _truthy_env(name: str) -> bool:
         """Match the standard shard-wide boolean flags used by residents."""
-        return str(os.environ.get(name) or "").strip().lower() in {"1", "true", "yes", "on"}
+        return str(os.environ.get(name) or "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
 
     def _cohort_config_payload(self) -> dict[str, object]:
         """Describe the settings shared by this doula process.
@@ -1325,15 +1447,23 @@ class DoulaLoop:
         observe.  It does not pretend that every old research control still
         exists in the current runtime.
         """
-        model_pool = [value.strip() for value in os.environ.get("WW_DOULA_MODELS", "").split(",") if value.strip()]
+        model_pool = [
+            value.strip()
+            for value in os.environ.get("WW_DOULA_MODELS", "").split(",")
+            if value.strip()
+        ]
         return {
             "schema_version": _SEED_PROVENANCE_SCHEMA_VERSION,
             "cohort_id": self._cohort_id,
             "creation_mode": self._creation_mode,
             "venture": {
                 "action_tendency_enabled": self._nonzero_env("WW_ACTION_TENDENCY"),
-                "targeting_mode": (os.environ.get("WW_VENTURE_TARGET_MODE") or "argmax").strip(),
-                "targeting_temperature": (os.environ.get("WW_VENTURE_TARGET_TEMP") or "0.25").strip(),
+                "targeting_mode": (
+                    os.environ.get("WW_VENTURE_TARGET_MODE") or "argmax"
+                ).strip(),
+                "targeting_temperature": (
+                    os.environ.get("WW_VENTURE_TARGET_TEMP") or "0.25"
+                ).strip(),
             },
             "targeting": {
                 "candidate_selection": "narrative_proximity_and_weight",
@@ -1342,7 +1472,9 @@ class DoulaLoop:
             "model": {
                 "configured_seed_model": self._soul_model,
                 "seed_model_pool": model_pool,
-                "selection": "random_pool" if model_pool else "configured_or_inference_default",
+                "selection": (
+                    "random_pool" if model_pool else "configured_or_inference_default"
+                ),
             },
             "doula_mode": {
                 "seed_paths": ["narrative_evidence", "dealt_hand"],
@@ -1388,12 +1520,19 @@ class DoulaLoop:
         entry_location = home_location
         nearby_landmark: str | None = None
         try:
-            landmarks = await self._ww.get_nearby_landmarks(home_location, radius_km=_FOUNDING_COHORT_RADIUS_KM)
-            nearby_landmark = next((name for name in landmarks if name and name.strip()), None)
+            landmarks = await self._ww.get_nearby_landmarks(
+                home_location, radius_km=_FOUNDING_COHORT_RADIUS_KM
+            )
+            nearby_landmark = next(
+                (name for name in landmarks if name and name.strip()), None
+            )
         except Exception:
             nearby_landmark = None
         if nearby_landmark:
-            context_lines = [*context_lines, f"They think of home as {home_location}, near {nearby_landmark}."]
+            context_lines = [
+                *context_lines,
+                f"They think of home as {home_location}, near {nearby_landmark}.",
+            ]
 
         # Sample an explicit demographic brief so the founding cohort spreads
         # instead of collapsing into one surname and one trade. (No grounding /
@@ -1409,7 +1548,12 @@ class DoulaLoop:
 
         try:
             name_raw = await self._llm.complete(
-                system_prompt=("You are naming a resident of a real, working neighborhood. " f"Give one plausible full name (first and last) in the {tradition} naming tradition. " f"Do NOT reuse any of these recently-used surnames: {avoid}. " "Reply with the name only — no explanation, punctuation, or quotes."),
+                system_prompt=(
+                    "You are naming a resident of a real, working neighborhood. "
+                    f"Give one plausible full name (first and last) in the {tradition} naming tradition. "
+                    f"Do NOT reuse any of these recently-used surnames: {avoid}. "
+                    "Reply with the name only — no explanation, punctuation, or quotes."
+                ),
                 user_prompt=f"They live and work around {home_location.replace('_', ' ')}.",
                 model=model,
                 temperature=0.95,
@@ -1421,12 +1565,19 @@ class DoulaLoop:
 
         name = name_raw.strip().strip("\"'").strip()
         if not self._looks_like_name(name):
-            logger.warning("[doula] not a name (LLM non-name output) for %s: %r — skipping", location, name)
+            logger.warning(
+                "[doula] not a name (LLM non-name output) for %s: %r — skipping",
+                location,
+                name,
+            )
             return False
         # The real failure the old place-word blocklist was groping at: the model echoing the
         # place instead of naming a person. Catch THAT precisely (exact location echo), so a
         # place-word *surname* (Park, Brooks, Banks, Forest) is no longer wrongly bounced.
-        if name.lower() in {str(location or "").strip().lower(), str(home_location or "").replace("_", " ").strip().lower()}:
+        if name.lower() in {
+            str(location or "").strip().lower(),
+            str(home_location or "").replace("_", " ").strip().lower(),
+        }:
             logger.warning("[doula] name echoes the location %r — skipping", location)
             return False
         parts = name.split()
@@ -1452,7 +1603,16 @@ class DoulaLoop:
                 f"- current livelihood domain: {dealt_hand_fields['livelihood_domain']}",
             )
         )
-        logger.info("[doula] dealing %s (%s · %s · %s · %s) home=%s near=%s", name, tradition, age, temperament, disposition.split(" —")[0], home_location, nearby_landmark or "")
+        logger.info(
+            "[doula] dealing %s (%s · %s · %s · %s) home=%s near=%s",
+            name,
+            tradition,
+            age,
+            temperament,
+            disposition.split(" —")[0],
+            home_location,
+            nearby_landmark or "",
+        )
         resident_dir = await self._seed_and_spawn(
             name,
             context_lines,
@@ -1535,7 +1695,11 @@ class DoulaLoop:
 
         # Filter: require at least minimal narrative weight (skip single low-confidence mentions)
         MIN_WEIGHT = 0.5
-        candidates = [(data["name"], data["weight"], data["summaries"]) for data in graph_by_name.values() if data["weight"] >= MIN_WEIGHT]
+        candidates = [
+            (data["name"], data["weight"], data["summaries"])
+            for data in graph_by_name.values()
+            if data["weight"] >= MIN_WEIGHT
+        ]
 
         # Sort: highest narrative weight first
         candidates.sort(key=lambda x: x[1], reverse=True)
@@ -1755,7 +1919,11 @@ class DoulaLoop:
                 # do NOT spawn them — they're a live player or already-running agent.
                 for person in scene.present:
                     role_lower = person.role.lower() if person.role else ""
-                    if _name_similarity(person.name, candidate_name) >= _TETHER_THRESHOLD or _name_similarity(role_lower, name_lower) >= _TETHER_THRESHOLD:
+                    if (
+                        _name_similarity(person.name, candidate_name)
+                        >= _TETHER_THRESHOLD
+                        or _name_similarity(role_lower, name_lower) >= _TETHER_THRESHOLD
+                    ):
                         logger.debug(
                             "[doula] %s already has an active session (%s), skipping",
                             candidate_name,
@@ -1782,8 +1950,15 @@ class DoulaLoop:
                             detail="event_actor",
                         )
                 for event in scene.recent_events_here:
-                    if name_lower in event.summary.lower() or name_lower in event.who.lower():
-                        return ProximityCheck(status="near", location=scene.location or None, matched_session_id=session_id)
+                    if (
+                        name_lower in event.summary.lower()
+                        or name_lower in event.who.lower()
+                    ):
+                        return ProximityCheck(
+                            status="near",
+                            location=scene.location or None,
+                            matched_session_id=session_id,
+                        )
             except Exception:
                 continue
 
@@ -1812,7 +1987,11 @@ class DoulaLoop:
         initialize_manifest: bool = False,
     ) -> Path | None:
         seed_model = model or self._soul_model
-        effective_hand_only = bool(dealt_hand) and (self._nonzero_env("WW_DOULA_HAND_ONLY") if hand_only_context is None else hand_only_context)
+        effective_hand_only = bool(dealt_hand) and (
+            self._nonzero_env("WW_DOULA_HAND_ONLY")
+            if hand_only_context is None
+            else hand_only_context
+        )
         # Evidence-based births may use what the world already knows about the
         # named person. A hand-only founding birth deliberately does not query
         # city history at all; otherwise old preoccupations still leak into the
@@ -1831,7 +2010,9 @@ class DoulaLoop:
         if entity_class == EntityClass.PLAYER_SHADOW:
             contract_constraints = self._read_contract_constraints(name)
 
-        all_lines = list(dict.fromkeys(contract_constraints + context_lines + extra_summaries))
+        all_lines = list(
+            dict.fromkeys(contract_constraints + context_lines + extra_summaries)
+        )
         context_prose = "\n".join(f"- {s}" for s in all_lines if s)
 
         # Dealt-hand path (de-novo founding): the soul GROWS from a randomized hand of unchosen givens,
@@ -1861,7 +2042,10 @@ class DoulaLoop:
             user_prompt = f"Character: {name}\n\nWhat the world has recorded about them:\n{context_prose}"
             # A sampled demographic brief (de-novo spawns) — leans, not literal facts.
             if shape_hint:
-                user_prompt += "\n\nShape this person — lean toward these, do not state them literally, make them specific:\n" + shape_hint
+                user_prompt += (
+                    "\n\nShape this person — lean toward these, do not state them literally, make them specific:\n"
+                    + shape_hint
+                )
 
         try:
             soul_text = await self._llm.complete(
@@ -1882,14 +2066,20 @@ class DoulaLoop:
         try:
             identity_prose = await self._llm.complete(
                 system_prompt=_IDENTITY_PROSE_SYSTEM,
-                user_prompt=(f"Here is who this person turned out to be:\n{soul_text}" if dealt_hand else user_prompt),
+                user_prompt=(
+                    f"Here is who this person turned out to be:\n{soul_text}"
+                    if dealt_hand
+                    else user_prompt
+                ),
                 model=seed_model,
                 temperature=0.5,
                 max_tokens=150,
             )
             identity_prose = identity_prose.strip()
         except Exception as e:
-            logger.warning("[doula] identity prose generation failed for %s: %s", name, e)
+            logger.warning(
+                "[doula] identity prose generation failed for %s: %s", name, e
+            )
 
         # Scaffold the resident directory
         resident_dir = self._residents_dir / slugify_resident_name(name)
@@ -1902,7 +2092,9 @@ class DoulaLoop:
         actor_id = str(uuid.uuid4())
         (identity_dir / "resident_id.txt").write_text(f"{actor_id}\n", encoding="utf-8")
         canonical_soul = soul_text.strip()
-        (identity_dir / "SOUL.canonical.md").write_text(canonical_soul + "\n", encoding="utf-8")
+        (identity_dir / "SOUL.canonical.md").write_text(
+            canonical_soul + "\n", encoding="utf-8"
+        )
         (identity_dir / "SOUL.md").write_text(canonical_soul + "\n", encoding="utf-8")
 
         ts = datetime.now(timezone.utc).isoformat()
@@ -1913,7 +2105,13 @@ class DoulaLoop:
             entry_location=home_location or entry_location,
             entity_class=entity_class,
         )
-        identity_content = f"# {name}\n\n" f"- **Spawned-By:** doula\n" f"- **Spawned-At:** {ts}\n" f"- **origin:** {origin}\n" f"- **chronotype:** {chronotype}\n"
+        identity_content = (
+            f"# {name}\n\n"
+            f"- **Spawned-By:** doula\n"
+            f"- **Spawned-At:** {ts}\n"
+            f"- **origin:** {origin}\n"
+            f"- **chronotype:** {chronotype}\n"
+        )
         if home_location:
             identity_content += f"- **home_location:** {home_location}\n"
         if first_landmark_target:
@@ -1934,10 +2132,14 @@ class DoulaLoop:
             default_tuning["home_location"] = home_location or entry_location
         if first_landmark_target:
             default_tuning["first_landmark_target"] = first_landmark_target
-        (identity_dir / "tuning.json").write_text(json.dumps(default_tuning, indent=4, ensure_ascii=False), encoding="utf-8")
+        (identity_dir / "tuning.json").write_text(
+            json.dumps(default_tuning, indent=4, ensure_ascii=False), encoding="utf-8"
+        )
 
         if entry_location:
-            (identity_dir / "entry_location.txt").write_text(entry_location, encoding="utf-8")
+            (identity_dir / "entry_location.txt").write_text(
+                entry_location, encoding="utf-8"
+            )
             logger.info("[doula] %s will enter at: %s", name, entry_location)
 
         # Record exactly how this resident entered the world before the main

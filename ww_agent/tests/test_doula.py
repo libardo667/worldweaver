@@ -44,9 +44,21 @@ def test_find_untethered_names_filters_known_places(tmp_path, monkeypatch):
 
     async def fake_graph_facts(_query: str):
         return [
-            WorldFact(summary="Western Addition came up again.", subject="Western Addition", confidence=1.0),
-            WorldFact(summary="Marco was spotted near the park.", subject="Marco", confidence=0.7),
-            WorldFact(summary="Darnell spoke with someone nearby.", subject="Darnell", confidence=0.9),
+            WorldFact(
+                summary="Western Addition came up again.",
+                subject="Western Addition",
+                confidence=1.0,
+            ),
+            WorldFact(
+                summary="Marco was spotted near the park.",
+                subject="Marco",
+                confidence=0.7,
+            ),
+            WorldFact(
+                summary="Darnell spoke with someone nearby.",
+                subject="Darnell",
+                confidence=0.9,
+            ),
         ]
 
     async def fake_world_facts(_query: str):
@@ -63,8 +75,14 @@ def test_find_untethered_names_filters_known_places(tmp_path, monkeypatch):
     assert [name for name, _, _ in candidates] == ["Marco"]
 
     decisions = json.loads((doula._decision_log_path).read_text(encoding="utf-8"))
-    assert any(item["name"] == "Western Addition" and item["reason"] == "static_place" for item in decisions)
-    assert any(item["name"] == "Darnell" and item["reason"] == "already_tethered" for item in decisions)
+    assert any(
+        item["name"] == "Western Addition" and item["reason"] == "static_place"
+        for item in decisions
+    )
+    assert any(
+        item["name"] == "Darnell" and item["reason"] == "already_tethered"
+        for item in decisions
+    )
 
 
 def test_record_decision_persists_capped_history(tmp_path):
@@ -171,7 +189,9 @@ def test_vitality_bootstrap_seeds_when_no_candidates_fit(tmp_path, monkeypatch):
     assert seeded[0][0] == "Inner Richmond"
 
 
-def test_vitality_bootstrap_skips_neighborhoods_with_resting_residents(tmp_path, monkeypatch):
+def test_vitality_bootstrap_skips_neighborhoods_with_resting_residents(
+    tmp_path, monkeypatch
+):
     doula = _make_doula(tmp_path)
     doula._neighborhood_vitality = {
         "Inner Richmond": {
@@ -242,7 +262,9 @@ def test_vitality_bootstrap_respects_recent_spawn_cooldown(tmp_path, monkeypatch
     assert seeded[0][0] == "Outer Sunset"
 
 
-def test_founding_cohort_bootstrap_seeds_multiple_empty_neighborhoods(tmp_path, monkeypatch):
+def test_founding_cohort_bootstrap_seeds_multiple_empty_neighborhoods(
+    tmp_path, monkeypatch
+):
     doula = _make_doula(tmp_path)
     doula._tethered.clear()
     doula._neighborhood_vitality = {
@@ -297,7 +319,9 @@ def test_founding_cohort_bootstrap_seeds_multiple_empty_neighborhoods(tmp_path, 
     assert seeded == ["Outer Sunset", "Inner Richmond", "Chinatown"]
 
 
-def test_gentle_expansion_bootstrap_seeds_one_neighborhood_after_founding_floor(tmp_path, monkeypatch):
+def test_gentle_expansion_bootstrap_seeds_one_neighborhood_after_founding_floor(
+    tmp_path, monkeypatch
+):
     doula = _make_doula(tmp_path)
     doula._tethered.clear()
     doula._neighborhood_vitality = {
@@ -397,7 +421,9 @@ def test_seed_and_spawn_uses_neighborhood_as_home_location(tmp_path):
     identity_dir = residents_dir / "rosa_garza" / "identity"
     tuning = json.loads((identity_dir / "tuning.json").read_text(encoding="utf-8"))
     identity_md = (identity_dir / "IDENTITY.md").read_text(encoding="utf-8")
-    entry_location = (identity_dir / "entry_location.txt").read_text(encoding="utf-8").strip()
+    entry_location = (
+        (identity_dir / "entry_location.txt").read_text(encoding="utf-8").strip()
+    )
 
     assert tuning["home_location"] == "Outer Sunset"
     assert "wander" not in tuning
@@ -456,11 +482,18 @@ def test_seed_records_provenance_and_one_cohort_config(tmp_path, monkeypatch):
 
     rosa_dir = residents_dir / "rosa_garza"
     rosa_events = load_runtime_events(rosa_dir / "memory")
-    seeded = next(event for event in rosa_events if event["event_type"] == "resident_seeded")
+    seeded = next(
+        event for event in rosa_events if event["event_type"] == "resident_seeded"
+    )
     payload = seeded["payload"]
 
     assert payload["schema_version"] == 1
-    assert payload["actor_id"] == (rosa_dir / "identity" / "resident_id.txt").read_text(encoding="utf-8").strip()
+    assert (
+        payload["actor_id"]
+        == (rosa_dir / "identity" / "resident_id.txt")
+        .read_text(encoding="utf-8")
+        .strip()
+    )
     assert payload["resident_slug"] == "rosa_garza"
     assert payload["seed_model"] == "seed-a"
     assert payload["doula_mode"] == "dealt_hand"
@@ -470,13 +503,17 @@ def test_seed_records_provenance_and_one_cohort_config(tmp_path, monkeypatch):
     assert payload["first_landmark_target"] == "Clement Street"
 
     mina_events = load_runtime_events(residents_dir / "mina_park" / "memory")
-    mina_seeded = next(event for event in mina_events if event["event_type"] == "resident_seeded")
+    mina_seeded = next(
+        event for event in mina_events if event["event_type"] == "resident_seeded"
+    )
     assert mina_seeded["payload"]["doula_mode"] == "narrative_evidence"
     assert mina_seeded["payload"]["dealt_hand"] == {}
     assert mina_seeded["payload"]["cohort_id"] == payload["cohort_id"]
 
     cohort_events = load_runtime_events(residents_dir / ".doula_runtime" / "memory")
-    cohort_configs = [event for event in cohort_events if event["event_type"] == "cohort_config"]
+    cohort_configs = [
+        event for event in cohort_events if event["event_type"] == "cohort_config"
+    ]
     assert len(cohort_configs) == 1
     config = cohort_configs[0]["payload"]
     assert config["cohort_id"] == payload["cohort_id"]
@@ -490,7 +527,9 @@ def test_seed_records_provenance_and_one_cohort_config(tmp_path, monkeypatch):
     assert config["isolation"]["incubation_enabled"] is True
 
 
-def test_seed_founding_resident_bootstraps_at_home_location_and_keeps_landmark_hint(tmp_path):
+def test_seed_founding_resident_bootstraps_at_home_location_and_keeps_landmark_hint(
+    tmp_path,
+):
     residents_dir = tmp_path / "residents"
     residents_dir.mkdir(parents=True, exist_ok=True)
 
@@ -530,7 +569,9 @@ def test_seed_founding_resident_bootstraps_at_home_location_and_keeps_landmark_h
     identity_dir = residents_dir / "rosa_garza" / "identity"
     tuning = json.loads((identity_dir / "tuning.json").read_text(encoding="utf-8"))
     identity_md = (identity_dir / "IDENTITY.md").read_text(encoding="utf-8")
-    entry_location = (identity_dir / "entry_location.txt").read_text(encoding="utf-8").strip()
+    entry_location = (
+        (identity_dir / "entry_location.txt").read_text(encoding="utf-8").strip()
+    )
 
     assert tuning["home_location"] == "Outer Sunset"
     assert tuning["first_landmark_target"] == "Clement Street"
@@ -591,12 +632,21 @@ def test_fixed_creation_seeds_a_hand_only_dormant_hearth(tmp_path):
     assert queue.empty()
     assert tethered == set()
     assert not (residents_dir / ".doula_spawns.json").exists()
-    assert load_hearth_manifest(home).actor_id == (home / "identity" / "resident_id.txt").read_text(encoding="utf-8").strip()
-    seeded = next(event for event in load_runtime_events(home / "memory") if event["event_type"] == "resident_seeded")
+    assert (
+        load_hearth_manifest(home).actor_id
+        == (home / "identity" / "resident_id.txt").read_text(encoding="utf-8").strip()
+    )
+    seeded = next(
+        event
+        for event in load_runtime_events(home / "memory")
+        if event["event_type"] == "resident_seeded"
+    )
     assert seeded["payload"]["creation_mode"] == "fixed_dormant_batch"
     assert seeded["payload"]["dormant"] is True
     assert seeded["payload"]["hand_only_context"] is True
-    assert seeded["payload"]["dealt_hand"]["livelihood_domain"].startswith("teaching and tutoring")
+    assert seeded["payload"]["dealt_hand"]["livelihood_domain"].startswith(
+        "teaching and tutoring"
+    )
     assert stat.S_IMODE(home.stat().st_mode) == 0o700
     assert stat.S_IMODE((home / "identity").stat().st_mode) == 0o700
     assert stat.S_IMODE((home / "identity" / "SOUL.md").stat().st_mode) == 0o600
@@ -628,8 +678,16 @@ def test_doula_rebalances_novel_spawn_out_of_saturated_location(tmp_path):
         },
     }
 
-    assert doula._rebalance_entry_location("Parkside", entity_class=EntityClass.NOVEL) == "Outer Sunset"
-    assert doula._rebalance_entry_location("Parkside", entity_class=EntityClass.PLAYER_SHADOW) == "Parkside"
+    assert (
+        doula._rebalance_entry_location("Parkside", entity_class=EntityClass.NOVEL)
+        == "Outer Sunset"
+    )
+    assert (
+        doula._rebalance_entry_location(
+            "Parkside", entity_class=EntityClass.PLAYER_SHADOW
+        )
+        == "Parkside"
+    )
 
 
 def test_spawn_ledger_uses_rolling_24h_window(tmp_path):
@@ -656,7 +714,9 @@ def test_spawn_ledger_reads_legacy_date_bucket_format(tmp_path):
     )
     ledger = _SpawnLedger(path, max_per_day=5)
 
-    assert ledger.can_spawn(now=datetime(2026, 3, 18, 0, 16, tzinfo=timezone.utc)) is False
+    assert (
+        ledger.can_spawn(now=datetime(2026, 3, 18, 0, 16, tzinfo=timezone.utc)) is False
+    )
 
 
 def test_doula_infers_early_chronotype_from_bakery_context(tmp_path):
@@ -664,7 +724,9 @@ def test_doula_infers_early_chronotype_from_bakery_context(tmp_path):
 
     chronotype = doula._infer_chronotype(
         name="Sun Li",
-        context_lines=["Runs a tea stall and bakery cart in Chinatown before the morning rush."],
+        context_lines=[
+            "Runs a tea stall and bakery cart in Chinatown before the morning rush."
+        ],
         entry_location="Chinatown",
         entity_class=EntityClass.NOVEL,
     )
@@ -677,7 +739,9 @@ def test_doula_infers_night_chronotype_from_night_shift_context(tmp_path):
 
     chronotype = doula._infer_chronotype(
         name="Darnell",
-        context_lines=["He is the night clerk at a hotel and works the overnight shift."],
+        context_lines=[
+            "He is the night clerk at a hotel and works the overnight shift."
+        ],
         entry_location="Civic Center",
         entity_class=EntityClass.NOVEL,
     )

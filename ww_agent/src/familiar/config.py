@@ -66,7 +66,9 @@ class HearthConfig:
         configured_roots = raw.get("read_roots") or []
         if isinstance(configured_roots, (str, os.PathLike)):
             configured_roots = [configured_roots]
-        for configured in configured_roots if isinstance(configured_roots, list) else []:
+        for configured in (
+            configured_roots if isinstance(configured_roots, list) else []
+        ):
             expanded = Path(os.path.expanduser(str(configured)))
             root = expanded if expanded.is_absolute() else Path(resident_dir) / expanded
             resolved = root.resolve()

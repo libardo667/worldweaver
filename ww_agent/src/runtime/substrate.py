@@ -123,7 +123,9 @@ def _decayed_field(
             "decay": round(decay, 4),
         }
         if use_confidence:
-            entry["confidence"] = round(confidence if confidence is not None else 0.5, 4)
+            entry["confidence"] = round(
+                confidence if confidence is not None else 0.5, 4
+            )
         active.append(entry)
 
         scope_field = by_scope.setdefault(scope, {})
@@ -139,14 +141,22 @@ def _decayed_field(
     }
 
 
-def derive_afterimage(events: list[dict[str, Any]], *, now: Any = None) -> dict[str, Any]:
+def derive_afterimage(
+    events: list[dict[str, Any]], *, now: Any = None
+) -> dict[str, Any]:
     """Current afterimage field (the substrate's top-down prediction)."""
-    return _decayed_field(events, event_type="afterimage_cast", now=now, use_confidence=True)
+    return _decayed_field(
+        events, event_type="afterimage_cast", now=now, use_confidence=True
+    )
 
 
-def derive_drive_nudges(events: list[dict[str, Any]], *, now: Any = None) -> dict[str, Any]:
+def derive_drive_nudges(
+    events: list[dict[str, Any]], *, now: Any = None
+) -> dict[str, Any]:
     """Current transient drive pulls, decayed from ``drive_nudge_cast`` events."""
-    return _decayed_field(events, event_type="drive_nudge_cast", now=now, use_confidence=False)
+    return _decayed_field(
+        events, event_type="drive_nudge_cast", now=now, use_confidence=False
+    )
 
 
 def predict(memory_dir: Path, *, now: Any = None) -> dict[str, Any]:
@@ -155,7 +165,9 @@ def predict(memory_dir: Path, *, now: Any = None) -> dict[str, Any]:
 
 
 def active_drive_nudges(memory_dir: Path, *, now: Any = None) -> dict[str, Any]:
-    return derive_drive_nudges(load_runtime_reducer_events(memory_dir, now=now), now=now)
+    return derive_drive_nudges(
+        load_runtime_reducer_events(memory_dir, now=now), now=now
+    )
 
 
 def derive_baseline(events: list[dict[str, Any]], *, now: Any = None) -> dict[str, Any]:
@@ -181,7 +193,9 @@ def derive_baseline(events: list[dict[str, Any]], *, now: Any = None) -> dict[st
 
     by_scope: dict[str, dict[str, float]] = {}
     if latest_payload is not None and isinstance(latest_payload.get("by_scope"), dict):
-        age_seconds = max(0.0, (now_dt - latest_dt).total_seconds()) if latest_dt else 0.0
+        age_seconds = (
+            max(0.0, (now_dt - latest_dt).total_seconds()) if latest_dt else 0.0
+        )
         decay = _decay_factor(age_seconds, BASELINE_DECAY_HALF_LIFE)
         for scope, tags in latest_payload["by_scope"].items():
             if not isinstance(tags, dict):
@@ -230,7 +244,9 @@ def predict_combined(memory_dir: Path, *, now: Any = None) -> dict[str, Any]:
         slow = base.get(scope, {})
         merged: dict[str, float] = {}
         for tag in set(fast) | set(slow):
-            merged[tag] = round(max(float(fast.get(tag, 0.0)), float(slow.get(tag, 0.0))), 4)
+            merged[tag] = round(
+                max(float(fast.get(tag, 0.0)), float(slow.get(tag, 0.0))), 4
+            )
         if merged:
             by_scope[scope] = merged
     return {

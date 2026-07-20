@@ -12,19 +12,27 @@ from src.runtime.salience import derive_arousal, derive_grief, derive_vital
 from src.runtime.substrate import derive_afterimage, derive_baseline
 
 
-def test_cold_ledger_retains_first_event_beyond_old_window(tmp_path, monkeypatch) -> None:
+def test_cold_ledger_retains_first_event_beyond_old_window(
+    tmp_path, monkeypatch
+) -> None:
     monkeypatch.setattr(ledger, "rebuild_runtime_artifacts", lambda _memory_dir: None)
-    first = ledger.append_runtime_event(tmp_path, event_type="first", payload={"ordinal": 0})
+    first = ledger.append_runtime_event(
+        tmp_path, event_type="first", payload={"ordinal": 0}
+    )
 
     for ordinal in range(1, 10_051):
-        ledger.append_runtime_event(tmp_path, event_type="later", payload={"ordinal": ordinal})
+        ledger.append_runtime_event(
+            tmp_path, event_type="later", payload={"ordinal": ordinal}
+        )
 
     events = ledger.load_runtime_events(tmp_path)
     assert len(events) == 10_051
     assert events[0] == first
     assert events[-1]["payload"]["ordinal"] == 10_050
 
-    raw_lines = (tmp_path / "runtime_ledger.jsonl").read_text(encoding="utf-8").splitlines()
+    raw_lines = (
+        (tmp_path / "runtime_ledger.jsonl").read_text(encoding="utf-8").splitlines()
+    )
     assert len(raw_lines) == 10_051
     assert json.loads(raw_lines[0]) == first
 
@@ -41,7 +49,9 @@ def test_runtime_reducer_read_uses_bounded_tail(tmp_path) -> None:
         }
         for ordinal in range(100)
     ]
-    path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+    path.write_text(
+        "".join(json.dumps(event) + "\n" for event in events), encoding="utf-8"
+    )
 
     hot = ledger.load_runtime_reducer_events(tmp_path)
 
@@ -69,7 +79,9 @@ def test_projection_replay_reads_only_requested_recent_events(tmp_path) -> None:
         }
         for ordinal in range(12)
     ]
-    path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+    path.write_text(
+        "".join(json.dumps(event) + "\n" for event in events), encoding="utf-8"
+    )
 
     recent = ledger.load_runtime_projection_events(tmp_path, max_events=5)
 
@@ -80,19 +92,70 @@ def test_projection_replay_reads_only_requested_recent_events(tmp_path) -> None:
 def test_hot_reducer_window_matches_cold_history_on_frozen_ledger(tmp_path) -> None:
     now = datetime(2026, 7, 14, 12, tzinfo=timezone.utc)
 
-    def event(event_id: str, seconds_ago: float, event_type: str, payload: dict) -> dict:
+    def event(
+        event_id: str, seconds_ago: float, event_type: str, payload: dict
+    ) -> dict:
         ts = (now - timedelta(seconds=seconds_ago)).isoformat()
-        return {"event_id": event_id, "ts": ts, "event_type": event_type, "payload": payload}
+        return {
+            "event_id": event_id,
+            "ts": ts,
+            "event_type": event_type,
+            "payload": payload,
+        }
 
     events = [
         event("old", 3 * 86400, "unrelated", {}),
-        event("present", 600, "surprise_observed", {"observed_ts": (now - timedelta(seconds=600)).isoformat(), "magnitude": 0.2, "anchor_present": ["hearth"]}),
-        event("ignition", 400, "ignition_fired", {"fired_ts": (now - timedelta(seconds=400)).isoformat()}),
-        event("absence", 300, "surprise_observed", {"observed_ts": (now - timedelta(seconds=300)).isoformat(), "magnitude": 0.3, "grief_field": [{"tag": "hearth", "predicted": 0.8}]}),
-        event("baseline", 120, "baseline_updated", {"updated_ts": (now - timedelta(seconds=120)).isoformat(), "by_scope": {"self": {"curiosity": 0.7}}}),
-        event("afterimage", 60, "afterimage_cast", {"cast_ts": (now - timedelta(seconds=60)).isoformat(), "scope": "self", "confidence": 0.9, "half_life": 600, "features": {"social_pull": 0.6}}),
+        event(
+            "present",
+            600,
+            "surprise_observed",
+            {
+                "observed_ts": (now - timedelta(seconds=600)).isoformat(),
+                "magnitude": 0.2,
+                "anchor_present": ["hearth"],
+            },
+        ),
+        event(
+            "ignition",
+            400,
+            "ignition_fired",
+            {"fired_ts": (now - timedelta(seconds=400)).isoformat()},
+        ),
+        event(
+            "absence",
+            300,
+            "surprise_observed",
+            {
+                "observed_ts": (now - timedelta(seconds=300)).isoformat(),
+                "magnitude": 0.3,
+                "grief_field": [{"tag": "hearth", "predicted": 0.8}],
+            },
+        ),
+        event(
+            "baseline",
+            120,
+            "baseline_updated",
+            {
+                "updated_ts": (now - timedelta(seconds=120)).isoformat(),
+                "by_scope": {"self": {"curiosity": 0.7}},
+            },
+        ),
+        event(
+            "afterimage",
+            60,
+            "afterimage_cast",
+            {
+                "cast_ts": (now - timedelta(seconds=60)).isoformat(),
+                "scope": "self",
+                "confidence": 0.9,
+                "half_life": 600,
+                "features": {"social_pull": 0.6},
+            },
+        ),
     ]
-    (tmp_path / "runtime_ledger.jsonl").write_text("".join(json.dumps(item) + "\n" for item in events), encoding="utf-8")
+    (tmp_path / "runtime_ledger.jsonl").write_text(
+        "".join(json.dumps(item) + "\n" for item in events), encoding="utf-8"
+    )
     cold = ledger.load_runtime_events(tmp_path)
     hot = ledger.load_runtime_reducer_events(tmp_path, now=now)
 
@@ -104,7 +167,11 @@ def test_hot_reducer_window_matches_cold_history_on_frozen_ledger(tmp_path) -> N
 
 
 def test_rebuild_writes_versioned_current_checkpoint_atomically(tmp_path) -> None:
-    event = ledger.append_runtime_event(tmp_path, event_type="research_queued", payload={"query": "harbor light", "priority": "high"})
+    event = ledger.append_runtime_event(
+        tmp_path,
+        event_type="research_queued",
+        payload={"query": "harbor light", "priority": "high"},
+    )
 
     checkpoint = ledger.load_runtime_checkpoint(tmp_path)
 
@@ -121,7 +188,9 @@ def test_rebuild_writes_versioned_current_checkpoint_atomically(tmp_path) -> Non
     assert not list(tmp_path.glob(".*.tmp"))
 
 
-def test_checkpoint_requires_exact_cold_ledger_offset_and_known_versions(tmp_path) -> None:
+def test_checkpoint_requires_exact_cold_ledger_offset_and_known_versions(
+    tmp_path,
+) -> None:
     ledger.append_runtime_event(tmp_path, event_type="first", payload={})
     checkpoint_path = tmp_path / "runtime_checkpoint.json"
     checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
@@ -144,7 +213,9 @@ def test_checkpoint_requires_exact_cold_ledger_offset_and_known_versions(tmp_pat
     assert ledger.load_runtime_checkpoint(tmp_path, require_current=False) is None
 
 
-def test_append_recovers_a_corrupt_checkpoint_from_complete_history(tmp_path, monkeypatch) -> None:
+def test_append_recovers_a_corrupt_checkpoint_from_complete_history(
+    tmp_path, monkeypatch
+) -> None:
     fixed_now = "2026-07-17T12:00:00+00:00"
     monkeypatch.setattr(ledger, "_utc_now_iso", lambda: fixed_now)
     ledger.append_runtime_event(tmp_path, event_type="first", payload={})
@@ -169,7 +240,9 @@ def test_append_recovers_a_corrupt_checkpoint_from_complete_history(tmp_path, mo
     assert state["cognitive_projection"] == oracle.cognitive_projection
 
 
-def test_operational_queue_projections_are_bounded_without_truncating_cold_events() -> None:
+def test_operational_queue_projections_are_bounded_without_truncating_cold_events() -> (
+    None
+):
     events = [
         {
             "event_id": f"evt-{ordinal}",
@@ -193,10 +266,14 @@ def test_operational_queue_projections_are_bounded_without_truncating_cold_event
     assert reduced.packets[-1]["packet_id"] == "packet-249"
 
 
-def test_projection_neutral_append_advances_checkpoint_without_loading_cold_history(tmp_path, monkeypatch) -> None:
+def test_projection_neutral_append_advances_checkpoint_without_loading_cold_history(
+    tmp_path, monkeypatch
+) -> None:
     fixed_now = "2026-07-17T12:00:00+00:00"
     monkeypatch.setattr(ledger, "_utc_now_iso", lambda: fixed_now)
-    ledger.append_runtime_event(tmp_path, event_type="research_queued", payload={"query": "tidal archive"})
+    ledger.append_runtime_event(
+        tmp_path, event_type="research_queued", payload={"query": "tidal archive"}
+    )
     original_load = ledger._load_events
 
     def reject_cold_load(_memory_dir):
@@ -231,7 +308,9 @@ def test_projection_neutral_append_advances_checkpoint_without_loading_cold_hist
     assert state["cognitive_projection"] == oracle.cognitive_projection
 
 
-def test_simple_queue_updates_advance_checkpoint_without_loading_cold_history(tmp_path, monkeypatch) -> None:
+def test_simple_queue_updates_advance_checkpoint_without_loading_cold_history(
+    tmp_path, monkeypatch
+) -> None:
     fixed_now = "2026-07-17T12:00:00+00:00"
     monkeypatch.setattr(ledger, "_utc_now_iso", lambda: fixed_now)
     ledger.append_runtime_event(
@@ -269,7 +348,11 @@ def test_simple_queue_updates_advance_checkpoint_without_loading_cold_history(tm
     ledger.append_runtime_event(
         tmp_path,
         event_type="intent_status_changed",
-        payload={"intent_id": "intent-1", "status": "executed", "validation_state": "valid"},
+        payload={
+            "intent_id": "intent-1",
+            "status": "executed",
+            "validation_state": "valid",
+        },
     )
 
     checkpoint = ledger.load_runtime_checkpoint(tmp_path)
@@ -286,7 +369,9 @@ def test_simple_queue_updates_advance_checkpoint_without_loading_cold_history(tm
     assert state["cognitive_projection"] == oracle.cognitive_projection
 
 
-def test_complex_update_replays_bounded_history_without_loading_cold_history(tmp_path, monkeypatch) -> None:
+def test_complex_update_replays_bounded_history_without_loading_cold_history(
+    tmp_path, monkeypatch
+) -> None:
     fixed_now = "2026-07-17T12:00:00+00:00"
     monkeypatch.setattr(ledger, "_utc_now_iso", lambda: fixed_now)
     ledger.append_runtime_event(tmp_path, event_type="first", payload={})
@@ -314,7 +399,9 @@ def test_complex_update_replays_bounded_history_without_loading_cold_history(tmp
     assert state["cognitive_projection"] == oracle.cognitive_projection
 
 
-def test_complex_update_cost_stays_flat_at_one_hundred_thousand_events(tmp_path) -> None:
+def test_complex_update_cost_stays_flat_at_one_hundred_thousand_events(
+    tmp_path,
+) -> None:
     seed_event = {
         "event_id": "evt-seed",
         "ts": "2026-07-17T12:00:00+00:00",
@@ -327,7 +414,9 @@ def test_complex_update_cost_stays_flat_at_one_hundred_thousand_events(tmp_path)
 
     def seed(memory_dir, event_count: int) -> None:
         memory_dir.mkdir(parents=True)
-        (memory_dir / "runtime_ledger.jsonl").write_text(encoded * event_count, encoding="utf-8")
+        (memory_dir / "runtime_ledger.jsonl").write_text(
+            encoded * event_count, encoding="utf-8"
+        )
         runtime_projection = dict(replayed.runtime_projection)
         runtime_projection["ledger_event_count"] = event_count
         runtime_projection["event_counts"] = {"sample": event_count}

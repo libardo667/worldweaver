@@ -50,7 +50,9 @@ def choose_locations(
     explicit: list[str],
 ) -> list[str]:
     if explicit:
-        cleaned = list(dict.fromkeys(value.strip() for value in explicit if value.strip()))
+        cleaned = list(
+            dict.fromkeys(value.strip() for value in explicit if value.strip())
+        )
         if len(cleaned) != count:
             raise ValueError("provide exactly one distinct --location per resident")
         return cleaned
@@ -63,7 +65,9 @@ def choose_locations(
         if not name:
             continue
         try:
-            agents = int(payload.get("total_agents") or payload.get("current_agents") or 0)
+            agents = int(
+                payload.get("total_agents") or payload.get("current_agents") or 0
+            )
         except (TypeError, ValueError):
             agents = 0
         try:
@@ -71,7 +75,9 @@ def choose_locations(
         except (TypeError, ValueError):
             score = 0.0
         ranked.append((agents, score, name))
-    locations = [item[2] for item in sorted(ranked, key=lambda item: (item[0], item[1], item[2]))]
+    locations = [
+        item[2] for item in sorted(ranked, key=lambda item: (item[0], item[1], item[2]))
+    ]
     locations = list(dict.fromkeys(locations))
     if len(locations) < count:
         raise ValueError(f"the city exposed only {len(locations)} usable neighborhoods")
@@ -81,7 +87,11 @@ def choose_locations(
 def _resident_summary(home: Path) -> tuple[str, str]:
     identity = (home / "identity" / "IDENTITY.md").read_text(encoding="utf-8")
     name = next(
-        (line.removeprefix("# ").strip() for line in identity.splitlines() if line.startswith("# ")),
+        (
+            line.removeprefix("# ").strip()
+            for line in identity.splitlines()
+            if line.startswith("# ")
+        ),
         home.name,
     )
     events = load_runtime_events(home / "memory")
@@ -115,8 +125,12 @@ async def run(args: argparse.Namespace) -> int:
         print(f"  count: {args.count}")
         print(f"  destination: {residents_dir}")
         print("  context: dealt hand plus bare home location; no city-history lookup")
-        print("  startup: dormant hearth manifests; no city sessions or resident processes")
-        for index, (location, vocation) in enumerate(zip(locations, vocations), start=1):
+        print(
+            "  startup: dormant hearth manifests; no city sessions or resident processes"
+        )
+        for index, (location, vocation) in enumerate(
+            zip(locations, vocations), start=1
+        ):
             print(f"  {index}. {location} — {vocation}")
 
         if not args.apply:
@@ -125,7 +139,11 @@ async def run(args: argparse.Namespace) -> int:
 
         inference_url = str(os.environ.get("WW_INFERENCE_URL") or "").strip()
         inference_key = str(os.environ.get("WW_INFERENCE_KEY") or "").strip()
-        inference_model = str(os.environ.get("WW_DOULA_MODEL") or os.environ.get("WW_INFERENCE_MODEL") or "").strip()
+        inference_model = str(
+            os.environ.get("WW_DOULA_MODEL")
+            or os.environ.get("WW_INFERENCE_MODEL")
+            or ""
+        ).strip()
         if not inference_url or not inference_key or not inference_model:
             print(
                 "WW_INFERENCE_URL, WW_INFERENCE_KEY, and a configured inference model are required.",
@@ -154,7 +172,11 @@ async def run(args: argparse.Namespace) -> int:
 
         created: list[Path] = []
         for location, vocation in zip(locations, vocations):
-            before = {path for path in residents_dir.iterdir() if path.is_dir() and not path.name.startswith((".", "_"))}
+            before = {
+                path
+                for path in residents_dir.iterdir()
+                if path.is_dir() and not path.name.startswith((".", "_"))
+            }
             success = await doula._seed_founding_resident(
                 location,
                 [f"This person lives around {location}."],
@@ -162,7 +184,11 @@ async def run(args: argparse.Namespace) -> int:
                 dormant=True,
                 hand_only_context=True,
             )
-            after = {path for path in residents_dir.iterdir() if path.is_dir() and not path.name.startswith((".", "_"))}
+            after = {
+                path
+                for path in residents_dir.iterdir()
+                if path.is_dir() and not path.name.startswith((".", "_"))
+            }
             added = sorted(after - before)
             if not success or len(added) != 1:
                 print(
@@ -189,9 +215,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--residents-dir", type=Path, required=True)
     parser.add_argument("--server-url", required=True)
     parser.add_argument("--count", type=int, default=3)
-    parser.add_argument("--seed", type=int, default=0, help="repeatable deal and vocation selection")
+    parser.add_argument(
+        "--seed", type=int, default=0, help="repeatable deal and vocation selection"
+    )
     parser.add_argument("--location", action="append", default=[])
-    parser.add_argument("--apply", action="store_true", help="create homes; omitted means dry-run")
+    parser.add_argument(
+        "--apply", action="store_true", help="create homes; omitted means dry-run"
+    )
     args = parser.parse_args()
     if not 1 <= args.count <= 5:
         parser.error("--count must be between 1 and 5")

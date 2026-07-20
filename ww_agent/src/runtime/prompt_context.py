@@ -141,7 +141,8 @@ class AffordanceContext:
             source_id=str(raw.get("source_id") or ""),
             name=str(raw.get("name") or "").strip(),
             description=str(raw.get("description") or "").strip(),
-            provenance=str(raw.get("provenance") or "local-knowledge").strip() or "local-knowledge",
+            provenance=str(raw.get("provenance") or "local-knowledge").strip()
+            or "local-knowledge",
             freshness=str(raw.get("freshness") or "unknown").strip() or "unknown",
             locality=str(raw.get("locality") or "unknown").strip() or "unknown",
             visibility=str(raw.get("visibility") or "private").strip() or "private",
@@ -164,19 +165,45 @@ class PulseContext:
     affordances: tuple[AffordanceContext, ...]
 
     @classmethod
-    def from_perception(cls, perception: dict[str, Any], *, mode: str) -> "PulseContext":
+    def from_perception(
+        cls, perception: dict[str, Any], *, mode: str
+    ) -> "PulseContext":
         return cls(
             mode=str(mode or "react"),
             policy=PromptContextPolicy.for_mode(mode),
             location=str(perception.get("location") or "").strip() or "somewhere",
-            present=tuple(str(name).strip() for name in perception.get("present") or [] if str(name).strip()),
+            present=tuple(
+                str(name).strip()
+                for name in perception.get("present") or []
+                if str(name).strip()
+            ),
             grounding=dict(perception.get("grounding") or {}),
-            reachable=tuple(str(place).strip() for place in perception.get("reachable") or [] if str(place).strip()),
-            recent_events=tuple(WorldEventContext.from_dict(item) for item in perception.get("recent_events") or [] if isinstance(item, dict)),
-            physical_traces=tuple(PhysicalTraceContext.from_dict(item) for item in perception.get("traces") or [] if isinstance(item, dict)),
-            heard=tuple(HeardContext.from_dict(item) for item in perception.get("heard") or [] if isinstance(item, dict)),
+            reachable=tuple(
+                str(place).strip()
+                for place in perception.get("reachable") or []
+                if str(place).strip()
+            ),
+            recent_events=tuple(
+                WorldEventContext.from_dict(item)
+                for item in perception.get("recent_events") or []
+                if isinstance(item, dict)
+            ),
+            physical_traces=tuple(
+                PhysicalTraceContext.from_dict(item)
+                for item in perception.get("traces") or []
+                if isinstance(item, dict)
+            ),
+            heard=tuple(
+                HeardContext.from_dict(item)
+                for item in perception.get("heard") or []
+                if isinstance(item, dict)
+            ),
             inbox_count=int(perception.get("inbox_count") or 0),
-            affordances=tuple(AffordanceContext.from_dict(item) for item in perception.get("affordances") or [] if isinstance(item, dict)),
+            affordances=tuple(
+                AffordanceContext.from_dict(item)
+                for item in perception.get("affordances") or []
+                if isinstance(item, dict)
+            ),
         )
 
     @property
@@ -193,8 +220,16 @@ class PulseContext:
 
     @property
     def prompted_packet_ids(self) -> list[str]:
-        heard = [item.packet_id for item in self.selected_heard if item.message and item.packet_id]
-        traces = [item.packet_id for item in self.selected_physical_traces if item.body and item.packet_id]
+        heard = [
+            item.packet_id
+            for item in self.selected_heard
+            if item.message and item.packet_id
+        ]
+        traces = [
+            item.packet_id
+            for item in self.selected_physical_traces
+            if item.body and item.packet_id
+        ]
         return [*heard, *traces]
 
     def moment_text(self) -> str:
@@ -208,7 +243,9 @@ class PulseContext:
 
     def to_trace_dict(self) -> dict[str, Any]:
         withheld_heard = self.heard[:-4] if self.policy.include_heard else self.heard
-        withheld_events = () if self.policy.include_recent_events else self.recent_events
+        withheld_events = (
+            () if self.policy.include_recent_events else self.recent_events
+        )
         return {
             "mode": self.mode,
             "policy": asdict(self.policy),
@@ -222,14 +259,22 @@ class PulseContext:
             "selected": {
                 "heard": [asdict(item) for item in self.selected_heard],
                 "recent_events": [asdict(item) for item in self.selected_recent_events],
-                "physical_traces": [asdict(item) for item in self.selected_physical_traces],
+                "physical_traces": [
+                    asdict(item) for item in self.selected_physical_traces
+                ],
                 "affordances": [asdict(item) for item in self.affordances],
             },
             "withheld": {
                 "heard": [asdict(item) for item in withheld_heard],
                 "recent_events": [asdict(item) for item in withheld_events],
-                "physical_traces": ([] if self.policy.include_physical_traces else [asdict(item) for item in self.physical_traces]),
-                "inbox_count": (self.inbox_count if not self.policy.include_inbox_count else 0),
+                "physical_traces": (
+                    []
+                    if self.policy.include_physical_traces
+                    else [asdict(item) for item in self.physical_traces]
+                ),
+                "inbox_count": (
+                    self.inbox_count if not self.policy.include_inbox_count else 0
+                ),
             },
         }
 
@@ -237,35 +282,101 @@ class PulseContext:
 def render_affordance_catalog(context: PulseContext) -> str:
     """Render the named source registry without any ambient perception."""
     blocks: list[str] = []
-    known = [item for item in context.affordances if item.provenance == "local-knowledge"]
-    remembered = [item for item in context.affordances if item.provenance == "self-memory"]
-    perceived = [item for item in context.affordances if item.provenance == "local-perception"]
-    computed = [item for item in context.affordances if item.provenance == "local-computation"]
-    reading = [item for item in context.affordances if item.provenance == "scoped-reading"]
+    known = [
+        item for item in context.affordances if item.provenance == "local-knowledge"
+    ]
+    remembered = [
+        item for item in context.affordances if item.provenance == "self-memory"
+    ]
+    perceived = [
+        item for item in context.affordances if item.provenance == "local-perception"
+    ]
+    computed = [
+        item for item in context.affordances if item.provenance == "local-computation"
+    ]
+    reading = [
+        item for item in context.affordances if item.provenance == "scoped-reading"
+    ]
     egress = [item for item in context.affordances if item.provenance == "world-egress"]
-    classified = {"local-knowledge", "self-memory", "local-perception", "local-computation", "scoped-reading", "world-egress"}
+    classified = {
+        "local-knowledge",
+        "self-memory",
+        "local-perception",
+        "local-computation",
+        "scoped-reading",
+        "world-egress",
+    }
     other = [item for item in context.affordances if item.provenance not in classified]
     if known:
-        listing = "\n".join(f'  source "{item.name}": {item.description}' for item in known if item.name and item.description)
-        blocks.append("Things you can USE by reaching privately with the exact source name — these are knowledge you already carry, so speak their results as your own knowing, not as a lookup:\n" f"{listing}\n\n")
+        listing = "\n".join(
+            f'  source "{item.name}": {item.description}'
+            for item in known
+            if item.name and item.description
+        )
+        blocks.append(
+            "Things you can USE by reaching privately with the exact source name — these are knowledge you already carry, so speak their results as your own knowing, not as a lookup:\n"
+            f"{listing}\n\n"
+        )
     if remembered:
-        listing = "\n".join(f'  source "{item.name}": {item.description}' for item in remembered if item.name and item.description)
-        blocks.append("Things you can RECALL privately from your own life with the exact source name — treat the result as remembered experience:\n" f"{listing}\n\n")
+        listing = "\n".join(
+            f'  source "{item.name}": {item.description}'
+            for item in remembered
+            if item.name and item.description
+        )
+        blocks.append(
+            "Things you can RECALL privately from your own life with the exact source name — treat the result as remembered experience:\n"
+            f"{listing}\n\n"
+        )
     if perceived:
-        listing = "\n".join(f'  source "{item.name}": {item.description}' for item in perceived if item.name and item.description)
-        blocks.append("Things you can NOTICE privately in your present surroundings with the exact source name — treat the result as first-hand perception:\n" f"{listing}\n\n")
+        listing = "\n".join(
+            f'  source "{item.name}": {item.description}'
+            for item in perceived
+            if item.name and item.description
+        )
+        blocks.append(
+            "Things you can NOTICE privately in your present surroundings with the exact source name — treat the result as first-hand perception:\n"
+            f"{listing}\n\n"
+        )
     if computed:
-        listing = "\n".join(f'  source "{item.name}": {item.description}' for item in computed if item.name and item.description)
-        blocks.append("Things you can CALCULATE privately with the exact source name — these are local computed results, so treat them as measured rather than remembered or looked up:\n" f"{listing}\n\n")
+        listing = "\n".join(
+            f'  source "{item.name}": {item.description}'
+            for item in computed
+            if item.name and item.description
+        )
+        blocks.append(
+            "Things you can CALCULATE privately with the exact source name — these are local computed results, so treat them as measured rather than remembered or looked up:\n"
+            f"{listing}\n\n"
+        )
     if reading:
-        listing = "\n".join(f'  source "{item.name}": {item.description}' for item in reading if item.name and item.description)
-        blocks.append("Things you can READ privately with the exact source name — these are authorized artifacts, so if you use a result keep clear that you read or consulted it rather than already knowing it:\n" f"{listing}\n\n")
+        listing = "\n".join(
+            f'  source "{item.name}": {item.description}'
+            for item in reading
+            if item.name and item.description
+        )
+        blocks.append(
+            "Things you can READ privately with the exact source name — these are authorized artifacts, so if you use a result keep clear that you read or consulted it rather than already knowing it:\n"
+            f"{listing}\n\n"
+        )
     if egress:
-        listing = "\n".join(f'  source "{item.name}": {item.description}' for item in egress if item.name and item.description)
-        blocks.append("Things you can USE by reaching outside the world with the exact source name — name that reach plainly as looking something up:\n" f"{listing}\n\n")
+        listing = "\n".join(
+            f'  source "{item.name}": {item.description}'
+            for item in egress
+            if item.name and item.description
+        )
+        blocks.append(
+            "Things you can USE by reaching outside the world with the exact source name — name that reach plainly as looking something up:\n"
+            f"{listing}\n\n"
+        )
     if other:
-        listing = "\n".join(f'  source "{item.name}": {item.description}' for item in other if item.name and item.description)
-        blocks.append("Other things you can reach privately with the exact source name — keep the stated source of anything you learn explicit:\n" f"{listing}\n\n")
+        listing = "\n".join(
+            f'  source "{item.name}": {item.description}'
+            for item in other
+            if item.name and item.description
+        )
+        blocks.append(
+            "Other things you can reach privately with the exact source name — keep the stated source of anything you learn explicit:\n"
+            f"{listing}\n\n"
+        )
     return "".join(blocks)
 
 
@@ -280,7 +391,12 @@ def render_pulse_context(context: PulseContext) -> str:
     blocks.append(f"Where you are: {context.location}. Present: {present}.\n")
 
     if context.policy.include_recent_events:
-        recent = "; ".join(item.summary for item in context.selected_recent_events if item.summary) or "nothing notable lately"
+        recent = (
+            "; ".join(
+                item.summary for item in context.selected_recent_events if item.summary
+            )
+            or "nothing notable lately"
+        )
         blocks.append(f"Recently here: {recent}.\n\n")
     else:
         blocks.append("\n")
@@ -289,9 +405,13 @@ def render_pulse_context(context: PulseContext) -> str:
     for item in context.selected_physical_traces:
         where = f" on {item.target}" if item.target else ""
         by = f" by {item.author_name}" if item.author_name else ""
-        trace_lines.append(f"  [{item.trace_id}] A physical trace{where}{by}: {item.body}")
+        trace_lines.append(
+            f"  [{item.trace_id}] A physical trace{where}{by}: {item.body}"
+        )
     if trace_lines:
-        blocks.append(f"Marks you physically encounter here:\n{chr(10).join(trace_lines)}\n\n")
+        blocks.append(
+            f"Marks you physically encounter here:\n{chr(10).join(trace_lines)}\n\n"
+        )
 
     heard_lines: list[str] = []
     for item in context.selected_heard:
@@ -310,6 +430,8 @@ def render_pulse_context(context: PulseContext) -> str:
     if context.policy.include_inbox_count and context.inbox_count:
         blocks.append(f"Letters waiting in your inbox: {context.inbox_count}.\n\n")
     if context.policy.include_navigation and context.reachable:
-        blocks.append(f"If you move, you can only go to one of these adjacent places: {', '.join(context.reachable)}.\n\n")
+        blocks.append(
+            f"If you move, you can only go to one of these adjacent places: {', '.join(context.reachable)}.\n\n"
+        )
     blocks.append(render_affordance_catalog(context))
     return "".join(blocks)

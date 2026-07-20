@@ -82,7 +82,15 @@ def _growth_candidates(
         payload = _payload(event)
         event_id = str(event.get("event_id") or "").strip()
         pulse_id = str(payload.get("pulse_id") or "").strip()
-        is_candidate = str(event.get("event_type") or "") == "self_delta_staged" and event_id and event_id not in adopted and str(payload.get("kind") or "") == "soul_edit" and str(payload.get("verdict") or "") == "accepted" and str(payload.get("body") or "").strip() and pulse_id in pulse_events
+        is_candidate = (
+            str(event.get("event_type") or "") == "self_delta_staged"
+            and event_id
+            and event_id not in adopted
+            and str(payload.get("kind") or "") == "soul_edit"
+            and str(payload.get("verdict") or "") == "accepted"
+            and str(payload.get("body") or "").strip()
+            and pulse_id in pulse_events
+        )
         if is_candidate:
             staged.append(event)
 
@@ -92,7 +100,11 @@ def _growth_candidates(
         body = str(payload.get("body") or "").strip()
         pulse_id = str(payload.get("pulse_id") or "").strip()
         pulse_event = pulse_events[pulse_id]
-        related = tuple(str(earlier.get("event_id") or "").strip() for earlier in staged[:index] if str(_payload(earlier).get("body") or "").strip() == body)[-3:]
+        related = tuple(
+            str(earlier.get("event_id") or "").strip()
+            for earlier in staged[:index]
+            if str(_payload(earlier).get("body") or "").strip() == body
+        )[-3:]
         candidates.append(
             GrowthCandidate(
                 candidate_id=str(event.get("event_id") or "").strip(),
@@ -112,7 +124,9 @@ def read_growth_candidate(memory_dir: Path, query: str = "") -> dict[str, Any]:
     candidates = _growth_candidates(events)
     requested = _candidate_id(query)
     if requested and requested.lower() not in {"latest", "newest", "recent"}:
-        candidate = next((item for item in candidates if item.candidate_id == requested), None)
+        candidate = next(
+            (item for item in candidates if item.candidate_id == requested), None
+        )
         selection_mode = "exact_id"
     else:
         candidate = candidates[-1] if candidates else None
@@ -125,7 +139,12 @@ def read_growth_candidate(memory_dir: Path, query: str = "") -> dict[str, Any]:
             "records": [],
         }
 
-    related = "\nEarlier matching proposal event IDs (context only, not evidence): " + ", ".join(candidate.related_event_ids) if candidate.related_event_ids else ""
+    related = (
+        "\nEarlier matching proposal event IDs (context only, not evidence): "
+        + ", ".join(candidate.related_event_ids)
+        if candidate.related_event_ids
+        else ""
+    )
     content = (
         "You previously proposed this exact change to your own identity:\n\n"
         f"{candidate.body}\n\n"
@@ -170,8 +189,16 @@ def _inspection_event(
             continue
         if not bool(payload.get("accessed")):
             continue
-        refs = payload.get("record_refs") if isinstance(payload.get("record_refs"), list) else []
-        if any(isinstance(ref, dict) and str(ref.get("record_id") or "").strip() == candidate.record_id for ref in refs):
+        refs = (
+            payload.get("record_refs")
+            if isinstance(payload.get("record_refs"), list)
+            else []
+        )
+        if any(
+            isinstance(ref, dict)
+            and str(ref.get("record_id") or "").strip() == candidate.record_id
+            for ref in refs
+        ):
             return event
     return None
 
@@ -196,7 +223,11 @@ def _persist_adoption(
     adoption_event: dict[str, Any],
 ) -> None:
     metadata = _growth_metadata(resident_dir)
-    adoptions = [dict(item) for item in list(metadata.get("adoptions") or []) if isinstance(item, dict)]
+    adoptions = [
+        dict(item)
+        for item in list(metadata.get("adoptions") or [])
+        if isinstance(item, dict)
+    ]
     candidate_ids = {str(item.get("candidate_id") or "").strip() for item in adoptions}
     if candidate.candidate_id not in candidate_ids:
         adoptions.append(
@@ -204,13 +235,17 @@ def _persist_adoption(
                 "candidate_id": candidate.candidate_id,
                 "adoption_event_id": str(adoption_event.get("event_id") or ""),
                 "source_event_ids": candidate.source_event_ids,
-                "inspection_event_id": str(_payload(adoption_event).get("inspection_event_id") or ""),
+                "inspection_event_id": str(
+                    _payload(adoption_event).get("inspection_event_id") or ""
+                ),
                 "adopted_at": str(adoption_event.get("ts") or ""),
             }
         )
 
     _canonical, existing_growth = IdentityLoader.load_canonical_and_growth(resident_dir)
-    paragraphs = [part.strip() for part in existing_growth.split("\n\n") if part.strip()]
+    paragraphs = [
+        part.strip() for part in existing_growth.split("\n\n") if part.strip()
+    ]
     growth = existing_growth.strip()
     if candidate.body not in paragraphs:
         growth = f"{growth}\n\n{candidate.body}".strip()
@@ -235,14 +270,24 @@ def adopt_growth_candidate(
     events = load_runtime_projection_events(memory_dir, max_events=GROWTH_REPLAY_LIMIT)
     requested = _candidate_id(candidate_id)
     candidate = next(
-        (item for item in _growth_candidates(events, include_adopted=True) if item.candidate_id == requested),
+        (
+            item
+            for item in _growth_candidates(events, include_adopted=True)
+            if item.candidate_id == requested
+        ),
         None,
     )
     if candidate is None:
         return {"ok": False, "reason": "growth_candidate_not_found"}
 
     prior_adoption = next(
-        (event for event in events if str(event.get("event_type") or "") == "growth_adopted" and str(_payload(event).get("candidate_id") or "").strip() == candidate.candidate_id),
+        (
+            event
+            for event in events
+            if str(event.get("event_type") or "") == "growth_adopted"
+            and str(_payload(event).get("candidate_id") or "").strip()
+            == candidate.candidate_id
+        ),
         None,
     )
     if prior_adoption is not None:
@@ -286,12 +331,22 @@ def repair_growth_adoptions(
     identity: ResidentIdentity,
 ) -> bool:
     """Finish any ledger-recorded adoption whose identity-file write was interrupted."""
-    events = load_runtime_projection_events(resident_dir / "memory", max_events=GROWTH_REPLAY_LIMIT)
-    adoption_events = [event for event in events if str(event.get("event_type") or "") == "growth_adopted"]
+    events = load_runtime_projection_events(
+        resident_dir / "memory", max_events=GROWTH_REPLAY_LIMIT
+    )
+    adoption_events = [
+        event
+        for event in events
+        if str(event.get("event_type") or "") == "growth_adopted"
+    ]
     if not adoption_events:
         return False
     metadata = _growth_metadata(resident_dir)
-    recorded_ids = {str(item.get("candidate_id") or "").strip() for item in list(metadata.get("adoptions") or []) if isinstance(item, dict)}
+    recorded_ids = {
+        str(item.get("candidate_id") or "").strip()
+        for item in list(metadata.get("adoptions") or [])
+        if isinstance(item, dict)
+    }
     _canonical, growth = IdentityLoader.load_canonical_and_growth(resident_dir)
     paragraphs = {part.strip() for part in growth.split("\n\n") if part.strip()}
     repaired = False
@@ -299,7 +354,11 @@ def repair_growth_adoptions(
         payload = _payload(event)
         candidate_id = str(payload.get("candidate_id") or "").strip()
         body = str(payload.get("body") or "").strip()
-        source_ids = [str(value or "").strip() for value in list(payload.get("source_event_ids") or []) if str(value or "").strip()]
+        source_ids = [
+            str(value or "").strip()
+            for value in list(payload.get("source_event_ids") or [])
+            if str(value or "").strip()
+        ]
         if not candidate_id or not body or len(source_ids) < 2:
             continue
         if candidate_id in recorded_ids and body in paragraphs:
