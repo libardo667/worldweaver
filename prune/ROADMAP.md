@@ -29,9 +29,12 @@ The project now has:
 Deeper hearth-transfer work is paused at the encrypted, witnessed, source-preserving synthetic checkpoint.
 There is no deletion command, and no real resident should be migrated as part of this pause.
 
-The immediate work is Publication Major 139: audit whether a stranger can understand, inspect, and safely try the
-project. Then build one honest Alderbank doorway and seek a small number of informed outside responses. This
-prepares WorldWeaver for review; it does not declare the network ready for unattended public operation.
+Publication Major 139's first audit and truth/safety corrections are complete. The public site no longer serves
+obsolete architecture exhibits, the manual records its exact source commit, GitHub has focused contribution and
+private security-reporting paths, and a non-destructive `demo-init` command now supplies fresh local tutorial
+state. The next proof is the full documented launch in a clean checkout, followed by a production-built public
+client and a small browser smoke suite. This prepares WorldWeaver for review; it does not declare the network
+ready for unattended public operation.
 
 ## Now
 

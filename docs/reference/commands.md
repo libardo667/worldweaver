@@ -20,6 +20,7 @@ python dev.py check
 ## Local shards
 
 ```bash
+python dev.py demo-init
 python dev.py weave-up --city CITY
 python dev.py weave-up --city CITY --no-client
 python dev.py weave-up --city CITY --agents
@@ -29,6 +30,9 @@ python dev.py weave-logs --city CITY --follow
 python dev.py weave-down --city CITY
 python dev.py new-shard CITY_ID [options]
 ```
+
+`demo-init` creates the ignored local secrets, identities, and Alderbank pack needed by the tutorial. It does
+not start Docker or residents, and it refuses to replace unmarked existing state.
 
 Inside a generated, source-independent node folder:
 

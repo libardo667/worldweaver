@@ -140,6 +140,8 @@ audit.
 
 Severity: **high discoverability gap**
 
+Remediation status: **resolved for outside review on 2026-07-20**
+
 Evidence as of the audit:
 
 - description: `unified project repo for worldweaver engine and agent runtime with example shards and residents`;
@@ -151,10 +153,10 @@ Evidence as of the audit:
 
 Disposition:
 
-Set a plain description, link `https://www.hekswerk.com/worldweaver`, and add a restrained set of accurate
-topics. Add one short contribution guide, one security-reporting policy, and two or three issue forms for setup
-failure, design criticism, and security concerns. Enable Discussions only when there is a concrete first prompt
-and capacity to respond. Do not create empty corporate process.
+The repository now has a plain description, homepage, restrained topics, a short contribution guide, a security
+policy, setup and design issue forms, and private vulnerability reporting. Discussions remain disabled until
+there is a useful opening prompt and realistic capacity to respond. A general Code of Conduct and support file
+were not added merely to raise a repository score.
 
 ### PR-06 — The public doorway describes concepts but shows no experience
 
@@ -176,7 +178,7 @@ the media. Do not use private resident prose or prompt traces.
 
 Severity: **high accuracy and reproducibility gap**
 
-Remediation status: **partly resolved on 2026-07-20**
+Remediation status: **resolved on 2026-07-20**
 
 Evidence:
 
@@ -189,15 +191,15 @@ Evidence:
 
 Disposition:
 
-The known signed-node status drift is corrected. Make WorldWeaver documentation changes trigger or request a
-site build, record the included WorldWeaver commit in the result, and fail on broken documentation links. Keep
-WorldWeaver's own `docs/` canonical.
+The known signed-node status drift is corrected. The Hekswerk build now fails on broken documentation links,
+shows and links the exact WorldWeaver documentation commit in its footer, and refreshes every six hours as well
+as on site changes or manual request. WorldWeaver's own `docs/` remains canonical.
 
 ### PR-08 — Maintained checked-in development shards retain broad backend bindings
 
 Severity: **high local safety gap**
 
-Remediation status: **resolved on 2026-07-20**
+Remediation status: **resolved in source on 2026-07-20; existing containers need recreation**
 
 Evidence:
 
