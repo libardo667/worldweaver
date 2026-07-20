@@ -12,7 +12,7 @@ existing typed world effector.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable
@@ -21,6 +21,7 @@ from src.identity.loader import ResidentIdentity
 from src.inference.client import InferenceClient
 from src.runtime.ledger import append_runtime_event
 from src.runtime.pulse import Act, PulseValidationError, Reach
+from src.runtime.relations import chat_utterance_id
 
 logger = logging.getLogger(__name__)
 
@@ -123,9 +124,12 @@ class ReferenceObservation:
     availability: dict[str, str]
     location: str = ""
     present: tuple[str, ...] = ()
+    co_present: tuple[tuple[str, str, str], ...] = ()
     ambient: tuple[str, ...] = ()
     recent_events: tuple[str, ...] = ()
     local_speech: tuple[str, ...] = ()
+    local_speech_ids: tuple[str, ...] = ()
+    heard: tuple[tuple[str, str, str], ...] = ()
     traces: tuple[str, ...] = ()
     reachable: tuple[str, ...] = ()
     sources: tuple[tuple[str, str], ...] = ()
@@ -190,10 +194,24 @@ async def observe_reference_world(
         str(identity.name or "").replace("_", " ").strip().casefold(),
         str(identity.display_name or "").strip().casefold(),
     }
-    present = tuple(
-        str(getattr(person, "role", "") or getattr(person, "name", "") or "").strip()
+    other_people = [
+        person
         for person in list(getattr(scene, "present", []) or [])
         if str(getattr(person, "name", "") or "").strip().casefold() not in own_names
+    ]
+    present = tuple(
+        str(getattr(person, "name", "") or "").strip()
+        for person in other_people
+        if str(getattr(person, "name", "") or "").strip()
+    )
+    co_present = tuple(
+        (
+            str(getattr(person, "actor_id", "") or "").strip(),
+            str(getattr(person, "session_id", "") or "").strip(),
+            str(getattr(person, "name", "") or "").strip(),
+        )
+        for person in other_people
+        if str(getattr(person, "name", "") or "").strip()
     )
     ambient = tuple(
         str(getattr(item, "label", "") or "").strip()
@@ -227,18 +245,55 @@ async def observe_reference_world(
     )
 
     local_speech: tuple[str, ...] = ()
+    local_speech_ids: tuple[str, ...] = ()
+    heard: tuple[tuple[str, str, str], ...] = ()
     if not location:
         availability["local_speech"] = "not_applicable"
     else:
         try:
             messages = await world.get_location_chat(location, session_id=session_id)
-            local_speech = tuple(
-                f"{str(getattr(item, 'display_name', '') or '').strip()}: "
-                f"{str(getattr(item, 'message', '') or '').strip()}".strip()
+            visible_messages = [
+                item
                 for item in list(messages or [])[-10:]
                 if str(getattr(item, "message", "") or "").strip()
                 and str(getattr(item, "session_id", "") or "").strip() != session_id
+                and not (
+                    str(getattr(item, "actor_id", "") or "").strip()
+                    and str(getattr(item, "actor_id", "") or "").strip()
+                    == str(identity.actor_id or "").strip()
+                )
+                and not (
+                    not str(getattr(item, "actor_id", "") or "").strip()
+                    and str(getattr(item, "display_name", "") or "").strip().casefold()
+                    in own_names
+                )
+            ]
+            local_speech = tuple(
+                f"{str(getattr(item, 'display_name', '') or '').strip()}: "
+                f"{str(getattr(item, 'message', '') or '').strip()}".strip()
+                for item in visible_messages
             )
+            heard_rows = tuple(
+                (
+                    str(getattr(item, "display_name", "") or "").strip(),
+                    str(getattr(item, "id", "") or "").strip(),
+                    (
+                        chat_utterance_id(location, getattr(item, "id", ""))
+                        if str(getattr(item, "id", "") or "").strip()
+                        else "chat:"
+                        + ":".join(
+                            (
+                                location,
+                                str(getattr(item, "ts", "") or "").strip(),
+                                str(getattr(item, "session_id", "") or "").strip(),
+                            )
+                        )
+                    ),
+                )
+                for item in visible_messages
+            )
+            local_speech_ids = tuple(row[2] for row in heard_rows)
+            heard = heard_rows
             availability["local_speech"] = "available"
         except Exception as exc:
             logger.info("[%s] local speech unavailable: %s", identity.name, exc)
@@ -248,9 +303,12 @@ async def observe_reference_world(
         availability=availability,
         location=location,
         present=tuple(item for item in present if item),
+        co_present=co_present,
         ambient=ambient,
         recent_events=recent_events,
         local_speech=local_speech,
+        local_speech_ids=local_speech_ids,
+        heard=heard,
         traces=traces,
         reachable=_reachable_destinations(
             location, getattr(scene, "location_graph", {})
@@ -330,6 +388,7 @@ class ReferenceResidentCore:
         effector: Effector,
         information_access: InformationAccess,
         tick_seconds: float = 20.0,
+        activation_seconds: float = 300.0,
         model: str | None = None,
         temperature: float | None = 0.7,
     ) -> None:
@@ -341,8 +400,12 @@ class ReferenceResidentCore:
         self._effector = effector
         self._information_access = information_access
         self._tick_seconds = max(2.0, float(tick_seconds))
+        self._activation_seconds = max(self._tick_seconds, float(activation_seconds))
         self._model = str(model or "").strip() or None
         self._temperature = temperature
+        self._last_activation_at: datetime | None = None
+        self._seen_local_speech_ids: set[str] = set()
+        self.latest_observation: ReferenceObservation | None = None
 
     @property
     def name(self) -> str:
@@ -424,15 +487,65 @@ class ReferenceResidentCore:
         now: Any = None,
         force_ignite: bool = False,
     ) -> dict[str, Any]:
-        """Run one activation. ``force_ignite`` is accepted only for host compatibility."""
+        """Poll local facts and activate only when due or locally addressed."""
 
-        _ = force_ignite
-        effective_now = now or datetime.now(timezone.utc)
+        if isinstance(now, datetime):
+            effective_now = now if now.tzinfo else now.replace(tzinfo=timezone.utc)
+        else:
+            effective_now = datetime.now(timezone.utc)
         observation = await observe_reference_world(
             self._world,
             session_id=self._session_id,
             identity=self._identity,
         )
+        self.latest_observation = observation
+        if hasattr(self._effector, "location"):
+            self._effector.location = observation.location
+        if hasattr(self._effector, "present"):
+            self._effector.present = list(observation.present)
+        if hasattr(self._effector, "co_present"):
+            self._effector.co_present = [
+                {"actor_id": actor_id, "session_id": actor_session_id, "name": name}
+                for actor_id, actor_session_id, name in observation.co_present
+            ]
+        if hasattr(self._effector, "heard"):
+            self._effector.heard = [
+                {"speaker": speaker, "id": message_id, "source_id": source_id}
+                for speaker, message_id, source_id in observation.heard
+            ]
+        current_signal_ids = set(observation.local_speech_ids)
+        new_signal_ids = current_signal_ids - self._seen_local_speech_ids
+        new_local_signal = bool(new_signal_ids)
+        first_activation = self._last_activation_at is None
+        self._seen_local_speech_ids.update(current_signal_ids)
+        baseline_due = (
+            first_activation
+            or (effective_now - self._last_activation_at).total_seconds()
+            >= self._activation_seconds
+        )
+        if not (force_ignite or new_local_signal or baseline_due):
+            return {
+                "status": "idle",
+                "choice": "none",
+                "reason": "no_new_local_signal_and_baseline_not_due",
+            }
+        prompt_observation = observation
+        if not first_activation:
+            fresh_speech = tuple(
+                speech
+                for speech, signal_id in zip(
+                    observation.local_speech,
+                    observation.local_speech_ids,
+                    strict=True,
+                )
+                if signal_id in new_signal_ids
+            )
+            prompt_observation = replace(
+                observation,
+                local_speech=fresh_speech,
+                local_speech_ids=tuple(sorted(new_signal_ids)),
+            )
+        self._last_activation_at = effective_now
         append_runtime_event(
             self._memory_dir,
             event_type="reference_activation_started",
@@ -444,12 +557,12 @@ class ReferenceResidentCore:
                 ),
                 "availability": dict(observation.availability),
                 "present_count": len(observation.present),
-                "local_speech_count": len(observation.local_speech),
+                "local_speech_count": len(prompt_observation.local_speech),
                 "source_count": len(observation.sources),
             },
             ts=effective_now,
         )
-        prompt = render_reference_observation(observation)
+        prompt = render_reference_observation(prompt_observation)
         try:
             decision = await self._infer(
                 phase="initial",

@@ -72,17 +72,15 @@ python dev.py resident --city CITY --resident NAME
 python dev.py resident --city CITY --resident NAME --activate
 python dev.py resident --city CITY --resident NAME --wake --ticks 3
 python dev.py resident --city CITY --resident NAME --wake --duration 15m
-python dev.py resident --city CITY --resident NAME --wake --duration 15m --reach-continuations 1
 python dev.py resident --city CITY --resident NAME --park
 python dev.py cohort --city CITY
 python dev.py cohort --city CITY --wake --duration 30m
-python dev.py cohort --city CITY --wake --duration 30m --reach-continuations 2
 python dev.py seed-residents --city CITY --count 3
 python dev.py seed-residents --city CITY --count 3 --apply
 ```
 
-`--reach-continuations` requests a per-pulse private-read limit from zero through eight. The resident
-host may lower it with `WW_REACH_CONTINUATION_MAX`; the default host maximum is two.
+`--ticks` counts local polls, not model calls. The reference loop activates on its first poll, new local
+speech, an explicit wake signal, or its slow baseline. Each activation permits at most one elective read.
 
 ## Steward and research tools
 

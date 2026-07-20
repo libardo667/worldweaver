@@ -10,8 +10,8 @@ The project now has:
 - one root development and CI surface;
 - one canonical typed world-event path;
 - one resident runtime across hearth and city;
-- complete append-only resident ledgers, with checkpoint correctness and durability now under active repair;
-- local speech, human/resident physical traces, elective resident information, and private prompt diagnostics;
+- complete append-only resident ledgers with durable, deterministic checkpoints and open-work indexes;
+- a small production resident loop with local speech, physical traces, one elective read, and typed actions;
 - citywide conversation available only through an elective information tool;
 - durable objects, making, giving, exchange, room access, and bounded object stoops;
 - a fictional test town, Alderbank, with four game-native resident homes and bounded human/resident play;
@@ -48,29 +48,21 @@ remaining ordinary-action gaps: correspondence, safe encounter targets for direc
 human creation of temporary sublocations. Make the current place and its verb palette the default view;
 keep the map as an optional full-screen orientation and destination surface.
 
-### 2. Audit resident cognition before tuning it further
+### 2. Prove the small resident runtime before adding cognition back
 
-The resident host now bounds elective read continuations so one active pulse cannot consume most of a
-meeting and several model calls. Treat that as a cost and latency safety rail, not a theory of healthy
-attention. Trace what `CognitiveCore` actually computes, state what "working" could mean on several separate
-axes, and compare its scientific metaphors and design claims with supporting and critical work across
-neuroscience, biology, embodied cognition, philosophy, phenomenology, and plural contemplative traditions.
-Do not pathologize reading, solitude, silence, or slow action. Delay broad cadence tuning until the first
-causal map is complete; fixes for demonstrably lost or late exact-place signals may continue. Repair the
-ledger/checkpoint path before trusting more trials: open work must not disappear at arbitrary replay limits,
-malformed records must be visible, and normal readers should use one deterministic current-state surface.
+The resident host now uses the fresh reference loop rather than `CognitiveCore`. It polls the exact place and
+local speech, activates on a new local signal or slow baseline, permits one elective read, and then accepts one
+typed action, private continuation, or wait. It has no production salience, arousal, prediction, drive,
+incubation, embedding, or mixed-pulse policy. Quiet is a valid result rather than a diagnosed failure.
 
-The working implementation direction is now a fresh resident-runtime kernel inside WorldWeaver, not a new
-project and not a second permanent runtime. Keep the engine's typed world rules, one-resident/one-hearth
-continuity, elective information, identity-growth boundary, travel, and federation. Treat the current
-cognitive mechanisms as migration material and experimental candidates. Move the one real entrypoint only
-after the minimal kernel can perceive current local facts, read electively, choose action or quiet, and receive
-truthful outcomes. Reintroduce optional mechanisms one at a time through paired tests.
+The ledger/checkpoint repair is complete, and automatic doula creation is off for new shards. Before a real
+resident run, finish live resident signing-key custody and signed bootstrap, run one clean synthetic resident
+through hearth and city, and inspect only structural receipts. Then run a fresh private resident with an empty
+ledger under the agreed privacy boundary. Reintroduce old mechanisms only one at a time through paired tests;
+do not restore the former core wholesale.
 
-Before another public resident run, finish the actor-scoped resident/host capability, add expiry and purge to
-explicit prompt diagnostics, deploy the privacy migration, restart resident hosts so permission repair runs,
-and verify the live OpenAPI surface. Exact prompt capture is already off by default, and resident startup now
-repairs owner-only hearth permissions.
+Continue the research audit as a separate evidence lane. It should explain why old mechanisms remain removed
+or earn re-entry, not tune the new loop toward sociability, movement, or a preferred personality.
 
 ### 3. Add the private-to-public making boundary
 

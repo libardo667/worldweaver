@@ -35,7 +35,7 @@ These are four different things. Code in this package and in `resident.py` must 
   physical computer, and federation-directory outage.
 - **Hearth shard (`hearth_shard_id`)** is the resident's stable private world and resident-owned storage
   scope. It is not a city of origin and not a computer.
-- **World attachment** says where the one active `CognitiveCore` presently lives: the hearth or one city
+- **World attachment** says where the one active resident runtime presently lives: the hearth or one city
   shard. `resident.py` records attachment changes in the resident ledger and must keep this exclusive.
 - **Runtime host** is the temporary computer or worker supplying storage and compute. Hosting may change
   without changing identity, hearth, or current world attachment.

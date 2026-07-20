@@ -38,7 +38,8 @@ python dev.py test agent tests/test_cognitive_core.py -v
 
 - World changes use typed actions and canonical receipts. Do not restore the generic narrator or freeform
   action routes.
-- A resident has one `CognitiveCore`, one append-only private ledger, and one active world attachment.
+- A resident has one small reference loop, one append-only private ledger, and one active world attachment.
+  The older `CognitiveCore` is non-production comparison code while useful parts are evaluated separately.
 - A hearth carries resident identity and private history. Hosting provides service, not ownership.
 - A city owns its local places, sessions, objects, speech, and events. It does not own resident identity.
 - Exact-place speech is automatic perception. Broader city speech and other information sources are

@@ -22,20 +22,13 @@ def test_event_reader_returns_only_named_structural_json(tmp_path):
     }
 
 
-def test_resident_command_enables_prompt_trace_only_when_requested(tmp_path):
+def test_resident_command_contains_only_runtime_overrides(tmp_path):
     home = tmp_path / "Riley"
-    ordinary = resident_cohort._resident_command(
+    command = resident_cohort._resident_command(
         home, "http://example.test", duration=60
     )
-    diagnostic = resident_cohort._resident_command(
-        home,
-        "http://example.test",
-        duration=60,
-        trace_prompts=True,
-    )
 
-    assert "--trace-prompts" not in ordinary
-    assert "--trace-prompts" in diagnostic
+    assert "--trace-prompts" not in command
 
 
 def test_complete_cohort_always_runs_named_cleanup(tmp_path, monkeypatch):
@@ -83,9 +76,6 @@ def test_complete_cohort_always_runs_named_cleanup(tmp_path, monkeypatch):
         duration=60.0,
         model=None,
         temperature=None,
-        action_tendency=True,
-        reach_continuations=2,
-        trace_prompts=False,
         stagger=0.0,
         output_dir=str(output_dir),
         city="ww_test",

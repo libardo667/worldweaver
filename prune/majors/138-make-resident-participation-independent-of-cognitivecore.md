@@ -177,7 +177,16 @@ rules, and the new loop records a content-blind confirmed, declined, or unknown 
 returns. Focused synthetic tests cover direct local speech, unavailable scene/chat, read-then-act, continuation
 failure, quiet waiting, and all three action-outcome states.
 
-This is not the production resident entrypoint yet. Identity, hearth/city attachment, information access,
-travel, and the current effector still need to be wired into the host, followed by a clean synthetic resident
-run. The old core must remain only until that migration is proven; the goal is one entrypoint, not two lasting
-architectures.
+### 2026-07-20 — reference loop selected by the resident host
+
+`src/resident.py` now constructs the small reference loop for both hearth and city attachments. The existing
+resident host still owns identity, one-at-a-time attachment, travel recovery, workshop access, information
+providers, and typed effectors. The old core is no longer a production entrypoint. Operator commands now
+separate cheap polls from model activations and no longer advertise old action-tendency, multi-read, embedding,
+or prompt-trace controls that the reference loop does not use.
+
+The scheduler polls exact-place facts and local speech every twenty seconds, activates immediately for newly
+observed local speech, and otherwise uses a five-minute baseline. It does not feed the same old speech back as
+a fresh signal at every baseline. A clean synthetic resident run is still required before this switch is
+considered operationally proven. Resident runtime key custody and signed bootstrap also remain prerequisites
+for a trustworthy real run.

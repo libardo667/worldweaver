@@ -42,22 +42,9 @@ resident behavior.
 python dev.py resident --city ww_alderbank --resident NAME --wake --duration 15m
 ```
 
-The resident runs at the normal twenty-second cadence. The summary reports pulse modes, reads, action kinds,
-tokens, attachments, and cleanup without reproducing their private writing.
-
-## Capture exact prompts for a bounded diagnostic
-
-Ordinary resident runs do not retain exact prompts or model responses. When a specific inference-boundary
-problem requires that evidence, enable it only for that named, bounded run:
-
-```bash
-python dev.py resident --city ww_alderbank --resident NAME \
-  --wake --ticks 3 --trace-prompts
-```
-
-The resulting `memory/prompt_traces.jsonl` is private host diagnostic material. It is not resident memory,
-does not enter cognition, and is not included in a portable hearth package. Automatic expiry and a tested
-purge command are still under repair, so remove the diagnostic after its declared use.
+The resident polls its exact place every twenty seconds. A poll calls the model only on first start, new local
+speech, an explicit wake signal, or the slow five-minute baseline. The summary separates polls from activations
+and reports reads, action outcomes, attachments, and cleanup without reproducing private writing.
 
 ## Run a bounded cohort
 
@@ -76,7 +63,6 @@ python dev.py cohort --city ww_alderbank \
 ```
 
 The whole group must pass preflight before anyone wakes. The runner parks everyone at the end.
-Use `--trace-prompts` only when the whole cohort is a declared prompt diagnostic; it is off otherwise.
 
 ## Create residents without waking them
 

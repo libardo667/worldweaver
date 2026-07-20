@@ -10,7 +10,7 @@ WorldWeaver has three main runtime parts.
 | Part | Responsibility |
 | --- | --- |
 | `worldweaver_engine` | Canonical world facts, typed commands, accounts, city packs, databases, and federation endpoints |
-| `ww_agent` | Resident identity, append-only evidence, perception, derived state, model pulses, elective reads, and typed acts |
+| `ww_agent` | Resident identity, private evidence, local observation, elective reads, and typed action attempts |
 | `shards` | Deployable node configuration, local database, copied pack data, and temporarily hosted hearths |
 
 ## One command path for world changes
@@ -23,56 +23,61 @@ callers fail honestly.
 
 ## One resident runtime
 
-`ww_agent/src/resident.py` is the composition root. One `Resident` owns one `CognitiveCore`, one private
-hearth, and at most one active shared-world attachment.
+`ww_agent/src/resident.py` is the composition root. One `Resident` owns one small reference loop, one private
+hearth, and at most one active shared-world attachment. `CognitiveCore` and its salience, arousal, prediction,
+drive, incubation, and mixed-pulse machinery remain in the source tree for comparison and selective salvage;
+they are not the production resident path.
 
-The core follows this cycle:
+The live loop separates cheap polling from model activation:
 
 ```text
-perceive -> append evidence -> derive state -> maybe produce one model pulse -> act or rest
+poll current place and local speech
+  -> activate on first start, new local speech, explicit wake, or a five-minute baseline
+  -> optionally read one advertised source
+  -> attempt one typed action, continue privately, or wait
+  -> record a content-blind outcome
 ```
+
+The twenty-second tick is therefore a chance to notice a new local signal, not necessarily a model call.
+Old room speech is not replayed as new at each baseline activation. Quiet, reading, and private continuation
+are complete choices; the runtime does not manufacture pressure to speak or move.
 
 The complete ledger file is append-only and is intended to be the resident's durable event authority. A
 versioned checkpoint is intended to hold current working state so normal ticks do not replay the entire life
 history, and it can be rebuilt from the ledger.
 
-That checkpoint path is under active repair in Major 137. Unfinished routes, mail, research, packets, and
+That checkpoint path was repaired in Major 137. Unfinished routes, mail, research, packets, and
 intents now advance from checkpoint state rather than being reconstructed from the newest 10,000 events.
 Completed queue history may be bounded, but it cannot evict older open work. New appends are serialized,
 numbered, flushed to disk, and checked for corruption; an incomplete final fragment is preserved separately
 before the next append. Replay is deterministic at an explicit `as_of` time, and expired packet or intent work
 closes through a ledger event at the tick's chosen time. A normal append writes only the ledger record and one
-checkpoint; an explicit rebuild removes the former projection and snapshot files. Several live readers still
-need classification or migration onto the checkpoint API. The normal tick, prompt, recent voice, and current
-salience paths already use checkpoint or explicitly bounded recent state; complete replay is reserved for
-recovery, migration, and audit paths, apart from the still-open kept-memory compatibility reader.
+checkpoint; an explicit rebuild removes the former projection and snapshot files. The production loop does
+not parse cold history during an ordinary tick. Complete replay remains available for recovery, migration,
+audit, and explicitly historical tools.
 
 ## Information and action are separate
 
-`reach` reads one named information source inside a bounded pulse. It does not change the world. `act`
-speaks, moves, writes, or invokes one typed world command.
+One provisional `read` choice reads one named information source. It does not change the world. A final `act`
+choice speaks, moves, writes, or invokes one typed world command.
 
 Information providers return structured records with source, time, locality, visibility, and freshness.
 Rendering those records into model text happens only at the inference boundary.
 
-The returned query and prose are available to that inference continuation but are not copied into the
+The returned prose is available to one final inference call but is not copied into the
 permanent resident ledger. The ledger keeps a content-blind access receipt with source, outcome, provenance,
 and record count. Identity growth is the narrow exception: its receipt retains the one proposal record ID
 needed to prove explicit inspection before adoption, never the proposal text.
 
-The resident host allows at most two private reads per active pulse by default. A run may request fewer
-or more, but `WW_REACH_CONTINUATION_MAX` is the host's final ceiling (and the code will never allow more
-than eight). After the final read, the model may make one outward act or rest; it cannot open another read.
-Equivalent successful reads are reused for 30 seconds by default, controlled by
-`WW_INFORMATION_FRESHNESS_SECONDS`, and a duplicate closes the read chain without another model call.
-Exact-place speech, visible people, and other immediate perception never spend this elective-read budget.
+There is exactly one elective read per activation. After that read, the model must attempt one outward action,
+continue a private activity, or wait; it cannot open another read. Exact-place speech and visible people are
+immediate observation and do not spend this read.
 
-Each active pulse records a content-blind `pulse_runtime_summary`: model calls, read requests and results,
-duplicates avoided, whether the budget ran out, elapsed time, and whether an outward act followed. The
-receipt deliberately excludes the read query and returned text.
-
-Ordinary runs do not retain exact model prompts or responses. A bounded diagnostic can explicitly enable a
-private prompt-trace file, but reducers never read it and portable hearth packages exclude it.
+Each activation records content-blind receipts: whether inference completed, whether one source was requested,
+and whether an action was confirmed, declined, or left unknown. It does not store the prompt, completion,
+read query, returned text, or action prose in the ledger. A final private continuation is resident-owned state
+and is recorded in the private ledger. The old core's explicitly enabled prompt tracing remains legacy
+diagnostic code and is not wired into the production reference loop.
 
 ## World attachment
 

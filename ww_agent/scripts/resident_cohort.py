@@ -26,31 +26,23 @@ SUMMARY_FIELDS = (
     "model",
     "elapsed_seconds",
     "ticks",
-    "ignitions",
-    "settling_pulses",
-    "fervor_pulses",
-    "venture_pulses",
-    "pulse_attempts",
-    "unrouted_pulse_attempts",
-    "pulses_routed",
-    "information_requests",
+    "resident_loop",
+    "activations",
+    "idle_polls",
     "information_reads",
-    "duplicate_reads_avoided",
-    "read_budget_exhaustions",
-    "pulse_model_calls",
-    "pulse_elapsed_ms",
-    "acts_executed",
-    "resting_ticks",
+    "actions_attempted",
+    "actions_confirmed",
+    "actions_declined",
+    "actions_unknown",
+    "private_continuations",
+    "waits",
     "ticks_by_attachment",
     "actions_by_attachment",
     "action_kinds",
-    "venture_gate_reasons",
     "inference_calls",
     "prompt_tokens",
     "completion_tokens",
     "recovered_json_responses",
-    "action_tendency",
-    "requested_reach_continuations",
 )
 
 
@@ -137,9 +129,6 @@ def _resident_command(
     duration: float | None = None,
     model: str | None = None,
     temperature: float | None = None,
-    action_tendency: bool = False,
-    reach_continuations: int | None = None,
-    trace_prompts: bool = False,
 ) -> list[str]:
     command = [
         sys.executable,
@@ -160,12 +149,6 @@ def _resident_command(
         command.extend(["--model", model])
     if temperature is not None:
         command.extend(["--temperature", str(temperature)])
-    if action_tendency:
-        command.append("--action-tendency")
-    if reach_continuations is not None:
-        command.extend(["--reach-continuations", str(reach_continuations)])
-    if trace_prompts:
-        command.append("--trace-prompts")
     return command
 
 
@@ -295,9 +278,6 @@ def _run(args: argparse.Namespace) -> int:
                 duration=args.duration,
                 model=args.model,
                 temperature=args.temperature,
-                action_tendency=args.action_tendency,
-                reach_continuations=args.reach_continuations,
-                trace_prompts=args.trace_prompts,
             )
             process = subprocess.Popen(
                 command,
@@ -359,15 +339,15 @@ def _run(args: argparse.Namespace) -> int:
 
     totals: dict[str, Any] = {
         "ticks": 0,
-        "pulse_attempts": 0,
-        "pulses_routed": 0,
-        "information_requests": 0,
+        "activations": 0,
+        "idle_polls": 0,
         "information_reads": 0,
-        "duplicate_reads_avoided": 0,
-        "read_budget_exhaustions": 0,
-        "pulse_model_calls": 0,
-        "pulse_elapsed_ms": 0.0,
-        "acts_executed": 0,
+        "actions_attempted": 0,
+        "actions_confirmed": 0,
+        "actions_declined": 0,
+        "actions_unknown": 0,
+        "private_continuations": 0,
+        "waits": 0,
         "inference_calls": 0,
         "prompt_tokens": 0,
         "completion_tokens": 0,
@@ -376,20 +356,20 @@ def _run(args: argparse.Namespace) -> int:
     for summary in summaries.values():
         for field in (
             "ticks",
-            "pulse_attempts",
-            "pulses_routed",
-            "information_requests",
+            "activations",
+            "idle_polls",
             "information_reads",
-            "duplicate_reads_avoided",
-            "read_budget_exhaustions",
-            "pulse_model_calls",
-            "acts_executed",
+            "actions_attempted",
+            "actions_confirmed",
+            "actions_declined",
+            "actions_unknown",
+            "private_continuations",
+            "waits",
             "inference_calls",
             "prompt_tokens",
             "completion_tokens",
         ):
             totals[field] += int(summary.get(field) or 0)
-        totals["pulse_elapsed_ms"] += float(summary.get("pulse_elapsed_ms") or 0.0)
         for kind, count in (summary.get("action_kinds") or {}).items():
             totals["action_kinds"][kind] = totals["action_kinds"].get(kind, 0) + int(
                 count or 0
@@ -407,8 +387,7 @@ def _run(args: argparse.Namespace) -> int:
         "city": args.city,
         "requested_duration_seconds": args.duration,
         "startup_stagger_seconds": args.stagger,
-        "action_tendency": bool(args.action_tendency),
-        "requested_reach_continuations": args.reach_continuations,
+        "resident_loop": "reference-v1",
         "residents": summaries,
         "totals": totals,
         "presence": _finalize_presence(presence),
@@ -445,19 +424,6 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--model", help="temporary model shared by this run")
     parser.add_argument("--temperature", type=float)
-    parser.add_argument("--action-tendency", action="store_true")
-    parser.add_argument(
-        "--trace-prompts",
-        action="store_true",
-        help="capture each resident's exact private prompts during this bounded diagnostic",
-    )
-    parser.add_argument(
-        "--reach-continuations",
-        type=int,
-        choices=range(0, 9),
-        metavar="0-8",
-        help="requested reads per active pulse; the resident host may lower it",
-    )
     parser.add_argument(
         "--stagger", type=float, default=1.5, help="seconds between resident starts"
     )

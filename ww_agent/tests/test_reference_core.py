@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -50,8 +51,18 @@ class _FakeWorld:
         self.scene = SimpleNamespace(
             location="Alderbank Commons",
             present=[
-                SimpleNamespace(name="test_resident", role="Test Resident"),
-                SimpleNamespace(name="Riley", role="Riley"),
+                SimpleNamespace(
+                    name="test_resident",
+                    role="Test Resident",
+                    actor_id="actor-test-resident",
+                    session_id="test-session",
+                ),
+                SimpleNamespace(
+                    name="Riley",
+                    role="Riley",
+                    actor_id="actor-riley",
+                    session_id="riley-session",
+                ),
             ],
             ambient_presence=[SimpleNamespace(label="Rain ticks on the awning")],
             recent_events_here=[SimpleNamespace(summary="A cup changed hands")],
@@ -71,6 +82,7 @@ class _FakeWorld:
             SimpleNamespace(
                 id=1,
                 session_id="riley-session",
+                actor_id="actor-riley",
                 display_name="Riley",
                 message="Test Resident, are you staying for tea?",
             )
@@ -218,6 +230,62 @@ def test_wait_is_a_complete_choice_and_calls_no_effector(tmp_path):
     assert load_runtime_events(memory_dir)[-1]["payload"]["outcome"] == "no_action"
 
 
+def test_no_new_signal_does_not_call_the_model_again_before_baseline(tmp_path):
+    core, _memory_dir, acted, reads = _core(
+        tmp_path,
+        responses=[{"choice": "wait"}],
+    )
+    start = datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc)
+
+    first = asyncio.run(core.tick_once(now=start))
+    second = asyncio.run(core.tick_once(now=start + timedelta(seconds=20)))
+
+    assert first["status"] == "completed"
+    assert second == {
+        "status": "idle",
+        "choice": "none",
+        "reason": "no_new_local_signal_and_baseline_not_due",
+    }
+    assert not acted
+    assert not reads
+
+
+def test_new_local_speech_wakes_before_the_slow_baseline(tmp_path):
+    core, _memory_dir, _acted, _reads = _core(
+        tmp_path,
+        responses=[{"choice": "wait"}, {"choice": "wait"}],
+    )
+    start = datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc)
+    asyncio.run(core.tick_once(now=start))
+    core._world.chat.append(
+        SimpleNamespace(
+            id=2,
+            session_id="riley-session",
+            actor_id="actor-riley",
+            display_name="Riley",
+            message="One more thing, Test Resident.",
+        )
+    )
+
+    result = asyncio.run(core.tick_once(now=start + timedelta(seconds=20)))
+
+    assert result["status"] == "completed"
+
+
+def test_slow_baseline_does_not_replay_old_speech_as_new(tmp_path):
+    core, _memory_dir, _acted, _reads = _core(
+        tmp_path,
+        responses=[{"choice": "wait"}, {"choice": "wait"}],
+    )
+    start = datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc)
+
+    asyncio.run(core.tick_once(now=start))
+    asyncio.run(core.tick_once(now=start + timedelta(minutes=5)))
+
+    assert "Recently said here" in core._llm.calls[0][1]
+    assert "Recently said here" not in core._llm.calls[1][1]
+
+
 def test_observation_does_not_turn_unavailable_into_empty():
     unavailable = asyncio.run(
         observe_reference_world(
@@ -247,8 +315,10 @@ def test_local_direct_speech_is_in_the_unavoidable_observation():
     )
 
     assert observation.present == ("Riley",)
+    assert observation.co_present == (("actor-riley", "riley-session", "Riley"),)
     assert observation.local_speech == (
         "Riley: Test Resident, are you staying for tea?",
     )
     assert observation.reachable == ("Commons Bank",)
     assert observation.source_names == {"library"}
+    assert observation.heard == (("Riley", "1", "chat:Alderbank Commons:1"),)

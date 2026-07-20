@@ -10,6 +10,7 @@ from src.familiar.config import HearthConfig
 from src.identity.loader import LoopTuning, ResidentIdentity
 from src.resident import Resident
 from src.runtime.ledger import load_runtime_events
+from src.runtime.reference_core import ReferenceResidentCore
 from src.runtime.travel import PendingShardTravel, TravelRequest
 from src.world.city_world import CityWorld
 
@@ -604,7 +605,7 @@ def test_model_override_can_omit_temperature_without_rewriting_identity(
         def __init__(self, **kwargs):
             captured.update(kwargs)
 
-    monkeypatch.setattr(resident_module, "CognitiveCore", _Core)
+    monkeypatch.setattr(resident_module, "ReferenceResidentCore", _Core)
     resident = Resident(
         tmp_path / "resident",
         _FakeCityClient(),
@@ -616,27 +617,31 @@ def test_model_override_can_omit_temperature_without_rewriting_identity(
 
     resident._build_core(object(), "session-test")
 
-    assert captured["pulse_model"] == "research/model"
-    assert captured["pulse_temperature"] is None
+    assert captured["model"] == "research/model"
+    assert captured["temperature"] is None
     assert resident.identity.tuning.fast_model is None
 
 
-def test_action_tendency_override_reaches_each_rebuilt_core(tmp_path, monkeypatch):
-    captured: dict = {}
+def test_resident_host_builds_and_runs_the_reference_core_at_hearth(tmp_path):
+    class _WaitLLM:
+        async def complete_json(self, *_args, **_kwargs):
+            return {"choice": "wait"}
 
-    class _Core:
-        def __init__(self, **kwargs):
-            captured.update(kwargs)
-
-    monkeypatch.setattr(resident_module, "CognitiveCore", _Core)
     resident = Resident(
         tmp_path / "resident",
         _FakeCityClient(),
-        llm=object(),
-        action_tendency=True,
+        llm=_WaitLLM(),
     )
     resident._identity = _identity()
+    resident._attachment_kind = "hearth"
+    resident._session_id = None
+    (resident._resident_dir / "memory").mkdir(parents=True)
+    world = resident._build_hearth_world()
 
-    resident._build_core(object(), "session-test")
+    core = resident._build_core(world, resident._active_session_id())
+    result = asyncio.run(core.tick_once())
 
-    assert captured["action_tendency"] is True
+    assert isinstance(core, ReferenceResidentCore)
+    assert result["choice"] == "wait"
+    assert "pulse_emitted" not in _event_types(resident)
+    assert _event_types(resident)[-1] == "reference_activation_outcome"

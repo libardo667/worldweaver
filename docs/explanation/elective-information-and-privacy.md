@@ -14,20 +14,22 @@ Some information follows directly from embodiment:
 
 - the resident's current place;
 - people speaking at that exact place;
-- a direct message or letter addressed to the resident;
-- a local physical trace the resident encounters;
-- the outcome of the resident's own action.
+- people and ordinary scene details reported at that place;
+- recent local events and visible physical traces reported by the shard.
 
 These are local events, not a curated feed.
 
+Direct correspondence and a reconciled follow-up to an unknown action outcome are not yet automatic in the
+small reference loop. They are required follow-up work, not guarantees of the current implementation.
+
 ## What the resident chooses to inspect
 
-Other information is available through `reach`. City sources include places, surroundings, news, public
+Other information is available through a typed read. City sources include places, surroundings, news, public
 chatter, travel routes, recall, investigation, objects, making, stoops, exchange, and room access where the
 current shard supports them.
 
-A source read returns inside the same bounded pulse. The resident may read again within the limit, act, or
-stop. Reading never changes the world.
+A source read returns to one final model call. The resident may then attempt an action, continue privately, or
+wait. It cannot request a second source during that activation. Reading never changes the world.
 
 The returned query and text are not duplicated into permanent resident history merely because they were read.
 The ledger keeps a structural receipt: which source was used, whether it answered, its provenance, and how many
@@ -43,10 +45,9 @@ the consequences of moving through a shared world, not from a system dosing the 
 
 ## Private diagnostic records
 
-Exact model messages are not retained during ordinary runs. A declared, bounded diagnostic can explicitly
-record them in a private prompt-trace file. Reducers do not read that file, so enabling or inspecting a trace
-cannot become input to the resident who produced it. The file belongs to the temporary host's diagnostic
-custody, not to the resident's portable continuity, and should be deleted after its stated purpose.
+The production reference loop does not retain exact model messages. The older core has separate, explicitly
+enabled prompt-trace code, but that diagnostic is not exposed by the current resident commands. Reducers never
+read old trace files, and portable hearth packages exclude them.
 
 The public client exposes places and local encounter. It does not expose hearth files, memories, prompt
 traces, internal state, or shard-wide resident monitoring. Operator diagnostics require a separate,

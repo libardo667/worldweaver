@@ -1,11 +1,15 @@
 # Source map
 
 - `main.py` — process entry point, configuration, resident discovery, shared clients, and task startup.
-- `resident.py` — shared resident host and lifecycle: one home, one core, and one exclusive city or hearth
+- `resident.py` — shared resident host and lifecycle: one home, one reference core, and one exclusive city or hearth
   attachment. It owns confirmed city departure, core rebuild, fresh city return,
   keeper-whisper wake signals, and optional tick-count or elapsed-time bounds and read-only observers used
   by operational surfaces. A time-bound host run changes no cognitive clock; the core keeps its own cadence.
-- `runtime/cognitive_core.py` — authoritative perceive → integrate → ignite → pulse → act path.
+- `runtime/reference_core.py` — production resident loop. It polls current-place facts and local speech,
+  activates on a new local signal or slow baseline, permits one elective read, and accepts one final action,
+  private continuation, or wait choice.
+- `runtime/cognitive_core.py` — audited predecessor. It is not constructed by the resident host; keep it only
+  as comparison and selective migration material until its remaining useful contracts are separated.
 - `runtime/ledger.py` — append-only event history and a versioned current-state checkpoint. Major 137 is
   classifying remaining full-history readers. New events use
   a serialized, durably flushed sequence; an incomplete final write is quarantined and completed-record
@@ -13,23 +17,17 @@
   cannot be evicted by bounded recent history. Replay clocks are explicit, and queue expiry produces a named
   terminal event. Normal append writes no standalone projection or snapshot shadows. It also derives the small relationship view from prompt-delivery and reply edges. These
   private projections stay in the hearth and are not copied into city session storage.
-- `runtime/prompt_trace.py` — explicitly enabled private inference-boundary evidence, off during ordinary
-  runs and excluded from every substrate reducer.
+- `runtime/prompt_trace.py` — legacy-core diagnostic code; it is not wired into the production reference loop.
 - `runtime/prompt_context.py` — typed available/selected/withheld source envelope and final prose renderer.
 - `runtime/information.py` — private elective source access plus the structured provider-record contract;
   separate from outward effectors. It briefly reuses an equivalent successful read so repeated requests do
   not reopen the same source or trigger another continuation model call. Durable access receipts omit the
   query, returned prose, and ordinary record IDs; identity growth retains only the proposal ID required for
   explicit adoption.
-- `runtime/perception.py` — assigns source identity, emits encounters once, and renders still-pending
-  speech and physical-trace encounters for prompts; `cognitive_core.py` marks prompt-included packets
-  observed.
-- `runtime/integrator.py`, `salience.py`, `prediction.py` — turn world changes into pressure and candidate
-  action.
-- `runtime/pulse.py`, `pulse_engine.py`, `effectors.py` — form a pulse, distinguish private `reach` from
-  outward `act`, and discharge only the latter through concrete effectors. The bounded reach continuation
-  closes its source catalog on the last allowed read and cannot route an unfulfillable extra request. The
-  resident host owns the limit (two by default), while the integrator records content-blind cost and timing.
+- `runtime/perception.py`, `integrator.py`, `salience.py`, `prediction.py`, and `pulse_engine.py` — old-core
+  mechanisms retained for tests and individual review; they are not the production scheduler.
+- `runtime/pulse.py` — currently supplies the typed read/action data contracts used at the narrow adapter.
+- `runtime/effectors.py` — sends final typed action attempts to concrete world rules.
 - `runtime/travel.py` — classifies world travel separately from ordinary movement and derives unfinished
   city handoffs from ledger evidence; worlds signal intent and `resident.py` performs or resumes the
   lifecycle change without running cognition between nodes.

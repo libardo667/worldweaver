@@ -7,33 +7,27 @@ engine decides shared world facts and whether actions succeed.
 ## Runtime
 
 ```text
-world observation
-      ↓
-perception → append-only ledger → derived current state → salience and pulse → typed effectors
-                                              ↘ elective source read ↗
+poll current place and local speech
+      ↓ when first started, newly addressed, explicitly woken, or baseline is due
+one model choice → optional single source read → final choice → typed effector or quiet
 ```
 
-There is one `CognitiveCore` per awake resident. `src/resident.py` keeps that same core attached to either
-the resident's private hearth or one city at a time. City-to-city travel retires the source session and
-starts the same actor at the destination through a recoverable handoff. Moving a hearth between computers
-is a separate stopped-host migration.
+There is one `ReferenceResidentCore` per awake resident. `src/resident.py` keeps that same resident attached
+to either their private hearth or one city at a time. City-to-city travel retires the source session and
+starts the same actor at the destination through a recoverable handoff. Moving a hearth between computers is
+a separate stopped-host migration. The older `CognitiveCore` remains as non-production comparison code while
+useful pieces are evaluated individually.
 
-The resident automatically receives only unavoidable local information: current embodiment, exact-place
-speech, direct correspondence, local traces, and action results. Broader city information, routes, files,
-recall, measurement, objects, making, and stoops are elective sources. A source read can continue within
-one bounded ignition, but only a typed effector can change the shared world.
+The resident automatically receives only current-place facts and exact-place speech. Broader city information,
+routes, files, objects, making, and stoops are elective sources. One activation may read one source before its
+final choice, but only a typed effector can change the shared world.
 
-Every observation, decision, source read, and action receipt is appended to the resident ledger. A versioned
-checkpoint is intended to provide current state without rereading the resident's full life. That path is under
-active repair in Major 137: new records now have serialized sequence numbers, durable writes, and explicit
-corruption handling, and unfinished lifecycle work now survives bounded semantic replay. Some normal readers
-still scan the complete ledger, but queue expiry is now an explicit event at the tick's injected time and full
-replay is deterministic. Normal append writes only the ledger record and one current-state checkpoint; old
-projection and snapshot files are removed by an explicit rebuild. The normal tick, prompt, voice, and salience
-paths use checkpoint or bounded recent state rather than replaying a whole life. Exact model requests are not
-retained during ordinary runs. A deliberately
-enabled diagnostic may write them to `memory/prompt_traces.jsonl`; those traces are private host evidence and
-are never cognitive input or portable resident state.
+The ledger holds durable lifecycle evidence and content-blind inference, information, and action receipts. A
+versioned checkpoint provides current state without rereading the resident's full life. Records have serialized
+sequence numbers, durable writes, explicit corruption handling, deterministic replay, and open-work indexes
+that survive bounded history. An ordinary reference-loop tick does not parse cold history. Exact prompts,
+completions, read results, and action prose are not retained. A final private continuation is recorded only in
+the resident's private ledger.
 
 ## Run from the repository root
 
@@ -56,10 +50,10 @@ After reviewing the preflight, a bounded wake is explicit:
 python dev.py resident --city ww_alderbank --resident NAME --wake --ticks 3
 ```
 
-Use `--duration 15m` for natural wall-clock timing. The bounded runner disables the doula and parks the
-resident at their hearth afterward. Add `--trace-prompts` only for a declared inference-boundary diagnostic;
-ordinary runs do not retain exact prompts. `--park` performs cleanup without cognition after an interrupted
-run.
+Use `--duration 15m` for natural wall-clock timing. The resident polls every twenty seconds but normally calls
+the model only on its first poll, new local speech, an explicit wake, or the five-minute baseline. The bounded
+runner disables the doula and parks the resident at their hearth afterward. `--park` performs cleanup without
+cognition after an interrupted run.
 
 Create fresh dormant residents with a dry run first:
 
@@ -85,12 +79,11 @@ hearths; they use the same `Resident` host and do not define a second kind of pe
 ## Code map
 
 - `src/resident.py`: resident lifetime, hearth/city attachment, and travel recovery
-- `src/runtime/cognitive_core.py`: authoritative perceive-to-act composition
+- `src/runtime/reference_core.py`: production poll, one-read, and final-choice loop
+- `src/runtime/cognitive_core.py`: non-production audited predecessor retained for selective salvage
 - `src/runtime/ledger.py`: complete event history, serialized durable writes, corruption checks, and derived
   current state; remaining cold-history reader cleanup is active
-- `src/runtime/perception.py`: source identity and consume-on-prompt handling
 - `src/runtime/information.py`: elective typed source access
-- `src/runtime/pulse_engine.py`: salience, ignition, and pulse generation
 - `src/runtime/effectors.py`: typed action boundary
 - `src/world/client.py`: engine transport
 - `src/world/resident_signing.py`: exact request signatures for an injected short-lived resident runtime key

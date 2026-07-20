@@ -436,31 +436,11 @@ def _resident(args: list[str]) -> int:
         type=float,
         help="seconds between smoke-test ticks (default 0.5; unavailable with --duration)",
     )
-    parser.add_argument("--model", help="temporary pulse model for this run only")
+    parser.add_argument("--model", help="temporary resident model for this run only")
     parser.add_argument(
         "--temperature",
         type=float,
         help="temporary sampling temperature; omitted model swaps use the model default",
-    )
-    parser.add_argument(
-        "--action-tendency",
-        action="store_true",
-        help=(
-            "for this run only, let sustained restless fervor become a venture "
-            "toward a reachable place"
-        ),
-    )
-    parser.add_argument(
-        "--reach-continuations",
-        type=int,
-        choices=range(0, 9),
-        metavar="0-8",
-        help="requested reads per active pulse; the host maximum may lower it",
-    )
-    parser.add_argument(
-        "--trace-prompts",
-        action="store_true",
-        help="capture exact private prompts for this bounded diagnostic run",
     )
     parsed = parser.parse_args(args)
     if parsed.ticks is None and parsed.duration is None:
@@ -524,12 +504,6 @@ def _resident(args: list[str]) -> int:
         command.extend(["--model", parsed.model])
     if parsed.temperature is not None:
         command.extend(["--temperature", str(parsed.temperature)])
-    if parsed.action_tendency:
-        command.append("--action-tendency")
-    if parsed.reach_continuations is not None:
-        command.extend(["--reach-continuations", str(parsed.reach_continuations)])
-    if parsed.trace_prompts:
-        command.append("--trace-prompts")
     if parsed.wake:
         command.append("--wake")
     if parsed.park:
@@ -559,30 +533,13 @@ def _cohort(args: list[str]) -> int:
         type=_duration_seconds,
         help="natural-cadence run duration, such as 30m or 1h (required with --wake)",
     )
-    parser.add_argument("--model", help="temporary pulse model shared by this run")
+    parser.add_argument("--model", help="temporary resident model shared by this run")
     parser.add_argument("--temperature", type=float)
     parser.add_argument(
         "--stagger",
         type=float,
         default=1.5,
         help="seconds between resident starts (default: 1.5)",
-    )
-    parser.add_argument(
-        "--action-tendency",
-        action="store_true",
-        help="let sustained restless fervor become a venture toward a reachable place",
-    )
-    parser.add_argument(
-        "--reach-continuations",
-        type=int,
-        choices=range(0, 9),
-        metavar="0-8",
-        help="requested reads per active pulse; the resident host may lower it",
-    )
-    parser.add_argument(
-        "--trace-prompts",
-        action="store_true",
-        help="capture exact private prompts for this bounded cohort diagnostic",
     )
     parser.add_argument(
         "--output-dir",
@@ -643,12 +600,6 @@ def _cohort(args: list[str]) -> int:
         command.extend(["--model", parsed.model])
     if parsed.temperature is not None:
         command.extend(["--temperature", str(parsed.temperature)])
-    if parsed.action_tendency:
-        command.append("--action-tendency")
-    if parsed.reach_continuations is not None:
-        command.extend(["--reach-continuations", str(parsed.reach_continuations)])
-    if parsed.trace_prompts:
-        command.append("--trace-prompts")
     if parsed.output_dir:
         command.extend(["--output-dir", parsed.output_dir])
     return _run(command, env=runtime_env)

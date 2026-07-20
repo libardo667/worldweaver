@@ -6,9 +6,9 @@ This file narrows that guidance for `ww_agent/`.
 ## Read first
 
 1. `src/resident.py` — one resident's composition root.
-2. `src/runtime/cognitive_core.py` — the current perceive → integrate → ignite → pulse → act path.
+2. `src/runtime/reference_core.py` — the production poll → optional read → final choice path.
 3. `src/runtime/ledger.py` — durable evidence and private derived runtime state.
-4. `src/runtime/{perception,integrator,pulse_engine,effectors}.py` — the principal seams.
+4. `src/runtime/{information,effectors}.py` — the current read and action seams.
 5. Tests matching the surface being changed.
 
 The former fast/slow/mail loop bank and tiered `src/memory/` package are gone. Do not recreate them or
@@ -17,7 +17,9 @@ inputs in the identity loader; they do not restore the old ownership model.
 
 ## Runtime invariants
 
-- A resident has one `CognitiveCore`; independent behavior schedulers must not compete with it.
+- A resident has one `ReferenceResidentCore`; independent behavior schedulers must not compete with it.
+  `CognitiveCore`, perception, integration, salience, prediction, and pulse generation are audited legacy
+  mechanisms, not the production path. Do not reconnect one without an explicit work item and paired proof.
 - `src/resident.py` owns one resident across city and hearth attachments. It confirms public session
   retirement and only then rebuilds the core against the private hearth. A
   failed departure must leave the resident in the city; never run two cores or two active attachments.
@@ -29,7 +31,7 @@ inputs in the identity loader; they do not restore the old ownership model.
   `runtime.lock`. Operational cleanup may park an existing session without running cognition; never leave
   a stopped process looking alive in the city roster.
 - `scripts/familiar.py` is an operational adapter around `src.resident.Resident`, not another composition
-  root. Portraits and smoke runners may observe ticks but must not instantiate their own `CognitiveCore`.
+  root. Portraits and smoke runners may observe ticks but must not instantiate their own resident core.
 - Durable observations and actions enter the append-only ledger. Runtime views are projections, not a
   second source of truth, and they stay in the hearth rather than being copied into city session storage.
 - The doula writes a new resident's immutable `resident_seeded` record before booting them. Shared
@@ -45,16 +47,14 @@ inputs in the identity loader; they do not restore the old ownership model.
   the remaining cold-reader audit. Expiry uses the tick's injected time and writes a terminal event. Normal
   append writes the ledger and one checkpoint, never the removed projection and snapshot shadows. Do not make
   the normal write path grow with lifetime history or restore front truncation.
-- Polling a source emits a stable stimulus packet; it does not by itself mean the resident attended to
-  that source. Prompt-included encounters transition from `pending` to `observed` through ledger events.
+- The production loop polls current-place facts and local public speech. Polling is not a model activation;
+  first start, new local speech, an explicit wake, or the slow baseline activates the model. Do not replay old
+  speech as new at every baseline.
 - Relationship summaries are reducer output, not a second memory store. They may use only an
   `utterance_perceived` delivery event and a canonical reply edge; their subjective claims must retain
   the supporting ledger event IDs and never turn chat text into an unsupported belief.
-- `runtime/prompt_context.py` is the typed selection boundary between perception and prose. Mode policy
-  must be explicit there; source selection, recall/affect input, traces, and packet consumption must agree.
-- Exact prompts/completions may be captured in `memory/prompt_traces.jsonl` only through an explicit bounded
-  diagnostic. Capture is off by default. This file is host evidence about the inference boundary, never
-  portable resident state or cognitive input; no reducer may read it.
+- The production reference loop does not store exact prompts or completions. `runtime/prompt_context.py` and
+  `runtime/prompt_trace.py` belong to the old core; no reducer may read old diagnostic traces.
 - `WorldWeaverClient` is the engine boundary. Keep engine-specific transport out of cognitive modules.
 - Canonical identity is immutable at runtime. Proposed growth stays in the private ledger. Mutable growth
   is hearth-owned and changes only after the resident inspects a proposal and explicitly adopts it there.
@@ -71,16 +71,13 @@ inputs in the identity loader; they do not restore the old ownership model.
   input only). Missing configuration means no keeper, gifts, host file roots, weather lookup, visual
   input, tools, or egress.
   Relative read roots resolve from that resident's home and remain behind FileScope's structural guards.
-- Elective information uses typed `Pulse.reach` → `InformationAccess`; it never masquerades as `act.do`
-  and never crosses the engine action/narration endpoint. A reach continuation may end with no outward act.
-  Returned queries and prose are transient continuation input, not durable ledger content. Keep ordinary
+- Elective information uses one typed read through `InformationAccess`; it never masquerades as `act.do`
+  and never crosses the engine action/narration endpoint. A read may end with no outward act.
+  Returned queries and prose are transient final-call input, not durable ledger content. Keep ordinary
   `information_accessed` receipts content-blind; the growth source may retain only its proposal record ID
   because explicit adoption depends on proof of exact inspection.
-  The final allowed read must close the reading window in both prompt and routing: never invite or persist
-  a reach that the current pulse can no longer fulfill. `CognitiveCore`, not the model producer, owns the
-  run limit and clamps it to the host's `WW_REACH_CONTINUATION_MAX` (default two, absolute ceiling eight).
-  A fresh equivalent source/query is reused briefly and closes the chain without another continuation call.
-  Immediate embodied perception remains outside this elective-read budget.
+  The reading window closes after exactly one read. The final model call may act, continue privately, or wait,
+  but cannot request a second source. Immediate embodied observation remains outside this elective-read limit.
 - Federation route discovery is an elective city source. Reading possible routes must not move a resident;
   actual city-to-city travel belongs to the resident host and must use the engine's recoverable departure
   and arrival contract before switching its WorldWeaver client.
@@ -90,7 +87,7 @@ inputs in the identity loader; they do not restore the old ownership model.
 - Information providers return structured records retaining provenance, freshness, locality, visibility,
   and selection mode. Render records only at the inference boundary; traces keep the structured form.
 - Images and rendered PDF pages may accompany only the typed read that requested them and only under an
-  explicit vision grant. Prompt traces store their hashes and sizes, not the image bodies.
+  explicit vision grant. Old-core prompt traces store their hashes and sizes, not the image bodies.
 - Gift delivery writes a resident-owned artifact and private notice. It never becomes ambient scene
   narration; an explicitly granted `gifts` source lists and opens it when the resident chooses. A legacy
   import carrying both the private delivery ledger and its files must keep that archive readable, including

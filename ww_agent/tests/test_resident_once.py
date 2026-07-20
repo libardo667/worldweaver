@@ -105,23 +105,18 @@ def test_tick_receipt_counts_attachment_mode_and_action_kind():
 
     stats = {
         "ticks": 0,
-        "ignitions": 0,
-        "settling_pulses": 0,
-        "fervor_pulses": 0,
-        "venture_pulses": 0,
-        "pulses_routed": 0,
-        "information_requests": 0,
+        "activations": 0,
+        "idle_polls": 0,
         "information_reads": 0,
-        "duplicate_reads_avoided": 0,
-        "read_budget_exhaustions": 0,
-        "pulse_model_calls": 0,
-        "pulse_elapsed_ms": 0.0,
-        "acts_executed": 0,
-        "resting_ticks": 0,
+        "actions_attempted": 0,
+        "actions_confirmed": 0,
+        "actions_declined": 0,
+        "actions_unknown": 0,
+        "private_continuations": 0,
+        "waits": 0,
         "ticks_by_attachment": {},
         "actions_by_attachment": {},
         "action_kinds": {},
-        "venture_gate_reasons": {},
     }
     world = object.__new__(LocalWorld)
 
@@ -129,27 +124,11 @@ def test_tick_receipt_counts_attachment_mode_and_action_kind():
         stats,
         world,
         {
-            "ignited": False,
-            "settled": True,
-            "fervor": False,
-            "venture": False,
-            "pulse_routed": {"pulse_id": "pulse-test"},
-            "information_accessed": [{"source": "recall"}],
-            "pulse_metrics": {
-                "information_requests": 2,
-                "information_reads_served": 1,
-                "duplicate_reads_avoided": 1,
-                "read_budget_exhausted": True,
-                "model_calls": 2,
-                "elapsed_ms": 12.5,
-            },
+            "status": "completed",
+            "choice": "act",
+            "reads": 1,
+            "action_outcome": "confirmed",
             "act_executed": {"executed": True, "kind": "write"},
-            "resting": False,
-            "venture_gate": {
-                "enabled": True,
-                "evaluated": True,
-                "reason": "opened",
-            },
         },
         1,
     )
@@ -158,29 +137,19 @@ def test_tick_receipt_counts_attachment_mode_and_action_kind():
         "event": "resident_tick",
         "tick": 1,
         "attachment": "hearth",
-        "mode": "settling",
-        "pulse_routed": True,
-        "information_requests": 2,
+        "status": "completed",
+        "choice": "act",
         "information_reads": 1,
-        "duplicate_reads_avoided": 1,
-        "read_budget_exhausted": True,
-        "pulse_model_calls": 2,
-        "pulse_elapsed_ms": 12.5,
+        "action_outcome": "confirmed",
         "act_executed": True,
         "act_kind": "write",
-        "venture_gate": {
-            "enabled": True,
-            "evaluated": True,
-            "reason": "opened",
-        },
     }
     assert stats["ticks_by_attachment"] == {"hearth": 1}
     assert stats["actions_by_attachment"] == {"hearth": 1}
     assert stats["action_kinds"] == {"write": 1}
-    assert stats["venture_gate_reasons"] == {"opened": 1}
-    assert stats["information_requests"] == 2
-    assert stats["duplicate_reads_avoided"] == 1
-    assert stats["read_budget_exhaustions"] == 1
+    assert stats["activations"] == 1
+    assert stats["information_reads"] == 1
+    assert stats["actions_confirmed"] == 1
 
 
 def test_duration_parser_accepts_operator_units():

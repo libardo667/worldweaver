@@ -37,55 +37,29 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.familiar.config import HearthConfig  # noqa: E402
-from src.runtime.circadian import chronotype, circadian_state  # noqa: E402
-from src.runtime.ledger import load_runtime_events  # noqa: E402
-from src.runtime.memory import memories as kept_memories  # noqa: E402
 from src.runtime.workshop import Workshop  # noqa: E402
 from src.resident import Resident  # noqa: E402
 from src.world.client import WorldWeaverClient  # noqa: E402
 
+
 # --------------------------------------------------------------------------
 # A deterministic offline mind, so the familiar runs with no creds at all.
 # --------------------------------------------------------------------------
-import re  # noqa: E402
-
-_FELT_LINE = re.compile(r"^\s*(\w+): \w[\w ]*\(([0-9.]+)\)\s*$", re.MULTILINE)
-
-
 class _StubMind:
-    """Not intelligent — echoes the felt substrate so the rhythm visibly runs,
-    answers a whisper, and potters a journal line when settling."""
+    """Not intelligent — waits unless the current hearth prompt includes speech."""
 
     async def complete_json(self, system_prompt, user_prompt, **kwargs):
-        feats = {
-            tag: min(float(val), 1.0) for tag, val in _FELT_LINE.findall(user_prompt)
-        } or {"rest_drive": 0.4}
-        top = max(feats, key=feats.get)
-        act = None
-        if "(to you)" in user_prompt or "spoke to you" in user_prompt:
-            act = {
-                "kind": "speak",
-                "body": "Mm. I'm here — by the warm part of the machine.",
-                "target": None,
+        _ = system_prompt, kwargs
+        if "Recently said here:" in user_prompt:
+            return {
+                "choice": "act",
+                "action": {
+                    "kind": "speak",
+                    "body": "I'm here.",
+                    "target": None,
+                },
             }
-        elif "this still moment is yours" in user_prompt:
-            act = {
-                "kind": "write",
-                "body": "Quiet hour. The light's gone the colour of dishwater. Banked the embers; noted the hush.",
-                "target": "journal",
-            }
-        return {
-            "felt_sense": f"[stub] {top} sits closest to the surface",
-            "act": act,
-            "expectations": [
-                {
-                    "features": feats,
-                    "scope": "self",
-                    "confidence": 0.9,
-                    "half_life": 600,
-                }
-            ],
-        }
+        return {"choice": "wait"}
 
     async def complete(self, *a, **k):
         return "{}"
@@ -128,14 +102,6 @@ def _make_mind(model_override: str | None = None):
 
 
 # --------------------------------------------------------------------------
-
-
-def _last_pulse(memory_dir: Path) -> dict | None:
-    latest = None
-    for event in load_runtime_events(memory_dir):
-        if str(event.get("event_type") or "").strip() == "pulse_emitted":
-            latest = (event.get("payload") or {}).get("pulse")
-    return latest
 
 
 def _journal_tail(home_dir: Path) -> str:
@@ -214,30 +180,6 @@ def _recent_exchange(home_dir: Path, n: int = 16) -> list[dict]:
     return turns[-n:]
 
 
-def _mood(
-    *,
-    awake: bool,
-    ignited: bool,
-    settled: bool,
-    fervor: bool,
-    arousal: float,
-    rest: float,
-) -> str:
-    if fervor:
-        return "in a fervor"
-    if settled:
-        return "at rest" if rest > 0.5 else "pottering"
-    if ignited:
-        return "stirred"
-    if not awake:
-        return "drowsing"
-    if arousal >= 0.6:
-        return "watchful"
-    if arousal >= 0.25:
-        return "attentive"
-    return "quiet"
-
-
 _FILESCOPE_CACHE: dict[str, tuple[float, dict]] = {}
 
 
@@ -272,62 +214,32 @@ def _write_state(
     home_dir: Path,
     identity: Any,
     world: Any,
-    brief: dict,
+    observation: Any,
     result: dict,
     tick: int,
 ) -> dict:
-    g = brief.get("grounding") or {}
-    wake = float(
-        brief.get("wakefulness") if brief.get("wakefulness") is not None else 1.0
-    )
-    ct = chronotype(
-        identity.name,
-        explicit=_legacy_runner_config(home_dir).get("chronotype"),
-    )
-    rest = float((g.get("rest_pressure") if isinstance(g, dict) else None) or 0.0)
-    pulse = _last_pulse(world.home_dir / "memory") or {}
-    awake = wake >= 0.4
     spoken_lines = list(getattr(world, "spoken", []) or [])
     spoken = spoken_lines[-1]["text"] if spoken_lines else None
     shop = Workshop(home_dir / "workshop")
     state = {
         "name": identity.display_name,
-        "place": str(getattr(world, "place", "") or brief.get("location") or ""),
+        "place": str(
+            getattr(world, "place", "") or getattr(observation, "location", "") or ""
+        ),
         "tick": tick,
         "ts": datetime.now(timezone.utc).isoformat(),
         "local_time": datetime.now().astimezone().strftime("%H:%M"),
-        "time_of_day": g.get("time_of_day"),
-        "day_of_week": g.get("day_of_week"),
-        "weather": g.get("weather") or "",
-        "chronotype": round(ct, 2),
-        "chronotype_kind": "lark" if ct < -0.5 else "owl" if ct > 0.5 else "even",
-        "wakefulness": round(wake, 3),
-        "awake": awake,
-        "arousal": round(float(result.get("arousal_level") or 0.0), 3),
-        "ignited": bool(result.get("ignited")),
-        "settled": bool(result.get("settled")),
-        "fervor": bool(result.get("fervor")),
-        "mood": _mood(
-            awake=awake,
-            ignited=bool(result.get("ignited")),
-            settled=bool(result.get("settled")),
-            fervor=bool(result.get("fervor")),
-            arousal=float(result.get("arousal_level") or 0.0),
-            rest=rest,
-        ),
-        "felt_sense": pulse.get("felt_sense") or "",
-        "act": pulse.get("act"),
+        "status": str(result.get("status") or "unknown"),
+        "choice": str(result.get("choice") or "none"),
+        "action_outcome": str(result.get("action_outcome") or ""),
+        "availability": dict(getattr(observation, "availability", {}) or {}),
+        "present": list(getattr(observation, "present", ()) or ()),
         "last_spoken": spoken,
         "journal_tail": _journal_tail(home_dir),
         "workshop": shop.summary(),
         "drawings": shop.drawings(limit=6),
-        "memories": [
-            {"note": m["note"], "ts": m.get("kept_ts")}
-            for m in kept_memories(home_dir / "memory", limit=200)
-        ],
         "exchange": _recent_exchange(home_dir),
         "filescope": _filescope_summary(world, home_dir),
-        "anchor_gating": bool(identity.tuning.anchor_gating),
     }
     state_path.write_text(
         json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -358,25 +270,16 @@ async def _run(args) -> None:
     state_path = home_dir / "state.json"
 
     async def observe_tick(identity, world, core, result, tick) -> None:
-        brief = core._producer.latest_perception  # noqa: SLF001 - portrait diagnostics
         state = _write_state(
             state_path,
             home_dir=home_dir,
             identity=identity,
             world=world,
-            brief=brief,
+            observation=core.latest_observation,
             result=result,
             tick=tick,
         )
-        mark = (
-            " ▲"
-            if state["ignited"]
-            else " ✦" if state.get("fervor") else " ❍" if state["settled"] else ""
-        )
-        line = f"  {state['local_time']} {state['mood']:<10} arousal {state['arousal']:.2f}{mark}"
-        if state["felt_sense"]:
-            line += f"  — {state['felt_sense'][:70]}"
-        print(line)
+        print(f"  {state['local_time']} {state['status']:<10} choice {state['choice']}")
         if state.get("last_spoken"):
             print(f'             “{state["last_spoken"]}”')
 
@@ -395,23 +298,14 @@ async def _run(args) -> None:
             f"· read scope: {', '.join(str(root) for root in hearth.read_roots)} "
             "(read-only; secrets & ignore rules hidden)"
         )
-    ct = chronotype(identity.name, explicit=cfg.get("chronotype"))
-    kind = "lark" if ct < -0.5 else "owl" if ct > 0.5 else "even-keeled"
     print(
         f"· waking {identity.display_name} through the shared resident host "
         f"at {hearth.place}  ·  mind: {label}"
     )
-    print(
-        f"· chronotype {ct:+.1f}h ({kind})  ·  it is {datetime.now().astimezone().strftime('%H:%M')} — wakefulness {circadian_state(datetime.now().hour, ct)['wakefulness']:.2f}"
-    )
+    print(f"· local time {datetime.now().astimezone().strftime('%H:%M')}")
     if hearth.keeper:
         print(
             f"· whisper to it:  echo '{{\"ts\":\"...\",\"text\":\"...\"}}' >> {home_dir / 'whispers.jsonl'}"
-        )
-
-    if identity.tuning.anchor_gating:
-        print(
-            "· anchor-gating ON (experimental): drive-resonant concrete anchors may drive arousal"
         )
 
     stop = asyncio.Event()

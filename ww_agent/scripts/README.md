@@ -8,12 +8,9 @@ directory is only for tools you run to *operate* the system, not to measure it.
 - `resident_once.py` — read-only preflight by default, or wake one explicitly named resident against one
   live city. A 1–20 tick run is a compressed smoke test; `--duration 15m` instead keeps the resident's
   natural cadence. It uses the shared `Resident` host, accepts a run-only model override, prints a small
-  receipt and summary, and parks the resident at their hearth when the bound ends. `--action-tendency`
-  enables the existing venture path for only that run: it can turn sustained, awake restlessness into a
-  bodily prompt when somewhere is reachable, but it does not add a wander timer. Content-blind tick receipts
-  report whether that gate was evaluated and why it stayed closed or opened; summaries count those reasons.
-  `--park` retires a
-  leftover city session without running cognition.
+  receipt and summary, and parks the resident at their hearth when the bound ends. A tick is a local poll,
+  not necessarily a model call; summaries report activations, idle polls, reads, and action outcomes.
+  `--park` retires a leftover city session without running cognition.
 - `live_boot.py` — compatibility entrypoint for `resident_once.py`; prefer root `dev.py resident`, which
   also checks topology and the city's cohort container.
 - `hearth_manifest.py` — inspect one resident's stable, host-independent hearth identity; initialization
