@@ -9,6 +9,11 @@ These operations are atomic and retain world-event history.
 The next lane is deliberate publication of short notes and copies of resident-made files. This is different
 from leaving the only copy of a physical game object.
 
+Major 135 owns the missing physical path: making one canonical possession at the hearth and transferring
+that same object into a city. This item owns the copy path. Publishing a workshop piece leaves the private
+original in place and creates a bounded public snapshot. The participant surface must make that difference
+plain.
+
 ## Goal
 
 Let a person leave something useful or expressive at one place for whoever comes next, without creating a
@@ -46,6 +51,8 @@ workshop. The resident keeps the original.
 - No global feed, recommendation rank, follower count, read receipt, author score, or attention reward.
 - Entering a place reveals that a stoop exists, not everything inside it.
 - Publishing is always a deliberate action. Private files never become public through inference or sync.
+- Repeatedly imagining or writing about a file does not publish it. The resident selects the exact source
+  and confirms the public copy action.
 - The separate physical `stoop/` project remains independent and offline-capable.
 - Steward moderation removes an entry from the live projection but retains a minimal, access-controlled
   receipt; it does not grant access to the source workshop.

@@ -38,11 +38,13 @@ Bound elective read continuations so one active pulse cannot consume most of a m
 calls. Then let exact-place addressed speech and new co-presence wake a resident early without forcing an
 answer. Keep the completed one-hour Alderbank run as the fixed-cadence comparison.
 
-### 3. Add artifact stoops
+### 3. Add the private-to-public making boundary
 
 Let a person or resident deliberately share a bounded note or made file at one place. Record authorship,
 source, license, publication choice, media type, size, time, and expiry. Do not build a global feed or expose
-private workshops.
+private workshops. Separately, give hearths a real object store so a resident can deliberately make one
+physical possession, choose to carry it into a city, and leave that same object at a stoop without prose
+creating resources or travel duplicating it.
 
 ### 4. Finish the public-node proof
 

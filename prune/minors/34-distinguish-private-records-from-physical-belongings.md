@@ -18,8 +18,10 @@ than a proven cause.
 
 - Give prompt context separate typed sections for private records, carried physical objects, and local
   physical objects.
-- Add an explicit private/hearth location for a self-authored possession when the resident has established
-  one, without promoting that private claim into the city's canonical object store.
+- Treat a privately imagined possession as a belief until the resident deliberately creates a canonical
+  hearth object through Major 135. Do not promote private prose directly into any object store.
+- Once a canonical hearth object exists, retain its exact hearth placement when the resident leaves unless
+  the resident deliberately selects it to carry.
 - Describe workshop entries as private records available across attachments, not as current-room inventory.
 - When physical inventory has not been inspected, say it is unknown rather than empty or missing.
 - Permit a claim of loss or theft only when a canonical object receipt or a direct observed change supports
@@ -40,7 +42,9 @@ than a proven cause.
 - [ ] Prompt context labels private workshop records separately from physical inventory.
 - [ ] An unread physical inventory is represented as unknown, not empty or missing.
 - [ ] A private notebook project does not appear as a carried notebook object.
-- [ ] A privately imagined hearth possession can remain at the hearth when the resident enters a city.
+- [ ] A privately imagined hearth possession remains a belief until an explicit, policy-accepted making
+  action creates it.
+- [ ] A canonical hearth possession can remain at the hearth when the resident enters a city.
 - [ ] A canonical carried object and a local resting object remain distinguishable.
 - [ ] A loss or theft assertion can cite a canonical object transition when one exists.
 - [ ] Tests do not read or depend on any live resident's private workshop or ledger.

@@ -15,10 +15,10 @@
 | Area | Work items |
 | --- | --- |
 | Public deployment and federation | 18, 37, 127 |
-| Human participation and correspondence | 39, 43, 71 |
-| Resident cognition and identity | 56, 65, 67 |
+| Human participation and correspondence | 39, 43, 71, 133 |
+| Resident cognition and identity | 56, 65, 67, 132, 134 |
 | Operations and accounting | 70 |
-| Stoops, City Studio, and game town | 125, 126, 130 |
+| Stoops, City Studio, and game town | 125, 126, 130, 131, 135 |
 
 ## Active bounded work
 
@@ -27,6 +27,7 @@
 | 31 | Local topology command polish |
 | 32 | Durable child places on top of the completed ephemeral layer |
 | 33 | Deterministic environmental activity without fake people |
+| 34 | Separate private ideas from real belongings and current surroundings |
 | 122 | Explicit, resident-scoped external network access |
 
 ## Rules
