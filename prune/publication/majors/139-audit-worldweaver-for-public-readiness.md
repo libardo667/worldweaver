@@ -1,5 +1,12 @@
 # Audit WorldWeaver for public readiness
 
+## Status
+
+The first audit is complete at
+[`research/audits/public-readiness/2026-07-20-worldweaver-public-readiness.md`](../../../research/audits/public-readiness/2026-07-20-worldweaver-public-readiness.md).
+It found that selected outside source review can begin now, while the fresh-clone demonstration, invited
+playtest, and unattended public service each have distinct blockers. Remediation remains open.
+
 ## Problem
 
 WorldWeaver is public source code, but that does not mean it is ready for useful outside attention. The
@@ -31,18 +38,18 @@ small way to participate.
 - `docs/`
 - `.github/`
 - repository description, topics, and homepage metadata
-- `/mnt/c/Hub/Projects/hekswerk-site/`
+- the sibling `../hekswerk-site/` repository
 - a dated audit report under `research/audits/public-readiness/`
 
 ## Acceptance criteria
 
-- [ ] A dated audit records evidence, severity, and a proposed disposition for each finding.
-- [ ] The audit separately rates readiness for source review, a local demonstration, an invited playtest, and
+- [x] A dated audit records evidence, severity, and a proposed disposition for each finding.
+- [x] The audit separately rates readiness for source review, a local demonstration, an invited playtest, and
   an unattended public service.
 - [ ] Public documentation makes no unsupported security, scientific, or resident-continuity claims.
 - [ ] Private resident data, credentials, local secrets, and machine-specific operator material are absent
   from the intended public surface.
-- [ ] The next implementation slices are small enough to review and commit independently.
+- [x] The next implementation slices are small enough to review and commit independently.
 
 ## Risks and rollback
 

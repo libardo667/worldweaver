@@ -24,7 +24,7 @@ that its cognitive experiments establish facts about minds.
 - `README.md`
 - `docs/index.md`
 - selected files under `docs/tutorials/` and `docs/explanation/`
-- `/mnt/c/Hub/Projects/hekswerk-site/`
+- the sibling `../hekswerk-site/` repository
 - deliberately created screenshots, diagrams, or short demonstration media
 
 ## Acceptance criteria
