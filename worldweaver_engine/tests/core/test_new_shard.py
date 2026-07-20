@@ -51,6 +51,7 @@ def test_new_shard_keeps_node_identity_separate_from_city_pack(tmp_path: Path) -
     assert "CITY_ID=portland\n" in env_text
     assert "SHARD_ID=rose-city-coop-1\n" in env_text
     assert "COMPOSE_PROJECT_NAME=rose-city-coop-1\n" in env_text
+    assert "WW_DOULA=0\n" in env_text
 
 
 def test_new_shard_can_advertise_and_bind_on_a_private_node_network(

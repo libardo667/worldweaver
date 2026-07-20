@@ -12,7 +12,7 @@ Configuration comes from environment variables (or a local `.env` loaded at star
 | `WW_RESIDENTS_DIR` | Resident directory root |
 | `WW_LOG_LEVEL` | Process logging level |
 | `WW_PROMPT_TRACE` | Exact private prompt/completion diagnostic; default `0`, enable only for a declared bounded run |
-| `WW_DOULA` / `WW_DOULA_MODEL` | Optional world-watching resident proposal process |
+| `WW_DOULA` / `WW_DOULA_MODEL` | Legacy automatic creation process; off in every new shard and ordinary run |
 
 Additional narrowly scoped runtime flags live beside their consumer and are documented in
 `env.example` when intended for operators. Avoid adding a second config-file system.

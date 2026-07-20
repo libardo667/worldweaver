@@ -143,8 +143,14 @@ The upstream creation pass found that founding residents do not begin from neutr
 U.S.-coded deck assigns every resident an age, temperament, explicit talk-or-withhold style, upbringing, and
 mandatory livelihood, then asks a model to freeze those choices into canonical soul text. Comments falsely call
 the result emergent and genetic. The dormant manual command is a useful safe boundary, but it previews only a
-fraction of the permanent brief and is not fully reproducible. New-shard scaffolding still enables the
-automatic doula by default.
+fraction of the permanent brief and is not fully reproducible. At audit time, new-shard scaffolding still
+enabled the automatic doula by default.
+
+The new-shard template now writes `WW_DOULA=0`; the resident daemon was already opt-in when that variable was
+absent, and the root resident commands explicitly disable it. A newly created shard therefore cannot begin
+automatic resident creation merely because inference credentials were configured. Manual dormant seeding
+remains a separate operator action. The old doula implementation remains available only as legacy code pending
+the later retire-or-rebuild decision.
 
 The same pass found that player shadows remain in the live client despite their explicit rejection in Major
 71. The form discards most entered identity fields, the endpoint is unauthenticated, two consent gates look for

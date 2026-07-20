@@ -100,7 +100,7 @@ LLM_CITY_BUILDER_MODEL=google/gemini-3-flash-preview
 WW_INFERENCE_KEY=
 WW_INFERENCE_URL=https://openrouter.ai/api/v1
 WW_INFERENCE_MODEL=google/gemini-3-flash-preview
-WW_DOULA=1
+WW_DOULA=0
 WW_DOULA_MODEL=
 """
 
