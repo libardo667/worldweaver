@@ -17,9 +17,20 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.asymmetric.x25519 import (
+    X25519PrivateKey,
+    X25519PublicKey,
+)
+
 from src.identity.hearth_activation import (
     HearthActivationError,
     HearthRuntimeLease,
+)
+from src.identity.hearth_envelope import (
+    HearthEnvelopeError,
+    decrypt_hearth_payload,
+    encrypt_hearth_payload,
 )
 from src.identity.hearth_manifest import (
     HEARTH_MANIFEST_FILENAME,
@@ -376,6 +387,38 @@ def _write_new_package(output: Path, content: bytes) -> None:
             temporary.unlink(missing_ok=True)
 
 
+def export_encrypted_hearth_package(
+    resident_dir: Path,
+    package_path: Path,
+    *,
+    resident_identity_private_key: Ed25519PrivateKey,
+    recipient_transport_public_key: X25519PublicKey,
+) -> dict[str, Any]:
+    """Write a stopped hearth package encrypted for one temporary host."""
+    home = Path(resident_dir)
+    output = Path(package_path)
+    if output.exists() or output.is_symlink():
+        raise HearthPackageError(f"refusing to replace existing package: {output}")
+    if not output.parent.is_dir():
+        raise HearthPackageError(f"package parent is not a directory: {output.parent}")
+    try:
+        with HearthRuntimeLease(home):
+            package_bytes, metadata = _build_hearth_package_bytes_locked(home)
+            manifest = HearthManifest.from_dict(metadata["hearth_manifest"])
+            encrypted = encrypt_hearth_payload(
+                package_bytes,
+                actor_id=manifest.actor_id,
+                hearth_shard_id=manifest.hearth_shard_id,
+                runtime_generation=manifest.runtime_generation,
+                resident_identity_private_key=resident_identity_private_key,
+                recipient_transport_public_key=recipient_transport_public_key,
+            )
+            _write_new_package(output, encrypted)
+    except (HearthActivationError, HearthEnvelopeError) as exc:
+        raise HearthPackageError(str(exc)) from exc
+    return metadata
+
+
 def _read_package_metadata(archive: zipfile.ZipFile) -> dict[str, Any]:
     names = archive.namelist()
     if len(names) != len(set(names)):
@@ -471,53 +514,72 @@ def _validated_package_files(
     return records
 
 
-def import_hearth_package(package_path: Path, resident_dir: Path) -> dict[str, Any]:
-    """Validate and atomically install a portable hearth on a stopped host."""
-    package = Path(package_path)
+def _validate_import_target(resident_dir: Path) -> Path:
     target = Path(resident_dir)
     if target.exists() or target.is_symlink():
         raise HearthPackageError(
             f"refusing to replace existing resident home: {target}"
         )
-    if not package.is_file() or package.is_symlink():
-        raise HearthPackageError(f"hearth package is not a regular file: {package}")
+    return target
+
+
+def _import_hearth_archive(
+    archive: zipfile.ZipFile,
+    resident_dir: Path,
+    *,
+    expected_actor_id: str | None = None,
+    expected_hearth_shard_id: str | None = None,
+    expected_runtime_generation: int | None = None,
+) -> dict[str, Any]:
+    """Validate and atomically install one already-opened plaintext archive."""
+    target = _validate_import_target(resident_dir)
+    metadata = _read_package_metadata(archive)
+    records = _validated_package_files(archive, metadata)
+    metadata_manifest = HearthManifest.from_dict(metadata["hearth_manifest"])
+    expected_binding = (
+        expected_actor_id,
+        expected_hearth_shard_id,
+        expected_runtime_generation,
+    )
+    actual_binding = (
+        metadata_manifest.actor_id,
+        metadata_manifest.hearth_shard_id,
+        metadata_manifest.runtime_generation,
+    )
+    if any(value is not None for value in expected_binding) and (
+        expected_binding != actual_binding
+    ):
+        raise HearthPackageError(
+            "encrypted hearth identity or generation does not match its inner package"
+        )
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(
         tempfile.mkdtemp(dir=target.parent, prefix=f".{target.name}.import.")
     )
-    metadata: dict[str, Any]
     try:
-        try:
-            archive_context = zipfile.ZipFile(package, "r")
-        except (OSError, zipfile.BadZipFile) as exc:
-            raise HearthPackageError(f"could not open hearth package: {exc}") from exc
-        with archive_context as archive:
-            metadata = _read_package_metadata(archive)
-            records = _validated_package_files(archive, metadata)
-            for relative, expected_size, expected_digest in records:
-                destination = temporary.joinpath(*relative.parts)
-                destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-                digest = hashlib.sha256()
-                size = 0
-                with (
-                    archive.open(relative.as_posix(), "r") as source,
-                    destination.open("xb") as output,
-                ):
-                    for chunk in iter(lambda: source.read(1024 * 1024), b""):
-                        size += len(chunk)
-                        if size > expected_size:
-                            raise HearthPackageError(
-                                f"package file exceeds declared size: {relative.as_posix()}"
-                            )
-                        digest.update(chunk)
-                        output.write(chunk)
-                destination.chmod(0o600)
-                if size != expected_size or digest.hexdigest() != expected_digest:
-                    raise HearthPackageError(
-                        f"package file failed integrity check: {relative.as_posix()}"
-                    )
+        for relative, expected_size, expected_digest in records:
+            destination = temporary.joinpath(*relative.parts)
+            destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            digest = hashlib.sha256()
+            size = 0
+            with (
+                archive.open(relative.as_posix(), "r") as source,
+                destination.open("xb") as output,
+            ):
+                for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                    size += len(chunk)
+                    if size > expected_size:
+                        raise HearthPackageError(
+                            f"package file exceeds declared size: {relative.as_posix()}"
+                        )
+                    digest.update(chunk)
+                    output.write(chunk)
+            destination.chmod(0o600)
+            if size != expected_size or digest.hexdigest() != expected_digest:
+                raise HearthPackageError(
+                    f"package file failed integrity check: {relative.as_posix()}"
+                )
         imported_manifest = load_hearth_manifest(temporary)
-        metadata_manifest = HearthManifest.from_dict(metadata["hearth_manifest"])
         if imported_manifest != metadata_manifest:
             raise HearthPackageError(
                 f"identity/{HEARTH_MANIFEST_FILENAME} does not match package metadata"
@@ -534,3 +596,48 @@ def import_hearth_package(package_path: Path, resident_dir: Path) -> dict[str, A
         if temporary.exists():
             shutil.rmtree(temporary)
     return metadata
+
+
+def import_hearth_package(package_path: Path, resident_dir: Path) -> dict[str, Any]:
+    """Validate and atomically install a plaintext portable hearth package."""
+    package = Path(package_path)
+    target = _validate_import_target(resident_dir)
+    if not package.is_file() or package.is_symlink():
+        raise HearthPackageError(f"hearth package is not a regular file: {package}")
+    try:
+        with zipfile.ZipFile(package, "r") as archive:
+            return _import_hearth_archive(archive, target)
+    except (OSError, zipfile.BadZipFile) as exc:
+        raise HearthPackageError(f"could not open hearth package: {exc}") from exc
+
+
+def import_encrypted_hearth_package(
+    package_path: Path,
+    resident_dir: Path,
+    *,
+    recipient_transport_private_key: X25519PrivateKey,
+    expected_resident_identity_public_key: str,
+) -> dict[str, Any]:
+    """Decrypt, verify, and atomically install a portable hearth package."""
+    package = Path(package_path)
+    target = _validate_import_target(resident_dir)
+    if not package.is_file() or package.is_symlink():
+        raise HearthPackageError(f"hearth package is not a regular file: {package}")
+    try:
+        opened = decrypt_hearth_payload(
+            package.read_bytes(),
+            recipient_transport_private_key=recipient_transport_private_key,
+            expected_resident_identity_public_key=expected_resident_identity_public_key,
+        )
+        with zipfile.ZipFile(io.BytesIO(opened.payload), "r") as archive:
+            return _import_hearth_archive(
+                archive,
+                target,
+                expected_actor_id=opened.actor_id,
+                expected_hearth_shard_id=opened.hearth_shard_id,
+                expected_runtime_generation=opened.runtime_generation,
+            )
+    except HearthEnvelopeError as exc:
+        raise HearthPackageError(str(exc)) from exc
+    except (OSError, zipfile.BadZipFile) as exc:
+        raise HearthPackageError(f"could not open hearth package: {exc}") from exc

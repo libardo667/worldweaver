@@ -121,12 +121,16 @@ rebuildable; city sessions and entry hints are city-local; host grants and crede
 host-specific. An unfamiliar path or any symlink blocks packaging until its meaning is made explicit.
 The resident's append-only `voice.jsonl` is portable correspondence/history as well; it is not a host log.
 
-The same module now exports those allowlisted files into a deterministic `.wwhearth` ZIP and imports only
-after the metadata, manifest, declared paths, sizes, and SHA-256 hashes all agree. Import writes into a
-temporary sibling and renames it into place only after validation; it never replaces an existing home.
-This protects against accidental corruption and unsafe paths, but it is not yet a signed statement of who
-authorized a transfer. Export also requires an explicitly initialized hearth manifest and refuses to read
-a home whose runtime lock is held.
+The same module exports those allowlisted files into a deterministic `.wwhearth` ZIP and imports only after
+the metadata, manifest, declared paths, sizes, and SHA-256 hashes all agree. Import writes into a temporary
+sibling and renames it into place only after validation; it never replaces an existing home. Export also
+requires an explicitly initialized hearth manifest and refuses to read a home whose runtime lock is held.
+
+The module also has an encrypted package path for injected synthetic keys. It builds the inner ZIP in memory,
+encrypts it for one host transport key, and verifies that the resident-signed outer actor, hearth, and
+generation exactly match the inner manifest before import writes anything. This is tested library plumbing,
+not an operator workflow: no real identity key is stored, no host key is loaded, no command exposes private
+key flags, and the current portable allowlist still excludes every key-like path.
 
 `hearth_activation.py` supplies the first orderly stopped-transfer fence. A manifested home is dormant
 until its first explicit activation. During transfer, the already imported target advances from generation
@@ -143,8 +147,8 @@ bytes for one temporary host's separate X25519 transport key and has the residen
 encrypted envelope. Opening it requires both the intended host private key and the independently expected
 resident public key. Actor, hearth, and generation are authenticated with the ciphertext. The envelope does
 not publish a plaintext payload hash, so an observer cannot use it to recognize repeated private archives.
-This module does not yet store keys, authorize a host, wrap `.wwhearth` export/import, or change activation
-state; those remain separate steps so a partial implementation cannot look like safe migration.
+This module does not store keys, authorize a host, or change activation state; those remain separate steps
+so a partial implementation cannot look like safe migration.
 
 ## Open decisions that must remain explicit
 
