@@ -31,7 +31,9 @@ watching or shaping residents.
 1. Write a field-by-field access table before building the UI. For every value, name the operating need,
    role, retention period, audit record, and safer aggregate alternative.
 2. Start with node health, service readiness, storage, database migration, federation reachability,
-   inference availability, aggregate cost, backups, and failed jobs.
+   inference availability, aggregate cost, backups, and failed jobs. Include content-blind counts of scene and
+   source availability, stale observations, model request/completion/validation outcomes, retries, pending
+   delivery packets, and unknown action outcomes.
 3. Add resident-level runtime detail only when a concrete incident cannot be handled with an aggregate or
    resident-supplied report.
 4. Require local authentication and an explicit steward role. Record access to sensitive views.
@@ -55,6 +57,9 @@ procedure rather than a permanent dashboard field.
 - [ ] The surface is separately authenticated and unavailable to ordinary participants and observers.
 - [ ] A steward can diagnose node health, storage, migrations, federation, inference, backups, and failed
   operations without reading resident prose.
+- [ ] The surface distinguishes attempted model calls from valid completions and absent observations from
+  unavailable or stale ones.
+- [ ] Pending/observed packet counts and unknown action outcomes are visible without exposing packet content.
 - [ ] Sensitive access is time-bounded and audited where it cannot be avoided.
 - [ ] No control can alter resident identity, preferences, cognition, or private history.
 - [ ] The public client imports no steward telemetry API.

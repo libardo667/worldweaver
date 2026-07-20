@@ -67,15 +67,17 @@ The prompt also says `self_delta` is “rare and slow,” but code imposes no ra
 model may stage a soul edit on every call. The later adoption boundary prevents automatic identity mutation,
 but the live prompt still manufactures an unlimited candidate stream.
 
-## Reaching discards the first response except for the request
+## Reaching gives the first response conditional authority
 
 An activation may contain several model calls. When the first response requests information, `_reach_then_act()`
-passes only the request and its `felt_sense` into the continuation. The next full `Pulse` replaces the previous
-one. Only the final pulse is routed.
+passes only the request and its `felt_sense` into the continuation. When that continuation succeeds, the next
+full `Pulse` replaces the previous one and only the final pulse is routed.
 
-That means initial expectations, keepsakes, self changes, drive nudges, and trace verdicts are provisional and
-discarded if the same response contains a reach. The contract does not explain this. Instead it asks for the
-whole object on every continuation.
+When the continuation fails, the read budget is zero, the information boundary is unavailable, or a read is
+deduplicated, the implementation instead strips `reach` from the earlier pulse and routes all its other fields.
+Initial expectations, keepsakes, self changes, drive nudges, and trace verdicts are therefore provisional on a
+successful continuation but become durable on several failure paths. The contract explains neither behavior.
+It asks for the whole object on every continuation.
 
 Routing only the final decision can be a sound transaction boundary. The interface should say so and avoid
 requesting fields that cannot commit yet. A cleaner episode would have:

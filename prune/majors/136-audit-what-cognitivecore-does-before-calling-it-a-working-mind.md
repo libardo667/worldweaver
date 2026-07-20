@@ -179,8 +179,9 @@ until authorization and data custody are repaired.
 The model-authorship pass found that one pulse JSON object combines an outward act, private read, prediction,
 self-report, memory choice, identity proposal, proposed goals and reveries, temporary drives, and judgements
 about attention traces. These outputs have radically different authority. Drive nudges, goals, reveries, and
-trace verdicts are recorded but have no production consumer. Initial durable-looking fields are also discarded
-whenever the response chooses a private read, because only the final continuation pulse is routed.
+trace verdicts are recorded but have no production consumer. A successful private-read continuation replaces
+the initial fields, while several continuation failure paths instead commit those pre-read fields. The schema
+does not explain this conditional authority.
 
 The same pass identified three automatic self-feedback paths. Model self-reports are mined into later anchors;
 all Markdown workshop excerpts are placed into every later prompt; and the optional voice-register arm feeds
@@ -189,6 +190,18 @@ and its anti-repetition sample covers only the journal and drawing titles while 
 making. Identity growth is the exception worth preserving: exact proposal, private inspection, and exact hearth
 adoption are genuinely separate steps. It still needs decline, supersession, correction, compaction, and a
 durable open-candidate index.
+
+The failure-semantics pass found that process survival is repeatedly bought by erasing uncertainty. A failed
+scene read leaves the previous scene and images cached in the prompt producer while scheduling continues. A
+grounding failure silently restores full daytime reactivity. Failed or invalid model calls still reset call
+pressure and cause selected chat packets to be marked observed; content-blind pulse receipts count the call but
+do not say whether any valid completion arrived. A failed private-read continuation commits the model's
+pre-read memory, prediction, and identity fields after stripping the reach. Broad action exceptions similarly
+report definite non-execution even when a remote shard may have committed before its response was lost.
+
+These are not acceptable experimental confounds. Observation must distinguish absent, unavailable, and stale;
+model backoff must not consume event delivery; only a validated final response may commit; and distributed
+writes need an explicit unknown outcome plus reconciliation.
 
 Three bounded evidence reviews now cover prediction/ignition/arousal/quiet/social norms,
 action-feedback/embodiment/external supports, and clock cadence/sleep/interoception/semantic policy. They

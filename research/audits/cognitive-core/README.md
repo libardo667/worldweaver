@@ -75,6 +75,9 @@ variable represents lived experience.
 - [`model-authorship-self-feedback-and-dead-schema.md`](model-authorship-self-feedback-and-dead-schema.md)
   separates model outputs that act, schedule, remember, or change identity from dead fields and automatic
   feedback loops through felt reports, workshop context, and optional voice samples.
+- [`failure-semantics-availability-and-observation.md`](failure-semantics-availability-and-observation.md)
+  traces how scene, grounding, embedding, inference, continuation, and network-write failures become empty,
+  stale, neutral, observed, or falsely definite state.
 - [`repair-and-ablation-order.md`](repair-and-ablation-order.md) puts software truth repairs before neutral
   reference runs and one-variable mechanism tests.
 - [`claim-ledger.md`](claim-ledger.md) lists terms and implied claims that require a decision.

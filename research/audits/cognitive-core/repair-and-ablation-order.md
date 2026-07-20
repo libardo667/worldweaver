@@ -22,8 +22,11 @@ from being interpretable.
 4. **Resolve social state from lifecycle evidence.** Pending prompt delivery, observed history, unanswered
    address, and replied exchange must be separate. Use wall time and canonical reply edges.
 5. **Give direct address a lossless attention path.** A newly addressed event must reach attention even when
-   an aggregate social node is saturated, without forcing a reply or an outward act.
-6. **Write empty current snapshots.** A calm scene must clear old ambient pressure.
+   an aggregate social node is saturated, without forcing a reply or an outward act. Model-call backoff must
+   not mark the address observed after a failed or invalid completion.
+6. **Make observation state explicit.** A calm, successful scene must clear old ambient pressure. A failed
+   scene, chat, inbox, or grounding read is unavailable, not empty; cached prompt context and images must be
+   stale-labelled or withheld rather than presented as current.
 7. **Shrink the pulse contract to live authority.** Remove `drive_nudges`, `new_reverie`, `goal_update`, and
    `trace_verdicts` from the live schema, routing, reducers, and tests. Separate provisional read requests from
    the one final response that may commit an action, memory, prediction, self-report, or identity proposal.
@@ -34,12 +37,13 @@ from being interpretable.
    repeatedly rebuilding it on every tick.
 10. **Correct the archived/current docs.** Do not claim valence, reverie-weighted drive, semantic constitution
    gating, or node-neighbor plasticity until the live path proves them.
-11. **Make the information episode contract true.** Stop calling a reach-enabled pulse one LLM call, define
-   whether only the final continuation commits, return cached results to the requesting model, and use an
-   injected clock for replayable cache behavior.
+11. **Make the information episode contract true.** Stop calling a reach-enabled pulse one LLM call. Use a
+   provisional read-request type and let only a valid final continuation commit. A failed continuation must
+   not promote the pre-read response. Return cached results to the requesting model, and use an injected clock
+   for replayable cache behavior.
 12. **Close the action-feedback loop.** Record one typed outcome for every proposal, preserve safe engine
-   decline codes, deliver unresolved outcomes to a later prompt, and stop narrating requested verbs as
-   successful history.
+   decline codes, distinguish confirmed failure from unknown network outcome, reconcile idempotent writes,
+   deliver unresolved outcomes to a later prompt, and stop narrating requested verbs as successful history.
 13. **Make hearth physics honest.** Distinguish imaginative gesture from state-changing action until the
    hearth implements the same canonical object and place consequences as other shards.
 14. **Make identity independent of host paths.** Preserve resident-owned name and explicit traits across
