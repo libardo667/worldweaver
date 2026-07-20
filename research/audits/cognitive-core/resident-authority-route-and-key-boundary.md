@@ -136,6 +136,11 @@ City and folder-local operators can now list or admit resident public identities
 command. An admission records the steward's reason and source label. The command never accepts a resident
 private key.
 
+The private-key trace now has a recorded implementation order in Major 127: a separate destination-host
+transport key, a resident-signed encrypted outer envelope around the deterministic hearth payload, in-memory
+certificate issuance, and one signed client per running resident. The stated threat boundary is explicit:
+software encryption cannot prevent an authorized malicious host from copying a key it is allowed to use.
+
 This is not live route enforcement yet. No existing resident has been assigned a private identity key, no
 anonymous compatibility route has been closed, and Alderbank's resident sessions have not been migrated.
 That waits for an explicit synthetic admission path, resident-side signing, and controlled route rollout.

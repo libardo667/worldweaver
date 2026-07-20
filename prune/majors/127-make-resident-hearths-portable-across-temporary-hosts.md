@@ -55,6 +55,39 @@ the archive until the package is encrypted for its reviewed destination and the 
 authenticated. Runtime request and certificate validation can be built against synthetic keys first. See
 [`resident-authority-route-and-key-boundary.md`](../../research/audits/cognitive-core/resident-authority-route-and-key-boundary.md).
 
+## Key-custody checkpoint — 2026-07-20
+
+The city-side half is now concrete. A city can record a reviewed resident public key and the steward's reason
+through a non-HTTP operator command. A pre-admitted resident can use an identity-signed, short-lived runtime
+key to bootstrap a generation-bound session. Existing residents still use the unsigned compatibility path;
+none has been silently assigned a key.
+
+Build the private half in this order:
+
+1. Define a small public resident identity descriptor containing the actor ID, hearth ID, public identity
+   key, format version, and no private or city-local data.
+2. Give a temporary host a dedicated X25519 transport key. Do not reuse its Ed25519 node-signing key, and do
+   not treat either host key as the resident's identity.
+3. Keep the current deterministic ZIP as an inner payload. Put it inside a versioned encrypted envelope whose
+   random content key is wrapped for the reviewed destination host. Sign the envelope metadata and inner
+   payload hash with the resident identity key.
+4. Only the encrypted format may carry the resident identity private key. Plain `.wwhearth` export must keep
+   excluding it and must fail if a future key-bearing hearth would otherwise leak it.
+5. On an authorized host, decrypt the long-term key into memory only long enough to sign a fresh runtime
+   public key for one city, generation, scope set, and expiry. Ordinary requests use the runtime key, not the
+   long-term identity key.
+6. Give each running resident its own signed world client. The current daemon's one shared client cannot carry
+   resident authority safely.
+7. Re-encrypt a stopped transfer for the next reviewed host, advance the generation, and retire the source
+   through the existing activation fence before the destination wakes.
+8. Specify recovery separately. A federation directory must not hold the only recovery key, and an ordinary
+   transfer must not quietly invent a guardian or owner.
+
+Encryption protects the package at rest and in transit and reduces accidental key exposure. It cannot stop a
+malicious temporary host from copying a key while that host is authorized to run the resident. Generation
+fencing can stop an orderly old copy; it cannot revoke an undisclosed offline copy. Do not claim otherwise
+without a separate hardware-backed or quorum design.
+
 ## Boundaries
 
 - No canonical identity field names a permanent owner computer.
