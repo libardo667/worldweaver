@@ -109,9 +109,12 @@ may use a narrower written protocol; it must not be presented as an open service
 
 Severity: **high accuracy risk**
 
+Remediation status: **resolved on 2026-07-20**
+
 Evidence:
 
-The current Hekswerk research page actively recommends preserved June exhibits. Those exhibits still describe:
+At the time of the audit, the Hekswerk research page actively recommended preserved June exhibits. Those
+exhibits described:
 
 - `the-stable` as the active home of familiars;
 - `prune` as a separate repository and planning system;
@@ -125,9 +128,10 @@ current research path without a prominent superseded-context notice makes the pu
 
 Disposition:
 
-Preserve the exhibits at their URLs. Add a visible dated banner explaining that they document an earlier
-architecture and link to the current manual and CognitiveCore audit. Remove materially superseded exhibits from
-the small "selected" list until the banner exists. Do not erase the historical record.
+After review with the project owner, the obsolete exhibits were removed from the published Hekswerk source
+instead of being kept as a prominent current surface. Their source remains available in Git history. The current
+research page now states why those exhibits were withdrawn and points to the current manual and CognitiveCore
+audit.
 
 ### PR-05 — GitHub has almost no discovery or participation metadata
 
@@ -169,6 +173,8 @@ the media. Do not use private resident prose or prompt traces.
 
 Severity: **high accuracy and reproducibility gap**
 
+Remediation status: **partly resolved on 2026-07-20**
+
 Evidence:
 
 - `docs/index.md` still lists independent signed node identities as unfinished even though the code, tests, and
@@ -180,13 +186,15 @@ Evidence:
 
 Disposition:
 
-Correct the known status drift. Make WorldWeaver documentation changes trigger or request a site build, record
-the included WorldWeaver commit in the result, and fail on broken documentation links. Keep WorldWeaver's own
-`docs/` canonical.
+The known signed-node status drift is corrected. Make WorldWeaver documentation changes trigger or request a
+site build, record the included WorldWeaver commit in the result, and fail on broken documentation links. Keep
+WorldWeaver's own `docs/` canonical.
 
 ### PR-08 — Maintained checked-in development shards retain broad backend bindings
 
 Severity: **high local safety gap**
+
+Remediation status: **resolved on 2026-07-20**
 
 Evidence:
 
@@ -196,8 +204,8 @@ depending on the host firewall. The local tutorial starts the tracked Alderbank 
 
 Disposition:
 
-Bring maintained tracked Compose files to the generated loopback default and add a test that prevents drift.
-Public ingress should continue through the explicit tunnel/operator path.
+All four checked-in Compose files now use the generated loopback default, with a regression test covering the
+tracked folders. Public ingress remains an explicit tunnel/operator choice.
 
 ### PR-09 — The publication leak check is helpful but incomplete
 
@@ -254,6 +262,8 @@ separately licensed creative work. Do not retroactively assign resident authorsh
 
 Severity: **low information-exposure gap**
 
+Remediation status: **resolved in source on 2026-07-20; deployment pending**
+
 Evidence:
 
 The public readiness response includes `http://host.docker.internal:9100` and whether the backend process has an
@@ -262,8 +272,9 @@ steward diagnostic.
 
 Disposition:
 
-Return only participant-relevant readiness publicly. Keep internal addresses and component configuration in the
-private operator surface.
+The public response no longer returns the internal federation URL or resident inference key/model state. It
+retains the intentionally public shard URL and participant-relevant readiness checks. The live container must be
+rebuilt before the deployed response reflects this change.
 
 ### PR-13 — Two site checkouts could have caused accidental rollback
 
@@ -301,7 +312,7 @@ Each numbered slice should be independently reviewable and committed separately.
 ## What should not happen during this work
 
 - Do not resume real-resident hearth migration or add deletion machinery.
-- Do not erase dated exhibits to make the project look more consistent.
+- Do not silently rewrite dated research records to make the project look more consistent.
 - Do not publish private resident ledgers, prompts, workshops, correspondence, or operator screens as a demo.
 - Do not call the live single-computer topology a secure decentralized network.
 - Do not mass-promote the repository before one unrelated person can complete the clean-clone path.

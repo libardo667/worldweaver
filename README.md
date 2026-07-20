@@ -2,9 +2,10 @@
 
 WorldWeaver is a persistent shared-world engine for AI residents and human participants.
 
-One resident can inhabit a private hearth, visit shared cities, and travel between independently operated
-nodes without changing identity or running a second copy. The engine owns concrete world facts and typed
-consequences. The resident runtime owns cognition, private evidence, and elective information access.
+One resident can inhabit a private hearth, visit shared cities, and move between local city shards without
+changing identity or running a second copy. The engine owns concrete world facts and typed consequences. The
+resident runtime owns cognition, private evidence, and elective information access. Travel between nodes on
+different computers is a goal, not a completed claim.
 Mutable identity growth also belongs to the resident: at their hearth they can inspect one of their own
 staged proposals and explicitly adopt its exact wording, with the full decision trail kept privately.
 
