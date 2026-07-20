@@ -39,7 +39,24 @@ from src.identity.hearth_manifest import (
     inspect_hearth_manifest,
     load_hearth_manifest,
 )
-from src.identity.resident_key_seal import SEALED_RESIDENT_IDENTITY_FILENAME
+from src.identity.hearth_transfer import (
+    HearthTransferError,
+    build_hearth_transfer_payload,
+    open_hearth_transfer_payload,
+)
+from src.identity.resident_identity import (
+    ResidentIdentityDescriptor,
+    ResidentIdentityError,
+    load_resident_identity_descriptor,
+)
+from src.identity.resident_key_seal import (
+    SEALED_RESIDENT_IDENTITY_FILENAME,
+    ResidentKeySealError,
+    load_resident_key_seal,
+    open_sealed_resident_identity_private_key,
+    seal_resident_identity_private_key,
+    write_resident_key_seal,
+)
 
 Disposition = Literal[
     "portable", "rebuildable", "host_specific", "city_local", "unknown"
@@ -424,6 +441,59 @@ def export_encrypted_hearth_package(
     return metadata
 
 
+def export_encrypted_hearth_transfer(
+    resident_dir: Path,
+    package_path: Path,
+    *,
+    source_transport_private_key: X25519PrivateKey,
+    recipient_transport_public_key: X25519PublicKey,
+) -> dict[str, Any]:
+    """Move a stopped hearth and sealed identity toward one reviewed host."""
+
+    home = Path(resident_dir)
+    output = Path(package_path)
+    if output.exists() or output.is_symlink():
+        raise HearthPackageError(f"refusing to replace existing package: {output}")
+    if not output.parent.is_dir():
+        raise HearthPackageError(f"package parent is not a directory: {output.parent}")
+    try:
+        with HearthRuntimeLease(home):
+            descriptor = load_resident_identity_descriptor(home)
+            identity_private_key = open_sealed_resident_identity_private_key(
+                load_resident_key_seal(
+                    home / "identity" / SEALED_RESIDENT_IDENTITY_FILENAME
+                ),
+                identity_descriptor=descriptor,
+                recipient_transport_private_key=source_transport_private_key,
+            )
+            archive_bytes, metadata = _build_hearth_package_bytes_locked(home)
+            manifest = HearthManifest.from_dict(metadata["hearth_manifest"])
+            transfer_payload = build_hearth_transfer_payload(
+                archive_bytes,
+                manifest=manifest,
+                identity_descriptor=descriptor,
+                identity_private_key=identity_private_key,
+            )
+            encrypted = encrypt_hearth_payload(
+                transfer_payload,
+                actor_id=manifest.actor_id,
+                hearth_shard_id=manifest.hearth_shard_id,
+                runtime_generation=manifest.runtime_generation,
+                resident_identity_private_key=identity_private_key,
+                recipient_transport_public_key=recipient_transport_public_key,
+            )
+            _write_new_package(output, encrypted)
+    except (
+        HearthActivationError,
+        HearthEnvelopeError,
+        HearthTransferError,
+        ResidentIdentityError,
+        ResidentKeySealError,
+    ) as exc:
+        raise HearthPackageError(str(exc)) from exc
+    return metadata
+
+
 def _read_package_metadata(archive: zipfile.ZipFile) -> dict[str, Any]:
     names = archive.namelist()
     if len(names) != len(set(names)):
@@ -535,6 +605,8 @@ def _import_hearth_archive(
     expected_actor_id: str | None = None,
     expected_hearth_shard_id: str | None = None,
     expected_runtime_generation: int | None = None,
+    destination_identity_descriptor: ResidentIdentityDescriptor | None = None,
+    destination_identity_seal: bytes | None = None,
 ) -> dict[str, Any]:
     """Validate and atomically install one already-opened plaintext archive."""
     target = _validate_import_target(resident_dir)
@@ -589,13 +661,35 @@ def _import_hearth_archive(
             raise HearthPackageError(
                 f"identity/{HEARTH_MANIFEST_FILENAME} does not match package metadata"
             )
+        if (destination_identity_descriptor is None) != (
+            destination_identity_seal is None
+        ):
+            raise HearthPackageError(
+                "destination identity card and host seal must be installed together"
+            )
+        if destination_identity_descriptor is not None:
+            imported_descriptor = load_resident_identity_descriptor(temporary)
+            if imported_descriptor != destination_identity_descriptor:
+                raise HearthPackageError(
+                    "inner resident identity card does not match the reviewed card"
+                )
+            write_resident_key_seal(
+                temporary / "identity" / SEALED_RESIDENT_IDENTITY_FILENAME,
+                destination_identity_seal,
+            )
         imported_inventory = inventory_hearth(temporary)
         if imported_inventory.blocked:
             raise HearthPackageError(
                 "imported hearth failed its portable-file inventory"
             )
         os.replace(temporary, target)
-    except (HearthManifestError, OSError, zipfile.BadZipFile) as exc:
+    except (
+        HearthManifestError,
+        OSError,
+        ResidentIdentityError,
+        ResidentKeySealError,
+        zipfile.BadZipFile,
+    ) as exc:
         raise HearthPackageError(f"could not import hearth package: {exc}") from exc
     finally:
         if temporary.exists():
@@ -655,3 +749,70 @@ def import_encrypted_hearth_package(
         raise HearthPackageError(str(exc)) from exc
     except (OSError, zipfile.BadZipFile) as exc:
         raise HearthPackageError(f"could not open hearth package: {exc}") from exc
+
+
+def import_encrypted_hearth_transfer(
+    package_path: Path,
+    resident_dir: Path,
+    *,
+    recipient_transport_private_key: X25519PrivateKey,
+    expected_resident_identity: ResidentIdentityDescriptor,
+) -> dict[str, Any]:
+    """Receive a transfer and reseal its identity into a new dormant hearth."""
+
+    package = Path(package_path)
+    target = _validate_import_target(resident_dir)
+    descriptor = ResidentIdentityDescriptor.from_dict(
+        expected_resident_identity.to_dict()
+    )
+    if not package.is_file() or package.is_symlink():
+        raise HearthPackageError(f"hearth package is not a regular file: {package}")
+    try:
+        opened_envelope = decrypt_hearth_payload(
+            package.read_bytes(),
+            recipient_transport_private_key=recipient_transport_private_key,
+            expected_resident_identity_public_key=descriptor.identity_public_key,
+        )
+        if (
+            opened_envelope.actor_id != descriptor.actor_id
+            or opened_envelope.hearth_shard_id != descriptor.hearth_shard_id
+        ):
+            raise HearthPackageError(
+                "encrypted hearth does not match the reviewed resident identity card"
+            )
+        opened_transfer = open_hearth_transfer_payload(
+            opened_envelope.payload,
+            identity_descriptor=descriptor,
+        )
+        if (
+            opened_transfer.actor_id != opened_envelope.actor_id
+            or opened_transfer.hearth_shard_id != opened_envelope.hearth_shard_id
+            or opened_transfer.runtime_generation != opened_envelope.runtime_generation
+        ):
+            raise HearthPackageError(
+                "encrypted hearth identity or generation does not match its transfer"
+            )
+        destination_seal = seal_resident_identity_private_key(
+            opened_transfer.identity_private_key,
+            identity_descriptor=descriptor,
+            recipient_transport_public_key=recipient_transport_private_key.public_key(),
+        )
+        with zipfile.ZipFile(io.BytesIO(opened_transfer.archive), "r") as archive:
+            return _import_hearth_archive(
+                archive,
+                target,
+                expected_actor_id=opened_transfer.actor_id,
+                expected_hearth_shard_id=opened_transfer.hearth_shard_id,
+                expected_runtime_generation=opened_transfer.runtime_generation,
+                destination_identity_descriptor=descriptor,
+                destination_identity_seal=destination_seal,
+            )
+    except (
+        HearthEnvelopeError,
+        HearthTransferError,
+        ResidentIdentityError,
+        ResidentKeySealError,
+    ) as exc:
+        raise HearthPackageError(str(exc)) from exc
+    except (OSError, zipfile.BadZipFile) as exc:
+        raise HearthPackageError(f"could not open hearth transfer: {exc}") from exc
