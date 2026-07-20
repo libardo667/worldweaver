@@ -8,8 +8,13 @@ correct.
 These are not behavioral experiments. They are contradictions or lifecycle bugs that prevent later evidence
 from being interpretable.
 
-1. **Restore the privacy boundary.** Replace the full runtime mirror with a minimal public operational payload
-   and protect any diagnostic endpoint with authentication plus actor/steward authorization.
+1. **Restore the privacy and control boundary.** Stop the full runtime mirror; remove anonymous state reads,
+   arbitrary variable writes, legacy growth access, cleanup, pruning, and reset; and perform a systematic
+   authorization pass over bootstrap, leave, messaging, travel, and maintenance. Give the current resident
+   host an actor-scoped capability without treating it as the resident's owner. Public session IDs identify a
+   session but must grant no control. Default exact prompt capture off, expire declared diagnostic captures,
+   enforce owner-only hearth permissions, and write the field-by-field custody/retention table before another
+   public resident run.
 2. **Stop false prediction error.** Accept expectations only for sensed scopes, or represent an unobserved
    scope as unknown rather than zero.
 3. **Make time semantics true.** Remove poll-rate dependence from repeated evidence, give replays a virtual

@@ -9,6 +9,18 @@ authenticated product with a written privacy boundary.
 The old “semi-public observatory” and “player shadow” proposals are rejected. Read-only surveillance is
 still surveillance, and a federation-held AI copy of a human is not part of the current resident model.
 
+The 2026-07-19 CognitiveCore audit found a more urgent backend contradiction. Every city resident currently
+copies full reduced private state into city session variables once a minute. General game routes then allow an
+unauthenticated caller to read or arbitrarily patch those variables; public world routes reveal the needed
+session IDs. Legacy identity growth, session cleanup, duplicate pruning, and whole-world reset are also exposed
+without the intended player, resident, node, or steward authority. Exact prompt capture is default-on and
+unbounded. Agent bootstrap, leave, and travel likewise have no resident/host credential: checks that protect a
+human-owned session accept an anonymous request when the session belongs to a resident. See
+[`private-state-data-custody-and-operator-boundary.md`](../../research/audits/cognitive-core/private-state-data-custody-and-operator-boundary.md).
+
+This is now a precondition rather than a later UI task: remove the private mirror and secure the underlying API
+before building any steward screen or interpreting another public resident run.
+
 ## Goal
 
 Give a steward enough information to keep their own node healthy without giving them a dashboard for

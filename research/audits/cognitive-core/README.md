@@ -69,6 +69,9 @@ variable represents lived experience.
 - [`inner-state-drive-rest-and-incubation.md`](inner-state-drive-rest-and-incubation.md) audits the actual
   computations behind drive, anchors, grief, circadian rest, interoception claims, incubation, and
   anti-repetition feedback.
+- [`private-state-data-custody-and-operator-boundary.md`](private-state-data-custody-and-operator-boundary.md)
+  traces where private resident data actually goes, including default prompt capture, local file permissions,
+  the city runtime mirror, unauthenticated state mutation, and portable-hearth limits.
 - [`repair-and-ablation-order.md`](repair-and-ablation-order.md) puts software truth repairs before neutral
   reference runs and one-variable mechanism tests.
 - [`claim-ledger.md`](claim-ledger.md) lists terms and implied claims that require a decision.

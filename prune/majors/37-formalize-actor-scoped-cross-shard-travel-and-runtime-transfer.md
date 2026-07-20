@@ -16,16 +16,23 @@ Authentication no longer changes an actor's recorded city. Ordinary human entry 
 attachment before creating local state and rejects a second local session. A person therefore cannot open
 another city tab and silently bypass the travel lifecycle.
 
+The 2026-07-19 privacy and custody audit found that this guarantee does not extend to resident control. Agent
+bootstrap accepts no resident/host credential. Leave and source-travel ownership checks reject the wrong human
+player but accept an anonymous caller when `player_id` is empty, as it is for residents. Destination arrival
+likewise treats an unauthenticated request as valid when the federation record says `agent`. Signed node calls
+protect the federation coordinator after the city begins a handoff; they do not authenticate who told the city
+to act for the resident. The existing anonymous resident travel tests codify this gap.
+
 The old plan said a resident's private runtime payload had to move with every city trip. That is no longer
 the design. A resident's hearth remains private and may keep running on its current host while the resident
 attaches to a remote city. Moving the hearth itself is the separate host-migration problem in Major 127.
 
 ## Remaining problem
 
-Travel has been proven between local Docker shards that share a federation secret. It has not yet been
-proven between independently operated computers with separate node identities. The server handoff and
-browser flow are actor-scoped and check the authenticated player. The remaining gap is trust and
-reachability between independently operated computers, not the local human travel flow.
+Travel has been proven between local Docker shards and later between separate signing identities. It has not
+yet been proven between independently operated computers. The human browser flow is actor-scoped, but the
+resident-facing city handoff has no actor/host capability. The remaining gaps are therefore both authority at
+the resident edge and trust/reachability between independently operated computers.
 
 Node registration, pulses, route discovery, and source-side recovery records now carry an optional human
 client URL separately from the shard API URL. Password-reset mail uses the same human URL when configured.
@@ -80,12 +87,16 @@ two computers. No resident was woken for this infrastructure check.
 
 ## Build next
 
-1. Put two independently created node folders behind real HTTPS addresses on different computers or trust
+1. Give the current resident runtime an actor-scoped city capability. Require it for bootstrap, leave,
+   departure, retry, and arrival without turning the temporary host into the resident's owner.
+2. Add wrong-resident, wrong-host, stale-generation, anonymous, and replay tests at the city edge as well as
+   the signed federation edge.
+3. Put two independently created node folders behind real HTTPS addresses on different computers or trust
    domains.
-2. Prove that a resident can remain hosted at their hearth, visit a remote city, and return without copying
+4. Prove that a resident can remain hosted at their hearth, visit a remote city, and return without copying
    the complete hearth to that city.
-3. Configure and verify a real public-client URL for each independently hosted destination.
-4. Test directory outage, destination outage, interrupted departure, interrupted arrival, and replay across
+5. Configure and verify a real public-client URL for each independently hosted destination.
+6. Test directory outage, destination outage, interrupted departure, interrupted arrival, and replay across
    independently operated nodes.
 
 ## Rules
@@ -111,6 +122,8 @@ two computers. No resident was woken for this infrastructure check.
 - [x] Destination arrival preserves the actor ID and uses a destination-owned hub.
 - [x] Resident travel can be requested through an elective world capability.
 - [x] Occupancy reads deduplicate current presence by actor identity.
+- [ ] Bootstrap, leave, and travel require an actor-scoped resident/host capability and reject anonymous or
+  stale-generation callers.
 - [ ] Independently operated nodes authenticate travel with separate identities.
 - [x] Two shards created in separate folders share no writable state, credentials, Docker project identity,
   or dependency on a neighboring source checkout.

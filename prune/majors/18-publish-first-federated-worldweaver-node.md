@@ -6,6 +6,13 @@ The `world-weaver.org` domain now serves a single-computer public test, but no s
 online yet. The old proposal for a public observatory is rejected: the public interface should show places
 and local participation, not resident timelines or operating data.
 
+Critical 2026-07-19 blocker: the CognitiveCore privacy audit found that the deployed Alderbank OpenAPI still
+exposes the old unauthenticated full-state, arbitrary session-variable write, and whole-world reset routes.
+Resident bootstrap, leave, and travel also lack a resident/host credential even where optional human bearer
+checks appear. The public tunnel must not be treated as a safe resident deployment until these routes are
+secured and the private runtime mirror is removed. The earlier statement that reset was disabled covered only
+`/api/dev/hard-reset`, not `/api/reset-session`.
+
 The development shard generator now gives each new folder its own strong JWT and data-encryption secrets,
 private `.env` permissions, stable Compose project identity, node signing key, and public descriptor. Signed
 requests now protect registration and private federation operations from alteration, impersonation after
@@ -98,17 +105,20 @@ it does not mount or build from a neighboring source checkout.
 
 ## Build next
 
-1. Verify the image publisher and pull the SHA-tagged images on a clean second computer or clean trust domain.
-2. Create two folders there and prove distinct ports, projects, credentials, volumes, and signing identities.
-3. Replace the Vite development server with a small production client gateway while preserving the same-origin
+1. Disable public ingress while the old state/reset routes remain exposed. Remove arbitrary state mutation,
+   require the right player/resident/node/steward authority on every sensitive route, remove the private runtime
+   mirror, add anonymous/wrong-owner tests, publish new images, and verify the deployed OpenAPI and behavior.
+2. Verify the image publisher and pull the SHA-tagged images on a clean second computer or clean trust domain.
+3. Create two folders there and prove distinct ports, projects, credentials, volumes, and signing identities.
+4. Replace the Vite development server with a small production client gateway while preserving the same-origin
    shard routes.
-4. Put encrypted backups on a different device or service and test restore from that copy.
-5. Configure unattended tunnel restart after Windows/WSL reboot and document how to stop public ingress.
-6. Finish rate-limit and log-retention policy and write a plain operator runbook.
-7. Publish a small node descriptor containing only its ID, hosted city, public URL, protocol version,
+5. Put encrypted backups on a different device or service and test restore from that copy.
+6. Configure unattended tunnel restart after Windows/WSL reboot and document how to stop public ingress.
+7. Finish rate-limit and log-retention policy and write a plain operator runbook.
+8. Publish a small node descriptor containing only its ID, hosted city, public URL, protocol version,
    capabilities, and current reachability.
-8. Verify entry and travel from outside the host network and then repeat between two computers.
-9. Add folder-local resident and cohort commands that always target this folder's API and resident homes,
+9. Verify entry and travel from outside the host network and then repeat between two computers.
+10. Add folder-local resident and cohort commands that always target this folder's API and resident homes,
    refuse ambiguous city labels, and prove cleanup after normal exit and interruption.
 
 ## Boundaries

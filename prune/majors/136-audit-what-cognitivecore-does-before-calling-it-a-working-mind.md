@@ -166,6 +166,16 @@ it hides citywide chatter, silently rewrites every attempted speech or direct re
 then counts that rewritten speech toward evidence that the resident has “built a self.” `self_sameness` likewise
 turns embedding similarity into the unsupported prompt verdict that repeated work's pleasure is spent.
 
+The privacy and custody pass found a system-boundary blocker. The resident-facing prompt says inner state is
+read by nobody, while normal runs capture exact prompts and completions by default and retain them without a
+limit or expiry. Live ledger and workshop files use ordinary group/world-readable permissions. More seriously,
+each city resident mirrors full reduced private state into the city every minute, public routes reveal session
+IDs, and unauthenticated routes accept those IDs to read or arbitrarily change session variables. The same API
+module exposes legacy identity-growth data, cleanup, pruning, and whole-world reset. Agent bootstrap, leave, and
+travel also have no resident/host credential; their ownership checks protect human accounts but permit anonymous
+control of resident sessions. This makes both the privacy promise and the causal integrity of a public run false
+until authorization and data custody are repaired.
+
 Three bounded evidence reviews now cover prediction/ignition/arousal/quiet/social norms,
 action-feedback/embodiment/external supports, and clock cadence/sleep/interoception/semantic policy. They
 support plainer names, reliable event and consequence delivery, quiet and repetition as valid outcomes, and
