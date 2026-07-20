@@ -46,7 +46,7 @@ services:
       WW_CLIENT_URL: ${WW_CLIENT_URL:-}
       FEDERATION_URL: ${WW_RUNTIME_FEDERATION_URL:-${FEDERATION_URL}}
     ports:
-      - "${BACKEND_PORT}:8000"
+      - "127.0.0.1:${BACKEND_PORT}:8000"
     depends_on:
       db:
         condition: service_healthy

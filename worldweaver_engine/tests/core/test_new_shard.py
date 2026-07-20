@@ -13,6 +13,17 @@ def _read_env(path: Path) -> dict[str, str]:
     )
 
 
+def test_tracked_shard_backends_bind_to_loopback() -> None:
+    repository_root = Path(__file__).resolve().parents[3]
+
+    for shard_name in ("ww_world", "ww_alderbank", "ww_sfo", "ww_pdx"):
+        compose_text = (
+            repository_root / "shards" / shard_name / "docker-compose.yml"
+        ).read_text(encoding="utf-8")
+        assert '"127.0.0.1:${BACKEND_PORT}:8000"' in compose_text
+        assert '- "${BACKEND_PORT}:8000"' not in compose_text
+
+
 def test_new_shard_keeps_node_identity_separate_from_city_pack(tmp_path: Path) -> None:
     city_pack = tmp_path / "pack"
     city_pack.mkdir()

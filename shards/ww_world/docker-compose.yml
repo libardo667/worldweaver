@@ -40,7 +40,7 @@ services:
       WW_DB_PASSWORD: ${WW_DB_PASSWORD:-postgres}
       WW_DATABASE_URL: ${WW_DATABASE_URL:-}
     ports:
-      - "${BACKEND_PORT}:8000"
+      - "127.0.0.1:${BACKEND_PORT}:8000"
     depends_on:
       db:
         condition: service_healthy
