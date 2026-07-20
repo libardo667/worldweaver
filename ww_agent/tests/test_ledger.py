@@ -202,7 +202,9 @@ def test_new_events_have_monotonic_sequences(tmp_path) -> None:
     assert ledger.load_runtime_checkpoint(tmp_path)["ledger"]["last_sequence"] == 2
 
 
-def test_append_migrates_legacy_record_order_without_rewriting_history(tmp_path) -> None:
+def test_append_migrates_legacy_record_order_without_rewriting_history(
+    tmp_path,
+) -> None:
     legacy = [
         {
             "event_id": f"evt-legacy-{ordinal}",
@@ -351,6 +353,189 @@ def test_operational_queue_projections_are_bounded_without_truncating_cold_event
     assert len(reduced.packets) == ledger.PACKET_PROJECTION_LIMIT
     assert reduced.packets[0]["packet_id"] == "packet-50"
     assert reduced.packets[-1]["packet_id"] == "packet-249"
+
+
+def test_terminal_packet_history_cannot_evict_an_older_pending_packet() -> None:
+    events = [
+        {
+            "event_id": "evt-pending",
+            "ts": "2026-07-17T00:00:00+00:00",
+            "event_type": "packet_emitted",
+            "payload": {
+                "packet_id": "packet-pending",
+                "packet_type": "direct_address",
+                "created_at": "2026-07-17T00:00:00+00:00",
+                "status": "pending",
+            },
+        }
+    ]
+    events.extend(
+        {
+            "event_id": f"evt-observed-{ordinal}",
+            "ts": f"2026-07-17T00:01:{ordinal % 60:02d}+00:00",
+            "event_type": "packet_emitted",
+            "payload": {
+                "packet_id": f"packet-observed-{ordinal}",
+                "packet_type": "sample",
+                "created_at": f"2026-07-17T00:01:{ordinal % 60:02d}+00:00",
+                "status": "observed",
+            },
+        }
+        for ordinal in range(ledger.PACKET_PROJECTION_LIMIT)
+    )
+
+    packets = ledger.reduce_runtime_events(events).packets
+
+    assert len(packets) == ledger.PACKET_PROJECTION_LIMIT
+    assert any(item["packet_id"] == "packet-pending" for item in packets)
+    assert sum(item["status"] == "observed" for item in packets) == 199
+
+
+def test_terminal_intent_history_cannot_evict_an_older_pending_intent() -> None:
+    events = [
+        {
+            "event_id": "evt-pending",
+            "ts": "2026-07-17T00:00:00+00:00",
+            "event_type": "intent_staged",
+            "payload": {
+                "intent_id": "intent-pending",
+                "intent_type": "inspect",
+                "created_at": "2026-07-17T00:00:00+00:00",
+                "priority": 0.9,
+                "status": "pending",
+            },
+        }
+    ]
+    events.extend(
+        {
+            "event_id": f"evt-executed-{ordinal}",
+            "ts": f"2026-07-17T00:01:{ordinal % 60:02d}+00:00",
+            "event_type": "intent_staged",
+            "payload": {
+                "intent_id": f"intent-executed-{ordinal}",
+                "intent_type": "sample",
+                "created_at": f"2026-07-17T00:01:{ordinal % 60:02d}+00:00",
+                "priority": 0.5,
+                "status": "executed",
+            },
+        }
+        for ordinal in range(ledger.INTENT_PROJECTION_LIMIT)
+    )
+
+    intents = ledger.reduce_runtime_events(events).intents
+
+    assert len(intents) == ledger.INTENT_PROJECTION_LIMIT
+    assert any(item["intent_id"] == "intent-pending" for item in intents)
+    assert sum(item["status"] == "executed" for item in intents) == 99
+
+
+def test_open_lifecycle_state_survives_the_complex_replay_boundary(tmp_path) -> None:
+    opened = [
+        {
+            "event_type": "route_state_changed",
+            "payload": {
+                "status": "active",
+                "destination": "Orchard Kitchen",
+                "remaining": ["Bridge"],
+            },
+        },
+        {
+            "event_type": "mail_intent_staged",
+            "payload": {
+                "mail_intent_id": "mail-1",
+                "recipient": "Mara",
+                "context": "A short note",
+                "staged_at": "2026-07-17T00:00:01+00:00",
+            },
+        },
+        {
+            "event_type": "research_queued",
+            "payload": {
+                "query": "alder history",
+                "priority": "normal",
+                "added_ts": "2026-07-17T00:00:02+00:00",
+            },
+        },
+        {
+            "event_type": "packet_emitted",
+            "payload": {
+                "packet_id": "packet-1",
+                "packet_type": "direct_address",
+                "created_at": "2026-07-17T00:00:03+00:00",
+                "status": "pending",
+            },
+        },
+        {
+            "event_type": "intent_staged",
+            "payload": {
+                "intent_id": "intent-1",
+                "intent_type": "inspect",
+                "created_at": "2026-07-17T00:00:04+00:00",
+                "priority": 0.5,
+                "status": "pending",
+            },
+        },
+    ]
+    events = [
+        {
+            "event_id": f"evt-{sequence}",
+            "sequence": sequence,
+            "ts": f"2026-07-17T00:00:{min(sequence, 59):02d}+00:00",
+            "event_type": item["event_type"],
+            "payload": item["payload"],
+        }
+        for sequence, item in enumerate(opened, start=1)
+    ]
+    for sequence in range(len(events) + 1, 10_007):
+        events.append(
+            {
+                "event_id": f"evt-{sequence}",
+                "sequence": sequence,
+                "ts": "2026-07-17T01:00:00+00:00",
+                "event_type": "neutral",
+                "payload": {},
+            }
+        )
+    (tmp_path / "runtime_ledger.jsonl").write_text(
+        "".join(json.dumps(event) + "\n" for event in events), encoding="utf-8"
+    )
+    ledger.rebuild_runtime_artifacts(tmp_path)
+
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="session_state_observed",
+        payload={"source": "session_state"},
+    )
+
+    state = ledger.load_runtime_checkpoint(tmp_path)["state"]
+    assert state["active_route"]["destination"] == "Orchard Kitchen"
+    assert state["active_mail_intents"][0]["mail_intent_id"] == "mail-1"
+    assert state["research_queue"][0]["query"] == "alder history"
+    assert state["packets"][0]["packet_id"] == "packet-1"
+    assert state["intents"][0]["intent_id"] == "intent-1"
+
+    terminal_events = [
+        ("route_state_changed", {"status": "cleared"}),
+        ("mail_intent_sent", {"mail_intent_id": "mail-1"}),
+        ("research_popped", {"query": "alder history"}),
+        (
+            "packet_status_changed",
+            {"packet_id": "packet-1", "status": "observed"},
+        ),
+        (
+            "intent_status_changed",
+            {"intent_id": "intent-1", "status": "executed"},
+        ),
+    ]
+    for event_type, payload in terminal_events:
+        ledger.append_runtime_event(tmp_path, event_type=event_type, payload=payload)
+
+    state = ledger.load_runtime_checkpoint(tmp_path)["state"]
+    assert state["active_route"] is None
+    assert state["active_mail_intents"] == []
+    assert state["research_queue"] == []
+    assert state["packets"][0]["status"] == "observed"
+    assert state["intents"][0]["status"] == "executed"
 
 
 def test_projection_neutral_append_advances_checkpoint_without_loading_cold_history(

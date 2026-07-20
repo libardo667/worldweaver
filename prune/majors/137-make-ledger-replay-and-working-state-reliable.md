@@ -67,9 +67,9 @@ semantics, converge readers, and only then delete dead shadows.
 
 ## Acceptance Criteria
 
-- [ ] A route, mail intent, research item, packet, and intent opened before more than 10,000 later events remain
+- [x] A route, mail intent, research item, packet, and intent opened before more than 10,000 later events remain
       open until a named terminal event or enforced expiry.
-- [ ] Newer terminal history cannot evict an older unresolved packet or intent.
+- [x] Newer terminal history cannot evict an older unresolved packet or intent.
 - [ ] Packet and intent expiry uses an injected clock and writes an explicit terminal event.
 - [ ] The same prior state, event sequence, and `as_of` produce byte-identical reduced state.
 - [x] Every accepted event has a monotonic sequence, and the checkpoint records the exact sequence and byte
@@ -118,3 +118,16 @@ Cold replay now rejects blank, non-object, malformed, or mis-sequenced completed
 unterminated final fragment, the next writer saves those exact bytes beside the ledger before truncating only
 that fragment and appending the next valid record. This completes the storage foundation, not the lifecycle
 repair: the 10,000-event complex replay boundary and status-blind queue caps remain the next work.
+
+### 2026-07-20 — unfinished work survives bounded replay
+
+Reducer format 2 separates current lifecycle indexes from the bounded recent event view used by larger
+semantic projections. Active routes, staged mail, queued research, and open packets and intents now advance
+from the prior checkpoint for every append. A fixture places all five opening events before more than 10,000
+neutral records, triggers the former destructive path, and proves that each remains until its named closing
+event.
+
+Packet and intent limits now reserve space for every unresolved item and trim only terminal history. Mail and
+research limits reject an overloaded open queue instead of retaining only its newest members. This completes
+the named lifecycle boundary. Explicit expiry events, pure replay clocks, current-state readers, and removal of
+compatibility projection writes remain open.

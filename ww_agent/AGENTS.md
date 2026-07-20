@@ -40,9 +40,10 @@ inputs in the identity loader; they do not restore the old ownership model.
 - The ledger file keeps the complete history for recovery and research. Normal writes must advance a
   versioned current-state checkpoint without rebuilding open work from an arbitrary event-count tail. A time
   window is valid only for a reducer whose declared contract is decay; unresolved routes, packets, intents,
-  mail, research, and action outcomes remain indexed until a terminal event or enforced expiry. The current
-  implementation violates this invariant at its 10,000-event complex replay boundary; Major 137 owns the
-  repair. Do not make the normal write path grow with lifetime history or restore front truncation.
+  mail, research, and action outcomes remain indexed until a terminal event or enforced expiry. Lifecycle
+  state now advances from the checkpoint across the 10,000-event semantic replay boundary; Major 137 owns
+  the remaining clock, reader, expiry, and shadow-file repair. Do not make the normal write path grow with
+  lifetime history or restore front truncation.
 - Polling a source emits a stable stimulus packet; it does not by itself mean the resident attended to
   that source. Prompt-included encounters transition from `pending` to `observed` through ledger events.
 - Relationship summaries are reducer output, not a second memory store. They may use only an

@@ -29,7 +29,7 @@ _CHECKPOINT_FILENAME = "runtime_checkpoint.json"
 _WRITER_LOCK_FILENAME = "runtime_ledger.lock"
 
 CHECKPOINT_FORMAT_VERSION = 2
-REDUCER_FORMAT_VERSION = 1
+REDUCER_FORMAT_VERSION = 2
 PROJECTION_FORMAT_VERSIONS = {
     "runtime": 1,
     "subjective": 1,
@@ -43,6 +43,8 @@ MAIL_INTENT_PROJECTION_LIMIT = 100
 RESEARCH_QUEUE_PROJECTION_LIMIT = 100
 PROJECTION_REPLAY_MAX_EVENTS = 10_000
 RELATIONSHIP_PROJECTION_SCHEMA_VERSION = 1
+PACKET_OPEN_STATUSES = {"pending", "processing"}
+INTENT_OPEN_STATUSES = {"pending", "claimed"}
 
 PROJECTION_STATE_EVENT_TYPES = {
     "packet_emitted",
@@ -615,6 +617,34 @@ def _quarantine_incomplete_tail(memory_dir: Path) -> Path | None:
     return quarantine_path
 
 
+def _bounded_lifecycle_view(
+    items: list[dict[str, Any]],
+    *,
+    open_statuses: set[str],
+    limit: int,
+    item_kind: str,
+    created_key: str = "created_at",
+) -> list[dict[str, Any]]:
+    ordered = sorted(items, key=lambda item: str(item.get(created_key) or ""))
+    open_items = [
+        item
+        for item in ordered
+        if str(item.get("status") or "pending").strip().lower() in open_statuses
+    ]
+    if len(open_items) > limit:
+        raise RuntimeError(
+            f"open {item_kind} count {len(open_items)} exceeds the safe ceiling "
+            f"of {limit}; close or explicitly migrate outstanding work"
+        )
+    terminal_items = [item for item in ordered if item not in open_items]
+    terminal_budget = limit - len(open_items)
+    retained_terminal = terminal_items[-terminal_budget:] if terminal_budget else []
+    return sorted(
+        [*open_items, *retained_terminal],
+        key=lambda item: str(item.get(created_key) or ""),
+    )
+
+
 def _derive_packets_from_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     packets: dict[str, dict[str, Any]] = {}
     for event in events:
@@ -632,11 +662,12 @@ def _derive_packets_from_events(events: list[dict[str, Any]]) -> list[dict[str, 
                     or packets[packet_id].get("status")
                     or "pending"
                 ).strip()
-    ordered = sorted(
-        packets.values(),
-        key=lambda item: str(item.get("created_at") or ""),
+    return _bounded_lifecycle_view(
+        list(packets.values()),
+        open_statuses=PACKET_OPEN_STATUSES,
+        limit=PACKET_PROJECTION_LIMIT,
+        item_kind="packet",
     )
-    return ordered[-PACKET_PROJECTION_LIMIT:]
 
 
 def derive_packets(memory_dir: Path) -> list[dict[str, Any]]:
@@ -663,10 +694,12 @@ def _derive_intents_from_events(events: list[dict[str, Any]]) -> list[dict[str, 
                 validation_state = str(payload.get("validation_state") or "").strip()
                 if validation_state:
                     intents[intent_id]["validation_state"] = validation_state
-    newest = sorted(
-        intents.values(),
-        key=lambda item: str(item.get("created_at") or ""),
-    )[-INTENT_PROJECTION_LIMIT:]
+    newest = _bounded_lifecycle_view(
+        list(intents.values()),
+        open_statuses=INTENT_OPEN_STATUSES,
+        limit=INTENT_PROJECTION_LIMIT,
+        item_kind="intent",
+    )
     return sorted(
         newest,
         key=lambda item: (
@@ -727,7 +760,12 @@ def _derive_active_mail_intents_from_events(
         staged.values(),
         key=lambda item: str(item.get("staged_at") or item.get("ts") or ""),
     )
-    return ordered[-MAIL_INTENT_PROJECTION_LIMIT:]
+    if len(ordered) > MAIL_INTENT_PROJECTION_LIMIT:
+        raise RuntimeError(
+            f"open mail intent count {len(ordered)} exceeds the safe ceiling "
+            f"of {MAIL_INTENT_PROJECTION_LIMIT}; close or explicitly migrate outstanding work"
+        )
+    return ordered
 
 
 def derive_active_mail_intents(memory_dir: Path) -> list[dict[str, Any]]:
@@ -761,7 +799,12 @@ def _derive_research_queue_from_events(
     newest = sorted(
         queued.values(),
         key=lambda item: str(item.get("added_ts") or ""),
-    )[-RESEARCH_QUEUE_PROJECTION_LIMIT:]
+    )
+    if len(newest) > RESEARCH_QUEUE_PROJECTION_LIMIT:
+        raise RuntimeError(
+            f"open research item count {len(newest)} exceeds the safe ceiling "
+            f"of {RESEARCH_QUEUE_PROJECTION_LIMIT}; close or explicitly migrate outstanding work"
+        )
     return sorted(
         newest,
         key=lambda item: (
@@ -2218,56 +2261,143 @@ def _advance_runtime_projection(
     return runtime_projection
 
 
+def _advance_lifecycle_state(state: dict[str, Any], event: dict[str, Any]) -> tuple[
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    dict[str, Any] | None,
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+]:
+    event_type = str(event.get("event_type") or "").strip()
+    payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+
+    packet_by_id = {
+        str(item.get("packet_id") or "").strip(): deepcopy(item)
+        for item in list(state.get("packets") or [])
+        if str(item.get("packet_id") or "").strip()
+    }
+    packet_id = str(payload.get("packet_id") or "").strip()
+    if event_type == "packet_emitted" and packet_id:
+        packet_by_id[packet_id] = dict(payload)
+    elif event_type == "packet_status_changed" and packet_id in packet_by_id:
+        packet_by_id[packet_id]["status"] = str(
+            payload.get("status") or packet_by_id[packet_id].get("status") or "pending"
+        ).strip()
+    packets = _bounded_lifecycle_view(
+        list(packet_by_id.values()),
+        open_statuses=PACKET_OPEN_STATUSES,
+        limit=PACKET_PROJECTION_LIMIT,
+        item_kind="packet",
+    )
+
+    intent_by_id = {
+        str(item.get("intent_id") or "").strip(): deepcopy(item)
+        for item in list(state.get("intents") or [])
+        if str(item.get("intent_id") or "").strip()
+    }
+    intent_id = str(payload.get("intent_id") or "").strip()
+    if event_type == "intent_staged" and intent_id:
+        intent_by_id[intent_id] = dict(payload)
+    elif event_type == "intent_status_changed" and intent_id in intent_by_id:
+        intent_by_id[intent_id]["status"] = str(
+            payload.get("status") or intent_by_id[intent_id].get("status") or "pending"
+        ).strip()
+        validation_state = str(payload.get("validation_state") or "").strip()
+        if validation_state:
+            intent_by_id[intent_id]["validation_state"] = validation_state
+    intents = _bounded_lifecycle_view(
+        list(intent_by_id.values()),
+        open_statuses=INTENT_OPEN_STATUSES,
+        limit=INTENT_PROJECTION_LIMIT,
+        item_kind="intent",
+    )
+    intents.sort(
+        key=lambda item: (
+            -float(item.get("priority") or 0.5),
+            str(item.get("created_at") or ""),
+        )
+    )
+
+    active_route = deepcopy(state.get("active_route"))
+    if event_type == "route_state_changed":
+        status = str(payload.get("status") or "").strip()
+        if status == "active":
+            active_route = {
+                "destination": str(payload.get("destination") or "").strip(),
+                "remaining": list(payload.get("remaining") or []),
+            }
+        elif status == "cleared":
+            active_route = None
+    if active_route is not None and not active_route.get("destination"):
+        active_route = None
+
+    mail_by_id = {
+        str(item.get("mail_intent_id") or "").strip(): deepcopy(item)
+        for item in list(state.get("active_mail_intents") or [])
+        if str(item.get("mail_intent_id") or "").strip()
+    }
+    mail_intent_id = str(payload.get("mail_intent_id") or "").strip()
+    if event_type == "mail_intent_staged" and mail_intent_id:
+        mail_by_id[mail_intent_id] = dict(payload)
+    elif event_type in {
+        "mail_intent_sent",
+        "mail_intent_declined",
+        "mail_intent_suppressed",
+    }:
+        mail_by_id.pop(mail_intent_id, None)
+    active_mail_intents = sorted(
+        mail_by_id.values(),
+        key=lambda item: str(item.get("staged_at") or item.get("ts") or ""),
+    )
+    if len(active_mail_intents) > MAIL_INTENT_PROJECTION_LIMIT:
+        raise RuntimeError(
+            f"open mail intent count {len(active_mail_intents)} exceeds the safe ceiling "
+            f"of {MAIL_INTENT_PROJECTION_LIMIT}; close or explicitly migrate outstanding work"
+        )
+
+    research_by_query = {
+        str(item.get("query") or "").strip().lower(): deepcopy(item)
+        for item in list(state.get("research_queue") or [])
+        if str(item.get("query") or "").strip()
+    }
+    query = str(payload.get("query") or "").strip()
+    if event_type == "research_queued" and query:
+        research_by_query[query.lower()] = {
+            "query": query,
+            "priority": str(payload.get("priority") or "normal").strip() or "normal",
+            "source": str(payload.get("source") or "").strip(),
+            "added_ts": str(payload.get("added_ts") or event.get("ts") or "").strip(),
+        }
+    elif event_type == "research_popped" and query:
+        research_by_query.pop(query.lower(), None)
+    research_queue = list(research_by_query.values())
+    if len(research_queue) > RESEARCH_QUEUE_PROJECTION_LIMIT:
+        raise RuntimeError(
+            f"open research item count {len(research_queue)} exceeds the safe ceiling "
+            f"of {RESEARCH_QUEUE_PROJECTION_LIMIT}; close or explicitly migrate outstanding work"
+        )
+    priority_rank = {"high": 0, "normal": 1, "low": 2}
+    research_queue.sort(
+        key=lambda item: (
+            priority_rank.get(str(item.get("priority") or "normal"), 1),
+            str(item.get("added_ts") or ""),
+        )
+    )
+    return packets, intents, active_route, active_mail_intents, research_queue
+
+
 def _reduced_after_simple_checkpoint_event(
     checkpoint: dict[str, Any], event: dict[str, Any]
 ) -> ResidentReducedState:
     state = checkpoint["state"]
     runtime_projection = _advance_runtime_projection(state["runtime_projection"], event)
-    event_type = str(event.get("event_type") or "").strip()
-    packets = deepcopy(list(state.get("packets") or []))
-    intents = deepcopy(list(state.get("intents") or []))
-    payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
-    if event_type == "packet_status_changed":
-        packet_id = str(payload.get("packet_id") or "").strip()
-        for packet in packets:
-            if str(packet.get("packet_id") or "").strip() == packet_id:
-                packet["status"] = str(
-                    payload.get("status") or packet.get("status") or "pending"
-                ).strip()
-                break
-    elif event_type == "intent_staged":
-        intent_id = str(payload.get("intent_id") or "").strip()
-        if intent_id:
-            intents = [
-                item
-                for item in intents
-                if str(item.get("intent_id") or "").strip() != intent_id
-            ]
-            intents.append(dict(payload))
-            intents = sorted(
-                intents, key=lambda item: str(item.get("created_at") or "")
-            )[-INTENT_PROJECTION_LIMIT:]
-            intents.sort(
-                key=lambda item: (
-                    -float(item.get("priority") or 0.5),
-                    str(item.get("created_at") or ""),
-                )
-            )
-    elif event_type == "intent_status_changed":
-        intent_id = str(payload.get("intent_id") or "").strip()
-        for intent in intents:
-            if str(intent.get("intent_id") or "").strip() != intent_id:
-                continue
-            intent["status"] = str(
-                payload.get("status") or intent.get("status") or "pending"
-            ).strip()
-            validation_state = str(payload.get("validation_state") or "").strip()
-            if validation_state:
-                intent["validation_state"] = validation_state
-            break
-    active_route = deepcopy(state.get("active_route"))
-    active_mail_intents = deepcopy(list(state.get("active_mail_intents") or []))
-    research_queue = deepcopy(list(state.get("research_queue") or []))
+    (
+        packets,
+        intents,
+        active_route,
+        active_mail_intents,
+        research_queue,
+    ) = _advance_lifecycle_state(state, event)
     subjective_projection = deepcopy(state["subjective_projection"])
     memory_projection = deepcopy(state["memory_projection"])
     subjective_facts = deepcopy(state["subjective_facts"])
@@ -2306,24 +2436,54 @@ def _reduced_after_bounded_replay(
     runtime_projection = _advance_runtime_projection(
         checkpoint["state"]["runtime_projection"], event
     )
+    (
+        packets,
+        intents,
+        active_route,
+        active_mail_intents,
+        research_queue,
+    ) = _advance_lifecycle_state(checkpoint["state"], event)
+    subjective_projection = _build_subjective_projection(
+        replayed.events,
+        packets=packets,
+        route=active_route,
+        mail_intents=active_mail_intents,
+        research_queue=research_queue,
+    )
+    memory_projection = _build_memory_projection(
+        replayed.events,
+        route=active_route,
+        research_queue=research_queue,
+        mail_intents=active_mail_intents,
+    )
+    relationship_projection = _build_relationship_projection(replayed.events)
+    subjective_projection["relationship_projection"] = relationship_projection
+    subjective_facts = _build_subjective_facts(
+        replayed.events,
+        packets=packets,
+        route=active_route,
+        mail_intents=active_mail_intents,
+        research_queue=research_queue,
+        relationship_projection=relationship_projection,
+    )
     return ResidentReducedState(
         events=replayed.events,
-        packets=replayed.packets,
-        intents=replayed.intents,
-        active_route=replayed.active_route,
-        active_mail_intents=replayed.active_mail_intents,
-        research_queue=replayed.research_queue,
+        packets=packets,
+        intents=intents,
+        active_route=active_route,
+        active_mail_intents=active_mail_intents,
+        research_queue=research_queue,
         runtime_projection=runtime_projection,
-        subjective_projection=replayed.subjective_projection,
-        memory_projection=replayed.memory_projection,
-        subjective_facts=replayed.subjective_facts,
+        subjective_projection=subjective_projection,
+        memory_projection=memory_projection,
+        subjective_facts=subjective_facts,
         cognitive_projection=_build_cognitive_projection(
             replayed.events,
             runtime_projection=runtime_projection,
-            subjective_projection=replayed.subjective_projection,
-            subjective_facts=replayed.subjective_facts,
-            route=replayed.active_route,
-            mail_intents=replayed.active_mail_intents,
+            subjective_projection=subjective_projection,
+            subjective_facts=subjective_facts,
+            route=active_route,
+            mail_intents=active_mail_intents,
         ),
     )
 
