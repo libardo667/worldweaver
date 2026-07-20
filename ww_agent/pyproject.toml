@@ -5,6 +5,7 @@ description = "Minimal event-driven agent runtime for WorldWeaver residents"
 requires-python = ">=3.11"
 license = "AGPL-3.0-or-later"
 dependencies = [
+    "cryptography>=46,<50",
     "httpx[http2]>=0.28,<1",
     "python-dotenv>=1,<2",
     "pydantic>=2.13,<3",

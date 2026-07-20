@@ -3,6 +3,11 @@
 `WorldWeaverClient` is the agent runtime's async HTTP boundary to the engine. `CityWorld` and
 `CityTools` adapt that client to the protocols consumed by `CognitiveCore` and its effectors.
 
+An unsigned client may perform public readiness and discovery reads. A client constructed with a
+`ResidentRequestSigner` belongs to one resident runtime: it signs the exact encoded path, query, and serialized
+body with that runtime's short-lived key. Retries receive fresh nonces. The signer does not create identity
+keys, issue certificates, or read them from disk.
+
 The client currently covers:
 
 - resident bootstrap, scene polling, and new-event reads;

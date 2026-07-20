@@ -122,6 +122,11 @@ The shared HTTP helper for step 4 is also implemented and tested. It preserves t
 target, rejects requests that mix human and resident credentials, and resolves either a human JWT or a
 resident signature to the same small `AuthorizedActor` record before ordinary domain rules run.
 
+The resident HTTP client can now accept an injected short-lived runtime key and certificate, then sign the
+exact encoded path, query, and serialized body it sends. Each retry gets a fresh nonce. The signer neither
+issues certificates nor loads key files, and the current multi-resident daemon has not been switched from its
+old shared unsigned client.
+
 This is not live route enforcement yet. No existing resident has been assigned a private identity key, no
 anonymous compatibility route has been closed, and Alderbank's resident sessions have not been migrated.
 That waits for an explicit synthetic admission path, resident-side signing, and controlled route rollout.

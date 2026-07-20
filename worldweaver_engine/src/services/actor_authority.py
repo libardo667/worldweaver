@@ -82,9 +82,24 @@ async def get_request_actor_credentials(
                 "message": "Use either human login or resident request proof, not both.",
             },
         )
-    target = request.url.path
-    if request.url.query:
-        target = f"{target}?{request.url.query}"
+    raw_path = request.scope.get("raw_path")
+    raw_query = request.scope.get("query_string")
+    if not isinstance(raw_path, bytes):
+        raw_path = request.url.path.encode("ascii")
+    if not isinstance(raw_query, bytes):
+        raw_query = str(request.url.query or "").encode("ascii")
+    try:
+        target = raw_path.decode("ascii")
+        if raw_query:
+            target = f"{target}?{raw_query.decode('ascii')}"
+    except UnicodeDecodeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "invalid_request_target",
+                "message": "Request path and query must use encoded HTTP bytes.",
+            },
+        ) from exc
     return RequestActorCredentials(
         player=player,
         method=request.method,

@@ -87,6 +87,7 @@ hearths; they use the same `Resident` host and do not define a second kind of pe
 - `src/runtime/pulse_engine.py`: salience, ignition, and pulse generation
 - `src/runtime/effectors.py`: typed action boundary
 - `src/world/client.py`: engine transport
+- `src/world/resident_signing.py`: exact request signatures for an injected short-lived resident runtime key
 - `src/identity/`: identity loading, hearth manifests, packages, and activation
 - `src/familiar/`: private hearth adapter and optional grants
 

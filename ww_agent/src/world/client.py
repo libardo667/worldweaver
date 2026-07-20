@@ -13,6 +13,8 @@ from typing import Any
 
 import httpx
 
+from src.world.resident_signing import ResidentRequestSigner
+
 logger = logging.getLogger(__name__)
 
 
@@ -213,13 +215,23 @@ class WorldClientError(Exception):
 class WorldWeaverClient:
     """
     Async HTTP client for the WorldWeaver server.
-    Shared across all residents. Stateless — all session context comes from caller.
+    An unsigned instance may serve public operator/bootstrap reads. Once a resident
+    signer is attached, the instance belongs to that resident runtime only.
     """
 
-    def __init__(self, base_url: str, timeout_scene: float = 30.0, timeout_action: float = 120.0):
+    def __init__(
+        self,
+        base_url: str,
+        timeout_scene: float = 30.0,
+        timeout_action: float = 120.0,
+        *,
+        resident_signer: ResidentRequestSigner | None = None,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ):
         self._base_url = base_url.rstrip("/")
         self._timeout_scene = timeout_scene
         self._timeout_action = timeout_action
+        self._resident_signer = resident_signer
         try:
             self._roster_directory_ttl_seconds = max(
                 5.0,
@@ -232,6 +244,7 @@ class WorldWeaverClient:
         self._client = httpx.AsyncClient(
             base_url=self._base_url,
             headers={"Content-Type": "application/json"},
+            transport=transport,
         )
 
     @property
@@ -1298,9 +1311,43 @@ class WorldWeaverClient:
     # Internal helpers
     # ------------------------------------------------------------------
 
+    async def _send(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict | None = None,
+        payload: dict | None = None,
+        timeout: float,
+    ) -> httpx.Response:
+        """Build once, then sign and send the exact serialized request."""
+
+        request_kwargs: dict[str, Any] = {
+            "params": params,
+            "timeout": timeout,
+        }
+        if payload is not None:
+            request_kwargs["json"] = payload
+        request = self._client.build_request(method, path, **request_kwargs)
+        if self._resident_signer is not None:
+            target = request.url.raw_path.decode("ascii")
+            request.headers.update(
+                self._resident_signer.signed_headers(
+                    method=method,
+                    target=target,
+                    body=request.content,
+                )
+            )
+        return await self._client.send(request)
+
     async def _get(self, path: str, *, params: dict | None = None, timeout: float = 30.0) -> httpx.Response:
         try:
-            resp = await self._client.get(path, params=params, timeout=timeout)
+            resp = await self._send(
+                "GET",
+                path,
+                params=params,
+                timeout=timeout,
+            )
             resp.raise_for_status()
             return resp
         except httpx.HTTPStatusError as e:
@@ -1319,7 +1366,12 @@ class WorldWeaverClient:
 
         for attempt in range(max_retries + 1):
             try:
-                resp = await self._client.get(path, params=params, timeout=timeout)
+                resp = await self._send(
+                    "GET",
+                    path,
+                    params=params,
+                    timeout=timeout,
+                )
                 if resp.status_code in retryable:
                     delay = 2**attempt
                     logger.warning(
@@ -1343,7 +1395,12 @@ class WorldWeaverClient:
 
     async def _post(self, path: str, payload: dict, *, timeout: float = 60.0) -> httpx.Response:
         try:
-            resp = await self._client.post(path, json=payload, timeout=timeout)
+            resp = await self._send(
+                "POST",
+                path,
+                payload=payload,
+                timeout=timeout,
+            )
             resp.raise_for_status()
             return resp
         except httpx.HTTPStatusError as e:

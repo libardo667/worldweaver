@@ -205,25 +205,31 @@ def test_request_dependency_preserves_body_and_exact_query_target():
     app = FastAPI()
     app.dependency_overrides[get_current_player_strict] = lambda: None
 
-    @app.post("/probe")
+    @app.post("/probe/{item}")
     async def probe(
+        item: str,
         payload: dict,
         credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
     ):
         return {
+            "item": item,
             "parsed": payload,
             "captured": json.loads(credentials.body),
             "target": credentials.target,
         }
 
     with TestClient(app) as client:
-        response = client.post("/probe?order=one&order=two", json={"hello": "world"})
+        response = client.post(
+            "/probe/caf%C3%A9?order=one&order=two",
+            json={"hello": "world"},
+        )
 
     assert response.status_code == 200
     assert response.json() == {
+        "item": "café",
         "parsed": {"hello": "world"},
         "captured": {"hello": "world"},
-        "target": "/probe?order=one&order=two",
+        "target": "/probe/caf%C3%A9?order=one&order=two",
     }
 
 
