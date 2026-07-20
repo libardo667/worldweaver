@@ -92,7 +92,7 @@ export function PlacePanel({ slug, node, nodes, edges, me, onWalk, onTravel, onC
 
         {me && node && <AccessHere location={node.name} sessionId={me.sessionId} />}
 
-        <PresenceHere node={node} />
+        <PresenceHere key={node?.key ?? slug} node={node} />
         {node && <Overheard location={node.name} refreshKey={spokeCount} />}
         {node && (
           <StoopHere
