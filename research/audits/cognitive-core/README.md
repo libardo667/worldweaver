@@ -47,6 +47,10 @@ variable represents lived experience.
   behavioral instructions in the live model prompt.
 - [`calibration-and-lineage.md`](calibration-and-lineage.md) records where the main constants and behavioral
   interventions came from and audits the archived completion claim they inherited.
+- [`state-lifecycle.md`](state-lifecycle.md) traces how current, pending, historical, and decaying state opens
+  and closes, including ghost pressure and post-Major-85 read costs.
+- [`repair-and-ablation-order.md`](repair-and-ablation-order.md) puts software truth repairs before neutral
+  reference runs and one-variable mechanism tests.
 - [`claim-ledger.md`](claim-ledger.md) lists terms and implied claims that require a decision.
 - [`evidence/README.md`](evidence/README.md) defines the review method and first source set.
 - `decisions.md` will be created only after a claim has both code evidence and literature review.

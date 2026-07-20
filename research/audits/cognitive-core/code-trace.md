@@ -133,6 +133,18 @@ behavior policies authored by the project. They must not be reported as an emerg
 14. **The advertised drive/constitution path is only partly wired.** Identity resonance affects prompt
     selection, chatter ranking, optional anchors, and venture targets. It does not tag surprise valence, does
     not include reveries in the live drive build, and does not supply the promised semantic contradiction gate.
+15. **Current and historical social state are conflated.** Prompt delivery stops showing observed packets, but
+    subjective reduction keeps counting them. This creates model calls with social pressure but without the
+    source words that supposedly caused it.
+16. **Anchor continuity is recursive prompt state.** Model self-report is mined, called current inner concern,
+    shown back to the model, and optionally admitted into call timing. It is not independent evidence.
+17. **Selected memory has two durable homes.** `kept_memory.jsonl` still claims to protect memory from a ledger
+    trim removed by Major 85. The side file is treated as authority rather than as a rebuildable index.
+18. **Normal tick cost still grows with history.** Append and checkpoint updates are bounded, but the core,
+    substrate stimulus, queues, prompt producer, memory rescue, and mirror retain full-ledger read paths.
+19. **An empty ambient observation cannot clear prior pressure.** Perception emits an ambient snapshot only
+    when signals are non-empty. Featureless calm can therefore leave an older crowding/event/weather record as
+    current state until another non-empty ambient record arrives.
 
 ## Questions for the next code pass
 

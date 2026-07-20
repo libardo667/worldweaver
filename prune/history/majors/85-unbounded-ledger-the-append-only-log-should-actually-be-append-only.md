@@ -2,6 +2,13 @@
 
 ## Completed (2026-07-17)
 
+> **Audit correction (2026-07-19):** The cold log is genuinely append-only and checkpoint-backed writes are
+> bounded, but the stronger flat-runtime-cost claim is incomplete. `CognitiveCore`, substrate stimulus,
+> packet queues, pulse construction, memory rescue, and the shard mirror still contain normal-operation
+> full-ledger reads. `kept_memory.jsonl` also retains its obsolete “hard-capped ledger” rationale and acts as a
+> second durable memory authority. Active Major 136 owns verification and repair; the storage work below
+> remains complete, while runtime-reader convergence does not.
+
 The ledger now keeps the complete history without making normal updates slower as that history grows.
 The implementation landed in these WorldWeaver slices:
 
