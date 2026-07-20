@@ -21,6 +21,7 @@ ENV/
 # Live shard runtime state
 shards/*/.env
 shards/*/.env.*
+shards/*/node.json
 shards/*/db/
 shards/*/data/
 shards/*/residents/
