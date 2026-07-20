@@ -42,6 +42,11 @@ variable represents lived experience.
 ## Documents
 
 - [`code-trace.md`](code-trace.md) records the literal runtime path and verified code concerns.
+- [`dependency-map.md`](dependency-map.md) traces each derived field and pulse output to its real consumers.
+- [`prompt-policy-audit.md`](prompt-policy-audit.md) separates observed facts, affordances, metaphors, and
+  behavioral instructions in the live model prompt.
+- [`calibration-and-lineage.md`](calibration-and-lineage.md) records where the main constants and behavioral
+  interventions came from and audits the archived completion claim they inherited.
 - [`claim-ledger.md`](claim-ledger.md) lists terms and implied claims that require a decision.
 - [`evidence/README.md`](evidence/README.md) defines the review method and first source set.
 - `decisions.md` will be created only after a claim has both code evidence and literature review.
@@ -51,4 +56,3 @@ variable represents lived experience.
 The core audit uses source, synthetic fixtures, structural receipts, and replayable public research records.
 It does not require private resident prose. Public speech may later answer a narrow, preregistered question,
 but behavior alone will not be used to diagnose consciousness, distress, pathology, or a preferred personality.
-

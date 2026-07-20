@@ -9,6 +9,13 @@
 > tests satisfy this rebuild. The old cognitive loop package is absent. Later majors refine the substrate;
 > they do not leave this foundational migration open.
 
+> **Audit correction (2026-07-19):** This remains the historical record of the loop-to-pulse migration, but
+> its stronger completion claims do not match the current runtime. `felt_sense` is read back through anchors;
+> drive nudges, trace verdicts, and graph-like node fields have no live consumer; surprise valence and the
+> semantic constitution check are not wired by `CognitiveCore`; reveries are not supplied to the drive build.
+> See `research/audits/cognitive-core/` and active Major 136. Do not treat the checked acceptance list below as
+> present-tense verification of those cognitive claims.
+
 ## Decision and lineage
 
 This major collapses the resident's multi-tempo LLM loops into a **mechanistic substrate plus a single predictive integration pulse**. It is the connective layer that closes the architecture Majors 34 / 35 / 40 / 42 / 46 / 47 / 48 were already building toward.

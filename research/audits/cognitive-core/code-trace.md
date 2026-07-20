@@ -115,12 +115,29 @@ behavior policies authored by the project. They must not be reported as an emerg
    `stability`, and `persistence_class` are built and stored in `runtime/ledger.py`, but no runtime code reads
    them back into later cognition. The pulse renderer uses node activation and mode. These fields currently
    make the projection look richer without changing the resident's next state.
+9. **The pulse contract misstates the causal role of `felt_sense`.** It is not sent directly to the effector,
+   but later code mines it for anchors, returns it through elective recall, and may feed those anchors into
+   arousal when anchor gating is enabled. It is not “readout only” in the ordinary causal meaning.
+10. **Unsupported prediction scopes manufacture surprise.** The model is invited to predict fields at `here`
+    or a named person, but ordinary stimulus has only `self` features and optional `anchors`. Missing observed
+    scopes are treated as zero, so an unmeasured place/person prediction becomes a false mismatch.
+11. **Much of the pulse schema is write-only.** Drive nudges, trace verdicts, and staged `new_reverie` and
+    `goal_update` fields have no production reader. Comments still describe some of them as live mechanisms.
+12. **The resident-private/shard-public boundary is broken.** The runtime mirror copies all reduced inner
+    projections to engine session variables. The raw session-variable GET route has no authentication or
+    ownership check, while public roster data exposes session IDs. The city briefing's absolute privacy claim
+    does not match the code.
+13. **Direct social pressure does not resolve honestly.** The newest direct question is always inside an
+    expiry window measured relative to itself. Packet observation and reply-edge evidence do not close it, so
+    “awaiting reply,” `owes_reply_to`, and maximum social pull can survive an actual reply.
+14. **The advertised drive/constitution path is only partly wired.** Identity resonance affects prompt
+    selection, chatter ranking, optional anchors, and venture targets. It does not tag surprise valence, does
+    not include reveries in the live drive build, and does not supply the promised semantic contradiction gate.
 
 ## Questions for the next code pass
 
-- Which remaining derived projections are included in prompts, and which survive only as operational/debug
-  artifacts?
-- Which experimental flags are active in each deployed shard and resident tuning file?
+- Which private projections, if any, does a city actually need beyond explicit operational status?
+- Which exact experimental flags and prompt hashes were effective in each recorded run?
 - Can paired replays isolate afterimage, baseline, anchors, drive resonance, memory recall, prompt examples,
   and mode wording one at a time?
 - Which constants were calibrated against recorded behavior, and which were selected by intuition?
