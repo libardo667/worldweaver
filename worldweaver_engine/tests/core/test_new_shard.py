@@ -102,6 +102,18 @@ def test_new_world_directory_is_closed_and_has_folder_local_trust_commands(tmp_p
         capture_output=True,
         text=True,
     )
+    hearth_receive_help = subprocess.run(
+        [
+            sys.executable,
+            str(shard / "ww.py"),
+            "hearth-host",
+            "receive",
+            "--help",
+        ],
+        cwd=shard,
+        capture_output=True,
+        text=True,
+    )
     assert checked.returncode == 0, checked.stderr
     assert node_help.returncode == 0, node_help.stderr
     assert "admit" in node_help.stdout
@@ -118,6 +130,10 @@ def test_new_world_directory_is_closed_and_has_folder_local_trust_commands(tmp_p
     assert "--actor-id" not in resident_admit_help.stdout
     assert hearth_host_help.returncode == 0, hearth_host_help.stderr
     assert "initialize" in hearth_host_help.stdout
+    assert "receive" in hearth_host_help.stdout
+    assert hearth_receive_help.returncode == 0, hearth_receive_help.stderr
+    assert "--resident" in hearth_receive_help.stdout
+    assert "private-key" not in hearth_receive_help.stdout
 
 
 def test_new_shards_receive_separate_secure_local_secrets(tmp_path: Path) -> None:
@@ -223,6 +239,7 @@ def test_new_game_shard_copies_versioned_experience_and_uses_readable_name(tmp_p
     assert "image: ${WW_ENGINE_IMAGE}" in compose_text
     assert "image: ${WW_AGENT_IMAGE}" in compose_text
     assert '"127.0.0.1:${BACKEND_PORT}:8000"' in compose_text
+    assert "./hearth-host" not in compose_text
 
     generated_env = _read_env(shard / ".env")
     assert generated_env["WW_ENGINE_IMAGE"].startswith("ghcr.io/libardo667/worldweaver-engine:sha-")

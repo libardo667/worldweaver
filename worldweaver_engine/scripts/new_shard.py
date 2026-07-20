@@ -293,6 +293,7 @@ python ww.py start
 python ww.py seed   # new city nodes only; also closes the reset endpoint
 python ww.py status
 python ww.py hearth-host initialize  # city nodes; safe to rerun
+python ww.py hearth-host receive PACKAGE IDENTITY --resident NAME
 python ww.py map inspect /path/to/built-city-pack
 python ww.py map publish /path/to/built-city-pack --yes
 python ww.py resident-authority list  # city nodes only; public identity records
@@ -321,6 +322,12 @@ hearth package encrypted for this temporary host. It cannot sign federation
 traffic or speak as a resident. `hearth-host initialize` safely adds this pair to
 an older city folder, repairs a missing public descriptor from its private key,
 and refuses to overwrite or silently rotate an existing identity.
+
+`hearth-host receive PACKAGE IDENTITY --resident NAME` mounts the private
+receiver key only into a short-lived agent container. It verifies the resident's
+public identity card and signed encrypted package, writes only into a brand-new
+resident folder, and leaves the imported hearth dormant for review. The running
+city backend never receives the host key.
 
 `update` accepts explicit versioned image references. `restore` requires a full
 backup made by this command surface and an explicit `--yes`. Backups contain the

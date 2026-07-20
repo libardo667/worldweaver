@@ -858,6 +858,20 @@ def _hearth_host(args: list[str]) -> int:
         "initialize",
         help="create, repair, or verify the private receiver key and public descriptor",
     )
+    receive = commands.add_parser(
+        "receive",
+        help="verify and install one encrypted resident package without waking it",
+    )
+    receive.add_argument("package", help="encrypted .wwhearth.enc package")
+    receive.add_argument(
+        "resident_identity",
+        help="reviewed safe-to-share resident identity card",
+    )
+    receive.add_argument(
+        "--resident",
+        required=True,
+        help="new folder name under the city's residents directory",
+    )
     parsed = parser.parse_args(args)
     if Path(parsed.city).name != parsed.city:
         parser.error("--city must be a single directory name")
@@ -879,6 +893,29 @@ def _hearth_host(args: list[str]) -> int:
     if env_values.get("SHARD_TYPE") == "world":
         print("A federation directory does not host resident hearths.", file=sys.stderr)
         return 2
+    if parsed.action == "receive":
+        resident_name = str(parsed.resident or "").strip()
+        if resident_name in {"", ".", ".."} or len(resident_name) > 80 or not all(character.isalnum() or character in "._-" for character in resident_name) or not resident_name[0].isalnum():
+            parser.error("--resident must use 1-80 letters, numbers, dots, dashes, or underscores")
+        key_path = city_dir / "hearth-host" / "identity" / "transport.key"
+        runtime_env = os.environ.copy()
+        runtime_env["WW_HEARTH_TRANSPORT_PRIVATE_KEY"] = str(key_path)
+        result = _run(
+            [
+                sys.executable,
+                str(AGENT_DIR / "scripts" / "hearth_package.py"),
+                "import-encrypted",
+                str(Path(parsed.package).expanduser().resolve()),
+                str(city_dir / "residents" / resident_name),
+                "--resident-identity",
+                str(Path(parsed.resident_identity).expanduser().resolve()),
+            ],
+            cwd=AGENT_DIR,
+            env=runtime_env,
+        )
+        if result == 0:
+            print("The imported hearth is dormant. Review it before activation or city admission.")
+        return result
     return _run(
         [
             sys.executable,
@@ -925,6 +962,8 @@ def _help() -> None:
                                         inspect public resident identities admitted by one city
   python dev.py hearth-host --city CITY initialize
                                         create or verify its encrypted-package receiver
+  python dev.py hearth-host --city CITY receive PACKAGE IDENTITY --resident NAME
+                                        install a signed hearth, dormant, into a new home
   python dev.py new-shard CITY [options]
                                         create an isolated, folder-operated node
   python dev.py city-draft create --city CITY

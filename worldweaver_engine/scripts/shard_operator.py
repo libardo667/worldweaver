@@ -214,6 +214,22 @@ def _write_new_public_descriptor(descriptor: dict[str, object]) -> None:
         raise OperatorError("Refusing to replace the existing hearth-host.json.") from exc
 
 
+def _regular_input_path(path_value: str, *, label: str) -> Path:
+    path = Path(path_value).expanduser()
+    if not path.is_absolute():
+        path = ROOT / path
+    if not path.is_file() or path.is_symlink():
+        raise OperatorError(f"{label} is not a regular file: {path}")
+    return path.resolve()
+
+
+def _resident_directory_name(value: str) -> str:
+    name = str(value or "").strip()
+    if name in {"", ".", ".."} or len(name) > 80 or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name):
+        raise OperatorError("Resident directory name must use 1-80 letters, numbers, dots, dashes, or underscores.")
+    return name
+
+
 def collect_problems(*, offline: bool = False) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -363,10 +379,13 @@ def command_setup(args: argparse.Namespace) -> int:
 def command_hearth_host(args: argparse.Namespace) -> int:
     """Create or verify the city's host-only package decryption identity."""
 
-    if args.hearth_host_action != "initialize":
-        raise OperatorError("Unsupported hearth-host action.")
     if _read_env().get("SHARD_TYPE") == "world":
         raise OperatorError("A federation directory does not host resident hearths.")
+
+    if args.hearth_host_action == "receive":
+        return _receive_encrypted_hearth(args)
+    if args.hearth_host_action != "initialize":
+        raise OperatorError("Unsupported hearth-host action.")
 
     private_present = HEARTH_TRANSPORT_KEY.exists() or HEARTH_TRANSPORT_KEY.is_symlink()
     public_present = HEARTH_TRANSPORT_DESCRIPTOR.exists() or HEARTH_TRANSPORT_DESCRIPTOR.is_symlink()
@@ -384,7 +403,7 @@ def command_hearth_host(args: argparse.Namespace) -> int:
     HEARTH_TRANSPORT_KEY.parent.mkdir(parents=True, exist_ok=True)
     if os.name != "nt":
         HEARTH_TRANSPORT_KEY.parent.chmod(0o700)
-    run_options = ["run", "--rm", "--no-deps"]
+    run_options = ["run", "--rm", "--no-deps", "--no-TTY"]
     getuid = getattr(os, "getuid", None)
     getgid = getattr(os, "getgid", None)
     if callable(getuid) and callable(getgid):
@@ -423,6 +442,69 @@ def command_hearth_host(args: argparse.Namespace) -> int:
     print(f"Hearth host identity {status}.")
     print(f"Safe-to-share descriptor: {HEARTH_TRANSPORT_DESCRIPTOR}")
     print("The private transport key stayed inside hearth-host/.")
+    return 0
+
+
+def _receive_encrypted_hearth(args: argparse.Namespace) -> int:
+    """Install one encrypted package through a short-lived agent container."""
+
+    if not HEARTH_TRANSPORT_KEY.is_file() or HEARTH_TRANSPORT_KEY.is_symlink() or not HEARTH_TRANSPORT_DESCRIPTOR.is_file() or HEARTH_TRANSPORT_DESCRIPTOR.is_symlink():
+        raise OperatorError("Initialize this city's complete hearth-host identity before receiving a package.")
+    _read_hearth_transport_descriptor()
+    package = _regular_input_path(args.package, label="Encrypted hearth package")
+    resident_identity = _regular_input_path(
+        args.resident_identity,
+        label="Resident identity card",
+    )
+    resident_name = _resident_directory_name(args.resident)
+    target = ROOT / "residents" / resident_name
+    if target.exists() or target.is_symlink():
+        raise OperatorError(f"Refusing to replace existing resident home: {target}")
+    if not _docker_available():
+        raise OperatorError("Docker is required to receive an encrypted hearth package.")
+
+    run_options = ["run", "--rm", "--no-deps", "--no-TTY"]
+    getuid = getattr(os, "getuid", None)
+    getgid = getattr(os, "getgid", None)
+    if callable(getuid) and callable(getgid):
+        run_options.extend(["--user", f"{getuid()}:{getgid()}"])
+    run_options.extend(
+        [
+            "--volume",
+            f"{package}:/transfer/package.wwhearth.enc:ro",
+            "--volume",
+            f"{resident_identity}:/transfer/resident-identity.json:ro",
+            "--volume",
+            f"{HEARTH_HOST_DIR.resolve()}:/hearth-host:ro",
+            "--env",
+            "WW_HEARTH_TRANSPORT_PRIVATE_KEY=/hearth-host/identity/transport.key",
+            "agent",
+            "python",
+            "scripts/hearth_package.py",
+            "import-encrypted",
+            "/transfer/package.wwhearth.enc",
+            f"/app/residents/{resident_name}",
+            "--resident-identity",
+            "/transfer/resident-identity.json",
+        ]
+    )
+    try:
+        result = _compose(*run_options, capture=True)
+    except subprocess.CalledProcessError as exc:
+        detail = ((exc.stdout or b"") + (exc.stderr or b"")).decode("utf-8", errors="replace").strip()
+        raise OperatorError("The agent image refused the encrypted hearth package. " "Check that the package, identity card, destination host, and image version agree." + (f" Details: {detail[-2000:]}" if detail else "")) from exc
+    try:
+        receipt = json.loads(result.stdout.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise OperatorError("The agent image returned an invalid import receipt.") from exc
+    if not isinstance(receipt, dict) or receipt.get("status") != "imported-encrypted":
+        raise OperatorError("The agent image did not confirm an encrypted hearth import.")
+    if not target.is_dir() or target.is_symlink():
+        raise OperatorError("The agent image reported success without creating the new hearth.")
+    manifest = receipt.get("hearth_manifest")
+    actor_id = manifest.get("actor_id") if isinstance(manifest, dict) else "unknown"
+    print(f"Received the signed hearth for {actor_id} into residents/{resident_name}.")
+    print("The imported hearth is dormant. Review it before activation or city admission.")
     return 0
 
 
@@ -972,6 +1054,20 @@ def build_parser() -> argparse.ArgumentParser:
     hearth_host_commands.add_parser(
         "initialize",
         help="create, repair, or verify the private receiver key and public descriptor",
+    )
+    receive_hearth = hearth_host_commands.add_parser(
+        "receive",
+        help="verify and install one encrypted resident package without waking it",
+    )
+    receive_hearth.add_argument("package", help="encrypted .wwhearth.enc package")
+    receive_hearth.add_argument(
+        "resident_identity",
+        help="reviewed safe-to-share resident identity card",
+    )
+    receive_hearth.add_argument(
+        "--resident",
+        required=True,
+        help="new folder name under residents/",
     )
     hearth_host.set_defaults(handler=command_hearth_host)
 
