@@ -23,6 +23,7 @@ from ..models import (
 )
 from .resident_protocol import (
     DEFAULT_MAX_CLOCK_SKEW_SECONDS,
+    RESIDENT_CERTIFICATE_HEADER,
     ResidentProtocolError,
     ResidentRuntimeCertificate,
     VerifiedResidentRequest,
@@ -188,6 +189,122 @@ def bind_resident_session(
     return binding
 
 
+def _consume_request_nonce(
+    db: Session,
+    *,
+    verified: VerifiedResidentRequest,
+    now: int,
+    max_clock_skew_seconds: int,
+) -> None:
+    """Commit one verified nonce and any authority change made before it."""
+
+    cutoff = datetime.fromtimestamp(
+        now - (max_clock_skew_seconds * 2),
+        tz=timezone.utc,
+    )
+    db.query(ResidentRequestNonce).filter(ResidentRequestNonce.received_at < cutoff).delete(synchronize_session=False)
+    db.add(
+        ResidentRequestNonce(
+            certificate_id=verified.certificate_id,
+            nonce=verified.nonce,
+            actor_id=verified.actor_id,
+            runtime_generation=verified.runtime_generation,
+            signed_at=datetime.fromtimestamp(verified.signed_at, tz=timezone.utc),
+        )
+    )
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise ResidentAuthorityError(
+            "replayed_request",
+            "Signed resident request was already used.",
+        ) from exc
+
+
+def authorize_resident_bootstrap_request(
+    db: Session,
+    *,
+    actor_id: str,
+    expected_audience: str,
+    method: str,
+    target: str,
+    body: bytes,
+    headers: Mapping[str, str],
+    now: int | None = None,
+    max_clock_skew_seconds: int = DEFAULT_MAX_CLOCK_SKEW_SECONDS,
+) -> VerifiedResidentRequest:
+    """Verify the first signed request before the resident has a city session.
+
+    The stable public identity must already have been admitted by a separate,
+    reviewed procedure. A valid request may activate the same or a newer
+    short-lived runtime generation. It cannot create an identity binding.
+    """
+
+    actor = _bounded_identifier(actor_id, label="actor ID", max_length=36)
+    if db.new or db.dirty or db.deleted:
+        raise ResidentAuthorityError(
+            "authorization_session_dirty",
+            "Resident authorization must run before other database changes.",
+        )
+    certificate_header = str(headers.get(RESIDENT_CERTIFICATE_HEADER) or "").strip()
+    try:
+        certificate = ResidentRuntimeCertificate.decode_header(certificate_header)
+    except ResidentProtocolError as exc:
+        raise ResidentAuthorityError("invalid_proof", str(exc)) from exc
+    if certificate.actor_id != actor:
+        raise ResidentAuthorityError(
+            "actor_mismatch",
+            "Resident bootstrap proof belongs to another actor.",
+        )
+
+    authority = db.get(ResidentAuthority, actor)
+    if authority is None:
+        raise ResidentAuthorityError(
+            "identity_not_admitted",
+            "Resident identity is not admitted by this city.",
+        )
+    if authority.hearth_shard_id != certificate.hearth_shard_id:
+        raise ResidentAuthorityError(
+            "identity_conflict",
+            "Resident certificate names a different hearth.",
+        )
+    active = authority.active_runtime_generation
+    if active is not None and certificate.runtime_generation < int(active):
+        raise ResidentAuthorityError(
+            "retired_generation",
+            "Resident runtime generation has already been retired.",
+        )
+
+    try:
+        verified = verify_resident_request(
+            identity_public_key=str(authority.identity_public_key),
+            expected_actor_id=actor,
+            expected_runtime_generation=int(certificate.runtime_generation),
+            expected_audience=expected_audience,
+            required_scope="session.bootstrap",
+            method=method,
+            target=target,
+            body=body,
+            headers=headers,
+            now=now,
+            max_clock_skew_seconds=max_clock_skew_seconds,
+        )
+    except ResidentProtocolError as exc:
+        raise ResidentAuthorityError("invalid_proof", str(exc)) from exc
+
+    if active is None or certificate.runtime_generation > int(active):
+        authority.active_runtime_generation = certificate.runtime_generation
+    current_time = int(time.time()) if now is None else int(now)
+    _consume_request_nonce(
+        db,
+        verified=verified,
+        now=current_time,
+        max_clock_skew_seconds=max_clock_skew_seconds,
+    )
+    return verified
+
+
 def authorize_resident_request(
     db: Session,
     *,
@@ -240,26 +357,10 @@ def authorize_resident_request(
         raise ResidentAuthorityError("invalid_proof", str(exc)) from exc
 
     current_time = int(time.time()) if now is None else int(now)
-    cutoff = datetime.fromtimestamp(
-        current_time - (max_clock_skew_seconds * 2),
-        tz=timezone.utc,
+    _consume_request_nonce(
+        db,
+        verified=verified,
+        now=current_time,
+        max_clock_skew_seconds=max_clock_skew_seconds,
     )
-    db.query(ResidentRequestNonce).filter(ResidentRequestNonce.received_at < cutoff).delete(synchronize_session=False)
-    db.add(
-        ResidentRequestNonce(
-            certificate_id=verified.certificate_id,
-            nonce=verified.nonce,
-            actor_id=verified.actor_id,
-            runtime_generation=verified.runtime_generation,
-            signed_at=datetime.fromtimestamp(verified.signed_at, tz=timezone.utc),
-        )
-    )
-    try:
-        db.commit()
-    except IntegrityError as exc:
-        db.rollback()
-        raise ResidentAuthorityError(
-            "replayed_request",
-            "Signed resident request was already used.",
-        ) from exc
     return verified

@@ -767,7 +767,8 @@ class WorldWeaverClient:
         if entry_location:
             payload["entry_location"] = entry_location
 
-        resp = await self._post("/api/session/bootstrap", payload, timeout=60.0)
+        path = "/api/session/bootstrap/resident" if self._resident_signer is not None else "/api/session/bootstrap"
+        resp = await self._post(path, payload, timeout=60.0)
         return resp.json()
 
     async def leave_session(self, session_id: str) -> dict[str, Any]:

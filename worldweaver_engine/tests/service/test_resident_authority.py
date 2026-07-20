@@ -7,6 +7,7 @@ from src.models import ResidentRequestNonce, SessionVars
 from src.services.resident_authority import (
     ResidentAuthorityError,
     activate_resident_generation,
+    authorize_resident_bootstrap_request,
     authorize_resident_request,
     bind_resident_identity,
     bind_resident_session,
@@ -25,6 +26,8 @@ SESSION_ID = "resident-session"
 AUDIENCE = "ww_alderbank"
 TARGET = "/api/world/location/Commons/chat"
 BODY = b'{"session_id":"resident-session","message":"hello"}'
+BOOTSTRAP_TARGET = "/api/session/bootstrap"
+BOOTSTRAP_BODY = b'{"session_id":"new-resident-session","actor_id":"actor-123"}'
 
 
 def _certificate(identity_private, runtime_private, *, generation=1, audience=AUDIENCE):
@@ -106,6 +109,31 @@ def _authorize(db_session, headers):
     )
 
 
+def _bootstrap_headers(runtime_private, certificate, *, nonce="bootstrap-nonce"):
+    return signed_resident_request_headers(
+        runtime_private_key=runtime_private,
+        certificate=certificate,
+        method="POST",
+        target=BOOTSTRAP_TARGET,
+        body=BOOTSTRAP_BODY,
+        timestamp=NOW,
+        nonce=nonce,
+    )
+
+
+def _authorize_bootstrap(db_session, headers, *, actor_id=ACTOR_ID):
+    return authorize_resident_bootstrap_request(
+        db_session,
+        actor_id=actor_id,
+        expected_audience=AUDIENCE,
+        method="POST",
+        target=BOOTSTRAP_TARGET,
+        body=BOOTSTRAP_BODY,
+        headers=headers,
+        now=NOW,
+    )
+
+
 def test_identity_binding_is_idempotent_but_cannot_be_silently_replaced(db_session):
     identity_private = Ed25519PrivateKey.generate()
     public_key = encoded_public_key(identity_private.public_key())
@@ -180,6 +208,96 @@ def test_generation_activation_requires_the_admitted_identity_hearth_and_city(db
             expected_audience=AUDIENCE,
             now=NOW,
         )
+
+
+def test_first_signed_request_activates_an_admitted_runtime_without_creating_a_session(db_session):
+    identity_private = Ed25519PrivateKey.generate()
+    runtime_private = Ed25519PrivateKey.generate()
+    certificate = _certificate(identity_private, runtime_private)
+    bind_resident_identity(
+        db_session,
+        actor_id=ACTOR_ID,
+        hearth_shard_id=HEARTH_ID,
+        identity_public_key=encoded_public_key(identity_private.public_key()),
+    )
+    db_session.commit()
+
+    verified = _authorize_bootstrap(
+        db_session,
+        _bootstrap_headers(runtime_private, certificate),
+    )
+
+    assert verified.actor_id == ACTOR_ID
+    assert db_session.get(SessionVars, "new-resident-session") is None
+    assert db_session.query(ResidentRequestNonce).count() == 1
+    authority = bind_resident_identity(
+        db_session,
+        actor_id=ACTOR_ID,
+        hearth_shard_id=HEARTH_ID,
+        identity_public_key=encoded_public_key(identity_private.public_key()),
+    )
+    assert authority.active_runtime_generation == 1
+
+
+def test_first_signed_request_rejects_unknown_or_mismatched_identity(db_session):
+    identity_private = Ed25519PrivateKey.generate()
+    runtime_private = Ed25519PrivateKey.generate()
+    certificate = _certificate(identity_private, runtime_private)
+    headers = _bootstrap_headers(runtime_private, certificate)
+
+    with pytest.raises(ResidentAuthorityError) as unknown:
+        _authorize_bootstrap(db_session, headers)
+    assert unknown.value.code == "identity_not_admitted"
+
+    bind_resident_identity(
+        db_session,
+        actor_id=ACTOR_ID,
+        hearth_shard_id=HEARTH_ID,
+        identity_public_key=encoded_public_key(identity_private.public_key()),
+    )
+    db_session.commit()
+    with pytest.raises(ResidentAuthorityError) as mismatch:
+        _authorize_bootstrap(db_session, headers, actor_id="actor-456")
+    assert mismatch.value.code == "actor_mismatch"
+
+
+def test_invalid_first_request_cannot_activate_generation_and_valid_proof_cannot_replay(db_session):
+    identity_private = Ed25519PrivateKey.generate()
+    runtime_private = Ed25519PrivateKey.generate()
+    certificate = _certificate(identity_private, runtime_private)
+    bind_resident_identity(
+        db_session,
+        actor_id=ACTOR_ID,
+        hearth_shard_id=HEARTH_ID,
+        identity_public_key=encoded_public_key(identity_private.public_key()),
+    )
+    db_session.commit()
+    headers = _bootstrap_headers(runtime_private, certificate)
+
+    with pytest.raises(ResidentAuthorityError) as changed_body:
+        authorize_resident_bootstrap_request(
+            db_session,
+            actor_id=ACTOR_ID,
+            expected_audience=AUDIENCE,
+            method="POST",
+            target=BOOTSTRAP_TARGET,
+            body=b'{"changed":true}',
+            headers=headers,
+            now=NOW,
+        )
+    assert changed_body.value.code == "invalid_proof"
+    authority = bind_resident_identity(
+        db_session,
+        actor_id=ACTOR_ID,
+        hearth_shard_id=HEARTH_ID,
+        identity_public_key=encoded_public_key(identity_private.public_key()),
+    )
+    assert authority.active_runtime_generation is None
+
+    _authorize_bootstrap(db_session, headers)
+    with pytest.raises(ResidentAuthorityError) as replay:
+        _authorize_bootstrap(db_session, headers)
+    assert replay.value.code == "replayed_request"
 
 
 def test_session_binding_rejects_humans_wrong_actors_and_inactive_generations(db_session):

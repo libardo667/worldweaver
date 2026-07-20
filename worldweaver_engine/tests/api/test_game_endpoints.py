@@ -1,8 +1,19 @@
 """Integration tests for core game API endpoints."""
 
 from datetime import datetime, timedelta, timezone
+import json
+
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi import HTTPException
-from src.models import SessionVars, ShardTravelHandoff, WorldEvent
+
+from src.models import ResidentAuthority, ResidentRequestNonce, ResidentSessionAuthority, SessionVars, ShardTravelHandoff, WorldEvent
+from src.services.federation_identity import current_shard_id
+from src.services.resident_authority import bind_resident_identity
+from src.services.resident_protocol import (
+    encoded_public_key,
+    issue_runtime_certificate,
+    signed_resident_request_headers,
+)
 
 
 class TestGameEndpoints:
@@ -62,6 +73,132 @@ class TestGameEndpoints:
         assert bootstrap_event.summary.startswith("Test Resident arrived at ")
         assert bootstrap_event.embedding is not None
         assert bootstrap_event.world_state_delta["__action_meta__"]["surface"] == "session_bootstrap"
+
+    def test_pre_admitted_resident_can_bootstrap_one_generation_with_exact_proof(self, seeded_client, seeded_world_id, db_session):
+        actor_id = "signed-resident-actor"
+        session_id = "signed-resident-session"
+        identity_private = Ed25519PrivateKey.generate()
+        runtime_private = Ed25519PrivateKey.generate()
+        bind_resident_identity(
+            db_session,
+            actor_id=actor_id,
+            hearth_shard_id="hearth:signed-resident-actor",
+            identity_public_key=encoded_public_key(identity_private.public_key()),
+        )
+        db_session.commit()
+        certificate = issue_runtime_certificate(
+            identity_private_key=identity_private,
+            runtime_public_key=runtime_private.public_key(),
+            actor_id=actor_id,
+            hearth_shard_id="hearth:signed-resident-actor",
+            runtime_generation=1,
+            audience=current_shard_id(),
+            scopes=["session.act", "session.bootstrap"],
+        )
+        payload = {
+            "session_id": session_id,
+            "actor_id": actor_id,
+            "world_theme": "quiet harbor",
+            "player_role": "Signed Resident",
+            "bootstrap_source": "worldweaver-agent",
+            "world_id": seeded_world_id,
+        }
+        body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        headers = signed_resident_request_headers(
+            runtime_private_key=runtime_private,
+            certificate=certificate,
+            method="POST",
+            target="/api/session/bootstrap/resident",
+            body=body,
+            nonce="signed-bootstrap-once",
+        )
+        headers["Content-Type"] = "application/json"
+
+        response = seeded_client.post(
+            "/api/session/bootstrap/resident",
+            content=body,
+            headers=headers,
+        )
+
+        assert response.status_code == 200, response.text
+        session = db_session.get(SessionVars, session_id)
+        binding = db_session.get(ResidentSessionAuthority, session_id)
+        assert session is not None
+        assert session.actor_id == actor_id
+        assert binding is not None
+        assert binding.actor_id == actor_id
+        assert binding.runtime_generation == 1
+
+        replay = seeded_client.post(
+            "/api/session/bootstrap/resident",
+            content=body,
+            headers=headers,
+        )
+        assert replay.status_code == 409
+        assert replay.json()["detail"]["code"] == "session_id_in_use"
+
+    def test_signed_resident_bootstrap_refuses_unsigned_traffic(self, seeded_client, seeded_world_id):
+        response = seeded_client.post(
+            "/api/session/bootstrap/resident",
+            json={
+                "session_id": "unsigned-resident-session",
+                "actor_id": "unsigned-resident-actor",
+                "player_role": "Unsigned Resident",
+                "world_id": seeded_world_id,
+            },
+        )
+
+        assert response.status_code == 401
+        assert response.json()["detail"]["code"] == "resident_proof_required"
+
+    def test_signed_resident_bootstrap_cannot_replace_an_existing_session(self, seeded_client, seeded_world_id, db_session):
+        actor_id = "signed-collision-actor"
+        identity_private = Ed25519PrivateKey.generate()
+        runtime_private = Ed25519PrivateKey.generate()
+        bind_resident_identity(
+            db_session,
+            actor_id=actor_id,
+            hearth_shard_id="hearth:signed-collision-actor",
+            identity_public_key=encoded_public_key(identity_private.public_key()),
+        )
+        db_session.add(SessionVars(session_id="occupied-session", actor_id="someone-else", vars={"name": "Still Here"}))
+        db_session.commit()
+        certificate = issue_runtime_certificate(
+            identity_private_key=identity_private,
+            runtime_public_key=runtime_private.public_key(),
+            actor_id=actor_id,
+            hearth_shard_id="hearth:signed-collision-actor",
+            runtime_generation=1,
+            audience=current_shard_id(),
+            scopes=["session.act", "session.bootstrap"],
+        )
+        payload = {
+            "session_id": "occupied-session",
+            "actor_id": actor_id,
+            "player_role": "Collision Resident",
+            "world_id": seeded_world_id,
+        }
+        body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        headers = signed_resident_request_headers(
+            runtime_private_key=runtime_private,
+            certificate=certificate,
+            method="POST",
+            target="/api/session/bootstrap/resident",
+            body=body,
+        )
+        headers["Content-Type"] = "application/json"
+
+        response = seeded_client.post(
+            "/api/session/bootstrap/resident",
+            content=body,
+            headers=headers,
+        )
+
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "session_id_in_use"
+        assert db_session.get(SessionVars, "occupied-session").actor_id == "someone-else"
+        assert db_session.get(ResidentAuthority, actor_id).active_runtime_generation is None
+        assert db_session.query(ResidentRequestNonce).count() == 0
 
     def test_session_bootstrap_prunes_stale_duplicate_agent_sessions(self, seeded_client, seeded_world_id, db_session):
         stale_session_id = "test_resident-20260317-010101"

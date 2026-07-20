@@ -53,7 +53,16 @@ from ...models.schemas import (
     WorldSeedResponse,
 )
 from ...services import city_pack_service, federation_discovery, federation_identity, federation_travel, session_service
+from ...services.actor_authority import (
+    RequestActorCredentials,
+    get_request_actor_credentials,
+)
 from ...services.event_submission import WorldEventCommand, submit_world_event
+from ...services.resident_authority import (
+    ResidentAuthorityError,
+    authorize_resident_bootstrap_request,
+    bind_resident_session,
+)
 from ...services.session_service import (
     remove_cached_sessions,
     save_state,
@@ -174,7 +183,7 @@ def _require_ordinary_player_attachment(
     if attachment.current_shard != local_shard:
         raise HTTPException(
             status_code=409,
-            detail=(f"This actor is attached to '{attachment.current_shard}', not '{local_shard}'. " "Enter through federation travel rather than opening a second city presence."),
+            detail=(f"This actor is attached to '{attachment.current_shard}', not '{local_shard}'. Enter through federation travel rather than opening a second city presence."),
         )
 
 
@@ -917,7 +926,7 @@ def bootstrap_session_world(
         # All characters join as residents with a world_id. There is no founder flow.
         raise HTTPException(
             status_code=422,
-            detail=("world_id is required. Seed the world first via POST /api/world/seed, " "then pass the returned world_id here."),
+            detail=("world_id is required. Seed the world first via POST /api/world/seed, then pass the returned world_id here."),
         )
     except HTTPException:
         raise
@@ -925,6 +934,89 @@ def bootstrap_session_world(
         db.rollback()
         logging.error("Session bootstrap failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"Session bootstrap failed: {str(exc)}")
+
+
+@router.post("/session/bootstrap/resident", response_model=SessionBootstrapResponse)
+async def bootstrap_signed_resident_session(
+    payload: SessionBootstrapRequest,
+    db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+):
+    """Bootstrap one pre-admitted resident from an exact signed request.
+
+    This transitional endpoint lets a synthetic resident use the new authority
+    protocol without changing the unsigned route used by current residents.
+    """
+
+    actor_id = str(payload.actor_id or "").strip()
+    if not actor_id:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "actor_id_required",
+                "message": "Signed resident bootstrap requires a durable actor ID.",
+            },
+        )
+    if credentials.player is not None or not credentials.has_resident_proof:
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "code": "resident_proof_required",
+                "message": "This endpoint requires resident request proof.",
+            },
+        )
+    requested_session_id = str(payload.session_id)
+    if db.get(SessionVars, requested_session_id) is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "session_id_in_use",
+                "message": "Signed bootstrap requires a new local session ID.",
+            },
+        )
+    live_actor_session = db.query(SessionVars).filter(SessionVars.actor_id == actor_id).first()
+    if live_actor_session is not None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "actor_already_present",
+                "message": f"This actor is already present in local session '{live_actor_session.session_id}'.",
+            },
+        )
+    try:
+        verified = authorize_resident_bootstrap_request(
+            db,
+            actor_id=actor_id,
+            expected_audience=current_shard_id(),
+            method=credentials.method,
+            target=credentials.target,
+            body=credentials.body,
+            headers=credentials.resident_headers,
+        )
+    except ResidentAuthorityError as exc:
+        error_status = 409 if exc.code in {"replayed_request", "retired_generation"} else 401
+        raise HTTPException(
+            status_code=error_status,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
+
+    response = bootstrap_session_world(payload, db=db, player=None)
+    try:
+        bind_resident_session(
+            db,
+            session_id=requested_session_id,
+            actor_id=verified.actor_id,
+            runtime_generation=verified.runtime_generation,
+        )
+        db.commit()
+    except ResidentAuthorityError as exc:
+        _delete_session_world_rows(db, requested_session_id)
+        _clear_runtime_session_caches(requested_session_id)
+        raise HTTPException(
+            status_code=409,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
+    return response
 
 
 @router.post("/session/leave")

@@ -127,6 +127,11 @@ exact encoded path, query, and serialized body it sends. Each retry gets a fresh
 issues certificates nor loads key files, and the current multi-resident daemon has not been switched from its
 old shared unsigned client.
 
+A separate signed bootstrap route now gives pre-admitted synthetic identities a controlled first request. It
+verifies the request before creating the city session, activates the certificate's runtime generation, and
+binds that generation to the new session. The old unsigned bootstrap route remains available only as a
+temporary compatibility path for residents that have not been migrated.
+
 This is not live route enforcement yet. No existing resident has been assigned a private identity key, no
 anonymous compatibility route has been closed, and Alderbank's resident sessions have not been migrated.
 That waits for an explicit synthetic admission path, resident-side signing, and controlled route rollout.

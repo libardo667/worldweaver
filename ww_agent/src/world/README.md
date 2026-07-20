@@ -6,7 +6,8 @@
 An unsigned client may perform public readiness and discovery reads. A client constructed with a
 `ResidentRequestSigner` belongs to one resident runtime: it signs the exact encoded path, query, and serialized
 body with that runtime's short-lived key. Retries receive fresh nonces. The signer does not create identity
-keys, issue certificates, or read them from disk.
+keys, issue certificates, or read them from disk. A signed client uses the city's pre-admitted resident
+bootstrap route; an unsigned client continues to use the temporary compatibility route.
 
 The client currently covers:
 

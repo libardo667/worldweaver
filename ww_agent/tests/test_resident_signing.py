@@ -136,6 +136,43 @@ async def test_world_client_signs_the_serialized_json_and_encoded_query_target()
 
 
 @pytest.mark.asyncio
+async def test_signed_world_client_uses_the_pre_admitted_bootstrap_route():
+    signer = _signer()
+    requests: list[httpx.Request] = []
+
+    async def handle(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json={"success": True})
+
+    client = WorldWeaverClient(
+        "https://city.example",
+        resident_signer=signer,
+        transport=httpx.MockTransport(handle),
+    )
+    try:
+        await client.bootstrap_session(
+            session_id="resident-session",
+            world_id="world-one",
+            world_theme="",
+            player_role="Resident",
+            actor_id="resident-actor",
+        )
+    finally:
+        await client.close()
+
+    assert len(requests) == 1
+    request = requests[0]
+    assert request.url.path == "/api/session/bootstrap/resident"
+    _verify_request_signature(
+        signer,
+        request.headers,
+        method="POST",
+        target="/api/session/bootstrap/resident",
+        body=request.content,
+    )
+
+
+@pytest.mark.asyncio
 async def test_each_retry_uses_a_fresh_nonce(monkeypatch):
     signer = _signer()
     requests: list[httpx.Request] = []
