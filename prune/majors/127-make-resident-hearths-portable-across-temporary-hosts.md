@@ -21,8 +21,10 @@ standalone command mounts the receiver key only into a short-lived agent contain
 receives it.
 
 The work is not complete. Existing residents are not all initialized, no real resident identity signing key
-is stored, and there is no safe operator export command yet. Hearth-host authorization for waking a resident
-is not defined, and no cross-computer migration or remote-city attachment has been proven. Active city nodes
+is stored, and no cross-computer migration or remote-city attachment has been proven. The safe operator
+commands can now move a synthetic host-sealed identity into a dormant home. A resident-signed handoff binds
+that transfer to one source host, destination host, and N-to-N+1 generation step, but the separate
+source-retirement and destination-wake ceremony is not built yet. Active city nodes
 have separate signing identities; that does not by itself authorize a computer to run a resident's hearth.
 
 ## Model
@@ -102,6 +104,10 @@ Build the private half in this order:
    host. The destination's `hearth-host receive-transfer` command verifies the resident card, envelope,
    generation, inner archive, and private key before resealing the key and installing a dormant home. The
    source remains unchanged. This completes the encrypted custody handoff, not authority transfer or recovery.
+   The encrypted payload now carries a resident-signed handoff record naming its one-time transfer ID, source
+   and destination host transport keys, and exact N-to-N+1 generation transition. Receipt stores that record as
+   host-specific evidence beside the dormant destination. It is coordination for cooperating hosts, not proof
+   that a malicious host erased an offline copy.
 5. On an authorized host, decrypt the long-term key into memory only long enough to sign a fresh runtime
    public key for one city, generation, scope set, and expiry. Ordinary requests use the runtime key, not the
    long-term identity key.

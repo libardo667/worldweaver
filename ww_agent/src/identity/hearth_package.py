@@ -31,6 +31,14 @@ from src.identity.hearth_envelope import (
     HearthEnvelopeError,
     decrypt_hearth_payload,
     encrypt_hearth_payload,
+    transport_key_id,
+)
+from src.identity.hearth_handoff import (
+    HEARTH_HANDOFF_FILENAME,
+    HearthHandoffAuthorization,
+    HearthHandoffError,
+    create_hearth_handoff_authorization,
+    write_hearth_handoff_authorization,
 )
 from src.identity.hearth_manifest import (
     HEARTH_MANIFEST_FILENAME,
@@ -78,6 +86,7 @@ _HOST_SPECIFIC_ROOT_FILES = {
     "hearth.json",
     "familiar.json",
     "hearth_activation.json",
+    HEARTH_HANDOFF_FILENAME,
 }
 _PORTABLE_IDENTITY_FILES = {
     "IDENTITY.md",
@@ -468,11 +477,19 @@ def export_encrypted_hearth_transfer(
             )
             archive_bytes, metadata = _build_hearth_package_bytes_locked(home)
             manifest = HearthManifest.from_dict(metadata["hearth_manifest"])
+            handoff = create_hearth_handoff_authorization(
+                manifest,
+                identity_descriptor=descriptor,
+                identity_private_key=identity_private_key,
+                source_transport_public_key=(source_transport_private_key.public_key()),
+                destination_transport_public_key=recipient_transport_public_key,
+            )
             transfer_payload = build_hearth_transfer_payload(
                 archive_bytes,
                 manifest=manifest,
                 identity_descriptor=descriptor,
                 identity_private_key=identity_private_key,
+                handoff_authorization=handoff,
             )
             encrypted = encrypt_hearth_payload(
                 transfer_payload,
@@ -486,12 +503,13 @@ def export_encrypted_hearth_transfer(
     except (
         HearthActivationError,
         HearthEnvelopeError,
+        HearthHandoffError,
         HearthTransferError,
         ResidentIdentityError,
         ResidentKeySealError,
     ) as exc:
         raise HearthPackageError(str(exc)) from exc
-    return metadata
+    return {**metadata, "handoff_authorization": handoff.to_dict()}
 
 
 def _read_package_metadata(archive: zipfile.ZipFile) -> dict[str, Any]:
@@ -607,6 +625,7 @@ def _import_hearth_archive(
     expected_runtime_generation: int | None = None,
     destination_identity_descriptor: ResidentIdentityDescriptor | None = None,
     destination_identity_seal: bytes | None = None,
+    destination_handoff: HearthHandoffAuthorization | None = None,
 ) -> dict[str, Any]:
     """Validate and atomically install one already-opened plaintext archive."""
     target = _validate_import_target(resident_dir)
@@ -661,11 +680,16 @@ def _import_hearth_archive(
             raise HearthPackageError(
                 f"identity/{HEARTH_MANIFEST_FILENAME} does not match package metadata"
             )
-        if (destination_identity_descriptor is None) != (
-            destination_identity_seal is None
+        destination_parts = (
+            destination_identity_descriptor,
+            destination_identity_seal,
+            destination_handoff,
+        )
+        if any(value is not None for value in destination_parts) and any(
+            value is None for value in destination_parts
         ):
             raise HearthPackageError(
-                "destination identity card and host seal must be installed together"
+                "destination identity card, host seal, and handoff must be installed together"
             )
         if destination_identity_descriptor is not None:
             imported_descriptor = load_resident_identity_descriptor(temporary)
@@ -677,6 +701,11 @@ def _import_hearth_archive(
                 temporary / "identity" / SEALED_RESIDENT_IDENTITY_FILENAME,
                 destination_identity_seal,
             )
+            write_hearth_handoff_authorization(
+                temporary / HEARTH_HANDOFF_FILENAME,
+                destination_handoff,
+                identity_descriptor=destination_identity_descriptor,
+            )
         imported_inventory = inventory_hearth(temporary)
         if imported_inventory.blocked:
             raise HearthPackageError(
@@ -685,6 +714,7 @@ def _import_hearth_archive(
         os.replace(temporary, target)
     except (
         HearthManifestError,
+        HearthHandoffError,
         OSError,
         ResidentIdentityError,
         ResidentKeySealError,
@@ -792,13 +822,19 @@ def import_encrypted_hearth_transfer(
             raise HearthPackageError(
                 "encrypted hearth identity or generation does not match its transfer"
             )
+        if opened_transfer.handoff_authorization.destination_host_key_id != (
+            transport_key_id(recipient_transport_private_key.public_key())
+        ):
+            raise HearthPackageError(
+                "hearth handoff is not authorized for this destination host"
+            )
         destination_seal = seal_resident_identity_private_key(
             opened_transfer.identity_private_key,
             identity_descriptor=descriptor,
             recipient_transport_public_key=recipient_transport_private_key.public_key(),
         )
         with zipfile.ZipFile(io.BytesIO(opened_transfer.archive), "r") as archive:
-            return _import_hearth_archive(
+            report = _import_hearth_archive(
                 archive,
                 target,
                 expected_actor_id=opened_transfer.actor_id,
@@ -806,9 +842,15 @@ def import_encrypted_hearth_transfer(
                 expected_runtime_generation=opened_transfer.runtime_generation,
                 destination_identity_descriptor=descriptor,
                 destination_identity_seal=destination_seal,
+                destination_handoff=opened_transfer.handoff_authorization,
             )
+        return {
+            **report,
+            "handoff_authorization": (opened_transfer.handoff_authorization.to_dict()),
+        }
     except (
         HearthEnvelopeError,
+        HearthHandoffError,
         HearthTransferError,
         ResidentIdentityError,
         ResidentKeySealError,

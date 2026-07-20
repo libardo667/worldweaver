@@ -18,6 +18,11 @@ import zipfile
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
+from src.identity.hearth_handoff import (
+    HearthHandoffAuthorization,
+    decode_hearth_handoff_authorization,
+    encode_hearth_handoff_authorization,
+)
 from src.identity.hearth_manifest import HearthManifest
 from src.identity.resident_identity import (
     ResidentIdentityDescriptor,
@@ -25,10 +30,11 @@ from src.identity.resident_identity import (
 )
 
 HEARTH_TRANSFER_SCHEMA = "worldweaver.hearth-transfer-payload"
-HEARTH_TRANSFER_VERSION = 1
+HEARTH_TRANSFER_VERSION = 2
 HEARTH_TRANSFER_METADATA = "HEARTH_TRANSFER.json"
 HEARTH_TRANSFER_ARCHIVE = "hearth.wwhearth"
 HEARTH_TRANSFER_IDENTITY_KEY = "resident-identity.key"
+HEARTH_TRANSFER_HANDOFF = "HEARTH_HANDOFF.json"
 
 _TRANSFER_FIELDS = {
     "schema",
@@ -44,6 +50,7 @@ _TRANSFER_MEMBERS = {
     HEARTH_TRANSFER_METADATA,
     HEARTH_TRANSFER_ARCHIVE,
     HEARTH_TRANSFER_IDENTITY_KEY,
+    HEARTH_TRANSFER_HANDOFF,
 }
 _FIXED_ZIP_TIME = (1980, 1, 1, 0, 0, 0)
 _MAX_METADATA_BYTES = 64 * 1024
@@ -61,6 +68,7 @@ class OpenedHearthTransfer:
     actor_id: str
     hearth_shard_id: str
     runtime_generation: int
+    handoff_authorization: HearthHandoffAuthorization
 
 
 def _canonical_json(value: Any) -> bytes:
@@ -81,6 +89,7 @@ def build_hearth_transfer_payload(
     manifest: HearthManifest,
     identity_descriptor: ResidentIdentityDescriptor,
     identity_private_key: Ed25519PrivateKey,
+    handoff_authorization: HearthHandoffAuthorization,
 ) -> bytes:
     """Build the secret-bearing inner payload entirely in memory."""
 
@@ -101,6 +110,18 @@ def build_hearth_transfer_payload(
     ):
         raise HearthTransferError(
             "Resident identity key does not match the public identity card."
+        )
+    handoff = HearthHandoffAuthorization.from_dict(
+        handoff_authorization.to_dict(),
+        identity_descriptor=descriptor,
+    )
+    if (
+        handoff.actor_id != manifest.actor_id
+        or handoff.hearth_shard_id != manifest.hearth_shard_id
+        or handoff.source_generation != manifest.runtime_generation
+    ):
+        raise HearthTransferError(
+            "Hearth handoff does not match the portable hearth generation."
         )
 
     metadata = {
@@ -123,6 +144,13 @@ def build_hearth_transfer_payload(
             _zip_file_info(HEARTH_TRANSFER_IDENTITY_KEY),
             identity_private_key.private_bytes_raw(),
         )
+        transfer.writestr(
+            _zip_file_info(HEARTH_TRANSFER_HANDOFF),
+            encode_hearth_handoff_authorization(
+                handoff,
+                identity_descriptor=descriptor,
+            ),
+        )
     return payload.getvalue()
 
 
@@ -130,7 +158,7 @@ def _read_metadata(transfer: zipfile.ZipFile) -> dict[str, Any]:
     names = transfer.namelist()
     if len(names) != len(set(names)) or set(names) != _TRANSFER_MEMBERS:
         raise HearthTransferError(
-            "Transfer members do not match the version 1 payload."
+            "Transfer members do not match the version 2 payload."
         )
     for info in transfer.infolist():
         mode = info.external_attr >> 16
@@ -151,7 +179,7 @@ def _read_metadata(transfer: zipfile.ZipFile) -> dict[str, Any]:
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise HearthTransferError("Transfer metadata is not valid UTF-8 JSON.") from exc
     if not isinstance(raw, dict) or set(raw) != _TRANSFER_FIELDS:
-        raise HearthTransferError("Transfer metadata fields do not match version 1.")
+        raise HearthTransferError("Transfer metadata fields do not match version 2.")
     if (
         raw.get("schema") != HEARTH_TRANSFER_SCHEMA
         or type(raw.get("schema_version")) is not int
@@ -207,6 +235,7 @@ def open_hearth_transfer_payload(
                 raise HearthTransferError("Transfer archive hash is invalid.")
             archive_info = transfer.getinfo(HEARTH_TRANSFER_ARCHIVE)
             key_info = transfer.getinfo(HEARTH_TRANSFER_IDENTITY_KEY)
+            handoff_info = transfer.getinfo(HEARTH_TRANSFER_HANDOFF)
             if archive_info.file_size != archive_size:
                 raise HearthTransferError(
                     "Transfer archive size does not match its metadata."
@@ -215,6 +244,8 @@ def open_hearth_transfer_payload(
                 raise HearthTransferError(
                     "Transfer resident identity key has the wrong size."
                 )
+            if handoff_info.file_size > _MAX_METADATA_BYTES:
+                raise HearthTransferError("Transfer handoff document is too large.")
             hearth_archive = transfer.read(HEARTH_TRANSFER_ARCHIVE)
             if hashlib.sha256(hearth_archive).hexdigest() != archive_sha256:
                 raise HearthTransferError(
@@ -228,6 +259,10 @@ def open_hearth_transfer_payload(
                 raise HearthTransferError(
                     "Transfer resident identity key is invalid."
                 ) from exc
+            handoff = decode_hearth_handoff_authorization(
+                transfer.read(HEARTH_TRANSFER_HANDOFF),
+                identity_descriptor=descriptor,
+            )
     except zipfile.BadZipFile as exc:
         raise HearthTransferError("Transfer payload is not a valid archive.") from exc
 
@@ -238,10 +273,19 @@ def open_hearth_transfer_payload(
         raise HearthTransferError(
             "Transfer resident identity key does not match its public card."
         )
+    if (
+        handoff.actor_id != actor_id
+        or handoff.hearth_shard_id != hearth_shard_id
+        or handoff.source_generation != generation
+    ):
+        raise HearthTransferError(
+            "Transfer handoff does not match its hearth generation."
+        )
     return OpenedHearthTransfer(
         archive=hearth_archive,
         identity_private_key=identity_private_key,
         actor_id=actor_id,
         hearth_shard_id=hearth_shard_id,
         runtime_generation=generation,
+        handoff_authorization=handoff,
     )

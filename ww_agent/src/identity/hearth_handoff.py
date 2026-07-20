@@ -11,8 +11,11 @@ import base64
 import binascii
 from dataclasses import dataclass
 import json
+import os
+from pathlib import Path
 import re
 import secrets
+import tempfile
 from typing import Any, Mapping
 
 from cryptography.exceptions import InvalidSignature
@@ -31,6 +34,8 @@ from src.identity.resident_identity import (
 
 HEARTH_HANDOFF_SCHEMA = "worldweaver.hearth-handoff"
 HEARTH_HANDOFF_VERSION = 1
+HEARTH_HANDOFF_FILENAME = "hearth_handoff.json"
+_MAX_HANDOFF_BYTES = 64 * 1024
 _FIELDS = {
     "schema",
     "schema_version",
@@ -250,3 +255,104 @@ def create_hearth_handoff_authorization(
         },
         identity_descriptor=descriptor,
     )
+
+
+def encode_hearth_handoff_authorization(
+    authorization: HearthHandoffAuthorization,
+    *,
+    identity_descriptor: ResidentIdentityDescriptor,
+) -> bytes:
+    """Verify and encode one handoff for transfer or host-local storage."""
+
+    verified = HearthHandoffAuthorization.from_dict(
+        authorization.to_dict(),
+        identity_descriptor=identity_descriptor,
+    )
+    return (json.dumps(verified.to_dict(), indent=2, sort_keys=True) + "\n").encode(
+        "utf-8"
+    )
+
+
+def decode_hearth_handoff_authorization(
+    encoded: bytes,
+    *,
+    identity_descriptor: ResidentIdentityDescriptor,
+) -> HearthHandoffAuthorization:
+    """Decode and verify one bounded UTF-8 handoff document."""
+
+    if len(encoded) > _MAX_HANDOFF_BYTES:
+        raise HearthHandoffError("Hearth handoff document is too large.")
+    try:
+        raw = json.loads(bytes(encoded))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise HearthHandoffError(
+            "Hearth handoff document is not valid UTF-8 JSON."
+        ) from exc
+    return HearthHandoffAuthorization.from_dict(
+        raw,
+        identity_descriptor=identity_descriptor,
+    )
+
+
+def load_hearth_handoff_authorization(
+    path: str | Path,
+    *,
+    identity_descriptor: ResidentIdentityDescriptor,
+) -> HearthHandoffAuthorization:
+    """Load one regular handoff file and verify its resident signature."""
+
+    handoff_path = Path(path).expanduser()
+    if not handoff_path.is_file() or handoff_path.is_symlink():
+        raise HearthHandoffError(f"Hearth handoff is missing or unsafe: {handoff_path}")
+    try:
+        encoded = handoff_path.read_bytes()
+    except OSError as exc:
+        raise HearthHandoffError(
+            f"Could not read hearth handoff: {handoff_path}"
+        ) from exc
+    return decode_hearth_handoff_authorization(
+        encoded,
+        identity_descriptor=identity_descriptor,
+    )
+
+
+def write_hearth_handoff_authorization(
+    path: str | Path,
+    authorization: HearthHandoffAuthorization,
+    *,
+    identity_descriptor: ResidentIdentityDescriptor,
+) -> None:
+    """Create one owner-only handoff file without replacing another record."""
+
+    handoff_path = Path(path)
+    encoded = encode_hearth_handoff_authorization(
+        authorization,
+        identity_descriptor=identity_descriptor,
+    )
+    if handoff_path.exists() or handoff_path.is_symlink():
+        raise HearthHandoffError(
+            f"Refusing to replace existing hearth handoff: {handoff_path}"
+        )
+    if not handoff_path.parent.is_dir() or handoff_path.parent.is_symlink():
+        raise HearthHandoffError(
+            f"Hearth handoff parent is missing or unsafe: {handoff_path.parent}"
+        )
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=handoff_path.parent,
+            prefix=f".{handoff_path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.link(temporary, handoff_path)
+        handoff_path.chmod(0o600)
+    except OSError as exc:
+        raise HearthHandoffError(f"Could not write hearth handoff: {exc}") from exc
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)

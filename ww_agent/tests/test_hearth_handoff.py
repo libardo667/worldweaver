@@ -8,6 +8,8 @@ from src.identity.hearth_handoff import (
     HearthHandoffAuthorization,
     HearthHandoffError,
     create_hearth_handoff_authorization,
+    load_hearth_handoff_authorization,
+    write_hearth_handoff_authorization,
 )
 from src.identity.hearth_envelope import transport_key_id
 from src.identity.hearth_manifest import HearthManifest
@@ -98,4 +100,30 @@ def test_handoff_rejects_the_same_source_and_destination_host():
             identity_private_key=identity,
             source_transport_public_key=host.public_key(),
             destination_transport_public_key=host.public_key(),
+        )
+
+
+def test_handoff_file_is_owner_only_and_never_replaced(tmp_path):
+    authorization, descriptor, _source_host, _destination_host = _handoff()
+    path = tmp_path / "hearth_handoff.json"
+
+    write_hearth_handoff_authorization(
+        path,
+        authorization,
+        identity_descriptor=descriptor,
+    )
+
+    assert path.stat().st_mode & 0o077 == 0
+    assert (
+        load_hearth_handoff_authorization(
+            path,
+            identity_descriptor=descriptor,
+        )
+        == authorization
+    )
+    with pytest.raises(HearthHandoffError, match="Refusing to replace"):
+        write_hearth_handoff_authorization(
+            path,
+            authorization,
+            identity_descriptor=descriptor,
         )

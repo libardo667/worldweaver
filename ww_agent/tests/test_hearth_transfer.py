@@ -22,11 +22,17 @@ from src.identity.hearth_envelope import (
     encrypt_hearth_payload,
     transport_key_id,
 )
+from src.identity.hearth_handoff import (
+    HEARTH_HANDOFF_FILENAME,
+    create_hearth_handoff_authorization,
+    load_hearth_handoff_authorization,
+)
 from src.identity.hearth_package import (
     HearthPackageError,
     export_encrypted_hearth_transfer,
     export_hearth_package,
     import_encrypted_hearth_transfer,
+    classify_hearth_path,
 )
 from src.identity.hearth_transfer import (
     HEARTH_TRANSFER_IDENTITY_KEY,
@@ -135,6 +141,13 @@ def test_transfer_reseals_identity_for_destination_and_keeps_home_dormant(tmp_pa
         "resident artifact\n"
     )
     assert not (target / "hearth_activation.json").exists()
+    handoff = load_hearth_handoff_authorization(
+        target / HEARTH_HANDOFF_FILENAME,
+        identity_descriptor=descriptor,
+    )
+    assert handoff.to_dict() == export_report["handoff_authorization"]
+    assert handoff.destination_generation == 2
+    assert classify_hearth_path(HEARTH_HANDOFF_FILENAME)[0] == "host_specific"
     destination_seal = load_resident_key_seal(
         target / "identity" / SEALED_RESIDENT_IDENTITY_FILENAME
     )
@@ -230,16 +243,24 @@ def test_transfer_import_rejects_wrong_host_card_and_tampering_without_a_home(
 
 
 def test_transfer_rejects_a_signed_payload_with_the_wrong_inner_identity_key(tmp_path):
-    home, identity, descriptor, _source_host, _source_seal = _sealed_home(tmp_path)
+    home, identity, descriptor, source_host, _source_seal = _sealed_home(tmp_path)
     destination_host = X25519PrivateKey.generate()
     portable = tmp_path / "portable.wwhearth"
     export_hearth_package(home, portable)
     manifest = load_hearth_manifest(home)
+    handoff = create_hearth_handoff_authorization(
+        manifest,
+        identity_descriptor=descriptor,
+        identity_private_key=identity,
+        source_transport_public_key=source_host.public_key(),
+        destination_transport_public_key=destination_host.public_key(),
+    )
     payload = build_hearth_transfer_payload(
         portable.read_bytes(),
         manifest=manifest,
         identity_descriptor=descriptor,
         identity_private_key=identity,
+        handoff_authorization=handoff,
     )
     with zipfile.ZipFile(io.BytesIO(payload), "r") as source:
         members = {name: source.read(name) for name in source.namelist()}

@@ -179,6 +179,13 @@ The agent-level commands are `export-transfer` and `import-transfer`. Public sha
 `hearth-host send` and `hearth-host receive-transfer`, using only fixed key-file mounts. These commands move
 custody material; they do not yet transfer permission to wake the resident.
 
+`hearth_handoff.py` is the resident-signed instruction for that later authority step. It names one random
+transfer ID, the resident and hearth, the current and next generations, and the exact source and destination
+host transport-key fingerprints. The encrypted transfer carries it, and receipt stores it as owner-only,
+host-specific evidence in `hearth_handoff.json`. Changing any named resident, host, generation, or signature
+is rejected. The record is intentionally clock-free so a reviewed offline transfer does not silently expire.
+It coordinates compliant software; it cannot prove that an authorized host destroyed a hidden copy.
+
 ## Open decisions that must remain explicit
 
 - Where the resident's identity signing/recovery material lives and how it can be recovered without making

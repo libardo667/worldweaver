@@ -168,6 +168,13 @@ def main(argv: list[str] | None = None) -> int:
                     "package": str(package),
                     "hearth_manifest": report["hearth_manifest"],
                     "file_count": len(report["files"]),
+                    **(
+                        {
+                            "handoff": report["handoff_authorization"],
+                        }
+                        if args.command == "export-transfer"
+                        else {}
+                    ),
                 },
                 indent=2,
                 sort_keys=True,
@@ -233,6 +240,13 @@ def main(argv: list[str] | None = None) -> int:
                     "package": str(package),
                     "hearth_manifest": report["hearth_manifest"],
                     "file_count": len(report["files"]),
+                    **(
+                        {
+                            "handoff": report["handoff_authorization"],
+                        }
+                        if args.command == "import-transfer"
+                        else {}
+                    ),
                 },
                 indent=2,
                 sort_keys=True,
