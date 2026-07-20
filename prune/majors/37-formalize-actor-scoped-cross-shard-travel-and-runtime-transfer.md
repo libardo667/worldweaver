@@ -127,6 +127,13 @@ generation, travel ID, and expiry. The destination must not accept anonymous age
 coordinator labels the trip `agent`. See the
 [`resident authority audit`](../../research/audits/cognitive-core/resident-authority-route-and-key-boundary.md).
 
+The first city-edge enforcement slice landed on 2026-07-20. Human-owned sessions and resident sessions with a
+generation binding now require actor proof for ordinary local life: leave, movement, speech, session-enriched
+scene and chat reads, objects, stoops, making, exchanges, space access, and session-addressed correspondence.
+Old unbound agent sessions remain on an explicitly temporary compatibility path. Travel is still unchecked
+here because departure retires the source session before some retries occur; completing it requires a narrow
+handoff/transfer grant rather than pretending a deleted session can keep authorizing requests.
+
 ## Rules
 
 - `actor_id` identifies the person; `session_id` is only a local runtime handle.

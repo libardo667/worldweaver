@@ -10,6 +10,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ...database import get_db
+from ...services.actor_authority import (
+    RequestActorCredentials,
+    authorize_bound_session_actor_http,
+    get_request_actor_credentials,
+)
 from ...services.consequence_objects import ConsequenceDomainError
 from ...services.material_making import make_durable_object, making_catalog
 
@@ -35,9 +40,13 @@ def _raise_http(exc: ConsequenceDomainError) -> None:
 def get_local_making_catalog(
     session_id: str = Query(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"),
     db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
 ) -> dict[str, Any]:
     """Electively inspect only materials and recipes available right here."""
 
+    authorize_bound_session_actor_http(
+        db, credentials=credentials, session_id=session_id
+    )
     try:
         return making_catalog(db, session_id=session_id)
     except ConsequenceDomainError as exc:
@@ -48,9 +57,13 @@ def get_local_making_catalog(
 def post_make_object(
     payload: MakeObjectRequest,
     db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
 ) -> dict[str, Any]:
     """Make one declared object through the typed consequence boundary."""
 
+    authorize_bound_session_actor_http(
+        db, credentials=credentials, session_id=payload.session_id
+    )
     try:
         return make_durable_object(
             db,

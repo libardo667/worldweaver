@@ -9,7 +9,7 @@ from typing import Mapping
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from ..models import Player, SessionVars
+from ..models import Player, ResidentSessionAuthority, SessionVars
 from .auth_service import get_current_player_strict
 from .federation_identity import current_shard_id
 from .resident_authority import (
@@ -186,6 +186,56 @@ def authorize_session_actor(
     )
 
 
+def authorize_bound_session_actor(
+    db: Session,
+    *,
+    credentials: RequestActorCredentials,
+    session_id: str,
+    required_scope: str,
+    expected_audience: str | None = None,
+) -> AuthorizedActor | None:
+    """Protect migrated and human sessions while old unbound agents are retired.
+
+    This is a rollout helper, not the final anonymous-session policy. A session
+    carrying either a human owner or a resident-generation binding always needs
+    proof. Supplying any proof also opts into strict verification. Only an old
+    unbound agent session may temporarily continue through the legacy path.
+    """
+
+    normalized_session_id = str(session_id or "").strip()
+    session_row = (
+        db.get(SessionVars, normalized_session_id) if normalized_session_id else None
+    )
+    resident_binding = (
+        db.get(ResidentSessionAuthority, normalized_session_id)
+        if normalized_session_id
+        else None
+    )
+    request_credentials = (
+        credentials if isinstance(credentials, RequestActorCredentials) else None
+    )
+    if not (
+        (request_credentials is not None and request_credentials.player is not None)
+        or (request_credentials is not None and request_credentials.has_resident_proof)
+        or (session_row is not None and session_row.player_id)
+        or resident_binding is not None
+    ):
+        return None
+    if request_credentials is None:
+        raise ActorAuthorizationError(
+            "actor_proof_required",
+            "This session command requires human login or resident request proof.",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+        )
+    return authorize_session_actor(
+        db,
+        credentials=request_credentials,
+        session_id=normalized_session_id,
+        required_scope=required_scope,
+        expected_audience=expected_audience,
+    )
+
+
 def actor_authorization_http_error(exc: ActorAuthorizationError) -> HTTPException:
     """Translate the shared service error at the API boundary."""
 
@@ -193,3 +243,22 @@ def actor_authorization_http_error(exc: ActorAuthorizationError) -> HTTPExceptio
         status_code=exc.status_code,
         detail={"code": exc.code, "message": str(exc)},
     )
+
+
+def authorize_bound_session_actor_http(
+    db: Session,
+    *,
+    credentials: RequestActorCredentials,
+    session_id: str,
+    required_scope: str = "session.act",
+) -> AuthorizedActor | None:
+    """Apply the migration-aware actor check at an HTTP route boundary."""
+    try:
+        return authorize_bound_session_actor(
+            db,
+            credentials=credentials,
+            session_id=session_id,
+            required_scope=required_scope,
+        )
+    except ActorAuthorizationError as exc:
+        raise actor_authorization_http_error(exc) from exc

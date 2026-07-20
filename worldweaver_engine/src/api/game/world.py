@@ -36,6 +36,13 @@ from ...models.schemas import (
 )
 from ...services.event_submission import WorldEventCommand, submit_world_event
 from ...services.federation_identity import current_shard_id
+from ...services.actor_authority import (
+    ActorAuthorizationError,
+    RequestActorCredentials,
+    actor_authorization_http_error,
+    authorize_bound_session_actor,
+    get_request_actor_credentials,
+)
 
 _INTERNAL_SESSION_PREFIXES = ("world-", "_", "player-", "agent-")
 _ACTIVE_HUMAN_SESSION_WINDOW = timedelta(hours=2)
@@ -67,6 +74,24 @@ _RECENT_WORLD_EVENTS_CACHE: Dict[
     tuple[int, str], tuple[float, tuple[int, str], List[_WorldEventSnapshot]]
 ] = {}
 _ROSTER_DIRECTORY_CACHE: Dict[str, tuple[float, List[Dict[str, Any]]]] = {}
+
+
+def _authorize_bound_actor_or_http(
+    db: Session,
+    *,
+    credentials: RequestActorCredentials,
+    session_id: str,
+    required_scope: str = "session.act",
+) -> None:
+    try:
+        authorize_bound_session_actor(
+            db,
+            credentials=credentials,
+            session_id=session_id,
+            required_scope=required_scope,
+        )
+    except ActorAuthorizationError as exc:
+        raise actor_authorization_http_error(exc) from exc
 
 
 def _world_trace_payload(row: WorldTrace) -> Dict[str, Any]:
@@ -2056,6 +2081,7 @@ def get_world_sublocations(
 def create_world_sublocation(
     payload: SublocationCreateRequest,
     db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
 ):
     """Create or refresh one bounded ephemeral place under the caller's map node."""
     from ...services.session_service import get_state_manager
@@ -2066,6 +2092,9 @@ def create_world_sublocation(
 
     if not _SAFE_SESSION_RE.match(payload.session_id):
         raise HTTPException(status_code=400, detail="Invalid session_id format.")
+    _authorize_bound_actor_or_http(
+        db, credentials=credentials, session_id=payload.session_id
+    )
     sm = get_state_manager(payload.session_id, db)
     current_location = str(sm.get_variable("location") or "").strip()
     if not current_location:
@@ -2089,7 +2118,11 @@ def create_world_sublocation(
 
 
 @router.post("/game/move")
-def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
+def map_move(
+    payload: MapMoveRequest,
+    db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+):
     """Move one hop toward destination along the shortest graph path.
 
     Bypasses LLM — pure graph traversal over 'path' edges.
@@ -2102,6 +2135,7 @@ def map_move(payload: MapMoveRequest, db: Session = Depends(get_db)):
     session_id = payload.session_id
     if not _SAFE_SESSION_RE.match(session_id):
         raise HTTPException(status_code=400, detail="Invalid session_id format.")
+    _authorize_bound_actor_or_http(db, credentials=credentials, session_id=session_id)
 
     sm = get_state_manager(session_id, db)
     current_location = sm.get_variable("location") or ""
@@ -2733,7 +2767,11 @@ def _dm_counterpart_label(
 
 
 @router.post("/world/dm")
-def send_dm(payload: SendDMRequest, db: Session = Depends(get_db)):
+def send_dm(
+    payload: SendDMRequest,
+    db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+):
     """Store a DM claiming the supplied sender and recipient.
 
     The current route validates names and row existence but does not authenticate
@@ -2750,6 +2788,10 @@ def send_dm(payload: SendDMRequest, db: Session = Depends(get_db)):
         if payload.session_id and _SAFE_SESSION_RE.match(payload.session_id or "")
         else None
     )
+    if from_session:
+        _authorize_bound_actor_or_http(
+            db, credentials=credentials, session_id=from_session
+        )
     delivered_to = recipient
 
     if recipient_type == "player":
@@ -2855,10 +2897,15 @@ def get_agent_dm_inbox(agent: str, db: Session = Depends(get_db)):
 
 
 @router.get("/world/dm/my-inbox/{session_id}")
-def get_player_dm_inbox(session_id: str, db: Session = Depends(get_db)):
-    """Return all DMs for a named player session; caller ownership is not yet checked."""
+def get_player_dm_inbox(
+    session_id: str,
+    db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+):
+    """Return all DMs for a proven named session."""
     if not _SAFE_SESSION_RE.match(session_id):
         raise HTTPException(status_code=400, detail="Invalid session_id format.")
+    _authorize_bound_actor_or_http(db, credentials=credentials, session_id=session_id)
 
     all_dms = (
         db.query(DirectMessage)
@@ -2878,10 +2925,15 @@ def get_player_dm_inbox(session_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/world/dm/my-threads/{session_id}")
-def get_player_dm_threads(session_id: str, db: Session = Depends(get_db)):
-    """Return threads for a named player session; caller ownership is not yet checked."""
+def get_player_dm_threads(
+    session_id: str,
+    db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+):
+    """Return threads for a proven named session."""
     if not _SAFE_SESSION_RE.match(session_id):
         raise HTTPException(status_code=400, detail="Invalid session_id format.")
+    _authorize_bound_actor_or_http(db, credentials=credentials, session_id=session_id)
 
     all_dms = (
         db.query(DirectMessage)
@@ -2943,11 +2995,15 @@ def get_player_dm_threads(session_id: str, db: Session = Depends(get_db)):
 
 @router.post("/world/dm/my-threads/{session_id}/read/{thread_key}")
 def mark_player_dm_thread_read(
-    session_id: str, thread_key: str, db: Session = Depends(get_db)
+    session_id: str,
+    thread_key: str,
+    db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
 ):
-    """Mark a named session's thread read; caller ownership is not yet checked."""
+    """Mark a proven named session's thread read."""
     if not _SAFE_SESSION_RE.match(session_id):
         raise HTTPException(status_code=400, detail="Invalid session_id format.")
+    _authorize_bound_actor_or_http(db, credentials=credentials, session_id=session_id)
     normalized_thread_key = re.sub(
         r"[^a-z0-9]+", "_", str(thread_key or "").lower()
     ).strip("_")
@@ -2993,7 +3049,11 @@ class ShadowConsentRequest(BaseModel):
 
 
 @router.post("/world/shadow/consent")
-def shadow_consent(payload: ShadowConsentRequest, db: Session = Depends(get_db)):
+def shadow_consent(
+    payload: ShadowConsentRequest,
+    db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+):
     """Record a player's shadow/twinning consent decision.
 
     Writes an identity contract to ww_agent/residents/_contracts/{name}.json.
@@ -3004,6 +3064,9 @@ def shadow_consent(payload: ShadowConsentRequest, db: Session = Depends(get_db))
     """
     if not _SAFE_SESSION_RE.match(payload.session_id):
         raise HTTPException(status_code=400, detail="Invalid session_id format.")
+    _authorize_bound_actor_or_http(
+        db, credentials=credentials, session_id=payload.session_id
+    )
 
     # Resolve the player's display name from their session state.
     from ...services.session_service import get_state_manager
@@ -3059,7 +3122,11 @@ def shadow_consent(payload: ShadowConsentRequest, db: Session = Depends(get_db))
 
 
 @router.get("/world/scene/{session_id}")
-def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
+def get_agent_scene(
+    session_id: str,
+    db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+):
     """Local scene snapshot for agents — who is here, what just happened, what can I do next.
 
     Called by agents before submitting an action. Returns a focused, location-scoped
@@ -3069,6 +3136,7 @@ def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
     """
     if not _SAFE_SESSION_RE.match(session_id):
         raise HTTPException(status_code=400, detail="Invalid session_id format.")
+    _authorize_bound_actor_or_http(db, credentials=credentials, session_id=session_id)
 
     from ...services.world_memory import get_location_graph
 
@@ -3206,6 +3274,7 @@ def get_new_events_for_agent(
         ..., description="ISO-8601 timestamp; return events after this time"
     ),
     db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
 ):
     """Poll for new events at the agent's current location since a given timestamp.
 
@@ -3215,6 +3284,7 @@ def get_new_events_for_agent(
     """
     if not _SAFE_SESSION_RE.match(session_id):
         raise HTTPException(status_code=400, detail="Invalid session_id format.")
+    _authorize_bound_actor_or_http(db, credentials=credentials, session_id=session_id)
 
     from datetime import datetime, timezone
 
@@ -3279,11 +3349,15 @@ class LeaveWorldTraceRequest(BaseModel):
 def get_world_traces(
     session_id: str = Query(..., min_length=1, max_length=64),
     db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
 ):
     """Show another visitor's active public marks at the caller's exact place."""
     normalized_session_id = str(session_id or "").strip()
     if not _SAFE_SESSION_RE.match(normalized_session_id):
         raise HTTPException(status_code=400, detail="Invalid session_id format.")
+    _authorize_bound_actor_or_http(
+        db, credentials=credentials, session_id=normalized_session_id
+    )
 
     session_row = db.get(SessionVars, normalized_session_id)
     if session_row is None:
@@ -3307,6 +3381,7 @@ def get_world_traces(
 def post_world_trace(
     payload: LeaveWorldTraceRequest,
     db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
 ):
     """Leave one expiring physical mark at the actor's current location.
 
@@ -3316,6 +3391,7 @@ def post_world_trace(
     session_id = str(payload.session_id or "").strip()
     if not _SAFE_SESSION_RE.match(session_id):
         raise HTTPException(status_code=400, detail="Invalid session_id format.")
+    _authorize_bound_actor_or_http(db, credentials=credentials, session_id=session_id)
 
     session_row = db.get(SessionVars, session_id)
     if session_row is None:
@@ -3382,12 +3458,12 @@ def get_location_chat(
     limit: int = Query(default=50, ge=1, le=200),
     session_id: Optional[str] = Query(default=None, max_length=64),
     db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
 ):
     """Return recent chat messages at a location, optionally filtered by timestamp.
 
-    Speaker session/actor identifiers are included when a caller names an existing
-    session_id. This route does not currently prove that the caller controls it;
-    public readers without one get display names, text, and timestamps only.
+    Speaker session/actor identifiers are included when a caller proves control of
+    an existing session. Public readers get display names, text, and timestamps only.
     """
     q = db.query(LocationChat).filter(LocationChat.location == location)
     if since:
@@ -3401,6 +3477,10 @@ def get_location_chat(
     rows = q.order_by(LocationChat.created_at.desc()).limit(limit).all()
     rows = list(reversed(rows))  # oldest first
     requested_session_id = str(session_id or "").strip()
+    if requested_session_id:
+        _authorize_bound_actor_or_http(
+            db, credentials=credentials, session_id=requested_session_id
+        )
     include_speaker_ids = bool(
         requested_session_id and db.get(SessionVars, requested_session_id) is not None
     )
@@ -3468,13 +3548,15 @@ def post_location_chat(
     location: str,
     payload: PostChatRequest,
     db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
 ):
-    """Post as a named session at its location. Caller control is not yet checked."""
+    """Post as a proven named session at its location."""
     message = payload.message.strip()
     if not message:
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
     session_id = str(payload.session_id or "").strip()
+    _authorize_bound_actor_or_http(db, credentials=credentials, session_id=session_id)
     session_row = db.get(SessionVars, session_id)
     if session_row is None:
         raise HTTPException(status_code=404, detail="Session not found.")

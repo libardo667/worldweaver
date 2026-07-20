@@ -2,11 +2,13 @@
 
 from datetime import datetime, timedelta, timezone
 import json
+from urllib.parse import quote
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi import HTTPException
 
 from src.models import (
+    LocationChat,
     ResidentAuthority,
     ResidentRequestNonce,
     ResidentSessionAuthority,
@@ -172,6 +174,163 @@ class TestGameEndpoints:
 
         assert response.status_code == 401
         assert response.json()["detail"]["code"] == "resident_proof_required"
+
+    def test_signed_resident_session_requires_its_proof_to_leave(
+        self, seeded_client, seeded_world_id, db_session
+    ):
+        actor_id = "signed-leave-actor"
+        session_id = "signed-leave-session"
+        identity_private = Ed25519PrivateKey.generate()
+        runtime_private = Ed25519PrivateKey.generate()
+        bind_resident_identity(
+            db_session,
+            actor_id=actor_id,
+            hearth_shard_id="hearth:signed-leave-actor",
+            identity_public_key=encoded_public_key(identity_private.public_key()),
+        )
+        db_session.commit()
+        certificate = issue_runtime_certificate(
+            identity_private_key=identity_private,
+            runtime_public_key=runtime_private.public_key(),
+            actor_id=actor_id,
+            hearth_shard_id="hearth:signed-leave-actor",
+            runtime_generation=1,
+            audience=current_shard_id(),
+            scopes=["session.bootstrap", "session.lifecycle"],
+        )
+        bootstrap_payload = {
+            "session_id": session_id,
+            "actor_id": actor_id,
+            "player_role": "Signed Leaver",
+            "world_id": seeded_world_id,
+        }
+        bootstrap_body = json.dumps(bootstrap_payload, separators=(",", ":")).encode(
+            "utf-8"
+        )
+        bootstrap_headers = signed_resident_request_headers(
+            runtime_private_key=runtime_private,
+            certificate=certificate,
+            method="POST",
+            target="/api/session/bootstrap/resident",
+            body=bootstrap_body,
+            nonce="signed-leave-bootstrap",
+        )
+        bootstrap_headers["Content-Type"] = "application/json"
+        assert (
+            seeded_client.post(
+                "/api/session/bootstrap/resident",
+                content=bootstrap_body,
+                headers=bootstrap_headers,
+            ).status_code
+            == 200
+        )
+
+        anonymous = seeded_client.post(
+            "/api/session/leave", json={"session_id": session_id}
+        )
+        assert anonymous.status_code == 401
+        assert anonymous.json()["detail"]["code"] == "actor_proof_required"
+        assert db_session.get(SessionVars, session_id) is not None
+
+        leave_payload = {"session_id": session_id}
+        leave_body = json.dumps(leave_payload, separators=(",", ":")).encode("utf-8")
+        leave_headers = signed_resident_request_headers(
+            runtime_private_key=runtime_private,
+            certificate=certificate,
+            method="POST",
+            target="/api/session/leave",
+            body=leave_body,
+            nonce="signed-leave-once",
+        )
+        leave_headers["Content-Type"] = "application/json"
+        left = seeded_client.post(
+            "/api/session/leave",
+            content=leave_body,
+            headers=leave_headers,
+        )
+
+        assert left.status_code == 200, left.text
+        assert db_session.get(SessionVars, session_id) is None
+
+    def test_signed_resident_session_requires_its_proof_to_speak(
+        self, seeded_client, seeded_world_id, db_session
+    ):
+        actor_id = "signed-speaker-actor"
+        session_id = "signed-speaker-session"
+        identity_private = Ed25519PrivateKey.generate()
+        runtime_private = Ed25519PrivateKey.generate()
+        bind_resident_identity(
+            db_session,
+            actor_id=actor_id,
+            hearth_shard_id="hearth:signed-speaker-actor",
+            identity_public_key=encoded_public_key(identity_private.public_key()),
+        )
+        db_session.commit()
+        certificate = issue_runtime_certificate(
+            identity_private_key=identity_private,
+            runtime_public_key=runtime_private.public_key(),
+            actor_id=actor_id,
+            hearth_shard_id="hearth:signed-speaker-actor",
+            runtime_generation=1,
+            audience=current_shard_id(),
+            scopes=["session.act", "session.bootstrap"],
+        )
+        bootstrap_payload = {
+            "session_id": session_id,
+            "actor_id": actor_id,
+            "player_role": "Signed Speaker",
+            "world_id": seeded_world_id,
+        }
+        bootstrap_body = json.dumps(bootstrap_payload, separators=(",", ":")).encode(
+            "utf-8"
+        )
+        bootstrap_headers = signed_resident_request_headers(
+            runtime_private_key=runtime_private,
+            certificate=certificate,
+            method="POST",
+            target="/api/session/bootstrap/resident",
+            body=bootstrap_body,
+            nonce="signed-speaker-bootstrap",
+        )
+        bootstrap_headers["Content-Type"] = "application/json"
+        assert (
+            seeded_client.post(
+                "/api/session/bootstrap/resident",
+                content=bootstrap_body,
+                headers=bootstrap_headers,
+            ).status_code
+            == 200
+        )
+        session = db_session.get(SessionVars, session_id)
+        location = "Test Commons"
+        vars_payload = dict(session.vars or {})
+        variables = dict(vars_payload.get("variables") or {})
+        variables["location"] = location
+        vars_payload["variables"] = variables
+        session.vars = vars_payload
+        db_session.commit()
+        path = f"/api/world/location/{quote(location, safe='')}/chat"
+        chat_payload = {"session_id": session_id, "message": "I am here."}
+
+        anonymous = seeded_client.post(path, json=chat_payload)
+        assert anonymous.status_code == 401
+        assert anonymous.json()["detail"]["code"] == "actor_proof_required"
+
+        chat_body = json.dumps(chat_payload, separators=(",", ":")).encode("utf-8")
+        chat_headers = signed_resident_request_headers(
+            runtime_private_key=runtime_private,
+            certificate=certificate,
+            method="POST",
+            target=path,
+            body=chat_body,
+            nonce="signed-speaker-chat",
+        )
+        chat_headers["Content-Type"] = "application/json"
+        spoken = seeded_client.post(path, content=chat_body, headers=chat_headers)
+
+        assert spoken.status_code == 200, spoken.text
+        stored = db_session.query(LocationChat).filter_by(session_id=session_id).one()
+        assert stored.message == "I am here."
 
     def test_signed_resident_bootstrap_cannot_replace_an_existing_session(
         self, seeded_client, seeded_world_id, db_session

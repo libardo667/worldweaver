@@ -10,6 +10,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ...database import get_db
+from ...services.actor_authority import (
+    RequestActorCredentials,
+    authorize_bound_session_actor_http,
+    get_request_actor_credentials,
+)
 from ...services.consequence_objects import ConsequenceDomainError
 from ...services.object_exchange import (
     accept_object_exchange,
@@ -48,9 +53,13 @@ def _raise_http(exc: ConsequenceDomainError) -> None:
 def get_object_exchanges(
     session_id: str = Query(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"),
     db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
 ) -> dict[str, Any]:
     """Electively list only exchanges involving the caller."""
 
+    authorize_bound_session_actor_http(
+        db, credentials=credentials, session_id=session_id
+    )
     try:
         return visible_object_exchanges(db, session_id=session_id)
     except ConsequenceDomainError as exc:
@@ -61,9 +70,13 @@ def get_object_exchanges(
 def post_object_exchange_offer(
     payload: ExchangeOfferRequest,
     db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
 ) -> dict[str, Any]:
     """Offer one currently held object for one held by a present person."""
 
+    authorize_bound_session_actor_http(
+        db, credentials=credentials, session_id=payload.session_id
+    )
     try:
         return offer_object_exchange(
             db,
@@ -82,9 +95,13 @@ def post_object_exchange_acceptance(
     exchange_id: str,
     payload: ExchangeCommandRequest,
     db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
 ) -> dict[str, Any]:
     """Accept exact terms and atomically swap both objects if still possible."""
 
+    authorize_bound_session_actor_http(
+        db, credentials=credentials, session_id=payload.session_id
+    )
     try:
         return accept_object_exchange(
             db,
@@ -101,9 +118,13 @@ def post_object_exchange_decline(
     exchange_id: str,
     payload: ExchangeCommandRequest,
     db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
 ) -> dict[str, Any]:
     """Decline exact terms without moving either object."""
 
+    authorize_bound_session_actor_http(
+        db, credentials=credentials, session_id=payload.session_id
+    )
     try:
         return decline_object_exchange(
             db,
@@ -120,9 +141,13 @@ def post_object_exchange_cancellation(
     exchange_id: str,
     payload: ExchangeCommandRequest,
     db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
 ) -> dict[str, Any]:
     """Cancel an open proposal without moving either object."""
 
+    authorize_bound_session_actor_http(
+        db, credentials=credentials, session_id=payload.session_id
+    )
     try:
         return cancel_object_exchange(
             db,

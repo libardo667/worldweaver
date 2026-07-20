@@ -144,9 +144,20 @@ transport key, a resident-signed encrypted outer envelope around the determinist
 certificate issuance, and one signed client per running resident. The stated threat boundary is explicit:
 software encryption cannot prevent an authorized malicious host from copying a key it is allowed to use.
 
-This is not live route enforcement yet. No existing resident has been assigned a private identity key, no
-anonymous compatibility route has been closed, and Alderbank's resident sessions have not been migrated.
-That waits for an explicit synthetic admission path, resident-side signing, and controlled route rollout.
+The first controlled route rollout is now implemented. A city session that has either a human owner or a
+resident-generation binding must prove its actor before it can leave, move, create a sublocation, speak, use
+session-enriched local reads, handle objects or stoops, make something, exchange objects, change ordinary
+space access, send session-attributed mail, or read that session's private correspondence. Synthetic signed
+resident tests prove that an anonymous caller cannot speak or leave through a bound session while the exact
+signed request can. Human and resident requests still enter the same domain services after this check.
+
+This rollout deliberately does not pretend migration is finished. Old unbound agent sessions temporarily use
+the compatibility path, the name-addressed legacy agent inbox and reply routes cannot yet prove a local
+session, and the old unsigned bootstrap remains. Resident travel also needs a transfer grant that survives
+source-session retirement; a live-session signature alone cannot safely authorize arrival or retry. No
+existing Alderbank resident has been assigned a private identity key or migrated. The compatibility paths can
+close only after the small reference runtime supplies one signer per resident and correspondence and travel
+use actor-scoped contracts.
 
 ## Acceptance tests
 

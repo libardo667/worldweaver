@@ -10,6 +10,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from ...database import get_db
+from ...services.actor_authority import (
+    RequestActorCredentials,
+    authorize_bound_session_actor_http,
+    get_request_actor_credentials,
+)
 from ...services.consequence_objects import (
     ConsequenceDomainError,
     give_durable_object,
@@ -46,9 +51,13 @@ def _raise_http(exc: ConsequenceDomainError) -> None:
 def list_world_objects(
     session_id: str = Query(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"),
     db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
 ) -> dict[str, Any]:
     """List only objects the caller carries or can see at their exact place."""
 
+    authorize_bound_session_actor_http(
+        db, credentials=credentials, session_id=session_id
+    )
     try:
         objects = visible_durable_objects(db, session_id=session_id)
     except ConsequenceDomainError as exc:
@@ -61,9 +70,13 @@ def get_world_object(
     object_id: str,
     session_id: str = Query(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"),
     db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
 ) -> dict[str, Any]:
     """Inspect one carried or co-located object without a global object feed."""
 
+    authorize_bound_session_actor_http(
+        db, credentials=credentials, session_id=session_id
+    )
     try:
         return {
             "object": inspect_durable_object(
@@ -79,9 +92,13 @@ def place_world_object(
     object_id: str,
     payload: ObjectCommandRequest,
     db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
 ) -> dict[str, Any]:
     """Place a carried object at the caller's exact current location."""
 
+    authorize_bound_session_actor_http(
+        db, credentials=credentials, session_id=payload.session_id
+    )
     try:
         return place_durable_object(
             db,
@@ -98,9 +115,13 @@ def pick_up_world_object(
     object_id: str,
     payload: ObjectCommandRequest,
     db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
 ) -> dict[str, Any]:
     """Reclaim an object the same stable actor ordinarily placed here."""
 
+    authorize_bound_session_actor_http(
+        db, credentials=credentials, session_id=payload.session_id
+    )
     try:
         return pick_up_durable_object(
             db,
@@ -117,9 +138,13 @@ def give_world_object(
     object_id: str,
     payload: GiveObjectRequest,
     db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
 ) -> dict[str, Any]:
     """Give a carried object to a stable actor at the same exact location."""
 
+    authorize_bound_session_actor_http(
+        db, credentials=credentials, session_id=payload.session_id
+    )
     try:
         return give_durable_object(
             db,

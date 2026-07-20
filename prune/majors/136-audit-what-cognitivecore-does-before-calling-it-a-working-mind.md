@@ -152,6 +152,13 @@ automatic resident creation merely because inference credentials were configured
 remains a separate operator action. The old doula implementation remains available only as legacy code pending
 the later retire-or-rebuild decision.
 
+The resident-control repair has also begun at the city edge. Sessions already bound to a human account or a
+signed resident runtime now require proof before local movement, speech, private/session-enriched reads, typed
+object consequences, space-access changes, correspondence, and leave. This closes the public-session-ID hole
+for migrated sessions while leaving old unbound resident sessions on a named temporary compatibility path.
+Unsigned resident bootstrap, name-addressed legacy mail, travel grants, live key custody, and migration of an
+actual dormant resident remain open; the audit must not describe the authorization boundary as complete yet.
+
 The same pass found that player shadows remain in the live client despite their explicit rejection in Major
 71. The form discards most entered identity fields, the endpoint is unauthenticated, two consent gates look for
 different files, and the scanner deliberately permits an old human name to become a `NOVEL` resident after

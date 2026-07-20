@@ -60,7 +60,10 @@ from ...services import (
     session_service,
 )
 from ...services.actor_authority import (
+    ActorAuthorizationError,
     RequestActorCredentials,
+    actor_authorization_http_error,
+    authorize_bound_session_actor,
     get_request_actor_credentials,
 )
 from ...services.event_submission import WorldEventCommand, submit_world_event
@@ -1239,18 +1242,18 @@ async def bootstrap_signed_resident_session(
 def leave_session_world(
     payload: SessionLeaveRequest,
     db: Session = Depends(get_db),
-    player: Optional[Player] = Depends(get_current_player_strict),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
 ):
     """Retire one live incarnation without erasing its public history."""
-    row = db.get(SessionVars, payload.session_id)
-    if (
-        row is not None
-        and row.player_id
-        and (player is None or row.player_id != player.id)
-    ):
-        raise HTTPException(
-            status_code=403, detail="Cannot leave a session owned by another player."
+    try:
+        authorize_bound_session_actor(
+            db,
+            credentials=credentials,
+            session_id=payload.session_id,
+            required_scope="session.lifecycle",
         )
+    except ActorAuthorizationError as exc:
+        raise actor_authorization_http_error(exc) from exc
 
     deleted = _retire_session_presence(db, payload.session_id)
     _clear_runtime_session_caches(payload.session_id)
