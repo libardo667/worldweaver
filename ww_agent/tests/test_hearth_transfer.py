@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import base64
 import io
 import json
+import os
+from pathlib import Path
+import subprocess
+import sys
 import zipfile
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -12,7 +17,11 @@ from src.identity.hearth_manifest import (
     initialize_hearth_manifest,
     load_hearth_manifest,
 )
-from src.identity.hearth_envelope import encrypt_hearth_payload
+from src.identity.hearth_envelope import (
+    encoded_transport_public_key,
+    encrypt_hearth_payload,
+    transport_key_id,
+)
 from src.identity.hearth_package import (
     HearthPackageError,
     export_encrypted_hearth_transfer,
@@ -66,6 +75,31 @@ def _sealed_home(tmp_path):
         "resident artifact\n", encoding="utf-8"
     )
     return home, identity_private, descriptor, source_host, source_seal
+
+
+def _write_host_files(tmp_path, name, private_key):
+    private_path = tmp_path / f"{name}.key"
+    private_path.write_text(
+        base64.urlsafe_b64encode(private_key.private_bytes_raw())
+        .decode("ascii")
+        .rstrip("=")
+        + "\n",
+        encoding="utf-8",
+    )
+    public_key = encoded_transport_public_key(private_key.public_key())
+    descriptor_path = tmp_path / f"{name}.json"
+    descriptor_path.write_text(
+        json.dumps(
+            {
+                "schema": "worldweaver.hearth-transport",
+                "schema_version": 1,
+                "transport_key_id": transport_key_id(public_key),
+                "transport_public_key": public_key,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return private_path, descriptor_path
 
 
 def test_transfer_reseals_identity_for_destination_and_keeps_home_dormant(tmp_path):
@@ -238,3 +272,68 @@ def test_transfer_rejects_a_signed_payload_with_the_wrong_inner_identity_key(tmp
         )
 
     assert not target.exists()
+
+
+def test_transfer_commands_load_host_keys_from_files(tmp_path):
+    home, _identity, descriptor, source_host, _source_seal = _sealed_home(tmp_path)
+    destination_host = X25519PrivateKey.generate()
+    source_key_path, _source_descriptor_path = _write_host_files(
+        tmp_path, "source-host", source_host
+    )
+    destination_key_path, destination_descriptor_path = _write_host_files(
+        tmp_path, "destination-host", destination_host
+    )
+    package = tmp_path / "resident.wwhearth.transfer"
+    target = tmp_path / "received"
+    identity_path = home / "identity" / "resident_identity.json"
+    script = Path(__file__).resolve().parents[1] / "scripts" / "hearth_package.py"
+
+    exported = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "export-transfer",
+            str(home),
+            str(package),
+            "--recipient-host",
+            str(destination_descriptor_path),
+        ],
+        env={
+            **os.environ,
+            "WW_HEARTH_TRANSPORT_PRIVATE_KEY": str(source_key_path),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert exported.returncode == 0, exported.stdout + exported.stderr
+    assert '"status": "exported-transfer"' in exported.stdout
+
+    imported = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "import-transfer",
+            str(package),
+            str(target),
+            "--resident-identity",
+            str(identity_path),
+        ],
+        env={
+            **os.environ,
+            "WW_HEARTH_TRANSPORT_PRIVATE_KEY": str(destination_key_path),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert imported.returncode == 0, imported.stdout + imported.stderr
+    assert '"status": "imported-transfer"' in imported.stdout
+    opened = open_sealed_resident_identity_private_key(
+        load_resident_key_seal(target / "identity" / SEALED_RESIDENT_IDENTITY_FILENAME),
+        identity_descriptor=descriptor,
+        recipient_transport_private_key=destination_host,
+    )
+    assert opened.public_key().public_bytes_raw() == (
+        _identity.public_key().public_bytes_raw()
+    )

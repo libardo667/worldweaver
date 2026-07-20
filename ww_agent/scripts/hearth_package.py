@@ -18,14 +18,17 @@ if str(AGENT_ROOT) not in sys.path:
 
 from src.identity.hearth_package import (  # noqa: E402
     HearthPackageError,
+    export_encrypted_hearth_transfer,
     export_hearth_package,
     import_encrypted_hearth_package,
+    import_encrypted_hearth_transfer,
     import_hearth_package,
     inventory_hearth,
 )
 from src.identity.hearth_envelope import (  # noqa: E402
     HearthEnvelopeError,
     load_transport_private_key,
+    load_transport_public_key,
 )
 from src.identity.resident_identity import (  # noqa: E402
     ResidentIdentityError,
@@ -44,7 +47,14 @@ def _print_error(subject: Path, exc: Exception) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     arguments = list(argv if argv is not None else sys.argv[1:])
-    commands = {"inventory", "export", "import", "import-encrypted"}
+    commands = {
+        "inventory",
+        "export",
+        "export-transfer",
+        "import",
+        "import-encrypted",
+        "import-transfer",
+    }
     if (
         arguments
         and arguments[0] not in commands
@@ -69,6 +79,20 @@ def main(argv: list[str] | None = None) -> int:
     export_parser.add_argument("home", help="one stopped resident home directory")
     export_parser.add_argument("package", help="new package path")
 
+    transfer_export_parser = subparsers.add_parser(
+        "export-transfer",
+        help="open this host's seal and encrypt a custody transfer for another host",
+    )
+    transfer_export_parser.add_argument(
+        "home", help="one stopped resident home directory"
+    )
+    transfer_export_parser.add_argument("package", help="new encrypted package path")
+    transfer_export_parser.add_argument(
+        "--recipient-host",
+        required=True,
+        help="reviewed safe-to-share destination hearth-host descriptor",
+    )
+
     import_parser = subparsers.add_parser(
         "import", help="validate and install a package into a new home"
     )
@@ -89,20 +113,57 @@ def main(argv: list[str] | None = None) -> int:
         help="reviewed safe-to-share resident identity card",
     )
 
+    transfer_import_parser = subparsers.add_parser(
+        "import-transfer",
+        help="verify, reseal, and install a resident transfer without waking it",
+    )
+    transfer_import_parser.add_argument(
+        "package", help="existing encrypted transfer package"
+    )
+    transfer_import_parser.add_argument(
+        "home", help="new dormant resident home directory"
+    )
+    transfer_import_parser.add_argument(
+        "--resident-identity",
+        required=True,
+        help="reviewed safe-to-share resident identity card",
+    )
+
     args = parser.parse_args(arguments)
 
     home = Path(args.home).expanduser().resolve()
-    if args.command == "export":
+    if args.command in {"export", "export-transfer"}:
         package = Path(args.package).expanduser().resolve()
         try:
-            report = export_hearth_package(home, package)
-        except (HearthPackageError, OSError) as exc:
+            if args.command == "export-transfer":
+                key_path = str(
+                    os.environ.get("WW_HEARTH_TRANSPORT_PRIVATE_KEY") or ""
+                ).strip()
+                if not key_path:
+                    raise HearthPackageError(
+                        "WW_HEARTH_TRANSPORT_PRIVATE_KEY is required for transfer export"
+                    )
+                report = export_encrypted_hearth_transfer(
+                    home,
+                    package,
+                    source_transport_private_key=load_transport_private_key(key_path),
+                    recipient_transport_public_key=load_transport_public_key(
+                        Path(args.recipient_host).expanduser().resolve()
+                    ),
+                )
+            else:
+                report = export_hearth_package(home, package)
+        except (HearthEnvelopeError, HearthPackageError, OSError) as exc:
             _print_error(home, exc)
             return 2
         print(
             json.dumps(
                 {
-                    "status": "exported",
+                    "status": (
+                        "exported-transfer"
+                        if args.command == "export-transfer"
+                        else "exported"
+                    ),
                     "home": str(home),
                     "package": str(package),
                     "hearth_manifest": report["hearth_manifest"],
@@ -113,10 +174,10 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 0
-    if args.command in {"import", "import-encrypted"}:
+    if args.command in {"import", "import-encrypted", "import-transfer"}:
         package = Path(args.package).expanduser().resolve()
         try:
-            if args.command == "import-encrypted":
+            if args.command in {"import-encrypted", "import-transfer"}:
                 key_path = str(
                     os.environ.get("WW_HEARTH_TRANSPORT_PRIVATE_KEY") or ""
                 ).strip()
@@ -127,16 +188,25 @@ def main(argv: list[str] | None = None) -> int:
                 identity = load_resident_identity_descriptor_file(
                     Path(args.resident_identity).expanduser().resolve()
                 )
-                report = import_encrypted_hearth_package(
-                    package,
-                    home,
-                    recipient_transport_private_key=load_transport_private_key(
-                        key_path
-                    ),
-                    expected_resident_identity_public_key=identity.identity_public_key,
-                    expected_actor_id=identity.actor_id,
-                    expected_hearth_shard_id=identity.hearth_shard_id,
-                )
+                transport_private_key = load_transport_private_key(key_path)
+                if args.command == "import-transfer":
+                    report = import_encrypted_hearth_transfer(
+                        package,
+                        home,
+                        recipient_transport_private_key=transport_private_key,
+                        expected_resident_identity=identity,
+                    )
+                else:
+                    report = import_encrypted_hearth_package(
+                        package,
+                        home,
+                        recipient_transport_private_key=transport_private_key,
+                        expected_resident_identity_public_key=(
+                            identity.identity_public_key
+                        ),
+                        expected_actor_id=identity.actor_id,
+                        expected_hearth_shard_id=identity.hearth_shard_id,
+                    )
             else:
                 report = import_hearth_package(package, home)
         except (
@@ -151,9 +221,13 @@ def main(argv: list[str] | None = None) -> int:
             json.dumps(
                 {
                     "status": (
-                        "imported-encrypted"
-                        if args.command == "import-encrypted"
-                        else "imported"
+                        "imported-transfer"
+                        if args.command == "import-transfer"
+                        else (
+                            "imported-encrypted"
+                            if args.command == "import-encrypted"
+                            else "imported"
+                        )
                     ),
                     "home": str(home),
                     "package": str(package),

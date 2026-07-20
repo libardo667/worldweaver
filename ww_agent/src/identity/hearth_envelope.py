@@ -157,6 +157,49 @@ def load_transport_private_key(path: str | Path) -> X25519PrivateKey:
         ) from exc
 
 
+def load_transport_public_key(path: str | Path) -> X25519PublicKey:
+    """Load and verify one safe-to-share hearth-host descriptor."""
+
+    descriptor_path = Path(path).expanduser()
+    if not descriptor_path.is_file() or descriptor_path.is_symlink():
+        raise HearthEnvelopeError(
+            f"Hearth transport descriptor is missing or unsafe: {descriptor_path}"
+        )
+    try:
+        encoded = descriptor_path.read_bytes()
+        if len(encoded) > 16 * 1024:
+            raise HearthEnvelopeError("Hearth transport descriptor is too large.")
+        raw = json.loads(encoded)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HearthEnvelopeError(
+            f"Could not load hearth transport descriptor: {descriptor_path}"
+        ) from exc
+    fields = {
+        "schema",
+        "schema_version",
+        "transport_key_id",
+        "transport_public_key",
+    }
+    if not isinstance(raw, dict) or set(raw) != fields:
+        raise HearthEnvelopeError(
+            "Hearth transport descriptor fields do not match version 1."
+        )
+    if (
+        raw.get("schema") != "worldweaver.hearth-transport"
+        or type(raw.get("schema_version")) is not int
+        or raw.get("schema_version") != 1
+    ):
+        raise HearthEnvelopeError("Hearth transport descriptor is unsupported.")
+    public_key = str(raw.get("transport_public_key") or "").strip()
+    if raw.get("transport_public_key") != public_key:
+        raise HearthEnvelopeError("Hearth transport descriptor key is invalid.")
+    if raw.get("transport_key_id") != transport_key_id(public_key):
+        raise HearthEnvelopeError("Hearth transport descriptor key ID does not match.")
+    return X25519PublicKey.from_public_bytes(
+        _decode(public_key, label="recipient public key", expected_size=32)
+    )
+
+
 def _derive_content_key(
     *,
     private_key: X25519PrivateKey,
