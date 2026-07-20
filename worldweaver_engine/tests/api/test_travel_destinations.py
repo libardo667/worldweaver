@@ -1,4 +1,6 @@
-def test_travel_destinations_endpoint_returns_discovery_without_moving_an_actor(client, monkeypatch):
+def test_travel_destinations_endpoint_returns_discovery_without_moving_an_actor(
+    client, monkeypatch
+):
     expected = {
         "source": {"shard_id": "sf-community", "city_id": "san_francisco"},
         "registry": {"configured": True, "reachable": True},

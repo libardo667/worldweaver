@@ -44,7 +44,11 @@ def _encode(value: bytes) -> str:
 
 def _decode(value: Any, *, label: str) -> bytes:
     encoded = str(value or "").strip()
-    if not isinstance(value, str) or value != encoded or not _BASE64URL_RE.fullmatch(encoded):
+    if (
+        not isinstance(value, str)
+        or value != encoded
+        or not _BASE64URL_RE.fullmatch(encoded)
+    ):
         raise HearthTransportError(f"Hearth transport {label} is invalid.")
     try:
         decoded = base64.urlsafe_b64decode(encoded + "=" * (-len(encoded) % 4))
@@ -60,7 +64,11 @@ def encoded_transport_public_key(key: X25519PublicKey) -> str:
 
 
 def hearth_transport_key_id(public_key: str | X25519PublicKey) -> str:
-    encoded = encoded_transport_public_key(public_key) if isinstance(public_key, X25519PublicKey) else public_key
+    encoded = (
+        encoded_transport_public_key(public_key)
+        if isinstance(public_key, X25519PublicKey)
+        else public_key
+    )
     raw = _decode(encoded, label="public key")
     return f"x25519:{hashlib.sha256(raw).hexdigest()[:32]}"
 
@@ -83,15 +91,30 @@ class HearthTransportDescriptor:
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> "HearthTransportDescriptor":
         if not isinstance(raw, Mapping) or set(raw) != _FIELDS:
-            raise HearthTransportError("Hearth transport descriptor fields do not match version 1.")
-        if raw.get("schema") != HEARTH_TRANSPORT_SCHEMA or type(raw.get("schema_version")) is not int or raw.get("schema_version") != HEARTH_TRANSPORT_VERSION:
-            raise HearthTransportError("Hearth transport descriptor schema is unsupported.")
+            raise HearthTransportError(
+                "Hearth transport descriptor fields do not match version 1."
+            )
+        if (
+            raw.get("schema") != HEARTH_TRANSPORT_SCHEMA
+            or type(raw.get("schema_version")) is not int
+            or raw.get("schema_version") != HEARTH_TRANSPORT_VERSION
+        ):
+            raise HearthTransportError(
+                "Hearth transport descriptor schema is unsupported."
+            )
         public_key = str(raw.get("transport_public_key") or "").strip()
-        if not isinstance(raw.get("transport_public_key"), str) or raw.get("transport_public_key") != public_key:
+        if (
+            not isinstance(raw.get("transport_public_key"), str)
+            or raw.get("transport_public_key") != public_key
+        ):
             raise HearthTransportError("Hearth transport public key is invalid.")
         _decode(public_key, label="public key")
         key_id = str(raw.get("transport_key_id") or "").strip()
-        if not isinstance(raw.get("transport_key_id"), str) or raw.get("transport_key_id") != key_id or key_id != hearth_transport_key_id(public_key):
+        if (
+            not isinstance(raw.get("transport_key_id"), str)
+            or raw.get("transport_key_id") != key_id
+            or key_id != hearth_transport_key_id(public_key)
+        ):
             raise HearthTransportError("Hearth transport key ID does not match.")
         return cls(
             transport_key_id=key_id,
@@ -170,7 +193,9 @@ def write_hearth_transport_descriptor(
     public_path.parent.mkdir(parents=True, exist_ok=True)
     _write_new(
         public_path,
-        (json.dumps(verified.to_dict(), indent=2, sort_keys=True) + "\n").encode("utf-8"),
+        (json.dumps(verified.to_dict(), indent=2, sort_keys=True) + "\n").encode(
+            "utf-8"
+        ),
     )
 
 
@@ -201,9 +226,13 @@ def generate_hearth_transport_identity(
 def load_hearth_transport_private_key(path: str | Path) -> X25519PrivateKey:
     key_path = Path(path).expanduser()
     if not key_path.is_file() or key_path.is_symlink():
-        raise HearthTransportError(f"Hearth transport private key is missing or unsafe: {key_path}")
+        raise HearthTransportError(
+            f"Hearth transport private key is missing or unsafe: {key_path}"
+        )
     try:
         raw = _decode(key_path.read_text(encoding="utf-8").strip(), label="private key")
         return X25519PrivateKey.from_private_bytes(raw)
     except (OSError, UnicodeDecodeError, ValueError) as exc:
-        raise HearthTransportError(f"Could not load hearth transport private key: {key_path}") from exc
+        raise HearthTransportError(
+            f"Could not load hearth transport private key: {key_path}"
+        ) from exc

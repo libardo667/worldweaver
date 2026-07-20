@@ -4,7 +4,7 @@ asyncio_mode = "auto"
 
 [tool.ruff]
 target-version = "py311"
-line-length = 320
+line-length = 88
 extend-exclude = [
     "client/dist",
     "client/node_modules",
@@ -12,9 +12,10 @@ extend-exclude = [
 
 [tool.ruff.lint]
 select = ["E", "F"]
+ignore = ["E501"]
 
 [tool.black]
-line-length = 320
+line-length = 88
 target-version = ["py311"]
 exclude = '''
 /(

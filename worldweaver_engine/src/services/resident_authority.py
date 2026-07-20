@@ -66,20 +66,34 @@ def bind_resident_identity(
     """
 
     actor = _bounded_identifier(actor_id, label="actor ID", max_length=36)
-    hearth = _bounded_identifier(hearth_shard_id, label="hearth shard ID", max_length=80)
-    public_key = _bounded_identifier(identity_public_key, label="identity public key", max_length=64)
+    hearth = _bounded_identifier(
+        hearth_shard_id, label="hearth shard ID", max_length=80
+    )
+    public_key = _bounded_identifier(
+        identity_public_key, label="identity public key", max_length=64
+    )
     try:
         key_id = identity_key_id(public_key)
     except ResidentProtocolError as exc:
         raise ResidentAuthorityError("invalid_binding", str(exc)) from exc
-    if isinstance(recovery_policy_version, bool) or not isinstance(recovery_policy_version, int) or recovery_policy_version < 1:
-        raise ResidentAuthorityError("invalid_binding", "Resident recovery policy version is invalid.")
+    if (
+        isinstance(recovery_policy_version, bool)
+        or not isinstance(recovery_policy_version, int)
+        or recovery_policy_version < 1
+    ):
+        raise ResidentAuthorityError(
+            "invalid_binding", "Resident recovery policy version is invalid."
+        )
     reason = str(admission_reason or "").strip()
     source = str(admitted_by or "").strip()
     if len(reason) > 500:
-        raise ResidentAuthorityError("invalid_binding", "Resident admission reason is too long.")
+        raise ResidentAuthorityError(
+            "invalid_binding", "Resident admission reason is too long."
+        )
     if not source or len(source) > 80:
-        raise ResidentAuthorityError("invalid_binding", "Resident admission source is invalid.")
+        raise ResidentAuthorityError(
+            "invalid_binding", "Resident admission source is invalid."
+        )
     if source == "local-steward" and not reason:
         raise ResidentAuthorityError(
             "invalid_binding",
@@ -88,14 +102,22 @@ def bind_resident_identity(
 
     existing = db.get(ResidentAuthority, actor)
     if existing is not None:
-        if existing.hearth_shard_id != hearth or existing.identity_public_key != public_key or existing.identity_key_id != key_id:
+        if (
+            existing.hearth_shard_id != hearth
+            or existing.identity_public_key != public_key
+            or existing.identity_key_id != key_id
+        ):
             raise ResidentAuthorityError(
                 "identity_conflict",
                 "Resident identity is already bound to different public continuity.",
             )
         return existing
 
-    key_owner = db.query(ResidentAuthority).filter(ResidentAuthority.identity_key_id == key_id).one_or_none()
+    key_owner = (
+        db.query(ResidentAuthority)
+        .filter(ResidentAuthority.identity_key_id == key_id)
+        .one_or_none()
+    )
     if key_owner is not None:
         raise ResidentAuthorityError(
             "identity_conflict",
@@ -128,9 +150,13 @@ def activate_resident_generation(
 
     authority = db.get(ResidentAuthority, certificate.actor_id)
     if authority is None:
-        raise ResidentAuthorityError("identity_not_admitted", "Resident identity is not admitted by this city.")
+        raise ResidentAuthorityError(
+            "identity_not_admitted", "Resident identity is not admitted by this city."
+        )
     if authority.hearth_shard_id != certificate.hearth_shard_id:
-        raise ResidentAuthorityError("identity_conflict", "Resident certificate names a different hearth.")
+        raise ResidentAuthorityError(
+            "identity_conflict", "Resident certificate names a different hearth."
+        )
     try:
         verify_runtime_certificate(
             certificate,
@@ -167,13 +193,21 @@ def bind_resident_session(
 
     session_key = _bounded_identifier(session_id, label="session ID", max_length=64)
     actor = _bounded_identifier(actor_id, label="actor ID", max_length=36)
-    if isinstance(runtime_generation, bool) or not isinstance(runtime_generation, int) or runtime_generation < 1:
+    if (
+        isinstance(runtime_generation, bool)
+        or not isinstance(runtime_generation, int)
+        or runtime_generation < 1
+    ):
         raise ResidentAuthorityError(
             "generation_mismatch",
             "Resident session generation is not active.",
         )
     session_row = db.get(SessionVars, session_key)
-    if session_row is None or session_row.actor_id != actor or session_row.player_id is not None:
+    if (
+        session_row is None
+        or session_row.actor_id != actor
+        or session_row.player_id is not None
+    ):
         raise ResidentAuthorityError(
             "session_mismatch",
             "Resident session does not belong to the admitted actor.",
@@ -217,7 +251,9 @@ def _consume_request_nonce(
         now - (max_clock_skew_seconds * 2),
         tz=timezone.utc,
     )
-    db.query(ResidentRequestNonce).filter(ResidentRequestNonce.received_at < cutoff).delete(synchronize_session=False)
+    db.query(ResidentRequestNonce).filter(
+        ResidentRequestNonce.received_at < cutoff
+    ).delete(synchronize_session=False)
     db.add(
         ResidentRequestNonce(
             certificate_id=verified.certificate_id,
@@ -348,11 +384,22 @@ def authorize_resident_request(
         )
     session_row = db.get(SessionVars, session_key)
     binding = db.get(ResidentSessionAuthority, session_key)
-    if session_row is None or binding is None or session_row.actor_id != binding.actor_id:
-        raise ResidentAuthorityError("session_not_authorized", "Resident session has no authority binding.")
+    if (
+        session_row is None
+        or binding is None
+        or session_row.actor_id != binding.actor_id
+    ):
+        raise ResidentAuthorityError(
+            "session_not_authorized", "Resident session has no authority binding."
+        )
     authority = db.get(ResidentAuthority, binding.actor_id)
-    if authority is None or authority.active_runtime_generation != binding.runtime_generation:
-        raise ResidentAuthorityError("retired_generation", "Resident session generation is no longer active.")
+    if (
+        authority is None
+        or authority.active_runtime_generation != binding.runtime_generation
+    ):
+        raise ResidentAuthorityError(
+            "retired_generation", "Resident session generation is no longer active."
+        )
 
     try:
         verified = verify_resident_request(

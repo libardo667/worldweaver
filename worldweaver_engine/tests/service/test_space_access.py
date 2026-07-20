@@ -28,7 +28,12 @@ from src.services.space_access import (
 
 @pytest.fixture()
 def game_rules(monkeypatch):
-    example = Path(__file__).resolve().parents[2] / "data" / "rulesets" / "private_constructive_game.v1.example.json"
+    example = (
+        Path(__file__).resolve().parents[2]
+        / "data"
+        / "rulesets"
+        / "private_constructive_game.v1.example.json"
+    )
     monkeypatch.setattr(settings, "shard_experience_path", str(example))
     monkeypatch.setattr(settings, "shard_id", "test-game-shard")
 
@@ -64,7 +69,9 @@ def test_unlisted_place_remains_public(db_session, game_rules):
     assert status["can_enter"] is True
     assert status["entry_reason"] == "no_restriction"
 
-    assert_route_entry_allowed(db_session, session_id="visitor", destinations=["Town Square"])
+    assert_route_entry_allowed(
+        db_session, session_id="visitor", destinations=["Town Square"]
+    )
 
 
 def test_private_and_closed_modes_are_destination_only(db_session, game_rules):
@@ -87,8 +94,12 @@ def test_private_and_closed_modes_are_destination_only(db_session, game_rules):
     assert refused.value.code == "space_access_required"
 
     # The entry check has no origin argument: being inside never blocks leaving.
-    assert_route_entry_allowed(db_session, session_id="visitor", destinations=["Town Square"])
-    assert_route_entry_allowed(db_session, session_id="controller", destinations=["Rowan's Workshop"])
+    assert_route_entry_allowed(
+        db_session, session_id="visitor", destinations=["Town Square"]
+    )
+    assert_route_entry_allowed(
+        db_session, session_id="controller", destinations=["Rowan's Workshop"]
+    )
 
     set_space_mode(
         db_session,
@@ -111,7 +122,9 @@ def test_private_and_closed_modes_are_destination_only(db_session, game_rules):
     assert receipt.world_event_id == event.id
 
 
-def test_request_admission_and_revocation_leave_retry_safe_receipts(db_session, game_rules):
+def test_request_admission_and_revocation_leave_retry_safe_receipts(
+    db_session, game_rules
+):
     _place(db_session)
     _session(db_session, "controller", "actor-controller")
     _session(db_session, "visitor", "actor-visitor")
@@ -206,7 +219,9 @@ def test_invitation_follows_actor_identity_across_sessions(db_session, game_rule
         session_id="controller",
         location="Rowan's Workshop",
     )
-    assert controller_view["active_grants"] == [{"actor_id": "actor-visitor", "session_id": "visitor-new"}]
+    assert controller_view["active_grants"] == [
+        {"actor_id": "actor-visitor", "session_id": "visitor-new"}
+    ]
     assert (
         access_status(
             db_session,

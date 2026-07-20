@@ -9,7 +9,9 @@ from src.services import federation_pulse
 from src.services.federation_identity import current_shard_id
 
 
-def test_build_pulse_payload_reads_nested_v2_session_vars(db_session, monkeypatch, tmp_path):
+def test_build_pulse_payload_reads_nested_v2_session_vars(
+    db_session, monkeypatch, tmp_path
+):
     residents_dir = tmp_path / "residents"
     identity_dir = residents_dir / "test_resident" / "identity"
     identity_dir.mkdir(parents=True, exist_ok=True)
@@ -46,11 +48,15 @@ def test_build_pulse_payload_reads_nested_v2_session_vars(db_session, monkeypatc
     assert resident["status"] == "active"
 
 
-def test_build_pulse_payload_resolves_resident_dirs_with_spaces(db_session, monkeypatch, tmp_path):
+def test_build_pulse_payload_resolves_resident_dirs_with_spaces(
+    db_session, monkeypatch, tmp_path
+):
     residents_dir = tmp_path / "residents"
     identity_dir = residents_dir / "Diana Chen" / "identity"
     identity_dir.mkdir(parents=True, exist_ok=True)
-    (identity_dir / "resident_id.txt").write_text("resident-diana-chen\n", encoding="utf-8")
+    (identity_dir / "resident_id.txt").write_text(
+        "resident-diana-chen\n", encoding="utf-8"
+    )
 
     monkeypatch.setenv("WW_RESIDENTS_DIR", str(residents_dir))
     monkeypatch.setattr(federation_pulse.settings, "city_id", "san_francisco")
@@ -80,7 +86,9 @@ def test_build_pulse_payload_resolves_resident_dirs_with_spaces(db_session, monk
     assert resident["location"] == "Inner Richmond"
 
 
-def test_pulse_keeps_independent_shard_and_city_identity_separate(db_session, monkeypatch, tmp_path):
+def test_pulse_keeps_independent_shard_and_city_identity_separate(
+    db_session, monkeypatch, tmp_path
+):
     residents_dir = tmp_path / "residents"
     identity_dir = residents_dir / "test_resident" / "identity"
     identity_dir.mkdir(parents=True)
@@ -145,8 +153,12 @@ def test_failed_startup_pulse_retries_before_the_normal_interval(monkeypatch):
         sleeps.append(delay)
         raise asyncio.CancelledError
 
-    monkeypatch.setattr(federation_pulse.settings, "federation_url", "https://federation.example")
-    monkeypatch.setattr(federation_pulse, "_post_pulse_sync", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        federation_pulse.settings, "federation_url", "https://federation.example"
+    )
+    monkeypatch.setattr(
+        federation_pulse, "_post_pulse_sync", lambda *_args, **_kwargs: None
+    )
     monkeypatch.setattr(federation_pulse.asyncio, "sleep", stop_after_first_sleep)
 
     with pytest.raises(asyncio.CancelledError):

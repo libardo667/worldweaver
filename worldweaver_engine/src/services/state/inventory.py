@@ -25,7 +25,9 @@ class ItemState:
     properties: Dict[str, Any] = field(default_factory=dict)
     location: Optional[str] = None
     last_used: Optional[datetime] = None
-    discovered_at: Optional[datetime] = field(default_factory=lambda: datetime.now(timezone.utc))
+    discovered_at: Optional[datetime] = field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
 
     def can_combine_with(self, other: "ItemState") -> bool:
         """Check if this item can be combined with another."""
@@ -85,7 +87,9 @@ class InventoryDomain:
         )
         return item, change
 
-    def remove(self, item_id: str, quantity: int = 1) -> Tuple[bool, Optional[StateChange]]:
+    def remove(
+        self, item_id: str, quantity: int = 1
+    ) -> Tuple[bool, Optional[StateChange]]:
         if item_id not in self._items:
             return False, None
 

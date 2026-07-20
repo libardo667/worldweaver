@@ -189,7 +189,9 @@ class TestRelationshipState:
 
 class TestItemState:
     def test_can_combine_with(self):
-        sword = ItemState(id="sword", name="Sword", properties={"combinable_with": ["gem"]})
+        sword = ItemState(
+            id="sword", name="Sword", properties={"combinable_with": ["gem"]}
+        )
         gem = ItemState(id="gem", name="Gem")
         assert sword.can_combine_with(gem) is True
         assert gem.can_combine_with(sword) is False

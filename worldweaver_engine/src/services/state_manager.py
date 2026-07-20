@@ -218,7 +218,9 @@ class AdvancedStateManager:
             "stance": self.variables.get("stance", defaults["stance"]),
             "focus": self.variables.get("focus", defaults["focus"]),
             "tactics": self.variables.get("tactics", defaults["tactics"]),
-            "injury_state": self.variables.get("injury_state", defaults["injury_state"]),
+            "injury_state": self.variables.get(
+                "injury_state", defaults["injury_state"]
+            ),
         }
         try:
             structured = StructuredCharacterState.model_validate(payload).model_dump()
@@ -310,7 +312,9 @@ class AdvancedStateManager:
             item = self.inventory[item_id]
         else:
             # New item
-            item = ItemState(id=item_id, name=name, quantity=quantity, properties=properties or {})
+            item = ItemState(
+                id=item_id, name=name, quantity=quantity, properties=properties or {}
+            )
             self.inventory[item_id] = item
 
         change = StateChange(
@@ -373,7 +377,9 @@ class AdvancedStateManager:
         for attribute, change_amount in changes.items():
             if hasattr(rel, attribute):
                 current_value = getattr(rel, attribute)
-                new_value = max(-100, min(100, current_value + change_amount))  # Clamp to -100/100
+                new_value = max(
+                    -100, min(100, current_value + change_amount)
+                )  # Clamp to -100/100
                 setattr(rel, attribute, new_value)
 
         rel.last_interaction = datetime.now(timezone.utc)
@@ -393,7 +399,9 @@ class AdvancedStateManager:
         logger.debug(f"Updated relationship {entity_a}-{entity_b}: {changes}")
         return rel
 
-    def get_relationship(self, entity_a: str, entity_b: str) -> Optional[RelationshipState]:
+    def get_relationship(
+        self, entity_a: str, entity_b: str
+    ) -> Optional[RelationshipState]:
         """Get relationship between two entities."""
         rel_key = f"{min(entity_a, entity_b)}:{max(entity_a, entity_b)}"
         return self.relationships.get(rel_key)
@@ -426,7 +434,11 @@ class AdvancedStateManager:
 
         env_changes = delta.get("environment")
         if isinstance(env_changes, dict) and env_changes:
-            filtered = {key: value for key, value in env_changes.items() if hasattr(self.environment, key)}
+            filtered = {
+                key: value
+                for key, value in env_changes.items()
+                if hasattr(self.environment, key)
+            }
             if filtered:
                 self.update_environment(filtered)
                 applied["environment"] = filtered
@@ -469,7 +481,11 @@ class AdvancedStateManager:
             # Relationship conditions
             if key.startswith("relationship:"):
                 if not isinstance(requirements, dict):
-                    logger.warning("evaluate_condition: malformed relationship requirement for %r (got %r); skipping", key, requirements)
+                    logger.warning(
+                        "evaluate_condition: malformed relationship requirement for %r (got %r); skipping",
+                        key,
+                        requirements,
+                    )
                     continue
                 _, entity_a, entity_b = key.split(":")
                 rel = self.get_relationship(entity_a, entity_b)
@@ -484,7 +500,11 @@ class AdvancedStateManager:
             # Item conditions
             elif key.startswith("item:"):
                 if not isinstance(requirements, dict):
-                    logger.warning("evaluate_condition: malformed item requirement for %r (got %r); skipping", key, requirements)
+                    logger.warning(
+                        "evaluate_condition: malformed item requirement for %r (got %r); skipping",
+                        key,
+                        requirements,
+                    )
                     continue
                 _, item_id = key.split(":", 1)
                 item = self.inventory.get(item_id)
@@ -503,7 +523,10 @@ class AdvancedStateManager:
             # Environment conditions
             elif key == "environment":
                 if not isinstance(requirements, dict):
-                    logger.warning("evaluate_condition: malformed environment requirement (got %r); skipping", requirements)
+                    logger.warning(
+                        "evaluate_condition: malformed environment requirement (got %r); skipping",
+                        requirements,
+                    )
                     continue
                 for attr, req in requirements.items():
                     env_value = getattr(self.environment, attr, None)
@@ -526,7 +549,10 @@ class AdvancedStateManager:
         """Get all variables plus computed contextual information."""
         self.ensure_structured_state_defaults(record_history=False)
         cache_key = "contextual_vars"
-        if cache_key in self._cached_computations and datetime.now(timezone.utc) < self._cache_expiry:
+        if (
+            cache_key in self._cached_computations
+            and datetime.now(timezone.utc) < self._cache_expiry
+        ):
             return self._cached_computations[cache_key]
 
         # Base variables
@@ -534,7 +560,9 @@ class AdvancedStateManager:
 
         # Add computed values
         context["_inventory_count"] = len(self.inventory)
-        context["_total_item_quantity"] = sum(item.quantity for item in self.inventory.values())
+        context["_total_item_quantity"] = sum(
+            item.quantity for item in self.inventory.values()
+        )
         context["_relationship_count"] = len(self.relationships)
         context["_time_of_day"] = self.environment.time_of_day
         context["_weather"] = self.environment.weather
@@ -542,13 +570,20 @@ class AdvancedStateManager:
 
         # Add non-underscore versions for compatibility
         context["inventory_count"] = len(self.inventory)
-        context["total_item_quantity"] = sum(item.quantity for item in self.inventory.values())
+        context["total_item_quantity"] = sum(
+            item.quantity for item in self.inventory.values()
+        )
         context["relationship_count"] = len(self.relationships)
         context["time_of_day"] = self.environment.time_of_day
         context["weather"] = self.environment.weather
         context["danger_level"] = self.environment.danger_level
         context["inventory_items"] = list(self.inventory.keys())
-        context["known_people"] = list({rel.entity_a if rel.entity_a != "player" else rel.entity_b for rel in self.relationships.values()})
+        context["known_people"] = list(
+            {
+                rel.entity_a if rel.entity_a != "player" else rel.entity_b
+                for rel in self.relationships.values()
+            }
+        )
         # Add mood modifiers from environment
         mood_modifiers = self.environment.get_mood_modifier()
         for mood, modifier in mood_modifiers.items():
@@ -609,7 +644,13 @@ class AdvancedStateManager:
                 "total_items": len(self.inventory),
                 "total_relationships": len(self.relationships),
             },
-            "recent_changes": len([c for c in self.change_history if c.timestamp > datetime.now(timezone.utc) - timedelta(minutes=5)]),
+            "recent_changes": len(
+                [
+                    c
+                    for c in self.change_history
+                    if c.timestamp > datetime.now(timezone.utc) - timedelta(minutes=5)
+                ]
+            ),
         }
 
     def fork_for_projection(self) -> "AdvancedStateManager":
@@ -668,7 +709,9 @@ class AdvancedStateManager:
 
         # Reconstruct typed domains from their serialized sections.
         self._inventory = InventoryDomain.from_dict(state_data.get("inventory", {}))
-        self._relationships = RelationshipDomain.from_dict(state_data.get("relationships", {}))
+        self._relationships = RelationshipDomain.from_dict(
+            state_data.get("relationships", {})
+        )
 
         # Reconstruct environment.
         if "environment" in state_data:
@@ -691,7 +734,9 @@ class AdvancedStateManager:
     def set_world_context(self, context: Dict[str, Any]) -> None:
         """Persist a thin shared-world context object into session state."""
         if not isinstance(context, dict):
-            raise TypeError(f"world_context must be a dict, got {type(context).__name__}")
+            raise TypeError(
+                f"world_context must be a dict, got {type(context).__name__}"
+            )
         self.variables[self._WORLD_CONTEXT_KEY] = context
         self._invalidate_cache()
         logger.debug("World context stored for session %s", self.session_id)

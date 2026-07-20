@@ -21,7 +21,11 @@ from .consequence_objects import (
     durable_object_payload,
     require_consequence_capabilities,
 )
-from .event_submission import WorldEventCommand, structural_event_idempotency_key, submit_world_event
+from .event_submission import (
+    WorldEventCommand,
+    structural_event_idempotency_key,
+    submit_world_event,
+)
 from .shard_experience import GameCapability
 
 
@@ -51,7 +55,13 @@ def _actor_present_at(db: Session, *, actor_id: str, location: str) -> bool:
 
 
 def _locked_objects(db: Session, *object_ids: str) -> dict[str, DurableObject]:
-    normalized = sorted({str(object_id or "").strip() for object_id in object_ids if str(object_id or "").strip()})
+    normalized = sorted(
+        {
+            str(object_id or "").strip()
+            for object_id in object_ids
+            if str(object_id or "").strip()
+        }
+    )
     rows = (
         db.query(DurableObject)
         .filter(
@@ -64,31 +74,55 @@ def _locked_objects(db: Session, *object_ids: str) -> dict[str, DurableObject]:
     )
     by_id = {str(row.object_id): row for row in rows}
     if len(by_id) != len(normalized):
-        raise ConsequenceDomainError("exchange_object_not_found", "One of the exchange objects no longer exists.", status_code=404)
+        raise ConsequenceDomainError(
+            "exchange_object_not_found",
+            "One of the exchange objects no longer exists.",
+            status_code=404,
+        )
     return by_id
 
 
-def _exchange_row(db: Session, exchange_id: str, *, lock: bool = False) -> ObjectExchange:
+def _exchange_row(
+    db: Session, exchange_id: str, *, lock: bool = False
+) -> ObjectExchange:
     normalized = str(exchange_id or "").strip()
     query = db.query(ObjectExchange).filter(ObjectExchange.exchange_id == normalized)
     if lock:
         query = query.with_for_update()
     row = query.one_or_none()
     if row is None:
-        raise ConsequenceDomainError("exchange_not_found", "Object exchange not found.", status_code=404)
+        raise ConsequenceDomainError(
+            "exchange_not_found", "Object exchange not found.", status_code=404
+        )
     return row
 
 
-def _object_rows_for_exchange(db: Session, row: ObjectExchange, *, lock: bool = False) -> tuple[DurableObject, DurableObject]:
+def _object_rows_for_exchange(
+    db: Session, row: ObjectExchange, *, lock: bool = False
+) -> tuple[DurableObject, DurableObject]:
     if lock:
-        objects = _locked_objects(db, str(row.offered_object_id), str(row.requested_object_id))
+        objects = _locked_objects(
+            db, str(row.offered_object_id), str(row.requested_object_id)
+        )
     else:
-        rows = db.query(DurableObject).filter(DurableObject.object_id.in_((row.offered_object_id, row.requested_object_id))).all()
+        rows = (
+            db.query(DurableObject)
+            .filter(
+                DurableObject.object_id.in_(
+                    (row.offered_object_id, row.requested_object_id)
+                )
+            )
+            .all()
+        )
         objects = {str(item.object_id): item for item in rows}
     offered = objects.get(str(row.offered_object_id))
     requested = objects.get(str(row.requested_object_id))
     if offered is None or requested is None:
-        raise ConsequenceDomainError("exchange_object_not_found", "One of the exchange objects no longer exists.", status_code=404)
+        raise ConsequenceDomainError(
+            "exchange_object_not_found",
+            "One of the exchange objects no longer exists.",
+            status_code=404,
+        )
     return offered, requested
 
 
@@ -100,7 +134,12 @@ def _exchange_payload(
     viewer: ActorContext | None = None,
     counterpart_present: bool | None = None,
 ) -> dict[str, Any]:
-    custody_ready = offered.custodian_actor_id == row.proposer_actor_id and requested.custodian_actor_id == row.recipient_actor_id and offered.status == "active" and requested.status == "active"
+    custody_ready = (
+        offered.custodian_actor_id == row.proposer_actor_id
+        and requested.custodian_actor_id == row.recipient_actor_id
+        and offered.status == "active"
+        and requested.status == "active"
+    )
     payload: dict[str, Any] = {
         "exchange_id": str(row.exchange_id),
         "status": str(row.status),
@@ -121,9 +160,18 @@ def _exchange_payload(
         is_recipient = viewer.actor_id == row.recipient_actor_id
         payload.update(
             {
-                "viewer_role": "proposer" if is_proposer else "recipient" if is_recipient else "observer",
+                "viewer_role": (
+                    "proposer"
+                    if is_proposer
+                    else "recipient" if is_recipient else "observer"
+                ),
                 "counterpart_present": bool(counterpart_present),
-                "can_accept": bool(row.status == "open" and is_recipient and custody_ready and counterpart_present),
+                "can_accept": bool(
+                    row.status == "open"
+                    and is_recipient
+                    and custody_ready
+                    and counterpart_present
+                ),
                 "can_decline": bool(row.status == "open" and is_recipient),
                 "can_cancel": bool(row.status == "open" and is_proposer),
             }
@@ -164,8 +212,13 @@ def _existing_receipt(
     )
     if row is None:
         return None
-    if row.operation != operation or (exchange_id is not None and row.exchange_id != exchange_id):
-        raise ConsequenceDomainError("idempotency_conflict", "That retry key was already used for a different exchange command.")
+    if row.operation != operation or (
+        exchange_id is not None and row.exchange_id != exchange_id
+    ):
+        raise ConsequenceDomainError(
+            "idempotency_conflict",
+            "That retry key was already used for a different exchange command.",
+        )
     return row
 
 
@@ -187,7 +240,10 @@ def _finish_exchange_command(
             event_type=operation,
             summary=summary,
             delta=delta,
-            metadata={"surface": "object_exchange_command", "actor_id": context.actor_id},
+            metadata={
+                "surface": "object_exchange_command",
+                "actor_id": context.actor_id,
+            },
             idempotency_key=structural_event_idempotency_key(operation, key),
             skip_graph_extraction=True,
             skip_projection=True,
@@ -227,7 +283,10 @@ def _recover_duplicate(
         exchange_id=exchange_id,
     )
     if row is None:
-        raise ConsequenceDomainError("transaction_conflict", "The exchange command conflicted and was not applied.")
+        raise ConsequenceDomainError(
+            "transaction_conflict",
+            "The exchange command conflicted and was not applied.",
+        )
     return _receipt_payload(row, replayed=True)
 
 
@@ -255,22 +314,45 @@ def offer_object_exchange(
     if existing is not None:
         return _receipt_payload(existing, replayed=True)
     if context.actor_id == recipient.actor_id:
-        raise ConsequenceDomainError("same_actor", "An actor cannot exchange objects with themself.", status_code=422)
+        raise ConsequenceDomainError(
+            "same_actor",
+            "An actor cannot exchange objects with themself.",
+            status_code=422,
+        )
     if context.location != recipient.location:
-        raise ConsequenceDomainError("recipient_not_present", "Both people must be at the same exact location to offer an exchange.")
+        raise ConsequenceDomainError(
+            "recipient_not_present",
+            "Both people must be at the same exact location to offer an exchange.",
+        )
     if str(offered_object_id or "").strip() == str(requested_object_id or "").strip():
-        raise ConsequenceDomainError("same_object", "An exchange must name two different objects.", status_code=422)
+        raise ConsequenceDomainError(
+            "same_object",
+            "An exchange must name two different objects.",
+            status_code=422,
+        )
 
     try:
         objects = _locked_objects(db, offered_object_id, requested_object_id)
         offered = objects.get(str(offered_object_id or "").strip())
         requested = objects.get(str(requested_object_id or "").strip())
         if offered is None or requested is None:
-            raise ConsequenceDomainError("exchange_object_not_found", "One of the exchange objects no longer exists.", status_code=404)
+            raise ConsequenceDomainError(
+                "exchange_object_not_found",
+                "One of the exchange objects no longer exists.",
+                status_code=404,
+            )
         if offered.custodian_actor_id != context.actor_id:
-            raise ConsequenceDomainError("offered_object_not_held", "The proposer must currently hold the offered object.", status_code=403)
+            raise ConsequenceDomainError(
+                "offered_object_not_held",
+                "The proposer must currently hold the offered object.",
+                status_code=403,
+            )
         if requested.custodian_actor_id != recipient.actor_id:
-            raise ConsequenceDomainError("requested_object_not_held", "The recipient must currently hold the requested object.", status_code=403)
+            raise ConsequenceDomainError(
+                "requested_object_not_held",
+                "The recipient must currently hold the requested object.",
+                status_code=403,
+            )
         exchange = ObjectExchange(
             proposer_actor_id=context.actor_id,
             recipient_actor_id=recipient.actor_id,
@@ -341,16 +423,33 @@ def accept_object_exchange(
         if existing is not None:
             return _receipt_payload(existing, replayed=True)
         if exchange.recipient_actor_id != context.actor_id:
-            raise ConsequenceDomainError("not_exchange_recipient", "Only the named recipient can accept this exchange.", status_code=403)
+            raise ConsequenceDomainError(
+                "not_exchange_recipient",
+                "Only the named recipient can accept this exchange.",
+                status_code=403,
+            )
         if exchange.status != "open":
-            raise ConsequenceDomainError("exchange_not_open", "That exchange is no longer open.")
-        if not _actor_present_at(db, actor_id=str(exchange.proposer_actor_id), location=context.location):
-            raise ConsequenceDomainError("proposer_not_present", "Both people must be at the same exact location to complete an exchange.")
+            raise ConsequenceDomainError(
+                "exchange_not_open", "That exchange is no longer open."
+            )
+        if not _actor_present_at(
+            db, actor_id=str(exchange.proposer_actor_id), location=context.location
+        ):
+            raise ConsequenceDomainError(
+                "proposer_not_present",
+                "Both people must be at the same exact location to complete an exchange.",
+            )
         offered, requested = _object_rows_for_exchange(db, exchange, lock=True)
         if offered.custodian_actor_id != exchange.proposer_actor_id:
-            raise ConsequenceDomainError("exchange_terms_unavailable", "The proposer no longer holds the offered object.")
+            raise ConsequenceDomainError(
+                "exchange_terms_unavailable",
+                "The proposer no longer holds the offered object.",
+            )
         if requested.custodian_actor_id != exchange.recipient_actor_id:
-            raise ConsequenceDomainError("exchange_terms_unavailable", "The recipient no longer holds the requested object.")
+            raise ConsequenceDomainError(
+                "exchange_terms_unavailable",
+                "The recipient no longer holds the requested object.",
+            )
 
         before = {
             "offered_object": durable_object_payload(offered),
@@ -420,11 +519,21 @@ def _resolve_open_exchange(
     try:
         exchange = _exchange_row(db, normalized_id, lock=True)
         if exchange.status != "open":
-            raise ConsequenceDomainError("exchange_not_open", "That exchange is no longer open.")
+            raise ConsequenceDomainError(
+                "exchange_not_open", "That exchange is no longer open."
+            )
         if resolution == "declined" and exchange.recipient_actor_id != context.actor_id:
-            raise ConsequenceDomainError("not_exchange_recipient", "Only the named recipient can decline this exchange.", status_code=403)
+            raise ConsequenceDomainError(
+                "not_exchange_recipient",
+                "Only the named recipient can decline this exchange.",
+                status_code=403,
+            )
         if resolution == "cancelled" and exchange.proposer_actor_id != context.actor_id:
-            raise ConsequenceDomainError("not_exchange_proposer", "Only the proposer can cancel this exchange.", status_code=403)
+            raise ConsequenceDomainError(
+                "not_exchange_proposer",
+                "Only the proposer can cancel this exchange.",
+                status_code=403,
+            )
         exchange.status = resolution
         exchange.resolved_at = _utcnow()
         offered, requested = _object_rows_for_exchange(db, exchange)
@@ -506,28 +615,40 @@ def visible_object_exchanges(db: Session, *, session_id: str) -> dict[str, Any]:
     exchanges: list[dict[str, Any]] = []
     for row in rows:
         offered, requested = _object_rows_for_exchange(db, row)
-        counterpart = row.recipient_actor_id if row.proposer_actor_id == context.actor_id else row.proposer_actor_id
+        counterpart = (
+            row.recipient_actor_id
+            if row.proposer_actor_id == context.actor_id
+            else row.proposer_actor_id
+        )
         exchanges.append(
             _exchange_payload(
                 row,
                 offered=offered,
                 requested=requested,
                 viewer=context,
-                counterpart_present=_actor_present_at(db, actor_id=str(counterpart), location=context.location),
+                counterpart_present=_actor_present_at(
+                    db, actor_id=str(counterpart), location=context.location
+                ),
             )
         )
 
     nearby_sessions: dict[str, SessionVars] = {}
     for row in db.query(SessionVars).order_by(SessionVars.session_id.asc()).all():
         actor_id = str(row.actor_id or "").strip()
-        if not actor_id or actor_id == context.actor_id or _session_location(row) != context.location:
+        if (
+            not actor_id
+            or actor_id == context.actor_id
+            or _session_location(row) != context.location
+        ):
             continue
         nearby_sessions.setdefault(actor_id, row)
         if len(nearby_sessions) >= 12:
             break
 
     actor_ids = list(nearby_sessions)
-    held_by_actor: dict[str, list[DurableObject]] = {actor_id: [] for actor_id in actor_ids}
+    held_by_actor: dict[str, list[DurableObject]] = {
+        actor_id: [] for actor_id in actor_ids
+    }
     if actor_ids:
         held_rows = (
             db.query(DurableObject)
@@ -547,7 +668,9 @@ def visible_object_exchanges(db: Session, *, session_id: str) -> dict[str, Any]:
         {
             "recipient_actor_id": actor_id,
             "recipient_session_id": str(nearby_sessions[actor_id].session_id),
-            "requested_objects": [durable_object_payload(item) for item in held_by_actor[actor_id]],
+            "requested_objects": [
+                durable_object_payload(item) for item in held_by_actor[actor_id]
+            ],
         }
         for actor_id in actor_ids
         if held_by_actor[actor_id]

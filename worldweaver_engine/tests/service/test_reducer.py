@@ -4,14 +4,22 @@ from src.services.rules.schema import (
     SystemTickIntent,
     FreeformActionCommittedIntent,
 )
-from src.models.schemas import ActionDeltaContract, ActionDeltaSetOperation, ActionDeltaIncrementOperation, ActionFactAppendOperation
+from src.models.schemas import (
+    ActionDeltaContract,
+    ActionDeltaSetOperation,
+    ActionDeltaIncrementOperation,
+    ActionFactAppendOperation,
+)
 from src.services.state_manager import AdvancedStateManager
 from typing import Any
 
 
 def test_reducer_applies_sets_and_increments(db_session: Any):
     manager = AdvancedStateManager(session_id="test-reducer-1")
-    delta = ActionDeltaContract(set=[ActionDeltaSetOperation(key="location", value="tavern")], increment=[ActionDeltaIncrementOperation(key="tension", amount=2.0)])
+    delta = ActionDeltaContract(
+        set=[ActionDeltaSetOperation(key="location", value="tavern")],
+        increment=[ActionDeltaIncrementOperation(key="tension", amount=2.0)],
+    )
     intent = ChoiceSelectedIntent(label="Enter Tavern", delta=delta)
 
     receipt = reduce_event(db_session, manager, intent)
@@ -26,7 +34,9 @@ def test_reducer_canonicalizes_danger_and_clamps(db_session: Any):
     manager = AdvancedStateManager(session_id="test-reducer-2")
     manager.set_variable("environment.danger_level", 8.0)
 
-    delta = ActionDeltaContract(increment=[ActionDeltaIncrementOperation(key="danger", amount=5.0)])
+    delta = ActionDeltaContract(
+        increment=[ActionDeltaIncrementOperation(key="danger", amount=5.0)]
+    )
     intent = FreeformActionCommittedIntent(action_text="I scream loudly", delta=delta)
 
     receipt = reduce_event(db_session, manager, intent)
@@ -63,7 +73,9 @@ def test_reducer_clamps_out_of_bounds_sets(db_session: Any):
 
 def test_reducer_blocks_system_keys(db_session: Any):
     manager = AdvancedStateManager(session_id="test-reducer-3")
-    delta = ActionDeltaContract(set=[ActionDeltaSetOperation(key="session_id", value="hacked")])
+    delta = ActionDeltaContract(
+        set=[ActionDeltaSetOperation(key="session_id", value="hacked")]
+    )
     intent = ChoiceSelectedIntent(label="Hack", delta=delta)
 
     receipt = reduce_event(db_session, manager, intent)
@@ -131,8 +143,12 @@ def test_reducer_preserves_internal_keys(db_session: Any):
 
 def test_reducer_maps_legacy_stance_boolean_to_structured_enum(db_session: Any):
     manager = AdvancedStateManager(session_id="test-reducer-structured-1")
-    delta = ActionDeltaContract(set=[ActionDeltaSetOperation(key="is_hiding", value=True)])
-    intent = FreeformActionCommittedIntent(action_text="I duck behind crates", delta=delta)
+    delta = ActionDeltaContract(
+        set=[ActionDeltaSetOperation(key="is_hiding", value=True)]
+    )
+    intent = FreeformActionCommittedIntent(
+        action_text="I duck behind crates", delta=delta
+    )
 
     receipt = reduce_event(db_session, manager, intent)
 
@@ -176,7 +192,9 @@ def test_reducer_allows_conflicting_stance_in_multi_actor_scene(db_session: Any)
 
 def test_reducer_shunts_unrecognized_state_key_into_namespaced_bag(db_session: Any):
     manager = AdvancedStateManager(session_id="test-reducer-structured-4")
-    delta = ActionDeltaContract(set=[ActionDeltaSetOperation(key="state.custom_flag", value=True)])
+    delta = ActionDeltaContract(
+        set=[ActionDeltaSetOperation(key="state.custom_flag", value=True)]
+    )
     intent = ChoiceSelectedIntent(label="Unknown state key", delta=delta)
 
     receipt = reduce_event(db_session, manager, intent)
@@ -202,7 +220,9 @@ def test_reducer_validates_tactics_and_decays_ttl_on_tick(db_session: Any):
             )
         ]
     )
-    reduce_event(db_session, manager, ChoiceSelectedIntent(label="Set tactics", delta=set_delta))
+    reduce_event(
+        db_session, manager, ChoiceSelectedIntent(label="Set tactics", delta=set_delta)
+    )
 
     tactics_after_set = manager.get_variable("tactics")
     assert tactics_after_set == [
@@ -217,7 +237,9 @@ def test_reducer_validates_tactics_and_decays_ttl_on_tick(db_session: Any):
 
 def test_reducer_rejects_invalid_injury_state(db_session: Any):
     manager = AdvancedStateManager(session_id="test-reducer-structured-6")
-    delta = ActionDeltaContract(set=[ActionDeltaSetOperation(key="injury_state", value="mangled")])
+    delta = ActionDeltaContract(
+        set=[ActionDeltaSetOperation(key="injury_state", value="mangled")]
+    )
     intent = ChoiceSelectedIntent(label="Bad injury state", delta=delta)
 
     receipt = reduce_event(db_session, manager, intent)
@@ -228,7 +250,9 @@ def test_reducer_rejects_invalid_injury_state(db_session: Any):
 
 def test_reducer_emits_location_fact_on_set(db_session: Any):
     manager = AdvancedStateManager(session_id="test-reducer-facts-1")
-    delta = ActionDeltaContract(set=[ActionDeltaSetOperation(key="location", value="the_red_spool_sanctum")])
+    delta = ActionDeltaContract(
+        set=[ActionDeltaSetOperation(key="location", value="the_red_spool_sanctum")]
+    )
     intent = ChoiceSelectedIntent(label="Move to sanctum", delta=delta)
 
     receipt = reduce_event(db_session, manager, intent)
@@ -249,7 +273,9 @@ def test_reducer_emits_stance_and_injury_facts(db_session: Any):
             ActionDeltaSetOperation(key="injury_state", value="injured"),
         ]
     )
-    intent = FreeformActionCommittedIntent(action_text="I dive behind cover, wounded", delta=delta)
+    intent = FreeformActionCommittedIntent(
+        action_text="I dive behind cover, wounded", delta=delta
+    )
 
     receipt = reduce_event(db_session, manager, intent)
 
@@ -261,8 +287,12 @@ def test_reducer_emits_stance_and_injury_facts(db_session: Any):
 
 def test_reducer_emits_danger_fact_on_increment(db_session: Any):
     manager = AdvancedStateManager(session_id="test-reducer-facts-3")
-    delta = ActionDeltaContract(increment=[ActionDeltaIncrementOperation(key="danger", amount=3.0)])
-    intent = FreeformActionCommittedIntent(action_text="Wolves howl nearby", delta=delta)
+    delta = ActionDeltaContract(
+        increment=[ActionDeltaIncrementOperation(key="danger", amount=3.0)]
+    )
+    intent = FreeformActionCommittedIntent(
+        action_text="Wolves howl nearby", delta=delta
+    )
 
     receipt = reduce_event(db_session, manager, intent)
 
@@ -276,7 +306,9 @@ def test_reducer_collects_explicit_append_facts(db_session: Any):
     manager = AdvancedStateManager(session_id="test-reducer-facts-4")
     delta = ActionDeltaContract(
         append_fact=[
-            ActionFactAppendOperation(subject="elara", predicate="met_player", value=True, confidence=0.9),
+            ActionFactAppendOperation(
+                subject="elara", predicate="met_player", value=True, confidence=0.9
+            ),
         ]
     )
     intent = FreeformActionCommittedIntent(action_text="I greet Elara", delta=delta)

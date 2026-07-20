@@ -49,16 +49,32 @@ DEFAULT_PLAYER_ROLE = "A resident of the neighborhood, living an ordinary life."
 
 DEFAULT_TONE = "quiet and observational; everyday life without manufactured drama"
 
-DEFAULT_DESCRIPTION = "A persistent, shared neighborhood where people live their lives. " "Characters walk to the park, grab coffee, run errands, sit on stoops. " "The world accumulates a quiet history through these small acts. " "Do not invent conflict or drama — let the texture of ordinary life be enough."
+DEFAULT_DESCRIPTION = (
+    "A persistent, shared neighborhood where people live their lives. "
+    "Characters walk to the park, grab coffee, run errands, sit on stoops. "
+    "The world accumulates a quiet history through these small acts. "
+    "Do not invent conflict or drama — let the texture of ordinary life be enough."
+)
 
 DEFAULT_STORYLET_COUNT = 5
 
 # Per-city theme overrides — used when city-pack seeding is active and --theme is not explicitly set.
 # The theme is injected into LLM enrichment prompts, so it should match the city being seeded.
 CITY_THEMES: dict[str, str] = {
-    "san_francisco": ("Everyday life in San Francisco's Mission District, grounded in real places — " "Dolores Park, taquerias, the BART, corner laundromats, weekend farmers markets."),
-    "portland": ("Everyday life in Portland, Oregon, grounded in real places — characters welcome. " "Powell's Books, food cart pods, the MAX light rail, neighborhood coffee shops, " "the Willamette River, and the quiet blocks of the inner eastside."),
-    "alderbank": ("Everyday life in Alderbank, a small fictional river village — the commons, shared workshop, " "watermill, inn, orchard kitchen, footbridge, river steps, and woodland trail. Ordinary work, " "rest, curiosity, privacy, and unplanned encounters are enough; no crisis or central quest is required."),
+    "san_francisco": (
+        "Everyday life in San Francisco's Mission District, grounded in real places — "
+        "Dolores Park, taquerias, the BART, corner laundromats, weekend farmers markets."
+    ),
+    "portland": (
+        "Everyday life in Portland, Oregon, grounded in real places — characters welcome. "
+        "Powell's Books, food cart pods, the MAX light rail, neighborhood coffee shops, "
+        "the Willamette River, and the quiet blocks of the inner eastside."
+    ),
+    "alderbank": (
+        "Everyday life in Alderbank, a small fictional river village — the commons, shared workshop, "
+        "watermill, inn, orchard kitchen, footbridge, river steps, and woodland trail. Ordinary work, "
+        "rest, curiosity, privacy, and unplanned encounters are enough; no crisis or central quest is required."
+    ),
 }
 
 DEFAULT_THEME = CITY_THEMES["san_francisco"]
@@ -97,13 +113,17 @@ def _post(url: str, payload: dict) -> dict:
 
 
 def _post_empty(url: str) -> dict:
-    req = urllib.request.Request(url, data=b"{}", headers={"Content-Type": "application/json"}, method="POST")
+    req = urllib.request.Request(
+        url, data=b"{}", headers={"Content-Type": "application/json"}, method="POST"
+    )
     with urllib.request.urlopen(req, timeout=30) as resp:
         return json.loads(resp.read())
 
 
 def _get(url: str) -> dict:
-    req = urllib.request.Request(url, headers={"Content-Type": "application/json"}, method="GET")
+    req = urllib.request.Request(
+        url, headers={"Content-Type": "application/json"}, method="GET"
+    )
     with urllib.request.urlopen(req, timeout=10) as resp:
         return json.loads(resp.read())
 
@@ -134,7 +154,9 @@ def _restore_entry_location(resident_dir: Path, dry_run: bool) -> None:
     if not home:
         return
     entry_path = resident_dir / "identity" / "entry_location.txt"
-    print(f"  entry_location restore: {entry_path.relative_to(resident_dir.parent.parent)} → {home!r}")
+    print(
+        f"  entry_location restore: {entry_path.relative_to(resident_dir.parent.parent)} → {home!r}"
+    )
     if not dry_run:
         entry_path.write_text(home, encoding="utf-8")
 
@@ -166,12 +188,16 @@ def _restore_soul(resident_dir: Path, dry_run: bool) -> None:
 def _clear_soul_growth(resident_dir: Path, dry_run: bool) -> None:
     growth_path = resident_dir / "identity" / "soul_growth.md"
     if growth_path.exists():
-        print(f"  soul_growth clear: {growth_path.relative_to(resident_dir.parent.parent)}")
+        print(
+            f"  soul_growth clear: {growth_path.relative_to(resident_dir.parent.parent)}"
+        )
         if not dry_run:
             growth_path.unlink(missing_ok=True)
     metadata_path = resident_dir / "identity" / "soul_growth.json"
     if metadata_path.exists():
-        print(f"  soul_growth clear: {metadata_path.relative_to(resident_dir.parent.parent)}")
+        print(
+            f"  soul_growth clear: {metadata_path.relative_to(resident_dir.parent.parent)}"
+        )
         if not dry_run:
             metadata_path.unlink(missing_ok=True)
 
@@ -197,7 +223,13 @@ def _reset_resident(resident_dir: Path, dry_run: bool) -> None:
 
 
 def _reset_all_residents(residents_dir: Path, dry_run: bool) -> None:
-    found = [d for d in residents_dir.iterdir() if d.is_dir() and not d.name.startswith("_") and (d / "identity" / "SOUL.md").exists()]
+    found = [
+        d
+        for d in residents_dir.iterdir()
+        if d.is_dir()
+        and not d.name.startswith("_")
+        and (d / "identity" / "SOUL.md").exists()
+    ]
     if not found:
         print("No residents found to reset.")
         return
@@ -245,7 +277,9 @@ def _stop_shard_agent(shard_dir: Path | None, dry_run: bool) -> None:
         print("      warning: docker compose unavailable — could not stop shard agent")
         return
     if shard_dir is None:
-        print("      warning: no shard dir resolved — could not stop shard agent deterministically")
+        print(
+            "      warning: no shard dir resolved — could not stop shard agent deterministically"
+        )
         return
     compose_file = shard_dir / "docker-compose.yml"
     if not compose_file.exists():
@@ -303,9 +337,21 @@ def main() -> None:
         default=None,
         help="Path to shard directory; reads .env to auto-configure --server and --city-id",
     )
-    parser.add_argument("--no-reset", action="store_true", help="Skip hard-reset (keep existing world data)")
-    parser.add_argument("--no-residents", action="store_true", help="Skip resetting resident runtime state")
-    parser.add_argument("--residents-dir", default=None, help="Path to residents directory (default: auto-detected)")
+    parser.add_argument(
+        "--no-reset",
+        action="store_true",
+        help="Skip hard-reset (keep existing world data)",
+    )
+    parser.add_argument(
+        "--no-residents",
+        action="store_true",
+        help="Skip resetting resident runtime state",
+    )
+    parser.add_argument(
+        "--residents-dir",
+        default=None,
+        help="Path to residents directory (default: auto-detected)",
+    )
     parser.add_argument("--theme", default=DEFAULT_THEME)
     parser.add_argument("--tone", default=DEFAULT_TONE)
     parser.add_argument("--count", type=int, default=DEFAULT_STORYLET_COUNT)
@@ -330,9 +376,21 @@ def main() -> None:
         action="store_true",
         help="Compatibility alias for deterministic city-pack seeding without LLM enrichment.",
     )
-    parser.add_argument("--city-id", default="san_francisco", help="City pack ID to use (default: san_francisco)")
-    parser.add_argument("--federation-url", default=None, help="After seed, register shard with this federation root URL")
-    parser.add_argument("--federation-token", default=None, help="Token for federation auth (X-Federation-Token)")
+    parser.add_argument(
+        "--city-id",
+        default="san_francisco",
+        help="City pack ID to use (default: san_francisco)",
+    )
+    parser.add_argument(
+        "--federation-url",
+        default=None,
+        help="After seed, register shard with this federation root URL",
+    )
+    parser.add_argument(
+        "--federation-token",
+        default=None,
+        help="Token for federation auth (X-Federation-Token)",
+    )
     args = parser.parse_args()
 
     shard_path: Path | None = None
@@ -431,8 +489,12 @@ def main() -> None:
 
     print(f"\n[2/3] Seed world: POST {server}/api/world/seed")
     if city_pack_mode:
-        mode = "LLM enrichment enabled" if args.llm_city_pack else "deterministic default"
-        print(f"      [city-pack mode] Using '{args.city_id}' city pack for location graph ({mode})")
+        mode = (
+            "LLM enrichment enabled" if args.llm_city_pack else "deterministic default"
+        )
+        print(
+            f"      [city-pack mode] Using '{args.city_id}' city pack for location graph ({mode})"
+        )
     else:
         print("      [llm-world mode] Using legacy LLM-generated world locations")
     _skip_display = {"storylet_count"} if city_pack_mode else set()
@@ -475,9 +537,15 @@ def main() -> None:
             "city_id": args.city_id,
         }
         try:
-            configured_key = str(shard_env.get("WW_NODE_PRIVATE_KEY_PATH") or "").strip()
+            configured_key = str(
+                shard_env.get("WW_NODE_PRIVATE_KEY_PATH") or ""
+            ).strip()
             private_key_path = Path(configured_key) if configured_key else None
-            if private_key_path is not None and not private_key_path.is_absolute() and shard_path is not None:
+            if (
+                private_key_path is not None
+                and not private_key_path.is_absolute()
+                and shard_path is not None
+            ):
                 private_key_path = shard_path / private_key_path
             reg_result = _post_with_federation_auth(
                 f"{fed_url}/api/federation/register",
@@ -489,7 +557,10 @@ def main() -> None:
             print(f"      ok: {reg_result}")
         except urllib.error.HTTPError as e:
             body = e.read().decode()
-            print(f"      WARNING: federation register failed {e.code}: {body}", file=sys.stderr)
+            print(
+                f"      WARNING: federation register failed {e.code}: {body}",
+                file=sys.stderr,
+            )
         except Exception as e:
             print(f"      WARNING: federation register failed: {e}", file=sys.stderr)
     elif args.federation_url and args.dry_run:
@@ -509,7 +580,9 @@ def main() -> None:
     if world_id:
         print(f"  world_id: {world_id}")
     if args.city_pack and not args.dry_run:
-        print("  Run: docker compose start agent   (to boot residents into the new world)")
+        print(
+            "  Run: docker compose start agent   (to boot residents into the new world)"
+        )
     else:
         print("  Start ww_agent to boot residents into the new world.")
 

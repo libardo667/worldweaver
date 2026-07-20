@@ -36,7 +36,13 @@ DEFAULT_LINT_EXTENDED_SCOPE = (
 )
 DEFAULT_RUNTIME_DB_PATHS = ("worldweaver.db", "db/worldweaver.db")
 DEFAULT_TEST_DB_PATHS = ("test_database.db", "test_env_integration.db")
-HARNESS_COMMANDS = ("eval", "eval-smoke", "sweep", "llm-playtest", "benchmark-three-layer")
+HARNESS_COMMANDS = (
+    "eval",
+    "eval-smoke",
+    "sweep",
+    "llm-playtest",
+    "benchmark-three-layer",
+)
 CLIENT_PROJECT = "ww_client"
 PUBLIC_CLIENT_PORT = 5174
 
@@ -69,7 +75,14 @@ class TravelReadiness:
 
     @property
     def ready(self) -> bool:
-        return self.readable and self.registry_configured and self.registry_reachable and self.available_route_count > 0 and self.live_node_count > 0 and self.reachable_node_count > 0
+        return (
+            self.readable
+            and self.registry_configured
+            and self.registry_reachable
+            and self.available_route_count > 0
+            and self.live_node_count > 0
+            and self.reachable_node_count > 0
+        )
 
 
 def _load_env_file(path: Path) -> dict[str, str]:
@@ -102,7 +115,9 @@ def _request_json(
         request_headers.update(headers)
     if payload is not None:
         data = json.dumps(payload).encode("utf-8")
-    request = urllib.request.Request(url, data=data, headers=request_headers, method=method)
+    request = urllib.request.Request(
+        url, data=data, headers=request_headers, method=method
+    )
     with urllib.request.urlopen(request, timeout=timeout) as response:
         body = response.read().decode("utf-8")
     if not body.strip():
@@ -129,7 +144,9 @@ def _normalize_host_accessible_url(url: str) -> str:
             if parts.password:
                 auth = f"{auth}:{parts.password}"
             netloc = f"{auth}@{netloc}"
-        return urllib.parse.urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+        return urllib.parse.urlunsplit(
+            (parts.scheme, netloc, parts.path, parts.query, parts.fragment)
+        )
     return candidate
 
 
@@ -157,10 +174,20 @@ def _build_postgres_url_from_env(env_values: dict[str, str]) -> str:
     if not host or not name:
         return ""
 
-    user = (os.environ.get("WW_DB_USER") or env_values.get("WW_DB_USER") or "postgres").strip() or "postgres"
-    password = os.environ.get("WW_DB_PASSWORD") or env_values.get("WW_DB_PASSWORD") or "postgres"
-    port = (os.environ.get("WW_DB_PORT") or env_values.get("WW_DB_PORT") or "5432").strip() or "5432"
-    return _normalize_database_url(f"postgresql://{user}:{password}@{host}:{port}/{name}")
+    user = (
+        os.environ.get("WW_DB_USER") or env_values.get("WW_DB_USER") or "postgres"
+    ).strip() or "postgres"
+    password = (
+        os.environ.get("WW_DB_PASSWORD")
+        or env_values.get("WW_DB_PASSWORD")
+        or "postgres"
+    )
+    port = (
+        os.environ.get("WW_DB_PORT") or env_values.get("WW_DB_PORT") or "5432"
+    ).strip() or "5432"
+    return _normalize_database_url(
+        f"postgresql://{user}:{password}@{host}:{port}/{name}"
+    )
 
 
 def _resolve_database_url(*, explicit_url: str | None = None) -> str:
@@ -169,7 +196,13 @@ def _resolve_database_url(*, explicit_url: str | None = None) -> str:
         return _normalize_database_url(candidate)
 
     env_values = _load_env_file(ENV_FILE)
-    candidate = (os.environ.get("WW_DATABASE_URL") or env_values.get("WW_DATABASE_URL") or os.environ.get("DATABASE_URL") or env_values.get("DATABASE_URL") or "").strip()
+    candidate = (
+        os.environ.get("WW_DATABASE_URL")
+        or env_values.get("WW_DATABASE_URL")
+        or os.environ.get("DATABASE_URL")
+        or env_values.get("DATABASE_URL")
+        or ""
+    ).strip()
     if candidate:
         return _normalize_database_url(candidate)
 
@@ -200,7 +233,10 @@ def _run(
 
 
 def _has_api_key(file_env: dict[str, str]) -> bool:
-    return any((os.environ.get(name) or file_env.get(name) or "").strip() for name in API_KEY_NAMES)
+    return any(
+        (os.environ.get(name) or file_env.get(name) or "").strip()
+        for name in API_KEY_NAMES
+    )
 
 
 def _resolve_compose_command() -> list[str] | None:
@@ -270,7 +306,9 @@ def _load_shard_specs() -> list[ShardSpec]:
                 shard_type=str(env_values.get("SHARD_TYPE") or "").strip() or "city",
                 shard_id=(str(env_values.get("SHARD_ID") or "").strip() or None),
                 city_id=(str(env_values.get("CITY_ID") or "").strip() or None),
-                backend_port=(str(env_values.get("BACKEND_PORT") or "").strip() or None),
+                backend_port=(
+                    str(env_values.get("BACKEND_PORT") or "").strip() or None
+                ),
             )
         )
     return specs
@@ -286,16 +324,24 @@ def _ollama_has_model(payload: object, model: str) -> bool:
     desired = str(model or "").strip()
     if not desired:
         return True
-    installed = {str(item.get("name") or item.get("model") or "").strip() for item in payload.get("models", []) if isinstance(item, dict)}
+    installed = {
+        str(item.get("name") or item.get("model") or "").strip()
+        for item in payload.get("models", [])
+        if isinstance(item, dict)
+    }
     return desired in installed or f"{desired}:latest" in installed
 
 
-def _probe_ollama(host: str, port: int = 11434, timeout: float = 2.0, *, model: str = "") -> bool:
+def _probe_ollama(
+    host: str, port: int = 11434, timeout: float = 2.0, *, model: str = ""
+) -> bool:
     """Does Ollama answer and contain the configured embedding model?"""
     if not host:
         return False
     try:
-        with urllib.request.urlopen(f"http://{host}:{port}/api/tags", timeout=timeout) as resp:
+        with urllib.request.urlopen(
+            f"http://{host}:{port}/api/tags", timeout=timeout
+        ) as resp:
             if getattr(resp, "status", resp.getcode()) != 200:
                 return False
             return _ollama_has_model(json.load(resp), model)
@@ -307,7 +353,12 @@ def _wsl_default_gateway() -> str:
     """The WSL default-gateway IP — the Windows host in NAT mode, where a Windows-side
     Ollama answers. Empty when not on WSL / no default route."""
     try:
-        out = subprocess.run(["ip", "route", "show", "default"], capture_output=True, text=True, timeout=3).stdout
+        out = subprocess.run(
+            ["ip", "route", "show", "default"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        ).stdout
     except Exception:
         return ""
     for line in out.splitlines():
@@ -331,19 +382,29 @@ def _resolve_embedder_env(shard: ShardSpec) -> dict[str, str]:
         return {}
     parsed = urllib.parse.urlparse(url)
     host, port = parsed.hostname or "", parsed.port or 11434
-    model = str(_shard_env(shard).get("WW_EMBEDDING_MODEL") or "nomic-embed-text").strip()
+    model = str(
+        _shard_env(shard).get("WW_EMBEDDING_MODEL") or "nomic-embed-text"
+    ).strip()
     # Always return a concrete URL (never {}): the agent service interpolates
     # ${WW_EMBEDDING_URL} over its env_file value, and compose's interpolation .env is the
     # launch CWD's, not the shard's — so an empty value here would blank the embedder.
     if _probe_ollama(host, port, model=model):
-        _print_result("PASS", f"embedder {host}:{port} reachable with {model} (drive vector ON)")
+        _print_result(
+            "PASS", f"embedder {host}:{port} reachable with {model} (drive vector ON)"
+        )
         return {"WW_EMBEDDING_URL": url}
     gateway = _wsl_default_gateway()
     if gateway and _probe_ollama(gateway, port, model=model):
         resolved = parsed._replace(netloc=f"{gateway}:{port}").geturl()
-        _print_result("PASS", f"embedder {host} unavailable for {model} -> WSL gateway {gateway} (drive vector ON)")
+        _print_result(
+            "PASS",
+            f"embedder {host} unavailable for {model} -> WSL gateway {gateway} (drive vector ON)",
+        )
         return {"WW_EMBEDDING_URL": resolved}
-    _print_result("WARN", f"embedder {host} missing/unreachable for {model}, no gateway fallback (drive vector OFF -> neutral affect)")
+    _print_result(
+        "WARN",
+        f"embedder {host} missing/unreachable for {model}, no gateway fallback (drive vector OFF -> neutral affect)",
+    )
     return {"WW_EMBEDDING_URL": url}
 
 
@@ -354,7 +415,9 @@ def _resolve_world_shard(shards: list[ShardSpec]) -> ShardSpec | None:
     return None
 
 
-def _resolve_city_shard(shards: list[ShardSpec], requested: str | None) -> ShardSpec | None:
+def _resolve_city_shard(
+    shards: list[ShardSpec], requested: str | None
+) -> ShardSpec | None:
     city_shards = [shard for shard in shards if shard.shard_type != "world"]
     if not city_shards:
         return None
@@ -363,14 +426,20 @@ def _resolve_city_shard(shards: list[ShardSpec], requested: str | None) -> Shard
     if requested_key:
         requested_lower = requested_key.lower()
         for shard in city_shards:
-            if shard.dir_name.lower() == requested_lower or str(shard.city_id or "").lower() == requested_lower:
+            if (
+                shard.dir_name.lower() == requested_lower
+                or str(shard.city_id or "").lower() == requested_lower
+            ):
                 return shard
         return None
 
     preferred = os.environ.get("WW_DEV_CITY_SHARD", "").strip().lower()
     if preferred:
         for shard in city_shards:
-            if shard.dir_name.lower() == preferred or str(shard.city_id or "").lower() == preferred:
+            if (
+                shard.dir_name.lower() == preferred
+                or str(shard.city_id or "").lower() == preferred
+            ):
                 return shard
 
     # Alderbank is the maintained playable default. Keep SFO as the fallback
@@ -468,7 +537,9 @@ def _backend_container_health_status(shard: ShardSpec) -> str:
     return str(result.stdout or "").strip().lower()
 
 
-def _wait_for_backend_health(shard: ShardSpec, *, label: str, timeout_seconds: float = 120.0) -> bool:
+def _wait_for_backend_health(
+    shard: ShardSpec, *, label: str, timeout_seconds: float = 120.0
+) -> bool:
     url = f"{_local_backend_url(shard)}/health"
     deadline = time.time() + timeout_seconds
     last_error: str | None = None
@@ -481,15 +552,23 @@ def _wait_for_backend_health(shard: ShardSpec, *, label: str, timeout_seconds: f
             last_error = str(exc)
             container_status = _backend_container_health_status(shard)
             if container_status == "healthy":
-                _print_result("PASS", f"{label} healthy via docker: {_backend_container_name(shard)}")
+                _print_result(
+                    "PASS",
+                    f"{label} healthy via docker: {_backend_container_name(shard)}",
+                )
                 return True
             time.sleep(1.0)
     if last_error:
         container_status = _backend_container_health_status(shard)
         suffix = f" (container={container_status})" if container_status else ""
-        _print_result("FAIL", f"{label} did not become healthy within {int(timeout_seconds)}s: {last_error}{suffix}")
+        _print_result(
+            "FAIL",
+            f"{label} did not become healthy within {int(timeout_seconds)}s: {last_error}{suffix}",
+        )
     else:
-        _print_result("FAIL", f"{label} did not become healthy within {int(timeout_seconds)}s")
+        _print_result(
+            "FAIL", f"{label} did not become healthy within {int(timeout_seconds)}s"
+        )
     return False
 
 
@@ -532,7 +611,13 @@ def _seed_city_shard(shard: ShardSpec, *, dry_run: bool) -> int:
     return _run(cmd, cwd=ROOT)
 
 
-def _restart_city_agent(compose_cmd: list[str], shard: ShardSpec, *, build: bool, env: dict[str, str] | None = None) -> int:
+def _restart_city_agent(
+    compose_cmd: list[str],
+    shard: ShardSpec,
+    *,
+    build: bool,
+    env: dict[str, str] | None = None,
+) -> int:
     args = ["up", "-d"]
     if build:
         args.append("--build")
@@ -614,10 +699,18 @@ def _federation_auth_headers(
 
 def _registry_shard_id(shard: ShardSpec) -> str:
     env_values = _shard_env(shard)
-    return str(env_values.get("SHARD_ID") or shard.shard_id or env_values.get("CITY_ID") or shard.city_id or shard.dir_name).strip()
+    return str(
+        env_values.get("SHARD_ID")
+        or shard.shard_id
+        or env_values.get("CITY_ID")
+        or shard.city_id
+        or shard.dir_name
+    ).strip()
 
 
-def _list_federation_shards(world_shard: ShardSpec, city_shard: ShardSpec) -> list[dict[str, object]] | None:
+def _list_federation_shards(
+    world_shard: ShardSpec, city_shard: ShardSpec
+) -> list[dict[str, object]] | None:
     registry_url = _world_registry_url(world_shard, city_shard)
     try:
         payload = _request_json(f"{registry_url}/api/federation/shards")
@@ -631,7 +724,9 @@ def _list_federation_shards(world_shard: ShardSpec, city_shard: ShardSpec) -> li
     return [item for item in shards if isinstance(item, dict)]
 
 
-def _registered_shard_entry(world_shard: ShardSpec, city_shard: ShardSpec) -> dict[str, object] | None:
+def _registered_shard_entry(
+    world_shard: ShardSpec, city_shard: ShardSpec
+) -> dict[str, object] | None:
     registry_id = _registry_shard_id(city_shard)
     for item in _list_federation_shards(world_shard, city_shard) or []:
         if str(item.get("shard_id") or "").strip() == registry_id:
@@ -641,20 +736,38 @@ def _registered_shard_entry(world_shard: ShardSpec, city_shard: ShardSpec) -> di
 
 def _city_travel_readiness(city_shard: ShardSpec) -> TravelReadiness:
     try:
-        payload = _request_json(f"{_local_backend_url(city_shard)}/api/world/travel/destinations")
+        payload = _request_json(
+            f"{_local_backend_url(city_shard)}/api/world/travel/destinations"
+        )
     except Exception:
         return TravelReadiness(False, False, False, 0, 0, 0, 0)
     if not isinstance(payload, dict):
         return TravelReadiness(False, False, False, 0, 0, 0, 0)
 
-    registry = payload.get("registry") if isinstance(payload.get("registry"), dict) else {}
-    routes = [route for route in list(payload.get("destinations") or []) if isinstance(route, dict)]
-    available_routes = [route for route in routes if str(route.get("availability") or "").strip() == "available"]
+    registry = (
+        payload.get("registry") if isinstance(payload.get("registry"), dict) else {}
+    )
+    routes = [
+        route
+        for route in list(payload.get("destinations") or [])
+        if isinstance(route, dict)
+    ]
+    available_routes = [
+        route
+        for route in routes
+        if str(route.get("availability") or "").strip() == "available"
+    ]
     live_nodes = {
-        (str(node.get("shard_id") or "").strip(), str(node.get("shard_url") or "").strip())
+        (
+            str(node.get("shard_id") or "").strip(),
+            str(node.get("shard_url") or "").strip(),
+        )
         for route in available_routes
         for node in list(route.get("nodes") or [])
-        if isinstance(node, dict) and str(node.get("status") or "").strip() in {"healthy", "degraded"} and str(node.get("shard_id") or "").strip() and str(node.get("shard_url") or "").strip()
+        if isinstance(node, dict)
+        and str(node.get("status") or "").strip() in {"healthy", "degraded"}
+        and str(node.get("shard_id") or "").strip()
+        and str(node.get("shard_url") or "").strip()
     }
     reachable_nodes: set[str] = set()
     for shard_id, shard_url in live_nodes:
@@ -675,7 +788,9 @@ def _city_travel_readiness(city_shard: ShardSpec) -> TravelReadiness:
     )
 
 
-def _register_city_shard(world_shard: ShardSpec, city_shard: ShardSpec, *, dry_run: bool) -> bool:
+def _register_city_shard(
+    world_shard: ShardSpec, city_shard: ShardSpec, *, dry_run: bool
+) -> bool:
     registry_url = _world_registry_url(world_shard, city_shard)
     path = "/api/federation/register"
     payload = {
@@ -685,9 +800,14 @@ def _register_city_shard(world_shard: ShardSpec, city_shard: ShardSpec, *, dry_r
         "shard_type": "city",
         "city_id": city_shard.city_id,
     }
-    _print_result("INFO", f"registering city shard with federation root: {registry_url}/api/federation/register")
+    _print_result(
+        "INFO",
+        f"registering city shard with federation root: {registry_url}/api/federation/register",
+    )
     if dry_run:
-        _print_result("INFO", f"dry-run register payload: {json.dumps(payload, sort_keys=True)}")
+        _print_result(
+            "INFO", f"dry-run register payload: {json.dumps(payload, sort_keys=True)}"
+        )
         return True
     headers = _federation_auth_headers(
         world_shard,
@@ -706,7 +826,9 @@ def _register_city_shard(world_shard: ShardSpec, city_shard: ShardSpec, *, dry_r
             timeout=15.0,
         )
     except Exception as exc:
-        _print_result("WARN", f"federation register failed for {city_shard.dir_name}: {exc}")
+        _print_result(
+            "WARN", f"federation register failed for {city_shard.dir_name}: {exc}"
+        )
         return False
     _print_result("PASS", f"city shard registered: {_registry_shard_id(city_shard)}")
     return True
@@ -722,9 +844,16 @@ def _wait_for_federation_registration(
     last_status = "missing"
     while time.time() < deadline:
         entry = _registered_shard_entry(world_shard, city_shard)
-        last_status = str(entry.get("status") or "unknown").strip() if entry is not None else "missing"
+        last_status = (
+            str(entry.get("status") or "unknown").strip()
+            if entry is not None
+            else "missing"
+        )
         if last_status in {"healthy", "degraded"}:
-            _print_result("PASS", f"federation sees {_registry_shard_id(city_shard)} as {last_status}")
+            _print_result(
+                "PASS",
+                f"federation sees {_registry_shard_id(city_shard)} as {last_status}",
+            )
             return True
         time.sleep(1.0)
     _print_result(
@@ -734,13 +863,20 @@ def _wait_for_federation_registration(
     return False
 
 
-def _deregister_city_shard(world_shard: ShardSpec, city_shard: ShardSpec, *, dry_run: bool) -> bool:
+def _deregister_city_shard(
+    world_shard: ShardSpec, city_shard: ShardSpec, *, dry_run: bool
+) -> bool:
     registry_url = _world_registry_url(world_shard, city_shard)
     path = "/api/federation/deregister"
     payload = {"shard_id": _registry_shard_id(city_shard)}
-    _print_result("INFO", f"deregistering city shard from federation root: {registry_url}/api/federation/deregister")
+    _print_result(
+        "INFO",
+        f"deregistering city shard from federation root: {registry_url}/api/federation/deregister",
+    )
     if dry_run:
-        _print_result("INFO", f"dry-run deregister payload: {json.dumps(payload, sort_keys=True)}")
+        _print_result(
+            "INFO", f"dry-run deregister payload: {json.dumps(payload, sort_keys=True)}"
+        )
         return True
     headers = _federation_auth_headers(
         world_shard,
@@ -759,12 +895,20 @@ def _deregister_city_shard(world_shard: ShardSpec, city_shard: ShardSpec, *, dry
         )
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
-            _print_result("WARN", f"city shard not registered at shutdown: {_registry_shard_id(city_shard)}")
+            _print_result(
+                "WARN",
+                f"city shard not registered at shutdown: {_registry_shard_id(city_shard)}",
+            )
             return True
-        _print_result("WARN", f"federation deregister failed for {city_shard.dir_name}: HTTP {exc.code}")
+        _print_result(
+            "WARN",
+            f"federation deregister failed for {city_shard.dir_name}: HTTP {exc.code}",
+        )
         return False
     except Exception as exc:
-        _print_result("WARN", f"federation deregister failed for {city_shard.dir_name}: {exc}")
+        _print_result(
+            "WARN", f"federation deregister failed for {city_shard.dir_name}: {exc}"
+        )
         return False
     _print_result("PASS", f"city shard deregistered: {_registry_shard_id(city_shard)}")
     return True
@@ -784,12 +928,16 @@ def _print_weave_status_for_shard(
     if not running:
         return False
 
-    healthy = _wait_for_backend_health(city_shard, label=f"{city_shard.dir_name} backend", timeout_seconds=1.0)
+    healthy = _wait_for_backend_health(
+        city_shard, label=f"{city_shard.dir_name} backend", timeout_seconds=1.0
+    )
     if not healthy:
         return False
 
     place_count = _city_place_count(city_shard)
-    seeded_message = "unknown" if place_count is None else ("yes" if place_count > 0 else "no")
+    seeded_message = (
+        "unknown" if place_count is None else ("yes" if place_count > 0 else "no")
+    )
     if place_count is None:
         _print_result("INFO", "  seeded: unknown")
     else:
@@ -810,15 +958,30 @@ def _print_weave_status_for_shard(
     else:
         _print_result(
             "INFO",
-            f"  federation discovery: {'reachable' if travel.registry_reachable else 'unreachable'} " f"({travel.available_route_count}/{travel.route_count} routes available, " f"{travel.reachable_node_count}/{travel.live_node_count} destination nodes directly reachable)",
+            f"  federation discovery: {'reachable' if travel.registry_reachable else 'unreachable'} "
+            f"({travel.available_route_count}/{travel.route_count} routes available, "
+            f"{travel.reachable_node_count}/{travel.live_node_count} destination nodes directly reachable)",
         )
 
-    registry_status = str(registry_entry.get("status") or "").strip() if registry_entry is not None else ""
-    base_ready = bool(place_count and registry_entry is not None and registry_status in {"healthy", "degraded"} and travel.readable and travel.registry_configured and travel.registry_reachable)
+    registry_status = (
+        str(registry_entry.get("status") or "").strip()
+        if registry_entry is not None
+        else ""
+    )
+    base_ready = bool(
+        place_count
+        and registry_entry is not None
+        and registry_status in {"healthy", "degraded"}
+        and travel.readable
+        and travel.registry_configured
+        and travel.registry_reachable
+    )
     return base_ready and (travel.ready if require_travel else True)
 
 
-def _client_proxy_env(*, world_shard: ShardSpec, city_shard: ShardSpec, all_shards: list[ShardSpec]) -> dict[str, str]:
+def _client_proxy_env(
+    *, world_shard: ShardSpec, city_shard: ShardSpec, all_shards: list[ShardSpec]
+) -> dict[str, str]:
     env = {
         "VITE_PROXY_TARGET": _docker_network_backend_url(city_shard),
         "VITE_DEFAULT_SHARD_PREFIX": _client_shard_prefix(city_shard),
@@ -836,7 +999,9 @@ def _client_proxy_env(*, world_shard: ShardSpec, city_shard: ShardSpec, all_shar
     return env
 
 
-def _client_host_env(*, world_shard: ShardSpec, city_shard: ShardSpec, all_shards: list[ShardSpec]) -> dict[str, str]:
+def _client_host_env(
+    *, world_shard: ShardSpec, city_shard: ShardSpec, all_shards: list[ShardSpec]
+) -> dict[str, str]:
     env = {
         "VITE_PROXY_TARGET": _local_backend_url(city_shard),
         "VITE_DEFAULT_SHARD_PREFIX": _client_shard_prefix(city_shard),
@@ -854,19 +1019,44 @@ def _client_host_env(*, world_shard: ShardSpec, city_shard: ShardSpec, all_shard
     return env
 
 
-def _print_weave_summary(*, world_shard: ShardSpec, city_shard: ShardSpec, client_started: bool, agents_started: bool) -> None:
+def _print_weave_summary(
+    *,
+    world_shard: ShardSpec,
+    city_shard: ShardSpec,
+    client_started: bool,
+    agents_started: bool,
+) -> None:
     _print_result("INFO", "Shard-first dev runtime")
-    _print_result("INFO", f"world root: {world_shard.dir_name} -> {_local_backend_url(world_shard)}")
-    _print_result("INFO", f"city shard: {city_shard.dir_name} ({city_shard.display_name}) -> {_local_backend_url(city_shard)}")
+    _print_result(
+        "INFO",
+        f"world root: {world_shard.dir_name} -> {_local_backend_url(world_shard)}",
+    )
+    _print_result(
+        "INFO",
+        f"city shard: {city_shard.dir_name} ({city_shard.display_name}) -> {_local_backend_url(city_shard)}",
+    )
     if client_started:
         _print_result("INFO", f"public client: http://localhost:{PUBLIC_CLIENT_PORT}")
-        _print_result("INFO", f"default client API target: {_local_backend_url(city_shard)}")
+        _print_result(
+            "INFO", f"default client API target: {_local_backend_url(city_shard)}"
+        )
     if agents_started:
-        _print_result("INFO", "agents: requested; they will start after backend seed and registration checks")
+        _print_result(
+            "INFO",
+            "agents: requested; they will start after backend seed and registration checks",
+        )
     else:
-        _print_result("INFO", "agents: not started (pass --agents when you intend to wake residents)")
-    _print_result("INFO", f"world registry proxy target: {_local_backend_url(world_shard)}")
-    _print_result("INFO", f"use 'python scripts/dev.py weave-logs --city {city_shard.dir_name}' to inspect stack logs")
+        _print_result(
+            "INFO",
+            "agents: not started (pass --agents when you intend to wake residents)",
+        )
+    _print_result(
+        "INFO", f"world registry proxy target: {_local_backend_url(world_shard)}"
+    )
+    _print_result(
+        "INFO",
+        f"use 'python scripts/dev.py weave-logs --city {city_shard.dir_name}' to inspect stack logs",
+    )
 
 
 def _list_running_compose_projects(compose_cmd: list[str]) -> list[dict[str, str]]:
@@ -925,7 +1115,10 @@ def _warn_for_running_project_conflicts(
     if include_client:
         intended.add(CLIENT_PROJECT)
 
-    running_names = {str(item.get("Name") or item.get("name") or "").strip() for item in running_projects}
+    running_names = {
+        str(item.get("Name") or item.get("name") or "").strip()
+        for item in running_projects
+    }
     running_names.discard("")
 
     already_running = sorted(name for name in intended if name in running_names)
@@ -938,7 +1131,11 @@ def _warn_for_running_project_conflicts(
             "legacy engine-root compose project 'worldweaver_engine' is already running. It can conflict with shard-first runtime assumptions.",
         )
 
-    unrelated_shards = sorted(shard.dir_name for shard in _load_shard_specs() if shard.dir_name not in intended and shard.dir_name in running_names)
+    unrelated_shards = sorted(
+        shard.dir_name
+        for shard in _load_shard_specs()
+        if shard.dir_name not in intended and shard.dir_name in running_names
+    )
     for project_name in unrelated_shards:
         _print_result(
             "WARN",
@@ -952,9 +1149,18 @@ def _running_city_shard_projects(
     exclude: set[str] | None = None,
 ) -> list[ShardSpec]:
     exclude_names = {name.strip() for name in (exclude or set()) if str(name).strip()}
-    running_names = {str(item.get("Name") or item.get("name") or "").strip() for item in _list_running_compose_projects(compose_cmd)}
+    running_names = {
+        str(item.get("Name") or item.get("name") or "").strip()
+        for item in _list_running_compose_projects(compose_cmd)
+    }
     running_names.discard("")
-    return [shard for shard in _load_shard_specs() if shard.shard_type != "world" and shard.dir_name in running_names and shard.dir_name not in exclude_names]
+    return [
+        shard
+        for shard in _load_shard_specs()
+        if shard.shard_type != "world"
+        and shard.dir_name in running_names
+        and shard.dir_name not in exclude_names
+    ]
 
 
 def _shard_depth(shard: ShardSpec) -> int:
@@ -988,8 +1194,13 @@ def _ordered_unique_city_shards(shards: list[ShardSpec]) -> list[ShardSpec]:
     return unique
 
 
-def _registration_needs_refresh(entry: dict[str, object] | None, shard: ShardSpec) -> bool:
-    if entry is None or str(entry.get("status") or "").strip() not in {"healthy", "degraded"}:
+def _registration_needs_refresh(
+    entry: dict[str, object] | None, shard: ShardSpec
+) -> bool:
+    if entry is None or str(entry.get("status") or "").strip() not in {
+        "healthy",
+        "degraded",
+    }:
         return True
     env_values = _shard_env(shard)
     configured_key = str(env_values.get("WW_NODE_PRIVATE_KEY_PATH") or "").strip()
@@ -1002,11 +1213,15 @@ def _registration_needs_refresh(entry: dict[str, object] | None, shard: ShardSpe
                 sys.path.insert(0, str(ROOT))
             from src.services.federation_node_auth import public_key_for_private_key
 
-            if str(entry.get("public_key") or "").strip() != public_key_for_private_key(key_path):
+            if str(entry.get("public_key") or "").strip() != public_key_for_private_key(
+                key_path
+            ):
                 return True
     registered_api = str(entry.get("shard_url") or "").rstrip("/")
     registered_client = str(entry.get("client_url") or "").rstrip("/")
-    return registered_api != _docker_host_backend_url(shard).rstrip("/") or registered_client != _shard_client_url(shard).rstrip("/")
+    return registered_api != _docker_host_backend_url(shard).rstrip(
+        "/"
+    ) or registered_client != _shard_client_url(shard).rstrip("/")
 
 
 def run_install() -> int:
@@ -1095,7 +1310,9 @@ def run_preflight(*, require_docker: bool = False) -> int:
             "docker compose unavailable (install Docker Desktop or docker-compose)",
         )
     else:
-        _print_result("WARN", "docker compose not found (optional for manual runtime path)")
+        _print_result(
+            "WARN", "docker compose not found (optional for manual runtime path)"
+        )
 
     # Env file checks
     if ENV_FILE.exists():
@@ -1146,7 +1363,15 @@ def run_stack_up(*, build: bool) -> int:
         _print_result("FAIL", "docker compose command unavailable")
         return 1
 
-    cmd = [*compose_cmd, "-p", "worldweaver_engine", "-f", str(LEGACY_STACK_COMPOSE_FILE), "up", "-d"]
+    cmd = [
+        *compose_cmd,
+        "-p",
+        "worldweaver_engine",
+        "-f",
+        str(LEGACY_STACK_COMPOSE_FILE),
+        "up",
+        "-d",
+    ]
     if build:
         cmd.append("--build")
     return _run(cmd, cwd=WORKSPACE_ROOT)
@@ -1159,7 +1384,14 @@ def run_stack_restart(*, service: str | None) -> int:
         _print_result("FAIL", "docker compose command unavailable")
         return 1
 
-    cmd = [*compose_cmd, "-p", "worldweaver_engine", "-f", str(LEGACY_STACK_COMPOSE_FILE), "restart"]
+    cmd = [
+        *compose_cmd,
+        "-p",
+        "worldweaver_engine",
+        "-f",
+        str(LEGACY_STACK_COMPOSE_FILE),
+        "restart",
+    ]
     if service:
         cmd.append(service)
     return _run(cmd, cwd=WORKSPACE_ROOT)
@@ -1172,7 +1404,15 @@ def run_stack_down(*, volumes: bool) -> int:
         _print_result("FAIL", "docker compose command unavailable")
         return 1
 
-    cmd = [*compose_cmd, "-p", "worldweaver_engine", "-f", str(LEGACY_STACK_COMPOSE_FILE), "down", "--remove-orphans"]
+    cmd = [
+        *compose_cmd,
+        "-p",
+        "worldweaver_engine",
+        "-f",
+        str(LEGACY_STACK_COMPOSE_FILE),
+        "down",
+        "--remove-orphans",
+    ]
     if volumes:
         cmd.append("--volumes")
     return _run(cmd, cwd=WORKSPACE_ROOT)
@@ -1198,7 +1438,9 @@ def run_stack_tunnel(*, build: bool) -> int:
         _print_result("FAIL", "cloudflared not found — install it first:")
         print("  Windows: winget install Cloudflare.cloudflared")
         print("  macOS:   brew install cloudflare/cloudflare/cloudflared")
-        print("  Linux:   https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/")
+        print(
+            "  Linux:   https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/"
+        )
         return 1
 
     # Start the docker stack first
@@ -1248,7 +1490,14 @@ def run_stack_logs(*, service: str | None, follow: bool) -> int:
         _print_result("FAIL", "docker compose command unavailable")
         return 1
 
-    cmd = [*compose_cmd, "-p", "worldweaver_engine", "-f", str(LEGACY_STACK_COMPOSE_FILE), "logs"]
+    cmd = [
+        *compose_cmd,
+        "-p",
+        "worldweaver_engine",
+        "-f",
+        str(LEGACY_STACK_COMPOSE_FILE),
+        "logs",
+    ]
     if follow:
         cmd.append("--follow")
     if service:
@@ -1286,7 +1535,9 @@ def run_weave_up(
     failures = 0
     failures += _validate_shard_spec(world_shard, label="world shard")
     for target in city_targets:
-        failures += _validate_shard_spec(target, label=f"city shard ({target.dir_name})")
+        failures += _validate_shard_spec(
+            target, label=f"city shard ({target.dir_name})"
+        )
     if include_client and not CLIENT_COMPOSE_FILE.exists():
         _print_result("FAIL", f"client compose file missing: {CLIENT_COMPOSE_FILE}")
         failures += 1
@@ -1310,7 +1561,9 @@ def run_weave_up(
         include_client=include_client,
     )
 
-    client_env = _client_proxy_env(world_shard=world_shard, city_shard=city_shard, all_shards=shards)
+    client_env = _client_proxy_env(
+        world_shard=world_shard, city_shard=city_shard, all_shards=shards
+    )
 
     _print_weave_summary(
         world_shard=world_shard,
@@ -1321,21 +1574,49 @@ def run_weave_up(
     if all_cities:
         _print_result(
             "INFO",
-            "fan-out city order: " + ", ".join(f"{target.dir_name}[depth={_shard_depth(target)}]" for target in city_targets),
+            "fan-out city order: "
+            + ", ".join(
+                f"{target.dir_name}[depth={_shard_depth(target)}]"
+                for target in city_targets
+            ),
         )
     if dry_run:
-        _print_result("INFO", f"dry-run world command: {' '.join([*compose_cmd, '-p', world_shard.dir_name, '-f', str(world_shard.compose_file), *world_args])}")
+        _print_result(
+            "INFO",
+            f"dry-run world command: {' '.join([*compose_cmd, '-p', world_shard.dir_name, '-f', str(world_shard.compose_file), *world_args])}",
+        )
         for target in city_targets:
-            _print_result("INFO", f"dry-run city command: {' '.join([*compose_cmd, '-p', target.dir_name, '-f', str(target.compose_file), *city_args])}")
-        _print_result("INFO", f"dry-run readiness check: wait for {_local_backend_url(world_shard)}/health")
+            _print_result(
+                "INFO",
+                f"dry-run city command: {' '.join([*compose_cmd, '-p', target.dir_name, '-f', str(target.compose_file), *city_args])}",
+            )
+        _print_result(
+            "INFO",
+            f"dry-run readiness check: wait for {_local_backend_url(world_shard)}/health",
+        )
         for target in city_targets:
-            _print_result("INFO", f"dry-run readiness check: wait for {_local_backend_url(target)}/health")
-            _print_result("INFO", f"dry-run non-destructive seed if needed: {sys.executable} scripts/seed_world.py --shard-dir {target.shard_dir} --no-reset --no-residents")
-            _print_result("INFO", f"dry-run auto-register if needed: {_world_registry_url(world_shard, target)}/api/federation/register")
+            _print_result(
+                "INFO",
+                f"dry-run readiness check: wait for {_local_backend_url(target)}/health",
+            )
+            _print_result(
+                "INFO",
+                f"dry-run non-destructive seed if needed: {sys.executable} scripts/seed_world.py --shard-dir {target.shard_dir} --no-reset --no-residents",
+            )
+            _print_result(
+                "INFO",
+                f"dry-run auto-register if needed: {_world_registry_url(world_shard, target)}/api/federation/register",
+            )
             if start_agents:
-                _print_result("INFO", f"dry-run agent command after readiness: {' '.join([*compose_cmd, '-p', target.dir_name, '-f', str(target.compose_file), 'up', '-d', 'agent'])}")
+                _print_result(
+                    "INFO",
+                    f"dry-run agent command after readiness: {' '.join([*compose_cmd, '-p', target.dir_name, '-f', str(target.compose_file), 'up', '-d', 'agent'])}",
+                )
         if include_client:
-            _print_result("INFO", f"dry-run client command: {' '.join([*compose_cmd, '-p', CLIENT_PROJECT, '-f', str(CLIENT_COMPOSE_FILE), *client_args])}")
+            _print_result(
+                "INFO",
+                f"dry-run client command: {' '.join([*compose_cmd, '-p', CLIENT_PROJECT, '-f', str(CLIENT_COMPOSE_FILE), *client_args])}",
+            )
         return 0
 
     world_rc = _compose(
@@ -1346,7 +1627,9 @@ def run_weave_up(
     )
     if world_rc != 0:
         return world_rc
-    if not dry_run and not _wait_for_backend_health(world_shard, label=f"{world_shard.dir_name} backend"):
+    if not dry_run and not _wait_for_backend_health(
+        world_shard, label=f"{world_shard.dir_name} backend"
+    ):
         return 1
 
     for target in city_targets:
@@ -1359,7 +1642,9 @@ def run_weave_up(
         )
         if city_rc != 0:
             return city_rc
-        if not dry_run and not _wait_for_backend_health(target, label=f"{target.dir_name} backend"):
+        if not dry_run and not _wait_for_backend_health(
+            target, label=f"{target.dir_name} backend"
+        ):
             return 1
 
         seeded = _city_is_seeded(target)
@@ -1367,21 +1652,34 @@ def run_weave_up(
             seed_rc = _seed_city_shard(target, dry_run=dry_run)
             if seed_rc != 0:
                 return seed_rc
-            if not _wait_for_backend_health(target, label=f"{target.dir_name} backend after seed"):
+            if not _wait_for_backend_health(
+                target, label=f"{target.dir_name} backend after seed"
+            ):
                 return 1
         elif seeded is None:
-            _print_result("WARN", f"could not determine seeded state for {target.dir_name}; skipping auto-seed")
+            _print_result(
+                "WARN",
+                f"could not determine seeded state for {target.dir_name}; skipping auto-seed",
+            )
 
         registry_entry = _registered_shard_entry(world_shard, target)
         if _registration_needs_refresh(registry_entry, target):
             if not _register_city_shard(world_shard, target, dry_run=False):
-                _print_result("FAIL", f"agents remain stopped because registration failed: {target.dir_name}")
+                _print_result(
+                    "FAIL",
+                    f"agents remain stopped because registration failed: {target.dir_name}",
+                )
                 return 1
         else:
-            _print_result("PASS", f"city shard already registered: {_registry_shard_id(target)}")
+            _print_result(
+                "PASS", f"city shard already registered: {_registry_shard_id(target)}"
+            )
 
         if not _wait_for_federation_registration(world_shard, target):
-            _print_result("FAIL", f"agents remain stopped because federation readiness failed: {target.dir_name}")
+            _print_result(
+                "FAIL",
+                f"agents remain stopped because federation readiness failed: {target.dir_name}",
+            )
             return 1
 
         if start_agents:
@@ -1389,7 +1687,12 @@ def run_weave_up(
             # An unreachable embedder silently disables the drive vector, so keep this check
             # immediately beside the agent start rather than coupling it to backend readiness.
             embedder_env = _resolve_embedder_env(target)
-            if _restart_city_agent(compose_cmd, target, build=build, env=embedder_env or None) != 0:
+            if (
+                _restart_city_agent(
+                    compose_cmd, target, build=build, env=embedder_env or None
+                )
+                != 0
+            ):
                 return 1
             _print_result("PASS", f"agents started after readiness: {target.dir_name}")
 
@@ -1425,7 +1728,9 @@ def run_weave_down(
     world_shard = _resolve_world_shard(shards)
     city_shard = _resolve_city_shard(shards, city)
     if world_shard is None or city_shard is None:
-        _print_result("FAIL", "could not resolve world shard and city shard for weave-down")
+        _print_result(
+            "FAIL", "could not resolve world shard and city shard for weave-down"
+        )
         return 1
 
     down_args = ["down", "--remove-orphans"]
@@ -1446,10 +1751,19 @@ def run_weave_down(
         for target in city_targets:
             _deregister_city_shard(world_shard, target, dry_run=True)
         for target in city_targets:
-            _print_result("INFO", f"dry-run city down: {' '.join([*compose_cmd, '-p', target.dir_name, '-f', str(target.compose_file), *down_args])}")
-        _print_result("INFO", f"dry-run world down: {' '.join([*compose_cmd, '-p', world_shard.dir_name, '-f', str(world_shard.compose_file), *down_args])}")
+            _print_result(
+                "INFO",
+                f"dry-run city down: {' '.join([*compose_cmd, '-p', target.dir_name, '-f', str(target.compose_file), *down_args])}",
+            )
+        _print_result(
+            "INFO",
+            f"dry-run world down: {' '.join([*compose_cmd, '-p', world_shard.dir_name, '-f', str(world_shard.compose_file), *down_args])}",
+        )
         if include_client:
-            _print_result("INFO", f"dry-run client down: {' '.join([*compose_cmd, '-p', CLIENT_PROJECT, '-f', str(CLIENT_COMPOSE_FILE), *client_args])}")
+            _print_result(
+                "INFO",
+                f"dry-run client down: {' '.join([*compose_cmd, '-p', CLIENT_PROJECT, '-f', str(CLIENT_COMPOSE_FILE), *client_args])}",
+            )
         if not all_cities:
             leftovers = _running_city_shard_projects(
                 compose_cmd=compose_cmd,
@@ -1508,7 +1822,9 @@ def run_weave_down(
     return 0
 
 
-def run_weave_status(*, city: str | None, all_cities: bool, strict: bool, require_travel: bool) -> int:
+def run_weave_status(
+    *, city: str | None, all_cities: bool, strict: bool, require_travel: bool
+) -> int:
     compose_cmd = _resolve_compose_command()
     if not compose_cmd:
         _print_result("FAIL", "docker compose command unavailable")
@@ -1525,15 +1841,25 @@ def run_weave_status(*, city: str | None, all_cities: bool, strict: bool, requir
         _print_result("FAIL", f"city shard not found{requested} under {SHARDS_ROOT}")
         return 1
 
-    running_projects = {str(item.get("Name") or item.get("name") or "").strip() for item in _list_running_compose_projects(compose_cmd) if isinstance(item, dict)}
+    running_projects = {
+        str(item.get("Name") or item.get("name") or "").strip()
+        for item in _list_running_compose_projects(compose_cmd)
+        if isinstance(item, dict)
+    }
     running_projects.discard("")
 
     _print_result("INFO", f"world shard: {world_shard.dir_name}")
     world_running = world_shard.dir_name in running_projects
     _print_result("INFO", f"  running: {'yes' if world_running else 'no'}")
-    world_healthy = world_running and _wait_for_backend_health(world_shard, label=f"{world_shard.dir_name} backend", timeout_seconds=1.0)
+    world_healthy = world_running and _wait_for_backend_health(
+        world_shard, label=f"{world_shard.dir_name} backend", timeout_seconds=1.0
+    )
 
-    city_targets = [shard for shard in shards if shard.shard_type != "world"] if all_cities else [city_shard]
+    city_targets = (
+        [shard for shard in shards if shard.shard_type != "world"]
+        if all_cities
+        else [city_shard]
+    )
     cities_ready = True
     for target in city_targets:
         if target is None:
@@ -1553,11 +1879,18 @@ def run_weave_status(*, city: str | None, all_cities: bool, strict: bool, requir
     else:
         _print_result("INFO", "client: not running")
     if strict and not (world_healthy and cities_ready):
-        requirement = "health, seed, registration, federation discovery, and a live route" if require_travel else "health, seed, registration, and federation discovery"
+        requirement = (
+            "health, seed, registration, federation discovery, and a live route"
+            if require_travel
+            else "health, seed, registration, and federation discovery"
+        )
         _print_result("FAIL", f"strict readiness failed; required: {requirement}")
         return 1
     if strict:
-        _print_result("PASS", "strict readiness passed; agent processes were not started or inspected")
+        _print_result(
+            "PASS",
+            "strict readiness passed; agent processes were not started or inspected",
+        )
     return 0
 
 
@@ -1571,7 +1904,9 @@ def run_weave_logs(*, city: str | None, target: str, follow: bool) -> int:
     world_shard = _resolve_world_shard(shards)
     city_shard = _resolve_city_shard(shards, city)
     if world_shard is None or city_shard is None:
-        _print_result("FAIL", "could not resolve world shard and city shard for weave-logs")
+        _print_result(
+            "FAIL", "could not resolve world shard and city shard for weave-logs"
+        )
         return 1
 
     log_args = ["logs"]
@@ -1630,11 +1965,18 @@ def run_weave_client(*, city: str | None, lan: bool) -> int:
     failures += _validate_shard_spec(world_shard, label="world shard")
     failures += _validate_shard_spec(city_shard, label="city shard")
     if failures:
-        _print_result("FAIL", f"weave-client blocked by {failures} configuration issue(s)")
+        _print_result(
+            "FAIL", f"weave-client blocked by {failures} configuration issue(s)"
+        )
         return 1
 
-    env = _client_host_env(world_shard=world_shard, city_shard=city_shard, all_shards=shards)
-    _print_result("INFO", f"starting public client on http://localhost:{PUBLIC_CLIENT_PORT} for {city_shard.dir_name} -> {_local_backend_url(city_shard)}")
+    env = _client_host_env(
+        world_shard=world_shard, city_shard=city_shard, all_shards=shards
+    )
+    _print_result(
+        "INFO",
+        f"starting public client on http://localhost:{PUBLIC_CLIENT_PORT} for {city_shard.dir_name} -> {_local_backend_url(city_shard)}",
+    )
     _print_result("INFO", f"world registry target: {_local_backend_url(world_shard)}")
 
     cmd = ["npm", "--prefix", "client-public", "run", "dev"]
@@ -1654,7 +1996,9 @@ def _collect_db_reset_targets(*, include_test_dbs: bool) -> list[Path]:
         sqlite_path = explicit_db_url.removeprefix("sqlite:///")
         targets.append(Path(sqlite_path))
 
-    custom_path_raw = (os.environ.get("WW_DB_PATH") or env_values.get("WW_DB_PATH") or "").strip()
+    custom_path_raw = (
+        os.environ.get("WW_DB_PATH") or env_values.get("WW_DB_PATH") or ""
+    ).strip()
     if custom_path_raw:
         custom = Path(custom_path_raw)
         if not custom.is_absolute():
@@ -1681,7 +2025,10 @@ def _collect_db_reset_targets(*, include_test_dbs: bool) -> list[Path]:
 def run_reset_data(*, confirm: bool, include_test_dbs: bool) -> int:
     configured_db_url = _resolve_database_url()
     if configured_db_url and not configured_db_url.startswith("sqlite:///"):
-        _print_result("WARN", f"reset-data only deletes local sqlite files; active database URL is {configured_db_url}")
+        _print_result(
+            "WARN",
+            f"reset-data only deletes local sqlite files; active database URL is {configured_db_url}",
+        )
     targets = _collect_db_reset_targets(include_test_dbs=include_test_dbs)
     existing = [path for path in targets if path.exists()]
 
@@ -1707,17 +2054,28 @@ def run_fact_audit(db_url: str | None = None) -> int:
         from sqlalchemy import create_engine
         from sqlalchemy.orm import sessionmaker
     except ImportError:
-        _print_result("FAIL", "sqlalchemy is required for fact-audit (run: pip install sqlalchemy)")
+        _print_result(
+            "FAIL",
+            "sqlalchemy is required for fact-audit (run: pip install sqlalchemy)",
+        )
         return 1
 
     resolved_url = _resolve_database_url(explicit_url=db_url)
 
     if not resolved_url:
-        _print_result("FAIL", "No database URL found. Set WW_DATABASE_URL / DATABASE_URL or ensure a local sqlite DB exists.")
+        _print_result(
+            "FAIL",
+            "No database URL found. Set WW_DATABASE_URL / DATABASE_URL or ensure a local sqlite DB exists.",
+        )
         return 1
 
     try:
-        engine = create_engine(resolved_url, connect_args={"check_same_thread": False} if "sqlite" in resolved_url else {})
+        engine = create_engine(
+            resolved_url,
+            connect_args=(
+                {"check_same_thread": False} if "sqlite" in resolved_url else {}
+            ),
+        )
         Session = sessionmaker(bind=engine)
         with Session() as session:
             # Import here so dev.py can run without a full src install check upfront
@@ -1726,9 +2084,15 @@ def run_fact_audit(db_url: str | None = None) -> int:
 
             report = audit_graph_facts(session)
         print(json.dumps(report, indent=2))
-        anomalies = report["duplicate_entity_key_count"] + report["duplicate_active_fact_count"] + report["orphan_fact_link_count"]
+        anomalies = (
+            report["duplicate_entity_key_count"]
+            + report["duplicate_active_fact_count"]
+            + report["orphan_fact_link_count"]
+        )
         if anomalies > 0:
-            _print_result("WARN", f"fact-audit found {anomalies} anomaly(ies); see report above")
+            _print_result(
+                "WARN", f"fact-audit found {anomalies} anomaly(ies); see report above"
+            )
             return 1
         _print_result("PASS", "fact-audit: no anomalies found")
         return 0
@@ -1748,14 +2112,23 @@ def run_harness_workflow(
     if legacy_alias:
         _print_result(
             "WARN",
-            (f"'{harness_command}' is a legacy alias. " f"Use: python scripts/dev.py harness {harness_command} ..."),
+            (
+                f"'{harness_command}' is a legacy alias. "
+                f"Use: python scripts/dev.py harness {harness_command} ..."
+            ),
         )
 
     if harness_command == "eval":
         return _run([sys.executable, "scripts/eval_narrative.py", "--enforce", *args])
     if harness_command == "eval-smoke":
         return _run(
-            [sys.executable, "scripts/eval_narrative.py", "--smoke", "--enforce", *args],
+            [
+                sys.executable,
+                "scripts/eval_narrative.py",
+                "--smoke",
+                "--enforce",
+                *args,
+            ],
         )
     if harness_command == "sweep":
         return _run([sys.executable, "playtest_harness/parameter_sweep.py", *args])
@@ -1904,14 +2277,23 @@ def main() -> int:
         action="store_true",
         help="expose Vite on all interfaces for LAN access",
     )
-    stack_up_parser = sub.add_parser("stack-up", help="legacy engine-root docker compose stack (prefer weave-up for shard-first dev)")
+    stack_up_parser = sub.add_parser(
+        "stack-up",
+        help="legacy engine-root docker compose stack (prefer weave-up for shard-first dev)",
+    )
     stack_up_parser.add_argument(
         "--build",
         action="store_true",
         help="rebuild images before starting (needed when requirements.txt or package.json change)",
     )
-    stack_restart_parser = sub.add_parser("stack-restart", help="restart running services without rebuild (fast bounce)")
-    stack_restart_parser.add_argument("service", nargs="?", help="optional service name (backend or client); omit for both")
+    stack_restart_parser = sub.add_parser(
+        "stack-restart", help="restart running services without rebuild (fast bounce)"
+    )
+    stack_restart_parser.add_argument(
+        "service",
+        nargs="?",
+        help="optional service name (backend or client); omit for both",
+    )
     stack_tunnel_parser = sub.add_parser(
         "stack-tunnel",
         help="start docker stack and open a Cloudflare quick-tunnel so you can join from any network (mobile data, etc.)",
@@ -1921,14 +2303,20 @@ def main() -> int:
         action="store_true",
         help="rebuild images before starting",
     )
-    stack_down_parser = sub.add_parser("stack-down", help="stop legacy engine-root docker compose dev stack")
+    stack_down_parser = sub.add_parser(
+        "stack-down", help="stop legacy engine-root docker compose dev stack"
+    )
     stack_down_parser.add_argument(
         "--volumes",
         action="store_true",
         help="also remove compose volumes",
     )
-    stack_logs_parser = sub.add_parser("stack-logs", help="view legacy engine-root docker compose logs")
-    stack_logs_parser.add_argument("service", nargs="?", help="optional compose service name")
+    stack_logs_parser = sub.add_parser(
+        "stack-logs", help="view legacy engine-root docker compose logs"
+    )
+    stack_logs_parser.add_argument(
+        "service", nargs="?", help="optional compose service name"
+    )
     stack_logs_parser.add_argument(
         "--follow",
         action="store_true",
@@ -1940,19 +2328,27 @@ def main() -> int:
         action="store_true",
         help="bind to 0.0.0.0 so devices on the local network can reach the server",
     )
-    client_parser = sub.add_parser("client", help="run the public commons client dev server (:5174)")
+    client_parser = sub.add_parser(
+        "client", help="run the public commons client dev server (:5174)"
+    )
     client_parser.add_argument(
         "--lan",
         action="store_true",
         help="expose Vite dev server on all interfaces (for phone/LAN access)",
     )
-    client_public_parser = sub.add_parser("client-public", help="run the public commons client dev server (:5174; VITE_PROXY_TARGET selects the shard)")
+    client_public_parser = sub.add_parser(
+        "client-public",
+        help="run the public commons client dev server (:5174; VITE_PROXY_TARGET selects the shard)",
+    )
     client_public_parser.add_argument(
         "--lan",
         action="store_true",
         help="expose Vite dev server on all interfaces (for phone/LAN access)",
     )
-    client_legacy_parser = sub.add_parser("client-legacy", help="run the retired combined client locally for migration/debug work (:5173)")
+    client_legacy_parser = sub.add_parser(
+        "client-legacy",
+        help="run the retired combined client locally for migration/debug work (:5173)",
+    )
     client_legacy_parser.add_argument(
         "--lan",
         action="store_true",
@@ -1960,7 +2356,9 @@ def main() -> int:
     )
     sub.add_parser("test", help="run backend test suite")
     sub.add_parser("build", help="build the supported public client")
-    sub.add_parser("static", help="run baseline static checks (client build + compileall)")
+    sub.add_parser(
+        "static", help="run baseline static checks (client build + compileall)"
+    )
     lint_parser = sub.add_parser(
         "lint",
         help="run ruff + black checks on explicit paths (or use --all for canonical scope)",
@@ -2021,7 +2419,9 @@ def main() -> int:
         default=None,
         help="SQLAlchemy database URL (defaults to WW_DATABASE_URL / DATABASE_URL or local sqlite fallback)",
     )
-    reset_parser = sub.add_parser("reset-data", help="delete local runtime sqlite data files")
+    reset_parser = sub.add_parser(
+        "reset-data", help="delete local runtime sqlite data files"
+    )
     reset_parser.add_argument(
         "--yes",
         action="store_true",
@@ -2063,7 +2463,9 @@ def main() -> int:
             follow=bool(getattr(args, "follow", False)),
         )
     if args.command == "weave-status":
-        if bool(getattr(args, "require_travel", False)) and not bool(getattr(args, "strict", False)):
+        if bool(getattr(args, "require_travel", False)) and not bool(
+            getattr(args, "strict", False)
+        ):
             parser.error("weave-status --require-travel also requires --strict")
         return run_weave_status(
             city=getattr(args, "city", None),
@@ -2079,7 +2481,9 @@ def main() -> int:
     if args.command == "stack-up":
         return run_stack_up(build=bool(args.build))
     if args.command == "stack-restart":
-        return run_stack_restart(service=(str(args.service).strip() if args.service else None))
+        return run_stack_restart(
+            service=(str(args.service).strip() if args.service else None)
+        )
     if args.command == "stack-tunnel":
         return run_stack_tunnel(build=bool(args.build))
     if args.command == "stack-down":
@@ -2090,7 +2494,15 @@ def main() -> int:
             follow=bool(args.follow),
         )
     if args.command == "backend":
-        cmd = [sys.executable, "-m", "uvicorn", "main:app", "--reload", "--port", "8000"]
+        cmd = [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "main:app",
+            "--reload",
+            "--port",
+            "8000",
+        ]
         if getattr(args, "lan", False):
             cmd += ["--host", "0.0.0.0"]
         return _run(cmd)

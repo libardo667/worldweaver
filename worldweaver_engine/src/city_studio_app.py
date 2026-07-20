@@ -110,7 +110,10 @@ def create_city_studio_app(
     @app.post("/api/drafts", dependencies=authorized, status_code=201)
     def create_draft(payload: CreateDraftRequest) -> dict:
         config_path = (configurations_dir / f"{payload.city}.json").resolve()
-        if config_path.parent != configurations_dir.resolve() or not config_path.is_file():
+        if (
+            config_path.parent != configurations_dir.resolve()
+            or not config_path.is_file()
+        ):
             raise HTTPException(status_code=404, detail="City configuration not found.")
         try:
             source = json.loads(config_path.read_text(encoding="utf-8"))
@@ -129,7 +132,9 @@ def create_city_studio_app(
     def get_map(draft_id: str) -> Response:
         draft = _get_draft_or_error(store, draft_id)
         if draft.preview.generated_map_svg is None:
-            raise HTTPException(status_code=404, detail="This draft has no generated map.")
+            raise HTTPException(
+                status_code=404, detail="This draft has no generated map."
+            )
         return Response(draft.preview.generated_map_svg, media_type="image/svg+xml")
 
     @app.get(
@@ -145,7 +150,9 @@ def create_city_studio_app(
         return Response(path.read_text(encoding="utf-8"), media_type="image/svg+xml")
 
     @app.post("/api/drafts/{draft_id}/sections/{section_id}", dependencies=authorized)
-    def edit_map_section(draft_id: str, section_id: str, payload: SectionEditRequest) -> dict:
+    def edit_map_section(
+        draft_id: str, section_id: str, payload: SectionEditRequest
+    ) -> dict:
         try:
             draft = store.edit_section(
                 draft_id,

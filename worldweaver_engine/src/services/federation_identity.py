@@ -76,7 +76,11 @@ class ActorProjectionBundle:
     @classmethod
     def from_dict(cls, payload: Dict[str, Any]) -> "ActorProjectionBundle":
         raw_pass_expires_at = _parse_iso(
-            str(payload.get("pass_expires_at")).strip() if payload.get("pass_expires_at") else None,
+            (
+                str(payload.get("pass_expires_at")).strip()
+                if payload.get("pass_expires_at")
+                else None
+            ),
         )
         normalized_pass_type, normalized_pass_expires_at = _canonicalize_pass_fields(
             payload.get("pass_type"),
@@ -92,9 +96,21 @@ class ActorProjectionBundle:
             password_hash=str(payload.get("password_hash") or "").strip(),
             pass_type=normalized_pass_type,
             pass_expires_at=_iso(normalized_pass_expires_at),
-            terms_accepted_at=(str(payload.get("terms_accepted_at")).strip() if payload.get("terms_accepted_at") else None),
-            email_verified_at=(str(payload.get("email_verified_at")).strip() if payload.get("email_verified_at") else None),
-            profile_completed_at=(str(payload.get("profile_completed_at")).strip() if payload.get("profile_completed_at") else None),
+            terms_accepted_at=(
+                str(payload.get("terms_accepted_at")).strip()
+                if payload.get("terms_accepted_at")
+                else None
+            ),
+            email_verified_at=(
+                str(payload.get("email_verified_at")).strip()
+                if payload.get("email_verified_at")
+                else None
+            ),
+            profile_completed_at=(
+                str(payload.get("profile_completed_at")).strip()
+                if payload.get("profile_completed_at")
+                else None
+            ),
             home_shard=str(payload.get("home_shard") or "").strip(),
             current_shard=str(payload.get("current_shard") or "").strip(),
             status=str(payload.get("status") or "active").strip() or "active",
@@ -133,7 +149,9 @@ def _parse_iso(value: Optional[str]) -> Optional[datetime]:
     return parsed
 
 
-def _canonicalize_pass_fields(pass_type: Optional[str], _pass_expires_at: Optional[datetime]) -> tuple[str, Optional[datetime]]:
+def _canonicalize_pass_fields(
+    pass_type: Optional[str], _pass_expires_at: Optional[datetime]
+) -> tuple[str, Optional[datetime]]:
     normalized_type = str(pass_type or "").strip() or "citizen"
     if normalized_type == "visitor_7day":
         normalized_type = "citizen"
@@ -149,7 +167,10 @@ def _build_bundle(db: Session, actor_id: str) -> ActorProjectionBundle:
         auth.pass_type,
         auth.pass_expires_at,
     )
-    if auth.pass_type != normalized_pass_type or auth.pass_expires_at != normalized_pass_expires_at:
+    if (
+        auth.pass_type != normalized_pass_type
+        or auth.pass_expires_at != normalized_pass_expires_at
+    ):
         auth.pass_type = normalized_pass_type
         auth.pass_expires_at = normalized_pass_expires_at
         db.commit()
@@ -188,11 +209,17 @@ def register_human_actor_local(
 ) -> ActorProjectionBundle:
     if db.query(FederationActorAuth).filter(FederationActorAuth.email == email).first():
         raise HTTPException(status_code=409, detail="email_taken")
-    if db.query(FederationActorAuth).filter(FederationActorAuth.username == username).first():
+    if (
+        db.query(FederationActorAuth)
+        .filter(FederationActorAuth.username == username)
+        .first()
+    ):
         raise HTTPException(status_code=409, detail="username_taken")
 
     actor_id = str(uuid.uuid4())
-    normalized_pass_type, normalized_pass_expires_at = _canonicalize_pass_fields(pass_type, None)
+    normalized_pass_type, normalized_pass_expires_at = _canonicalize_pass_fields(
+        pass_type, None
+    )
     accepted_at = datetime.now(timezone.utc) if terms_accepted else None
 
     actor = FederationActor(
@@ -231,7 +258,14 @@ def login_human_actor_local(
     password: str,
 ) -> ActorProjectionBundle:
     identifier = str(username or "").strip().lower()
-    auth = db.query(FederationActorAuth).filter((FederationActorAuth.username == identifier) | (FederationActorAuth.email == identifier)).first()
+    auth = (
+        db.query(FederationActorAuth)
+        .filter(
+            (FederationActorAuth.username == identifier)
+            | (FederationActorAuth.email == identifier)
+        )
+        .first()
+    )
     if auth is None or not verify_password(password, auth.password_hash):
         raise HTTPException(status_code=401, detail="invalid_credentials")
     return _build_bundle(db, auth.actor_id)
@@ -264,13 +298,18 @@ def request_email_verification_local(db: Session, *, actor_id: str) -> dict[str,
         "ok": True,
         "verification_token": token,
         "email": auth.email,
-        "display_name": str(getattr(actor, "display_name", "") or "").strip() or "traveler",
+        "display_name": str(getattr(actor, "display_name", "") or "").strip()
+        or "traveler",
     }
 
 
 def verify_email_local(db: Session, *, token: str) -> ActorProjectionBundle:
     hashed_token = _reset_token_hash(token)
-    auth = db.query(FederationActorAuth).filter(FederationActorAuth.email_verification_token_hash == hashed_token).first()
+    auth = (
+        db.query(FederationActorAuth)
+        .filter(FederationActorAuth.email_verification_token_hash == hashed_token)
+        .first()
+    )
     if auth is None:
         raise HTTPException(status_code=401, detail="invalid_verification_token")
     expires_at = auth.email_verification_expires_at
@@ -290,7 +329,14 @@ def verify_email_local(db: Session, *, token: str) -> ActorProjectionBundle:
 
 def request_password_reset_local(db: Session, *, identifier: str) -> dict[str, Any]:
     normalized = str(identifier or "").strip().lower()
-    auth = db.query(FederationActorAuth).filter((FederationActorAuth.username == normalized) | (FederationActorAuth.email == normalized)).first()
+    auth = (
+        db.query(FederationActorAuth)
+        .filter(
+            (FederationActorAuth.username == normalized)
+            | (FederationActorAuth.email == normalized)
+        )
+        .first()
+    )
     if auth is None:
         return {"ok": True}
     reset_token = secrets.token_urlsafe(24)
@@ -302,7 +348,8 @@ def request_password_reset_local(db: Session, *, identifier: str) -> dict[str, A
     return {
         "ok": True,
         "reset_token": reset_token,
-        "display_name": str(getattr(actor, "display_name", "") or "").strip() or auth.username,
+        "display_name": str(getattr(actor, "display_name", "") or "").strip()
+        or auth.username,
         "email": auth.email,
     }
 
@@ -314,7 +361,11 @@ def reset_password_local(
     new_password: str,
 ) -> ActorProjectionBundle:
     hashed_token = _reset_token_hash(token)
-    auth = db.query(FederationActorAuth).filter(FederationActorAuth.password_reset_token_hash == hashed_token).first()
+    auth = (
+        db.query(FederationActorAuth)
+        .filter(FederationActorAuth.password_reset_token_hash == hashed_token)
+        .first()
+    )
     if auth is None:
         raise HTTPException(status_code=401, detail="invalid_reset_token")
     expires_at = auth.password_reset_expires_at
@@ -405,7 +456,9 @@ def sync_resident_actor_local(
         resident.status = status
 
 
-def _federation_request(method: str, path: str, payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def _federation_request(
+    method: str, path: str, payload: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     if not settings.federation_url:
         raise HTTPException(status_code=503, detail="federation_unavailable")
     url = f"{settings.federation_url.rstrip('/')}{path}"
@@ -435,7 +488,9 @@ def _federation_request(method: str, path: str, payload: Optional[Dict[str, Any]
         detail = body_text or exc.reason
         raise HTTPException(status_code=exc.code, detail=detail)
     except urllib.error.URLError as exc:
-        raise HTTPException(status_code=503, detail=f"federation_unavailable: {exc.reason}")
+        raise HTTPException(
+            status_code=503, detail=f"federation_unavailable: {exc.reason}"
+        )
 
 
 def register_human_actor_remote(
@@ -568,7 +623,9 @@ def register_human_actor(
     )
 
 
-def login_human_actor(db: Session, *, username: str, password: str) -> ActorProjectionBundle:
+def login_human_actor(
+    db: Session, *, username: str, password: str
+) -> ActorProjectionBundle:
     if settings.shard_type == "world" or not str(settings.federation_url or "").strip():
         return login_human_actor_local(
             db,
@@ -587,7 +644,9 @@ def request_password_reset(db: Session, *, identifier: str) -> dict[str, Any]:
     return request_password_reset_remote(identifier=identifier)
 
 
-def reset_password(db: Session, *, token: str, new_password: str) -> ActorProjectionBundle:
+def reset_password(
+    db: Session, *, token: str, new_password: str
+) -> ActorProjectionBundle:
     if settings.shard_type == "world" or not str(settings.federation_url or "").strip():
         return reset_password_local(
             db,
@@ -636,7 +695,9 @@ def update_human_actor_display_name(
     )
 
 
-def ensure_local_player_projection(db: Session, bundle: ActorProjectionBundle) -> Player:
+def ensure_local_player_projection(
+    db: Session, bundle: ActorProjectionBundle
+) -> Player:
     normalized_pass_type, normalized_pass_expires_at = _canonicalize_pass_fields(
         bundle.pass_type,
         _parse_iso(bundle.pass_expires_at),
@@ -675,7 +736,9 @@ def ensure_local_player_projection(db: Session, bundle: ActorProjectionBundle) -
     return player
 
 
-def sync_player_projection_from_actor_id(db: Session, actor_id: str) -> Optional[Player]:
+def sync_player_projection_from_actor_id(
+    db: Session, actor_id: str
+) -> Optional[Player]:
     raw_actor_id = str(actor_id or "").strip()
     if not raw_actor_id:
         return None

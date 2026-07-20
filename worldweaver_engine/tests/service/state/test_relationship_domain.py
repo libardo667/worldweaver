@@ -41,7 +41,9 @@ class TestRelationshipDomainBasics:
 
     def test_to_dict_from_dict_roundtrip(self):
         domain = RelationshipDomain()
-        domain.update("player", "npc", {"trust": 15, "fear": -5}, memory="helped in fight")
+        domain.update(
+            "player", "npc", {"trust": 15, "fear": -5}, memory="helped in fight"
+        )
         data = domain.to_dict()
         restored = RelationshipDomain.from_dict(data)
         key = "npc:player"
@@ -58,4 +60,6 @@ class TestRelationshipDomainBasics:
     def test_assert_relationship_parity_helper(self):
         domain = RelationshipDomain()
         domain.update("player", "innkeeper", {"trust": 20.0, "fear": 0.0})
-        assert_relationship_parity(domain, {"innkeeper:player": {"trust": 20.0, "fear": 0.0}})
+        assert_relationship_parity(
+            domain, {"innkeeper:player": {"trust": 20.0, "fear": 0.0}}
+        )

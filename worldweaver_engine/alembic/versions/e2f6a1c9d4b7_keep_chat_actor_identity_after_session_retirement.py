@@ -18,7 +18,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column("location_chat", sa.Column("actor_id", sa.String(length=36), nullable=True))
+    op.add_column(
+        "location_chat", sa.Column("actor_id", sa.String(length=36), nullable=True)
+    )
     op.execute(
         "UPDATE location_chat "
         "SET actor_id = (SELECT session_vars.actor_id FROM session_vars "

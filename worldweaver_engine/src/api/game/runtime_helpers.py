@@ -78,7 +78,11 @@ def finalize_request_metrics(
     """Record route duration, emit structured timing log, and reset route context."""
     route_key = str(route or "").strip()
     duration_ms = round((time.perf_counter() - request_started) * 1000.0, 3)
-    final_status = ("error" if str(status or "").strip().lower() == "error" else "ok") if status is not None else ("error" if sys.exc_info()[0] is not None else "ok")
+    final_status = (
+        ("error" if str(status or "").strip().lower() == "error" else "ok")
+        if status is not None
+        else ("error" if sys.exc_info()[0] is not None else "ok")
+    )
     runtime_metrics.record_route_timing(route_key, duration_ms, status=final_status)
     logger.info(
         json.dumps(

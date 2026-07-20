@@ -24,9 +24,13 @@ def test_generated_transport_key_is_private_separate_and_matches_descriptor(tmp_
     private_key = load_hearth_transport_private_key(private_path)
 
     assert private_path.stat().st_mode & 0o077 == 0
-    assert json.loads(descriptor_path.read_text(encoding="utf-8")) == (descriptor.to_dict())
+    assert json.loads(descriptor_path.read_text(encoding="utf-8")) == (
+        descriptor.to_dict()
+    )
     assert descriptor == HearthTransportDescriptor.from_dict(descriptor.to_dict())
-    assert descriptor.transport_key_id == hearth_transport_key_id(private_key.public_key())
+    assert descriptor.transport_key_id == hearth_transport_key_id(
+        private_key.public_key()
+    )
 
 
 def test_transport_generation_refuses_to_replace_either_half(tmp_path):
@@ -43,7 +47,12 @@ def test_transport_generation_refuses_to_replace_either_half(tmp_path):
             descriptor_path=descriptor_path,
         )
 
-    assert HearthTransportDescriptor.from_dict(json.loads(descriptor_path.read_text(encoding="utf-8"))) == first
+    assert (
+        HearthTransportDescriptor.from_dict(
+            json.loads(descriptor_path.read_text(encoding="utf-8"))
+        )
+        == first
+    )
 
 
 @pytest.mark.parametrize(
@@ -54,7 +63,9 @@ def test_transport_generation_refuses_to_replace_either_half(tmp_path):
         ("transport_public_key", " not-a-key", "public key"),
     ],
 )
-def test_transport_descriptor_rejects_changed_or_ambiguous_fields(tmp_path, field, value, message):
+def test_transport_descriptor_rejects_changed_or_ambiguous_fields(
+    tmp_path, field, value, message
+):
     descriptor = generate_hearth_transport_identity(
         private_key_path=tmp_path / "identity" / "transport.key",
         descriptor_path=tmp_path / "hearth-host.json",

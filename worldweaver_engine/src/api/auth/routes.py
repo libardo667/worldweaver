@@ -20,7 +20,11 @@ from ...services.auth_service import (
     create_access_token,
     require_player,
 )
-from ...services.email_service import send_email_verification, send_password_reset_email, send_welcome_email
+from ...services.email_service import (
+    send_email_verification,
+    send_password_reset_email,
+    send_welcome_email,
+)
 from ...services.federation_identity import (
     current_shard_id,
     ensure_local_player_projection,
@@ -37,7 +41,11 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 _USERNAME_RE = re.compile(r"^[a-zA-Z0-9_]{3,40}$")
 
-TERMS_TEXT = "WorldWeaver is a shared, mixed-intelligence space. " "By registering you agree not to harass other players or agents, " "to respect the collaborative fiction, and to participate in good faith."
+TERMS_TEXT = (
+    "WorldWeaver is a shared, mixed-intelligence space. "
+    "By registering you agree not to harass other players or agents, "
+    "to respect the collaborative fiction, and to participate in good faith."
+)
 
 
 # ---------------------------------------------------------------------------
@@ -50,7 +58,9 @@ class RegisterRequest(BaseModel):
     username: Optional[str] = Field(default=None, min_length=3, max_length=40)
     display_name: Optional[str] = Field(default=None, min_length=1, max_length=120)
     password: str = Field(..., min_length=8, max_length=128)
-    password_confirmation: Optional[str] = Field(default=None, min_length=8, max_length=128)
+    password_confirmation: Optional[str] = Field(
+        default=None, min_length=8, max_length=128
+    )
     pass_type: str = Field(default="citizen")
     terms_accepted: bool
 
@@ -60,12 +70,17 @@ class RegisterRequest(BaseModel):
         if v is None:
             return None
         if not _USERNAME_RE.match(v):
-            raise ValueError("username must be 3–40 alphanumeric characters or underscores")
+            raise ValueError(
+                "username must be 3–40 alphanumeric characters or underscores"
+            )
         return v.lower()
 
     @model_validator(mode="after")
     def passwords_match(self) -> "RegisterRequest":
-        if self.password_confirmation is not None and self.password_confirmation != self.password:
+        if (
+            self.password_confirmation is not None
+            and self.password_confirmation != self.password
+        ):
             raise ValueError("passwords do not match")
         return self
 
@@ -159,7 +174,9 @@ def _make_response(player: Player, token: str) -> AuthResponse:
         email_verified=player.email_verified_at is not None,
         email_verification_required=bool(settings.require_email_verification),
         pass_type=player.pass_type,
-        pass_expires_at=player.pass_expires_at.isoformat() if player.pass_expires_at else None,
+        pass_expires_at=(
+            player.pass_expires_at.isoformat() if player.pass_expires_at else None
+        ),
     )
 
 
@@ -176,9 +193,16 @@ def get_terms():
 
 @router.post("/register", response_model=AuthResponse)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
-    if settings.require_email_verification and (not str(settings.resend_api_key or "").strip() or not str(settings.resend_from_email or "").strip()):
-        raise HTTPException(status_code=503, detail="email_verification_delivery_unavailable")
-    legacy_username = str(payload.username or f"ww_{secrets.token_hex(12)}").strip().lower()
+    if settings.require_email_verification and (
+        not str(settings.resend_api_key or "").strip()
+        or not str(settings.resend_from_email or "").strip()
+    ):
+        raise HTTPException(
+            status_code=503, detail="email_verification_delivery_unavailable"
+        )
+    legacy_username = (
+        str(payload.username or f"ww_{secrets.token_hex(12)}").strip().lower()
+    )
     requested_name = str(payload.display_name or "").strip()
     profile_completed = bool(requested_name)
     bundle = register_human_actor(
@@ -196,7 +220,9 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     player = ensure_local_player_projection(db, bundle)
 
     if settings.require_email_verification:
-        verification = request_email_verification(db, actor_id=str(player.actor_id or ""))
+        verification = request_email_verification(
+            db, actor_id=str(player.actor_id or "")
+        )
         verification_token = str(verification.get("verification_token") or "").strip()
         verification_email = str(verification.get("email") or "").strip()
         if verification_token and verification_email:
@@ -204,7 +230,9 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     elif profile_completed:
         send_welcome_email(str(payload.email), requested_name)
 
-    return _make_response(player, create_access_token(str(player.actor_id or player.id)))
+    return _make_response(
+        player, create_access_token(str(player.actor_id or player.id))
+    )
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -218,36 +246,50 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     )
     player = ensure_local_player_projection(db, bundle)
 
-    return _make_response(player, create_access_token(str(player.actor_id or player.id)))
+    return _make_response(
+        player, create_access_token(str(player.actor_id or player.id))
+    )
 
 
 @router.post("/request-password-reset")
-def request_password_reset_route(payload: PasswordResetRequest, db: Session = Depends(get_db)):
+def request_password_reset_route(
+    payload: PasswordResetRequest, db: Session = Depends(get_db)
+):
     result = request_password_reset(db, identifier=payload.identifier)
     reset_token = str(result.get("reset_token") or "").strip()
     email = str(result.get("email") or "").strip()
     display_name = str(result.get("display_name") or "").strip()
     if reset_token and email:
-        send_password_reset_email(email, display_name or payload.identifier, reset_token)
+        send_password_reset_email(
+            email, display_name or payload.identifier, reset_token
+        )
     return {"ok": True}
 
 
 @router.post("/reset-password", response_model=AuthResponse)
-def reset_password_route(payload: PasswordResetConfirmRequest, db: Session = Depends(get_db)):
+def reset_password_route(
+    payload: PasswordResetConfirmRequest, db: Session = Depends(get_db)
+):
     bundle = reset_password(
         db,
         token=payload.token.strip(),
         new_password=payload.new_password,
     )
     player = ensure_local_player_projection(db, bundle)
-    return _make_response(player, create_access_token(str(player.actor_id or player.id)))
+    return _make_response(
+        player, create_access_token(str(player.actor_id or player.id))
+    )
 
 
 @router.post("/verify-email", response_model=AuthResponse)
-def verify_email_route(payload: EmailVerificationRequest, db: Session = Depends(get_db)):
+def verify_email_route(
+    payload: EmailVerificationRequest, db: Session = Depends(get_db)
+):
     bundle = verify_email(db, token=payload.token.strip())
     player = ensure_local_player_projection(db, bundle)
-    return _make_response(player, create_access_token(str(player.actor_id or player.id)))
+    return _make_response(
+        player, create_access_token(str(player.actor_id or player.id))
+    )
 
 
 @router.post("/resend-verification")
@@ -274,7 +316,9 @@ def resend_email_verification_route(
 @router.get("/me", response_model=AuthResponse)
 def me(player: Player = Depends(require_player)):
     # Re-issue a fresh token so long-lived sessions stay alive
-    return _make_response(player, create_access_token(str(player.actor_id or player.id)))
+    return _make_response(
+        player, create_access_token(str(player.actor_id or player.id))
+    )
 
 
 @router.patch("/profile", response_model=AuthResponse)

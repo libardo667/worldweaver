@@ -27,7 +27,9 @@ from src.services.city_draft_store import (  # noqa: E402
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the private WorldWeaver City Studio on loopback")
+    parser = argparse.ArgumentParser(
+        description="Run the private WorldWeaver City Studio on loopback"
+    )
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--root", default=str(DEFAULT_CITY_DRAFTS_DIR))
     parser.add_argument("--no-open", action="store_true")

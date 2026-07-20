@@ -15,7 +15,9 @@ def _validate_session_id(v: str) -> str:
     if not 1 <= len(v) <= 128:
         raise ValueError("session_id must be 1-128 characters")
     if not _SESSION_ID_RE.match(v):
-        raise ValueError("session_id must contain only alphanumeric, hyphen, or underscore characters")
+        raise ValueError(
+            "session_id must contain only alphanumeric, hyphen, or underscore characters"
+        )
     return v
 
 
@@ -35,7 +37,9 @@ class ActiveTacticState(BaseModel):
     def _validate_name(cls, value: str) -> str:
         cleaned = str(value or "").strip().lower()
         if not _TACTIC_NAME_RE.match(cleaned):
-            raise ValueError("tactic name must start with a letter and use letters, digits, underscore, dot, or hyphen")
+            raise ValueError(
+                "tactic name must start with a letter and use letters, digits, underscore, dot, or hyphen"
+            )
         return cleaned
 
 
@@ -114,11 +118,18 @@ class WorldSeedRequest(BaseModel):
     tone: str = Field(default="grounded, observational", min_length=1, max_length=500)
     seed_from_city_pack: bool = Field(
         default=True,
-        description=("When true, seed the world graph from the city pack (city_id). " "This deterministic geography path is the default for shard bring-up."),
+        description=(
+            "When true, seed the world graph from the city pack (city_id). "
+            "This deterministic geography path is the default for shard bring-up."
+        ),
     )
     enrich_city_pack: bool = Field(
         default=False,
-        description=("When seed_from_city_pack=True, enrich city-pack nodes with LLM-written " "descriptions. Disabled by default so seed uses the pack's existing " "vibe/description fields."),
+        description=(
+            "When seed_from_city_pack=True, enrich city-pack nodes with LLM-written "
+            "descriptions. Disabled by default so seed uses the pack's existing "
+            "vibe/description fields."
+        ),
     )
     city_id: str = Field(
         default="san_francisco",

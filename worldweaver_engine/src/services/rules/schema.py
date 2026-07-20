@@ -6,7 +6,11 @@
 from typing import Any, Dict, List, Literal, Optional, Union
 from pydantic import BaseModel, Field
 
-from ...models.schemas import ActionDeltaContract, ActionFactAppendOperation, StructuredCharacterState
+from ...models.schemas import (
+    ActionDeltaContract,
+    ActionFactAppendOperation,
+    StructuredCharacterState,
+)
 
 
 class IntentBase(BaseModel):
@@ -38,7 +42,9 @@ class SystemTickIntent(IntentBase):
 
 
 # Union of all possible event intents to funnel through the reducer
-EventIntent = Union[ChoiceSelectedIntent, FreeformActionCommittedIntent, SystemTickIntent]
+EventIntent = Union[
+    ChoiceSelectedIntent, FreeformActionCommittedIntent, SystemTickIntent
+]
 
 
 class ReducerReceipt(BaseModel):
@@ -82,7 +88,9 @@ MAX_UNSTRUCTURED_STATE_ITEMS = 50
 MULTI_ACTOR_SCENE_KEYS = ("scene.multi_actor", "scene_state.multi_actor")
 STRUCTURED_STATE_HINT_TOKENS = ("stance", "focus", "tactic", "injury")
 
-ALLOWED_STANCES = frozenset({"observing", "hiding", "negotiating", "fleeing", "fighting"})
+ALLOWED_STANCES = frozenset(
+    {"observing", "hiding", "negotiating", "fleeing", "fighting"}
+)
 ALLOWED_INJURY_STATES = frozenset({"healthy", "injured", "critical"})
 
 LEGACY_STANCE_KEY_ALIASES = {
@@ -156,7 +164,9 @@ def is_unstructured_state_hint_key(key: str) -> bool:
         return False
     if lowered.startswith("state."):
         return canonicalize_structured_key(lowered) not in STRUCTURED_STATE_KEYS
-    return any(token in lowered for token in STRUCTURED_STATE_HINT_TOKENS) and not is_structured_state_key(lowered)
+    return any(
+        token in lowered for token in STRUCTURED_STATE_HINT_TOKENS
+    ) and not is_structured_state_key(lowered)
 
 
 def normalize_structured_value(key: str, value: Any) -> tuple[Any, Optional[str]]:
@@ -166,7 +176,9 @@ def normalize_structured_value(key: str, value: Any) -> tuple[Any, Optional[str]
     if lowered == STRUCTURED_STANCE_KEY:
         stance = str(value or "").strip().lower()
         if stance not in ALLOWED_STANCES:
-            return None, ("Invalid stance; expected one of " + ", ".join(sorted(ALLOWED_STANCES)))
+            return None, (
+                "Invalid stance; expected one of " + ", ".join(sorted(ALLOWED_STANCES))
+            )
         return stance, None
 
     if lowered == STRUCTURED_FOCUS_KEY:
@@ -177,13 +189,19 @@ def normalize_structured_value(key: str, value: Any) -> tuple[Any, Optional[str]
         try:
             structured = StructuredCharacterState(tactics=value)
         except Exception:
-            return None, "Invalid tactics payload; expected short bounded entries with ttl"
+            return (
+                None,
+                "Invalid tactics payload; expected short bounded entries with ttl",
+            )
         return [entry.model_dump() for entry in structured.tactics], None
 
     if lowered == STRUCTURED_INJURY_STATE_KEY:
         injury_state = str(value or "").strip().lower()
         if injury_state not in ALLOWED_INJURY_STATES:
-            return None, ("Invalid injury_state; expected one of " + ", ".join(sorted(ALLOWED_INJURY_STATES)))
+            return None, (
+                "Invalid injury_state; expected one of "
+                + ", ".join(sorted(ALLOWED_INJURY_STATES))
+            )
         return injury_state, None
 
     return value, None

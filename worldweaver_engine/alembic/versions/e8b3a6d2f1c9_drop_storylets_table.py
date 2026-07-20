@@ -14,11 +14,11 @@ Revises: d7e2f9a1c4b8
 Create Date: 2026-07-13 00:00:00.000000
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-
 
 revision: str = "e8b3a6d2f1c9"
 down_revision: Union[str, None] = "d7e2f9a1c4b8"
@@ -48,7 +48,9 @@ def downgrade() -> None:
         sa.Column("weight", sa.Float(), nullable=True),
         sa.Column("position", sa.JSON(), nullable=True),
         sa.Column("embedding", sa.JSON(), nullable=True),
-        sa.Column("source", sa.String(length=50), nullable=False, server_default="authored"),
+        sa.Column(
+            "source", sa.String(length=50), nullable=False, server_default="authored"
+        ),
         sa.Column("seed_event_ids", sa.JSON(), nullable=True),
         sa.Column("expires_at", sa.DateTime(), nullable=True),
         sa.Column("created_at", sa.DateTime(), server_default=sa.func.now()),

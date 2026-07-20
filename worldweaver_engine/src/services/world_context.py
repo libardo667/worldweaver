@@ -33,10 +33,14 @@ def build_world_context_header(
     source: str = "runtime",
 ) -> Dict[str, Any]:
     """Create a bounded shared-world context object for prompts and bootstrap."""
-    safe_world_name = str(world_name or "").strip() or (str(city_id or "").replace("_", " ").title() if city_id else "WorldWeaver")
+    safe_world_name = str(world_name or "").strip() or (
+        str(city_id or "").replace("_", " ").title() if city_id else "WorldWeaver"
+    )
     safe_theme = str(theme or "").strip()
     safe_tone = str(tone or "").strip() or "grounded, observational"
-    safe_premise = str(premise or "").strip() or (f"A persistent shared world shaped by its inhabitants{': ' + safe_theme if safe_theme else ''}.")
+    safe_premise = str(premise or "").strip() or (
+        f"A persistent shared world shaped by its inhabitants{': ' + safe_theme if safe_theme else ''}."
+    )
     safe_entry_point = str(entry_point or "").strip()
     canonical = _dedupe_preserve_order(canonical_locations or [])
     constraints = _dedupe_preserve_order(
@@ -60,7 +64,9 @@ def build_world_context_header(
     }
 
 
-def get_canonical_locations_from_context(world_context: Dict[str, Any] | None) -> List[str]:
+def get_canonical_locations_from_context(
+    world_context: Dict[str, Any] | None,
+) -> List[str]:
     """Return canonical movement/location names from a context header."""
     if not isinstance(world_context, dict):
         return []

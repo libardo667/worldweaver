@@ -53,7 +53,9 @@ def _extract_token_usage(response: Any) -> Dict[str, int]:
         completion_tokens = usage.get("completion_tokens", usage.get("output_tokens"))
         total_tokens = usage.get("total_tokens")
     else:
-        prompt_tokens = getattr(usage, "prompt_tokens", getattr(usage, "input_tokens", None))
+        prompt_tokens = getattr(
+            usage, "prompt_tokens", getattr(usage, "input_tokens", None)
+        )
         completion_tokens = getattr(
             usage,
             "completion_tokens",

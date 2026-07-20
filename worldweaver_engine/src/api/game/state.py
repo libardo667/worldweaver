@@ -52,7 +52,13 @@ from ...models.schemas import (
     WorldSeedRequest,
     WorldSeedResponse,
 )
-from ...services import city_pack_service, federation_discovery, federation_identity, federation_travel, session_service
+from ...services import (
+    city_pack_service,
+    federation_discovery,
+    federation_identity,
+    federation_travel,
+    session_service,
+)
 from ...services.actor_authority import (
     RequestActorCredentials,
     get_request_actor_credentials,
@@ -97,7 +103,9 @@ class SessionTravelDepartureRequest(BaseModel):
     session_id: SessionId
     route_id: str = Field(min_length=1, max_length=80)
     destination_shard: str = Field(min_length=1, max_length=80)
-    travel_id: str = Field(default_factory=lambda: str(uuid.uuid4()), min_length=1, max_length=64)
+    travel_id: str = Field(
+        default_factory=lambda: str(uuid.uuid4()), min_length=1, max_length=64
+    )
     reason: Optional[str] = Field(default=None, max_length=255)
 
 
@@ -141,13 +149,17 @@ def _travel_handoff_payload(row: ShardTravelHandoff) -> Dict[str, Any]:
 def _handoff_place(db: Session, row: ShardTravelHandoff) -> Optional[str]:
     if not row.session_id or row.status not in {"session_booted", "arrived"}:
         return None
-    place = str(get_state_manager(row.session_id, db).get_variable("location") or "").strip()
+    place = str(
+        get_state_manager(row.session_id, db).get_variable("location") or ""
+    ).strip()
     return place or None
 
 
 def _require_handoff_owner(row: ShardTravelHandoff, player: Optional[Player]) -> None:
     if row.owner_player_id and (player is None or player.id != row.owner_player_id):
-        raise HTTPException(status_code=403, detail="Cannot manage travel owned by another player.")
+        raise HTTPException(
+            status_code=403, detail="Cannot manage travel owned by another player."
+        )
 
 
 def _require_ordinary_player_attachment(
@@ -162,14 +174,22 @@ def _require_ordinary_player_attachment(
         return
     actor_id = str(player.actor_id or "").strip()
     if not actor_id:
-        raise HTTPException(status_code=409, detail="This player has no durable actor identity.")
+        raise HTTPException(
+            status_code=409, detail="This player has no durable actor identity."
+        )
     actor_auth = db.get(FederationActorAuth, actor_id)
-    if settings.require_email_verification and actor_auth is not None and actor_auth.email_verified_at is None:
+    if (
+        settings.require_email_verification
+        and actor_auth is not None
+        and actor_auth.email_verified_at is None
+    ):
         raise HTTPException(status_code=409, detail="email_unverified")
     if actor_auth is not None and actor_auth.profile_completed_at is None:
         raise HTTPException(status_code=409, detail="profile_incomplete")
 
-    live_session = db.query(SessionVars).filter(SessionVars.actor_id == actor_id).first()
+    live_session = (
+        db.query(SessionVars).filter(SessionVars.actor_id == actor_id).first()
+    )
     if live_session is not None and str(live_session.session_id) != str(session_id):
         raise HTTPException(
             status_code=409,
@@ -179,11 +199,16 @@ def _require_ordinary_player_attachment(
     attachment = federation_identity.get_actor_bundle(db, actor_id)
     local_shard = current_shard_id()
     if attachment.status == "traveling":
-        raise HTTPException(status_code=409, detail="This actor is currently traveling and must finish that trip before ordinary entry.")
+        raise HTTPException(
+            status_code=409,
+            detail="This actor is currently traveling and must finish that trip before ordinary entry.",
+        )
     if attachment.current_shard != local_shard:
         raise HTTPException(
             status_code=409,
-            detail=(f"This actor is attached to '{attachment.current_shard}', not '{local_shard}'. Enter through federation travel rather than opening a second city presence."),
+            detail=(
+                f"This actor is attached to '{attachment.current_shard}', not '{local_shard}'. Enter through federation travel rather than opening a second city presence."
+            ),
         )
 
 
@@ -191,22 +216,39 @@ def _resolve_departure_route(route_id: str, destination_shard: str) -> Dict[str,
     discovery = federation_discovery.get_travel_destinations()
     registry = discovery.get("registry") if isinstance(discovery, dict) else None
     if not isinstance(registry, dict) or not registry.get("reachable"):
-        raise HTTPException(status_code=503, detail="Federation registry is unavailable; local life can continue, but inter-city departure cannot start.")
+        raise HTTPException(
+            status_code=503,
+            detail="Federation registry is unavailable; local life can continue, but inter-city departure cannot start.",
+        )
 
-    destinations = discovery.get("destinations") if isinstance(discovery, dict) else None
+    destinations = (
+        discovery.get("destinations") if isinstance(discovery, dict) else None
+    )
     for route in destinations if isinstance(destinations, list) else []:
-        if not isinstance(route, dict) or str(route.get("route_id") or "").strip() != route_id:
+        if (
+            not isinstance(route, dict)
+            or str(route.get("route_id") or "").strip() != route_id
+        ):
             continue
         nodes = route.get("nodes")
         for node in nodes if isinstance(nodes, list) else []:
-            if not isinstance(node, dict) or str(node.get("shard_id") or "").strip() != destination_shard:
+            if (
+                not isinstance(node, dict)
+                or str(node.get("shard_id") or "").strip() != destination_shard
+            ):
                 continue
             if str(node.get("status") or "").strip() not in {"healthy", "degraded"}:
-                raise HTTPException(status_code=409, detail=f"Destination node '{destination_shard}' is not currently available.")
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Destination node '{destination_shard}' is not currently available.",
+                )
             departure_hub_id = str(route.get("departure_hub_id") or "").strip()
             arrival_hub_id = str(route.get("arrival_hub_id") or "").strip()
             if not departure_hub_id or not arrival_hub_id:
-                raise HTTPException(status_code=409, detail=f"Route '{route_id}' has no stable travel hub IDs and cannot be used safely.")
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Route '{route_id}' has no stable travel hub IDs and cannot be used safely.",
+                )
             return {
                 "route_id": route_id,
                 "departure_hub_id": departure_hub_id,
@@ -214,17 +256,26 @@ def _resolve_departure_route(route_id: str, destination_shard: str) -> Dict[str,
                 "arrival_hub_id": arrival_hub_id,
                 "arrival_hub": str(route.get("arrival_hub") or "").strip() or None,
                 "destination_url": str(node.get("shard_url") or "").strip() or None,
-                "destination_client_url": str(node.get("client_url") or "").strip() or None,
+                "destination_client_url": str(node.get("client_url") or "").strip()
+                or None,
             }
-        raise HTTPException(status_code=404, detail=f"Route '{route_id}' does not lead to node '{destination_shard}'.")
-    raise HTTPException(status_code=404, detail=f"Travel route '{route_id}' not found in this city pack.")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Route '{route_id}' does not lead to node '{destination_shard}'.",
+        )
+    raise HTTPException(
+        status_code=404,
+        detail=f"Travel route '{route_id}' not found in this city pack.",
+    )
 
 
 def _federated_trip_or_error(travel_id: str) -> Dict[str, Any]:
     response = federation_travel.get_federated_travel(travel_id=travel_id)
     trip = response.get("travel") if isinstance(response, dict) else None
     if not isinstance(trip, dict):
-        raise HTTPException(status_code=502, detail="The federation returned an invalid travel record.")
+        raise HTTPException(
+            status_code=502, detail="The federation returned an invalid travel record."
+        )
     return trip
 
 
@@ -232,13 +283,22 @@ def _resolve_destination_arrival(trip: Dict[str, Any]) -> Dict[str, Any]:
     destination_shard = str(trip.get("destination_shard") or "").strip()
     local_shard = current_shard_id()
     if destination_shard != local_shard:
-        raise HTTPException(status_code=409, detail=f"Travel is intended for node '{destination_shard}', not '{local_shard}'.")
+        raise HTTPException(
+            status_code=409,
+            detail=f"Travel is intended for node '{destination_shard}', not '{local_shard}'.",
+        )
     if str(trip.get("status") or "").strip() not in {"traveling", "arrived"}:
-        raise HTTPException(status_code=409, detail="Travel must be departed before the destination can receive it.")
+        raise HTTPException(
+            status_code=409,
+            detail="Travel must be departed before the destination can receive it.",
+        )
 
     arrival_hub_id = str(trip.get("arrival_hub_id") or "").strip()
     if not arrival_hub_id:
-        raise HTTPException(status_code=409, detail="Travel has no stable destination hub ID and cannot be placed safely.")
+        raise HTTPException(
+            status_code=409,
+            detail="Travel has no stable destination hub ID and cannot be placed safely.",
+        )
     hub = city_pack_service.resolve_travel_hub_entry(arrival_hub_id, settings.city_id)
     if hub is None:
         raise HTTPException(
@@ -253,12 +313,19 @@ def _normalized_place(value: Any) -> str:
     return re.sub(r"[^a-z0-9]+", "-", str(value or "").strip().casefold()).strip("-")
 
 
-def _require_session_at_departure_hub(db: Session, session_id: str, departure_hub_id: str) -> None:
+def _require_session_at_departure_hub(
+    db: Session, session_id: str, departure_hub_id: str
+) -> None:
     hub = city_pack_service.resolve_travel_hub_entry(departure_hub_id, settings.city_id)
     if hub is None:
-        raise HTTPException(status_code=409, detail=f"Departure hub '{departure_hub_id}' does not resolve to a local place.")
+        raise HTTPException(
+            status_code=409,
+            detail=f"Departure hub '{departure_hub_id}' does not resolve to a local place.",
+        )
     required_place = str(hub.get("entry_location") or "").strip()
-    current_place = str(get_state_manager(session_id, db).get_variable("location") or "").strip()
+    current_place = str(
+        get_state_manager(session_id, db).get_variable("location") or ""
+    ).strip()
     if _normalized_place(current_place) != _normalized_place(required_place):
         raise HTTPException(
             status_code=409,
@@ -269,12 +336,19 @@ def _require_session_at_departure_hub(db: Session, session_id: str, departure_hu
 def _require_arriving_actor(trip: Dict[str, Any], player: Optional[Player]) -> str:
     actor_id = str(trip.get("actor_id") or "").strip()
     if not actor_id:
-        raise HTTPException(status_code=502, detail="The federation travel record has no actor identity.")
+        raise HTTPException(
+            status_code=502,
+            detail="The federation travel record has no actor identity.",
+        )
     actor_type = str(trip.get("actor_type") or "agent").strip() or "agent"
     if player is not None and str(player.actor_id or "").strip() != actor_id:
-        raise HTTPException(status_code=403, detail="This trip belongs to another actor.")
+        raise HTTPException(
+            status_code=403, detail="This trip belongs to another actor."
+        )
     if player is None and actor_type not in {"agent", "player_shadow"}:
-        raise HTTPException(status_code=401, detail="A human traveler must authenticate before arrival.")
+        raise HTTPException(
+            status_code=401, detail="A human traveler must authenticate before arrival."
+        )
     return actor_id
 
 
@@ -286,7 +360,12 @@ def _finish_destination_arrival(
     trip: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any] | JSONResponse:
     if row.status == "arrived":
-        return {"success": True, "idempotent": True, "place": _handoff_place(db, row), "handoff": _travel_handoff_payload(row)}
+        return {
+            "success": True,
+            "idempotent": True,
+            "place": _handoff_place(db, row),
+            "handoff": _travel_handoff_payload(row),
+        }
 
     if row.status == "prepared":
         try:
@@ -294,10 +373,16 @@ def _finish_destination_arrival(
             hub = _resolve_destination_arrival(trip)
             actor_id = _require_arriving_actor(trip, player)
             if actor_id != row.actor_id:
-                raise HTTPException(status_code=409, detail="The federation trip actor no longer matches this local handoff.")
+                raise HTTPException(
+                    status_code=409,
+                    detail="The federation trip actor no longer matches this local handoff.",
+                )
             world_id = _read_world_id()
             if not world_id:
-                raise HTTPException(status_code=409, detail="This destination has no seeded world to receive the traveler.")
+                raise HTTPException(
+                    status_code=409,
+                    detail="This destination has no seeded world to receive the traveler.",
+                )
             bootstrap_session_world(
                 SessionBootstrapRequest(
                     session_id=str(row.session_id or ""),
@@ -312,7 +397,9 @@ def _finish_destination_arrival(
             )
             row = db.get(ShardTravelHandoff, row.travel_id)
             if row is None:
-                raise HTTPException(status_code=500, detail="Local arrival recovery record disappeared.")
+                raise HTTPException(
+                    status_code=500, detail="Local arrival recovery record disappeared."
+                )
             row.status = "session_booted"
             row.last_error = None
             db.commit()
@@ -329,12 +416,17 @@ def _finish_destination_arrival(
                     "recoverable": True,
                     "message": "The destination has not finished booting this traveler. Retry this travel ID.",
                     "place": _handoff_place(db, row) if row is not None else None,
-                    "handoff": _travel_handoff_payload(row) if row is not None else None,
+                    "handoff": (
+                        _travel_handoff_payload(row) if row is not None else None
+                    ),
                 },
             )
 
     if row.status != "session_booted":
-        raise HTTPException(status_code=409, detail=f"Destination handoff is in unexpected state '{row.status}'.")
+        raise HTTPException(
+            status_code=409,
+            detail=f"Destination handoff is in unexpected state '{row.status}'.",
+        )
 
     try:
         federation_result = federation_travel.confirm_federated_arrival(
@@ -381,7 +473,9 @@ def _finish_destination_arrival(
             ),
         )
     except Exception as exc:
-        logging.warning("Could not append local arrival event for %s: %s", row.travel_id, exc)
+        logging.warning(
+            "Could not append local arrival event for %s: %s", row.travel_id, exc
+        )
 
     return {
         "success": True,
@@ -397,13 +491,19 @@ def _finish_source_departure(
     row: ShardTravelHandoff,
 ) -> Dict[str, Any] | JSONResponse:
     if row.status == "traveling":
-        return {"success": True, "idempotent": True, "handoff": _travel_handoff_payload(row)}
+        return {
+            "success": True,
+            "idempotent": True,
+            "handoff": _travel_handoff_payload(row),
+        }
 
     deleted = _retire_session_presence(db, str(row.session_id or ""))
     _clear_runtime_session_caches(str(row.session_id or ""))
     row = db.get(ShardTravelHandoff, row.travel_id)
     if row is None:
-        raise HTTPException(status_code=500, detail="Local travel recovery record disappeared.")
+        raise HTTPException(
+            status_code=500, detail="Local travel recovery record disappeared."
+        )
     row.status = "session_retired"
     db.commit()
 
@@ -451,7 +551,9 @@ def _finish_source_departure(
             ),
         )
     except Exception as exc:
-        logging.warning("Could not append local departure event for %s: %s", row.travel_id, exc)
+        logging.warning(
+            "Could not append local departure event for %s: %s", row.travel_id, exc
+        )
 
     return {
         "success": True,
@@ -497,7 +599,9 @@ def _prune_duplicate_agent_sessions(
         if len(entries) <= 1:
             continue
         display = " ".join(part.capitalize() for part in normalized_name.split(" "))
-        if keep_session_id and any(session_id == keep_session_id for session_id, _ in entries):
+        if keep_session_id and any(
+            session_id == keep_session_id for session_id, _ in entries
+        ):
             survivor_id = keep_session_id
         else:
             survivor_id = max(
@@ -541,18 +645,60 @@ def _delete_session_world_rows(db: Session, session_id: str) -> Dict[str, int]:
             "consequence_events_preserved": 0,
         }
 
-    all_session_event_ids = [int(row[0]) for row in db.query(WorldEvent.id).filter(WorldEvent.session_id == safe_session_id).all() if row[0] is not None]
-    protected_event_ids = {int(row[0]) for row in db.query(ConsequenceReceipt.world_event_id).filter(ConsequenceReceipt.world_event_id.in_(all_session_event_ids)).all() if row[0] is not None}
-    protected_event_ids.update(int(row[0]) for row in db.query(ExchangeReceipt.world_event_id).filter(ExchangeReceipt.world_event_id.in_(all_session_event_ids)).all() if row[0] is not None)
-    protected_event_ids.update(int(row[0]) for row in db.query(StoopReceipt.world_event_id).filter(StoopReceipt.world_event_id.in_(all_session_event_ids)).all() if row[0] is not None)
-    protected_event_ids.update(int(row[0]) for row in db.query(SpaceAccessReceipt.world_event_id).filter(SpaceAccessReceipt.world_event_id.in_(all_session_event_ids)).all() if row[0] is not None)
-    session_event_ids = [event_id for event_id in all_session_event_ids if event_id not in protected_event_ids]
+    all_session_event_ids = [
+        int(row[0])
+        for row in db.query(WorldEvent.id)
+        .filter(WorldEvent.session_id == safe_session_id)
+        .all()
+        if row[0] is not None
+    ]
+    protected_event_ids = {
+        int(row[0])
+        for row in db.query(ConsequenceReceipt.world_event_id)
+        .filter(ConsequenceReceipt.world_event_id.in_(all_session_event_ids))
+        .all()
+        if row[0] is not None
+    }
+    protected_event_ids.update(
+        int(row[0])
+        for row in db.query(ExchangeReceipt.world_event_id)
+        .filter(ExchangeReceipt.world_event_id.in_(all_session_event_ids))
+        .all()
+        if row[0] is not None
+    )
+    protected_event_ids.update(
+        int(row[0])
+        for row in db.query(StoopReceipt.world_event_id)
+        .filter(StoopReceipt.world_event_id.in_(all_session_event_ids))
+        .all()
+        if row[0] is not None
+    )
+    protected_event_ids.update(
+        int(row[0])
+        for row in db.query(SpaceAccessReceipt.world_event_id)
+        .filter(SpaceAccessReceipt.world_event_id.in_(all_session_event_ids))
+        .all()
+        if row[0] is not None
+    )
+    session_event_ids = [
+        event_id
+        for event_id in all_session_event_ids
+        if event_id not in protected_event_ids
+    ]
 
     projection_rows_deleted = 0
     edge_rows_deleted = 0
     if session_event_ids:
-        projection_rows_deleted = db.query(WorldProjection).filter(WorldProjection.source_event_id.in_(session_event_ids)).delete(synchronize_session=False)
-        edge_rows_deleted = db.query(WorldEdge).filter(WorldEdge.source_event_id.in_(session_event_ids)).delete(synchronize_session=False)
+        projection_rows_deleted = (
+            db.query(WorldProjection)
+            .filter(WorldProjection.source_event_id.in_(session_event_ids))
+            .delete(synchronize_session=False)
+        )
+        edge_rows_deleted = (
+            db.query(WorldEdge)
+            .filter(WorldEdge.source_event_id.in_(session_event_ids))
+            .delete(synchronize_session=False)
+        )
 
     fact_filter = WorldFact.session_id == safe_session_id
     if session_event_ids:
@@ -571,7 +717,11 @@ def _delete_session_world_rows(db: Session, session_id: str) -> Dict[str, int]:
     if protected_event_ids:
         event_query = event_query.filter(WorldEvent.id.notin_(protected_event_ids))
     world_events_deleted = event_query.delete(synchronize_session=False)
-    sessions_deleted = db.query(SessionVars).filter(SessionVars.session_id == safe_session_id).delete(synchronize_session=False)
+    sessions_deleted = (
+        db.query(SessionVars)
+        .filter(SessionVars.session_id == safe_session_id)
+        .delete(synchronize_session=False)
+    )
     db.commit()
 
     return {
@@ -589,7 +739,11 @@ def _retire_session_presence(db: Session, session_id: str) -> Dict[str, int]:
     safe_session_id = str(session_id or "").strip()
     if not safe_session_id:
         return {"sessions": 0}
-    sessions_deleted = db.query(SessionVars).filter(SessionVars.session_id == safe_session_id).delete(synchronize_session=False)
+    sessions_deleted = (
+        db.query(SessionVars)
+        .filter(SessionVars.session_id == safe_session_id)
+        .delete(synchronize_session=False)
+    )
     db.commit()
     return {"sessions": int(sessions_deleted)}
 
@@ -598,21 +752,37 @@ def _delete_all_world_rows(db: Session) -> Dict[str, int]:
     doula_polls_deleted = db.query(DoulaPoll).delete(synchronize_session=False)
     location_chat_deleted = db.query(LocationChat).delete(synchronize_session=False)
     world_traces_deleted = db.query(WorldTrace).delete(synchronize_session=False)
-    exchange_receipts_deleted = db.query(ExchangeReceipt).delete(synchronize_session=False)
-    object_exchanges_deleted = db.query(ObjectExchange).delete(synchronize_session=False)
+    exchange_receipts_deleted = db.query(ExchangeReceipt).delete(
+        synchronize_session=False
+    )
+    object_exchanges_deleted = db.query(ObjectExchange).delete(
+        synchronize_session=False
+    )
     stoop_receipts_deleted = db.query(StoopReceipt).delete(synchronize_session=False)
     stoop_entries_deleted = db.query(StoopObjectEntry).delete(synchronize_session=False)
     world_stoops_deleted = db.query(WorldStoop).delete(synchronize_session=False)
-    space_access_receipts_deleted = db.query(SpaceAccessReceipt).delete(synchronize_session=False)
-    space_access_requests_deleted = db.query(SpaceAccessRequest).delete(synchronize_session=False)
-    space_access_grants_deleted = db.query(SpaceAccessGrant).delete(synchronize_session=False)
-    space_access_policies_deleted = db.query(SpaceAccessPolicy).delete(synchronize_session=False)
-    consequence_receipts_deleted = db.query(ConsequenceReceipt).delete(synchronize_session=False)
+    space_access_receipts_deleted = db.query(SpaceAccessReceipt).delete(
+        synchronize_session=False
+    )
+    space_access_requests_deleted = db.query(SpaceAccessRequest).delete(
+        synchronize_session=False
+    )
+    space_access_grants_deleted = db.query(SpaceAccessGrant).delete(
+        synchronize_session=False
+    )
+    space_access_policies_deleted = db.query(SpaceAccessPolicy).delete(
+        synchronize_session=False
+    )
+    consequence_receipts_deleted = db.query(ConsequenceReceipt).delete(
+        synchronize_session=False
+    )
     durable_objects_deleted = db.query(DurableObject).delete(synchronize_session=False)
     material_pools_deleted = db.query(MaterialPool).delete(synchronize_session=False)
     world_facts_deleted = db.query(WorldFact).delete(synchronize_session=False)
     world_edges_deleted = db.query(WorldEdge).delete(synchronize_session=False)
-    projection_rows_deleted = db.query(WorldProjection).delete(synchronize_session=False)
+    projection_rows_deleted = db.query(WorldProjection).delete(
+        synchronize_session=False
+    )
     world_nodes_deleted = db.query(WorldNode).delete(synchronize_session=False)
     world_events_deleted = db.query(WorldEvent).delete(synchronize_session=False)
     sessions_deleted = db.query(SessionVars).delete(synchronize_session=False)
@@ -663,7 +833,14 @@ def _reset_world_sequences(db: Session) -> None:
         db.rollback()
 
 
-_WORLD_ID_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", f"world_id_{settings.city_id}.txt")
+_WORLD_ID_FILE = os.path.join(
+    os.path.dirname(__file__),
+    "..",
+    "..",
+    "..",
+    "data",
+    f"world_id_{settings.city_id}.txt",
+)
 
 
 def _read_world_id() -> str:
@@ -701,9 +878,13 @@ def seed_world(
     from datetime import datetime as _dt, timezone as _tz
 
     # Reuse an existing world_id (e.g. adding a second city pack) or mint a fresh one.
-    world_id = (payload.world_id or "").strip() or f"world-{_dt.now(_tz.utc).strftime('%Y%m%d-%H%M%S')}-{str(uuid.uuid4())[:8]}"
+    world_id = (
+        payload.world_id or ""
+    ).strip() or f"world-{_dt.now(_tz.utc).strftime('%Y%m%d-%H%M%S')}-{str(uuid.uuid4())[:8]}"
     raw_description = (payload.description or "").strip()
-    description = raw_description or (f"A persistent world shaped by its inhabitants — {payload.world_theme}.")
+    description = raw_description or (
+        f"A persistent world shaped by its inhabitants — {payload.world_theme}."
+    )
     tone = payload.tone.strip() or "grounded, observational"
 
     try:
@@ -715,7 +896,11 @@ def seed_world(
         state_manager.set_variable("_bootstrap_source", "world-seed")
 
         world_context = build_world_context_header(
-            world_name=payload.city_id.replace("_", " ").title() if payload.seed_from_city_pack else payload.world_theme,
+            world_name=(
+                payload.city_id.replace("_", " ").title()
+                if payload.seed_from_city_pack
+                else payload.world_theme
+            ),
             city_id=payload.city_id if payload.seed_from_city_pack else "",
             theme=payload.world_theme,
             tone=tone,
@@ -813,7 +998,9 @@ def bootstrap_session_world(
 
         player_role = payload.player_role.strip()
         if not player_role:
-            raise HTTPException(status_code=422, detail="player_role must not be blank.")
+            raise HTTPException(
+                status_code=422, detail="player_role must not be blank."
+            )
 
         joining_world_id = str(payload.world_id).strip() if payload.world_id else None
 
@@ -835,18 +1022,28 @@ def bootstrap_session_world(
             state_manager.set_variable("world_theme", world_theme)
             state_manager.set_variable("player_role", player_role)
             state_manager.set_variable("character_profile", player_role)
-            display_name = player_role.split(" — ", 1)[0].strip() if " — " in player_role else player_role
+            display_name = (
+                player_role.split(" — ", 1)[0].strip()
+                if " — " in player_role
+                else player_role
+            )
             state_manager.set_variable("name", display_name)
             tone = payload.tone.strip() or "adventure"
             state_manager.set_variable("world_tone", tone)
             if payload.key_elements:
                 state_manager.set_variable(
                     "world_key_elements",
-                    [str(item).strip() for item in payload.key_elements if str(item).strip()][:20],
+                    [
+                        str(item).strip()
+                        for item in payload.key_elements
+                        if str(item).strip()
+                    ][:20],
                 )
             state_manager.set_variable("_bootstrap_state", "completed")
             state_manager.set_variable("_bootstrap_source", payload.bootstrap_source)
-            state_manager.set_variable("_bootstrap_completed_at", bootstrap_completed_at)
+            state_manager.set_variable(
+                "_bootstrap_completed_at", bootstrap_completed_at
+            )
             # Determine entry location: explicit > city_pack node (shared context is descriptive only)
             resolved_location: str = ""
             if payload.entry_location:
@@ -856,9 +1053,18 @@ def bootstrap_session_world(
             if not resolved_location:
                 # Fall back to first city-pack location node — shared context is narrative only.
                 # Landmarks are not valid entry points (no map coordinates, orphaned from graph).
-                cp_nodes = db.query(WorldNode).filter(WorldNode.node_type == "location").limit(500).all()
+                cp_nodes = (
+                    db.query(WorldNode)
+                    .filter(WorldNode.node_type == "location")
+                    .limit(500)
+                    .all()
+                )
                 cp_loc = next(
-                    (n.name for n in cp_nodes if (n.metadata_json or {}).get("source") == "city_pack"),
+                    (
+                        n.name
+                        for n in cp_nodes
+                        if (n.metadata_json or {}).get("source") == "city_pack"
+                    ),
                     None,
                 )
                 if cp_loc:
@@ -918,7 +1124,9 @@ def bootstrap_session_world(
                     "world_id": joining_world_id,
                     "world_context_inherited": bool(inherited_context),
                     "bootstrap_source": str(payload.bootstrap_source),
-                    "duplicate_agent_sessions_pruned": int((pruned_duplicates or {}).get("pruned_count") or 0),
+                    "duplicate_agent_sessions_pruned": int(
+                        (pruned_duplicates or {}).get("pruned_count") or 0
+                    ),
                 },
             )
 
@@ -926,14 +1134,18 @@ def bootstrap_session_world(
         # All characters join as residents with a world_id. There is no founder flow.
         raise HTTPException(
             status_code=422,
-            detail=("world_id is required. Seed the world first via POST /api/world/seed, then pass the returned world_id here."),
+            detail=(
+                "world_id is required. Seed the world first via POST /api/world/seed, then pass the returned world_id here."
+            ),
         )
     except HTTPException:
         raise
     except Exception as exc:
         db.rollback()
         logging.error("Session bootstrap failed: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Session bootstrap failed: {str(exc)}")
+        raise HTTPException(
+            status_code=500, detail=f"Session bootstrap failed: {str(exc)}"
+        )
 
 
 @router.post("/session/bootstrap/resident", response_model=SessionBootstrapResponse)
@@ -974,7 +1186,9 @@ async def bootstrap_signed_resident_session(
                 "message": "Signed bootstrap requires a new local session ID.",
             },
         )
-    live_actor_session = db.query(SessionVars).filter(SessionVars.actor_id == actor_id).first()
+    live_actor_session = (
+        db.query(SessionVars).filter(SessionVars.actor_id == actor_id).first()
+    )
     if live_actor_session is not None:
         raise HTTPException(
             status_code=409,
@@ -994,7 +1208,9 @@ async def bootstrap_signed_resident_session(
             headers=credentials.resident_headers,
         )
     except ResidentAuthorityError as exc:
-        error_status = 409 if exc.code in {"replayed_request", "retired_generation"} else 401
+        error_status = (
+            409 if exc.code in {"replayed_request", "retired_generation"} else 401
+        )
         raise HTTPException(
             status_code=error_status,
             detail={"code": exc.code, "message": str(exc)},
@@ -1027,8 +1243,14 @@ def leave_session_world(
 ):
     """Retire one live incarnation without erasing its public history."""
     row = db.get(SessionVars, payload.session_id)
-    if row is not None and row.player_id and (player is None or row.player_id != player.id):
-        raise HTTPException(status_code=403, detail="Cannot leave a session owned by another player.")
+    if (
+        row is not None
+        and row.player_id
+        and (player is None or row.player_id != player.id)
+    ):
+        raise HTTPException(
+            status_code=403, detail="Cannot leave a session owned by another player."
+        )
 
     deleted = _retire_session_presence(db, payload.session_id)
     _clear_runtime_session_caches(payload.session_id)
@@ -1048,7 +1270,9 @@ def depart_session_for_travel(
 ):
     """Retire a source session through the recoverable federation handoff."""
     if settings.shard_type != "city":
-        raise HTTPException(status_code=409, detail="Inter-city departure must start on a city node.")
+        raise HTTPException(
+            status_code=409, detail="Inter-city departure must start on a city node."
+        )
 
     travel_id = payload.travel_id.strip()
     destination_shard = payload.destination_shard.strip()
@@ -1056,19 +1280,33 @@ def depart_session_for_travel(
     existing = db.get(ShardTravelHandoff, travel_id)
     if existing is not None:
         _require_handoff_owner(existing, player)
-        same_request = existing.session_id == payload.session_id and existing.destination_shard == destination_shard and existing.route_id == route_id
+        same_request = (
+            existing.session_id == payload.session_id
+            and existing.destination_shard == destination_shard
+            and existing.route_id == route_id
+        )
         if not same_request:
-            raise HTTPException(status_code=409, detail=f"Travel ID '{travel_id}' already describes another local handoff.")
+            raise HTTPException(
+                status_code=409,
+                detail=f"Travel ID '{travel_id}' already describes another local handoff.",
+            )
         return _finish_source_departure(db, existing)
 
     session = db.get(SessionVars, payload.session_id)
     if session is None:
-        raise HTTPException(status_code=404, detail=f"Session '{payload.session_id}' not found.")
+        raise HTTPException(
+            status_code=404, detail=f"Session '{payload.session_id}' not found."
+        )
     if session.player_id and (player is None or session.player_id != player.id):
-        raise HTTPException(status_code=403, detail="Cannot depart a session owned by another player.")
+        raise HTTPException(
+            status_code=403, detail="Cannot depart a session owned by another player."
+        )
     actor_id = str(session.actor_id or "").strip()
     if not actor_id:
-        raise HTTPException(status_code=409, detail="Session has no durable actor identity and cannot travel between nodes.")
+        raise HTTPException(
+            status_code=409,
+            detail="Session has no durable actor identity and cannot travel between nodes.",
+        )
 
     route = _resolve_departure_route(route_id, destination_shard)
     _require_session_at_departure_hub(db, payload.session_id, route["departure_hub_id"])
@@ -1116,7 +1354,9 @@ def retry_session_travel_departure(
     """Retry federation confirmation after a recoverable source-side outage."""
     handoff = db.get(ShardTravelHandoff, travel_id)
     if handoff is None or handoff.role != "source":
-        raise HTTPException(status_code=404, detail=f"Source travel handoff '{travel_id}' not found.")
+        raise HTTPException(
+            status_code=404, detail=f"Source travel handoff '{travel_id}' not found."
+        )
     _require_handoff_owner(handoff, player)
     return _finish_source_departure(db, handoff)
 
@@ -1129,27 +1369,43 @@ def arrive_session_from_travel(
 ):
     """Receive one actor into a fresh local session at a city-owned travel hub."""
     if settings.shard_type != "city":
-        raise HTTPException(status_code=409, detail="Inter-city arrival must finish on a city node.")
+        raise HTTPException(
+            status_code=409, detail="Inter-city arrival must finish on a city node."
+        )
 
     travel_id = payload.travel_id.strip()
     session_id = str(payload.session_id).strip()
     existing = db.get(ShardTravelHandoff, travel_id)
     if existing is not None:
         if existing.role != "destination":
-            raise HTTPException(status_code=409, detail=f"Travel ID '{travel_id}' already describes a source handoff on this node.")
+            raise HTTPException(
+                status_code=409,
+                detail=f"Travel ID '{travel_id}' already describes a source handoff on this node.",
+            )
         _require_handoff_owner(existing, player)
         if existing.session_id != session_id:
-            raise HTTPException(status_code=409, detail=f"Travel ID '{travel_id}' is already bound to another local session.")
+            raise HTTPException(
+                status_code=409,
+                detail=f"Travel ID '{travel_id}' is already bound to another local session.",
+            )
         return _finish_destination_arrival(db, existing, player=player)
 
     trip = _federated_trip_or_error(travel_id)
     hub = _resolve_destination_arrival(trip)
     actor_id = _require_arriving_actor(trip, player)
     if not _read_world_id():
-        raise HTTPException(status_code=409, detail="This destination has no seeded world to receive the traveler.")
+        raise HTTPException(
+            status_code=409,
+            detail="This destination has no seeded world to receive the traveler.",
+        )
     if db.get(SessionVars, session_id) is not None:
-        raise HTTPException(status_code=409, detail=f"Session ID '{session_id}' is already in use on this node.")
-    live_actor_session = db.query(SessionVars).filter(SessionVars.actor_id == actor_id).first()
+        raise HTTPException(
+            status_code=409,
+            detail=f"Session ID '{session_id}' is already in use on this node.",
+        )
+    live_actor_session = (
+        db.query(SessionVars).filter(SessionVars.actor_id == actor_id).first()
+    )
     if live_actor_session is not None:
         raise HTTPException(
             status_code=409,
@@ -1167,7 +1423,8 @@ def arrive_session_from_travel(
         departure_hub_id=str(trip.get("departure_hub_id") or "").strip() or None,
         departure_hub=str(trip.get("departure_hub") or "").strip() or None,
         arrival_hub_id=str(trip.get("arrival_hub_id") or "").strip() or None,
-        arrival_hub=str(trip.get("arrival_hub") or hub.get("name") or "").strip() or None,
+        arrival_hub=str(trip.get("arrival_hub") or hub.get("name") or "").strip()
+        or None,
         status="prepared",
     )
     db.add(handoff)
@@ -1184,7 +1441,10 @@ def retry_session_travel_arrival(
     """Retry local boot or federation confirmation for a destination handoff."""
     handoff = db.get(ShardTravelHandoff, travel_id)
     if handoff is None or handoff.role != "destination":
-        raise HTTPException(status_code=404, detail=f"Destination travel handoff '{travel_id}' not found.")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Destination travel handoff '{travel_id}' not found.",
+        )
     _require_handoff_owner(handoff, player)
     return _finish_destination_arrival(db, handoff, player=player)
 
@@ -1207,4 +1467,6 @@ def dev_hard_reset_world(db: Session = Depends(get_db)):
     except Exception as exc:
         db.rollback()
         logging.error("Development hard reset failed: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Development hard reset failed: {str(exc)}")
+        raise HTTPException(
+            status_code=500, detail=f"Development hard reset failed: {str(exc)}"
+        )

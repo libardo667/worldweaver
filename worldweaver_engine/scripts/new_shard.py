@@ -402,11 +402,26 @@ def _city_pack_timezone(city_pack_src: Path | None) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Create a new WorldWeaver shard directory.")
+    parser = argparse.ArgumentParser(
+        description="Create a new WorldWeaver shard directory."
+    )
     parser.add_argument("city_id", help="Shard slug (e.g. portland, tokyo)")
-    parser.add_argument("--port", type=int, default=8001, help="Backend port (default: 8001)")
-    parser.add_argument("--db-port", type=int, default=None, help="Host-local Postgres port for GUI/psql access (default: derived from backend port)")
-    parser.add_argument("--type", dest="shard_type", default="city", choices=["city", "world", "neighborhood"], help="Shard type (default: city)")
+    parser.add_argument(
+        "--port", type=int, default=8001, help="Backend port (default: 8001)"
+    )
+    parser.add_argument(
+        "--db-port",
+        type=int,
+        default=None,
+        help="Host-local Postgres port for GUI/psql access (default: derived from backend port)",
+    )
+    parser.add_argument(
+        "--type",
+        dest="shard_type",
+        default="city",
+        choices=["city", "world", "neighborhood"],
+        help="Shard type (default: city)",
+    )
     parser.add_argument(
         "--shard-id",
         default="",
@@ -418,7 +433,9 @@ def main() -> None:
         default="",
         help="Federation URL used inside Docker when it differs from the host-side URL",
     )
-    parser.add_argument("--token", default="", help="Shared federation secret (FEDERATION_TOKEN)")
+    parser.add_argument(
+        "--token", default="", help="Shared federation secret (FEDERATION_TOKEN)"
+    )
     parser.add_argument(
         "--image-registry",
         default=os.environ.get("WW_IMAGE_REGISTRY", "ghcr.io/libardo667"),
@@ -429,9 +446,15 @@ def main() -> None:
         default=os.environ.get("WW_IMAGE_TAG", ""),
         help="Immutable image tag (default: sha-<current Git commit>)",
     )
-    parser.add_argument("--engine-image", default="", help="Explicit immutable engine image reference")
-    parser.add_argument("--agent-image", default="", help="Explicit immutable agent image reference")
-    parser.add_argument("--base-dir", default="..", help="Parent directory (default: ..)")
+    parser.add_argument(
+        "--engine-image", default="", help="Explicit immutable engine image reference"
+    )
+    parser.add_argument(
+        "--agent-image", default="", help="Explicit immutable agent image reference"
+    )
+    parser.add_argument(
+        "--base-dir", default="..", help="Parent directory (default: ..)"
+    )
     parser.add_argument(
         "--city-pack-dir",
         default="",
@@ -506,7 +529,9 @@ def main() -> None:
     shard_dir = base / shard_dir_name
 
     if shard_dir.exists():
-        print(f"ERROR: {shard_dir} already exists. Remove it first or choose a different name.")
+        print(
+            f"ERROR: {shard_dir} already exists. Remove it first or choose a different name."
+        )
         sys.exit(1)
 
     # Resolve city pack for non-world shards
@@ -538,19 +563,27 @@ def main() -> None:
         if args.experience:
             experience_src = Path(args.experience).resolve()
             if not experience_src.is_file() or experience_src.suffix.lower() != ".json":
-                print(f"ERROR: Shard experience must be an existing JSON file: {experience_src}")
+                print(
+                    f"ERROR: Shard experience must be an existing JSON file: {experience_src}"
+                )
                 sys.exit(1)
             try:
-                experience_payload = json.loads(experience_src.read_text(encoding="utf-8"))
+                experience_payload = json.loads(
+                    experience_src.read_text(encoding="utf-8")
+                )
             except (OSError, json.JSONDecodeError) as exc:
                 print(f"ERROR: Could not read shard experience {experience_src}: {exc}")
                 sys.exit(1)
             if experience_payload.get("schema") != "worldweaver.shard-experience":
-                print("ERROR: --experience does not contain a WorldWeaver shard-experience declaration")
+                print(
+                    "ERROR: --experience does not contain a WorldWeaver shard-experience declaration"
+                )
                 sys.exit(1)
 
     # Build file contents
-    db_external_port = int(args.db_port) if args.db_port is not None else int(args.port) + 7431
+    db_external_port = (
+        int(args.db_port) if args.db_port is not None else int(args.port) + 7431
+    )
     compose_project_name = _compose_project_name(shard_id)
     jwt_secret = secrets.token_urlsafe(48)
     data_encryption_key = _new_data_encryption_key()
@@ -577,7 +610,11 @@ def main() -> None:
             port=args.port,
             db_external_port=db_external_port,
             city_timezone=_city_pack_timezone(city_pack_src),
-            experience_path=(f"/app/data/rulesets/{experience_src.name}" if experience_src is not None else ""),
+            experience_path=(
+                f"/app/data/rulesets/{experience_src.name}"
+                if experience_src is not None
+                else ""
+            ),
             federation_url=args.federation,
             runtime_federation_url=args.runtime_federation,
             token=args.token,
@@ -637,7 +674,9 @@ def main() -> None:
         print(f"  copy   {city_pack_src}  →  {dest_pack.relative_to(base.parent)}/")
     if experience_src is not None:
         dest_experience = shard_dir / "data" / "rulesets" / experience_src.name
-        print(f"  copy   {experience_src}  →  {dest_experience.relative_to(base.parent)}")
+        print(
+            f"  copy   {experience_src}  →  {dest_experience.relative_to(base.parent)}"
+        )
 
     if args.dry_run:
         print("\n[dry-run] No files written.")

@@ -18,13 +18,33 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column("federation_actor_auth", sa.Column("email_verified_at", sa.DateTime(), nullable=True))
-    op.add_column("federation_actor_auth", sa.Column("email_verification_token_hash", sa.String(length=128), nullable=True))
-    op.add_column("federation_actor_auth", sa.Column("email_verification_expires_at", sa.DateTime(), nullable=True))
-    op.add_column("federation_actor_auth", sa.Column("email_verification_sent_at", sa.DateTime(), nullable=True))
-    op.add_column("players", sa.Column("email_verified_at", sa.DateTime(), nullable=True))
-    op.execute("UPDATE federation_actor_auth SET email_verified_at = CURRENT_TIMESTAMP WHERE email_verified_at IS NULL")
-    op.execute("UPDATE players SET email_verified_at = CURRENT_TIMESTAMP WHERE email_verified_at IS NULL")
+    op.add_column(
+        "federation_actor_auth",
+        sa.Column("email_verified_at", sa.DateTime(), nullable=True),
+    )
+    op.add_column(
+        "federation_actor_auth",
+        sa.Column(
+            "email_verification_token_hash", sa.String(length=128), nullable=True
+        ),
+    )
+    op.add_column(
+        "federation_actor_auth",
+        sa.Column("email_verification_expires_at", sa.DateTime(), nullable=True),
+    )
+    op.add_column(
+        "federation_actor_auth",
+        sa.Column("email_verification_sent_at", sa.DateTime(), nullable=True),
+    )
+    op.add_column(
+        "players", sa.Column("email_verified_at", sa.DateTime(), nullable=True)
+    )
+    op.execute(
+        "UPDATE federation_actor_auth SET email_verified_at = CURRENT_TIMESTAMP WHERE email_verified_at IS NULL"
+    )
+    op.execute(
+        "UPDATE players SET email_verified_at = CURRENT_TIMESTAMP WHERE email_verified_at IS NULL"
+    )
 
 
 def downgrade() -> None:

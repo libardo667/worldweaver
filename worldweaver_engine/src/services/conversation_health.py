@@ -155,7 +155,11 @@ class PublicConversationMessage:
 
 
 def _tokens(body: str) -> list[str]:
-    return [token for token in _TOKEN_RE.findall(str(body or "").lower()) if token not in _STOPWORDS]
+    return [
+        token
+        for token in _TOKEN_RE.findall(str(body or "").lower())
+        if token not in _STOPWORDS
+    ]
 
 
 def _cosine(left: dict[str, float], right: dict[str, float]) -> float:
@@ -189,7 +193,11 @@ def _tfidf_vectors(tokenized: list[list[str]]) -> list[dict[str, float]]:
     for tokens in tokenized:
         counts = Counter(tokens)
         total = max(1, sum(counts.values()))
-        vector = {token: (count / total) * (math.log((1 + document_count) / (1 + document_frequency[token])) + 1.0) for token, count in counts.items()}
+        vector = {
+            token: (count / total)
+            * (math.log((1 + document_count) / (1 + document_frequency[token])) + 1.0)
+            for token, count in counts.items()
+        }
         vectors.append(vector)
     return vectors
 
@@ -210,11 +218,21 @@ def _speaker_convergence(labels: list[str], vectors: list[dict[str, float]]) -> 
     for label, vector in zip(labels, vectors, strict=True):
         by_speaker[label].append(vector)
     centroids = [_centroid(rows) for rows in by_speaker.values()]
-    similarities = [_cosine(centroids[i], centroids[j]) for i in range(len(centroids)) for j in range(i + 1, len(centroids))]
+    similarities = [
+        _cosine(centroids[i], centroids[j])
+        for i in range(len(centroids))
+        for j in range(i + 1, len(centroids))
+    ]
     return _mean(similarities)
 
 
-def _shuffled_convergence(labels: list[str], vectors: list[dict[str, float]], *, seed: int, iterations: int = 32) -> float:
+def _shuffled_convergence(
+    labels: list[str],
+    vectors: list[dict[str, float]],
+    *,
+    seed: int,
+    iterations: int = 32,
+) -> float:
     if len(set(labels)) < 2:
         return 0.0
     generator = random.Random(seed)
@@ -226,7 +244,9 @@ def _shuffled_convergence(labels: list[str], vectors: list[dict[str, float]], *,
     return _mean(samples)
 
 
-def _population_repetition(labels: list[str], vectors: list[dict[str, float]], normalized_bodies: list[str]) -> tuple[float, float]:
+def _population_repetition(
+    labels: list[str], vectors: list[dict[str, float]], normalized_bodies: list[str]
+) -> tuple[float, float]:
     previous_vectors: defaultdict[str, list[dict[str, float]]] = defaultdict(list)
     previous_bodies: defaultdict[str, set[str]] = defaultdict(set)
     similarity_scores: list[float] = []
@@ -235,7 +255,9 @@ def _population_repetition(labels: list[str], vectors: list[dict[str, float]], n
     for label, vector, body in zip(labels, vectors, normalized_bodies, strict=True):
         if previous_vectors[label]:
             eligible += 1
-            similarity_scores.append(max(_cosine(vector, prior) for prior in previous_vectors[label]))
+            similarity_scores.append(
+                max(_cosine(vector, prior) for prior in previous_vectors[label])
+            )
             if body and body in previous_bodies[label]:
                 exact_repeats += 1
         previous_vectors[label].append(vector)
@@ -244,7 +266,9 @@ def _population_repetition(labels: list[str], vectors: list[dict[str, float]], n
     return _mean(similarity_scores), exact_repeats / eligible if eligible else 0.0
 
 
-def _cluster_entropy(vectors: list[dict[str, float]], *, floor: float) -> tuple[int, float]:
+def _cluster_entropy(
+    vectors: list[dict[str, float]], *, floor: float
+) -> tuple[int, float]:
     clusters: list[list[dict[str, float]]] = []
     for vector in vectors:
         if not clusters:
@@ -259,11 +283,15 @@ def _cluster_entropy(vectors: list[dict[str, float]], *, floor: float) -> tuple[
     if len(clusters) <= 1:
         return len(clusters), 0.0
     total = sum(len(cluster) for cluster in clusters)
-    entropy = -sum((len(cluster) / total) * math.log(len(cluster) / total) for cluster in clusters)
+    entropy = -sum(
+        (len(cluster) / total) * math.log(len(cluster) / total) for cluster in clusters
+    )
     return len(clusters), entropy / math.log(len(clusters))
 
 
-def _window_convergence(labels: list[str], vectors: list[dict[str, float]], *, window_count: int) -> list[float | None]:
+def _window_convergence(
+    labels: list[str], vectors: list[dict[str, float]], *, window_count: int
+) -> list[float | None]:
     if not labels:
         return []
     count = max(1, min(int(window_count), len(labels)))
@@ -293,7 +321,11 @@ def _interaction_metrics(messages: list[PublicConversationMessage]) -> dict[str,
         pair_counts[pair] += 1
 
     transition_count = sum(pair_counts.values())
-    shares = [count / transition_count for count in pair_counts.values()] if transition_count else []
+    shares = (
+        [count / transition_count for count in pair_counts.values()]
+        if transition_count
+        else []
+    )
     return {
         "adjacent_reply_transitions": transition_count,
         "unique_pairs": len(pair_counts),
@@ -312,7 +344,12 @@ def analyze_public_conversation(
     """Return a content-blind aggregate report over public speech only."""
 
     ordered = sorted(
-        (message for message in messages if str(message.speaker_key or "").strip() and str(message.body or "").strip()),
+        (
+            message
+            for message in messages
+            if str(message.speaker_key or "").strip()
+            and str(message.body or "").strip()
+        ),
         key=lambda message: message.created_at,
     )
     labels = [message.speaker_key for message in ordered]
@@ -334,14 +371,27 @@ def analyze_public_conversation(
     normalized_bodies = [" ".join(tokens) for tokens in tokenized]
     observed_convergence = _speaker_convergence(labels, vectors)
     shuffled_convergence = _shuffled_convergence(labels, vectors, seed=shuffle_seed)
-    repetition, exact_repetition = _population_repetition(labels, vectors, normalized_bodies)
-    cluster_count, cluster_entropy = _cluster_entropy(vectors, floor=DEFAULT_CLUSTER_FLOOR)
-    civic_messages = sum(bool(set(tokens) & _CIVIC_INFRASTRUCTURE_TERMS) for tokens in tokenized)
-    civic_tokens = sum(sum(token in _CIVIC_INFRASTRUCTURE_TERMS for token in tokens) for tokens in tokenized)
+    repetition, exact_repetition = _population_repetition(
+        labels, vectors, normalized_bodies
+    )
+    cluster_count, cluster_entropy = _cluster_entropy(
+        vectors, floor=DEFAULT_CLUSTER_FLOOR
+    )
+    civic_messages = sum(
+        bool(set(tokens) & _CIVIC_INFRASTRUCTURE_TERMS) for tokens in tokenized
+    )
+    civic_tokens = sum(
+        sum(token in _CIVIC_INFRASTRUCTURE_TERMS for token in tokens)
+        for tokens in tokenized
+    )
     total_tokens = sum(len(tokens) for tokens in tokenized)
     window_scores = _window_convergence(labels, vectors, window_count=window_count)
     available_window_scores = [score for score in window_scores if score is not None]
-    convergence_change = available_window_scores[-1] - available_window_scores[0] if len(available_window_scores) >= 2 else 0.0
+    convergence_change = (
+        available_window_scores[-1] - available_window_scores[0]
+        if len(available_window_scores) >= 2
+        else 0.0
+    )
 
     return {
         **base,
@@ -351,7 +401,9 @@ def analyze_public_conversation(
             "exact_repeat_fraction": _rounded(exact_repetition),
             "speaker_convergence": _rounded(observed_convergence),
             "shuffled_convergence": _rounded(shuffled_convergence),
-            "distinctiveness_gap": _rounded(max(0.0, shuffled_convergence - observed_convergence)),
+            "distinctiveness_gap": _rounded(
+                max(0.0, shuffled_convergence - observed_convergence)
+            ),
             "window_convergence": window_scores,
             "window_convergence_change": round(convergence_change, 4),
         },
@@ -359,7 +411,9 @@ def analyze_public_conversation(
             "anonymous_cluster_count": cluster_count,
             "normalized_cluster_entropy": _rounded(cluster_entropy),
             "civic_message_fraction": _rounded(civic_messages / len(ordered)),
-            "civic_token_fraction": _rounded(civic_tokens / total_tokens if total_tokens else 0.0),
+            "civic_token_fraction": _rounded(
+                civic_tokens / total_tokens if total_tokens else 0.0
+            ),
         },
         "interaction": _interaction_metrics(ordered),
     }

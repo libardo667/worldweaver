@@ -115,11 +115,18 @@ def active_sublocations(
     now: datetime | None = None,
 ) -> list[WorldNode]:
     current = now or _utc_now()
-    rows = db.query(WorldNode).filter(WorldNode.node_type == NODE_TYPE_SUBLOCATION).order_by(WorldNode.id.asc()).all()
+    rows = (
+        db.query(WorldNode)
+        .filter(WorldNode.node_type == NODE_TYPE_SUBLOCATION)
+        .order_by(WorldNode.id.asc())
+        .all()
+    )
     active: list[WorldNode] = []
     for row in rows:
         metadata = dict(row.metadata_json or {})
-        if parent_location and str(metadata.get("parent_location") or "") != str(parent_location):
+        if parent_location and str(metadata.get("parent_location") or "") != str(
+            parent_location
+        ):
             continue
         if _is_active(row, now=current):
             active.append(row)
@@ -186,7 +193,9 @@ def create_or_refresh_ephemeral(
             .first()
             is not None
         )
-        display_name = f"{clean_label} ({clean_parent})" if duplicate_name else clean_label
+        display_name = (
+            f"{clean_label} ({clean_parent})" if duplicate_name else clean_label
+        )
         row = WorldNode(
             node_type=NODE_TYPE_SUBLOCATION,
             name=display_name,
@@ -201,7 +210,9 @@ def create_or_refresh_ephemeral(
             "label": clean_label,
             "parent_location": clean_parent,
             "persistence": "ephemeral",
-            "created_by_session": str(metadata.get("created_by_session") or created_by_session or ""),
+            "created_by_session": str(
+                metadata.get("created_by_session") or created_by_session or ""
+            ),
             "created_at": str(metadata.get("created_at") or current.isoformat()),
             "last_active_at": current.isoformat(),
             "ttl_seconds": ttl,
@@ -252,13 +263,19 @@ def graph_with_sublocations(
     nodes = [dict(node) for node in list(graph.get("nodes") or [])]
     edges = [dict(edge) for edge in list(graph.get("edges") or [])]
     parent_node = next(
-        (node for node in nodes if str(node.get("name") or "").strip() == parent_location),
+        (
+            node
+            for node in nodes
+            if str(node.get("name") or "").strip() == parent_location
+        ),
         None,
     )
     if parent_node is None:
         return {"nodes": nodes, "edges": edges}
     parent_key = str(parent_node.get("key") or "").strip()
-    edge_pairs = {(str(edge.get("from") or ""), str(edge.get("to") or "")) for edge in edges}
+    edge_pairs = {
+        (str(edge.get("from") or ""), str(edge.get("to") or "")) for edge in edges
+    }
     for row in rows:
         key = f"sublocation:{row.id}"
         payload = sublocation_payload(row)

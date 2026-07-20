@@ -45,7 +45,9 @@ class TestDatabaseEnvironmentLogic:
         assert database_url == "sqlite:///custom_database.db"
         assert "custom_database.db" in str(engine.url)
 
-    @patch.dict(os.environ, {"WW_DB_PATH": "/absolute/path/to/database.db"}, clear=False)
+    @patch.dict(
+        os.environ, {"WW_DB_PATH": "/absolute/path/to/database.db"}, clear=False
+    )
     def test_absolute_db_path_environment_variable(self):
         _, db_file, engine, _ = _reimport_database()
         assert db_file == "/absolute/path/to/database.db"
@@ -62,7 +64,10 @@ class TestDatabaseEnvironmentLogic:
     def test_database_url_takes_precedence_over_db_path(self):
         database_url, db_file, engine, engine_kwargs = _reimport_database()
         assert db_file is None
-        assert database_url == "postgresql+psycopg://postgres:postgres@localhost:5432/worldweaver"
+        assert (
+            database_url
+            == "postgresql+psycopg://postgres:postgres@localhost:5432/worldweaver"
+        )
         assert engine.url.drivername == "postgresql+psycopg"
         assert engine.url.host == "localhost"
         assert engine.url.database == "worldweaver"
@@ -82,7 +87,10 @@ class TestDatabaseEnvironmentLogic:
     def test_component_db_settings_build_postgres_url(self):
         database_url, db_file, engine, engine_kwargs = _reimport_database()
         assert db_file is None
-        assert database_url == "postgresql+psycopg://postgres:postgres@db:5432/worldweaver_sfo"
+        assert (
+            database_url
+            == "postgresql+psycopg://postgres:postgres@db:5432/worldweaver_sfo"
+        )
         assert engine.url.drivername == "postgresql+psycopg"
         assert engine.url.host == "db"
         assert engine.url.database == "worldweaver_sfo"
@@ -165,4 +173,6 @@ class TestDatabaseEnvironmentLogic:
             with patch.dict(os.environ, env, clear=True):
                 from src.database import db_file
 
-                assert db_file == expected, f"Failed for WW_DB_PATH={dw_db_path}, PYTEST={pytest_test}"
+                assert (
+                    db_file == expected
+                ), f"Failed for WW_DB_PATH={dw_db_path}, PYTEST={pytest_test}"

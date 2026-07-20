@@ -67,9 +67,16 @@ def resolve_inter_city_routes(
                 "status": str(shard.get("status") or "offline").strip(),
             }
             for shard in shards
-            if str(shard.get("city_id") or "").strip() == to_city_id and str(shard.get("shard_type") or "city").strip() == "city" and str(shard.get("shard_id") or "").strip() != current_shard_id()
+            if str(shard.get("city_id") or "").strip() == to_city_id
+            and str(shard.get("shard_type") or "city").strip() == "city"
+            and str(shard.get("shard_id") or "").strip() != current_shard_id()
         ]
-        nodes.sort(key=lambda node: (str(node["status"]) not in _AVAILABLE_NODE_STATES, str(node["shard_id"])))
+        nodes.sort(
+            key=lambda node: (
+                str(node["status"]) not in _AVAILABLE_NODE_STATES,
+                str(node["shard_id"]),
+            )
+        )
 
         if not registry_reachable:
             availability = "unknown"
@@ -106,7 +113,11 @@ def get_travel_destinations() -> dict[str, Any]:
     city_id = str(settings.city_id or "").strip()
     pack = get_pack(city_id) or {}
     raw_routes = pack.get("inter_city")
-    routes = [item for item in raw_routes if isinstance(item, dict)] if isinstance(raw_routes, list) else []
+    routes = (
+        [item for item in raw_routes if isinstance(item, dict)]
+        if isinstance(raw_routes, list)
+        else []
+    )
     registry_shards = _fetch_registry_shards()
     destinations = resolve_inter_city_routes(
         city_id=city_id,
@@ -114,8 +125,12 @@ def get_travel_destinations() -> dict[str, Any]:
         registry_shards=registry_shards,
     )
     for destination in destinations:
-        hub = resolve_travel_hub_entry(str(destination.get("departure_hub_id") or ""), city_id)
-        destination["departure_place"] = str((hub or {}).get("entry_location") or "").strip()
+        hub = resolve_travel_hub_entry(
+            str(destination.get("departure_hub_id") or ""), city_id
+        )
+        destination["departure_place"] = str(
+            (hub or {}).get("entry_location") or ""
+        ).strip()
     return {
         "source": {
             "shard_id": current_shard_id(),

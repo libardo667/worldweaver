@@ -27,7 +27,9 @@ router = APIRouter(prefix="/world/access", tags=["world access"])
 class AccessCommandRequest(BaseModel):
     session_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
     location: str = Field(min_length=1, max_length=200)
-    idempotency_key: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:-]+$")
+    idempotency_key: str = Field(
+        min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:-]+$"
+    )
 
 
 class AccessRequestCommand(AccessCommandRequest):
@@ -40,13 +42,17 @@ class SpaceModeCommand(AccessCommandRequest):
 
 
 class AdmissionCommand(AccessCommandRequest):
-    recipient_session_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    recipient_session_id: str = Field(
+        min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"
+    )
 
 
 class ResolveRequestCommand(BaseModel):
     session_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
     decision: Literal["admitted", "denied"]
-    idempotency_key: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:-]+$")
+    idempotency_key: str = Field(
+        min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:-]+$"
+    )
 
 
 def _raise_http(exc: SpaceAccessError) -> None:

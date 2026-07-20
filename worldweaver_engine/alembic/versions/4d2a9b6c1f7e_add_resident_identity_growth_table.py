@@ -5,11 +5,11 @@ Revises: f3a1c09b8d12
 Create Date: 2026-03-18 16:30:00.000000
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-
 
 revision: str = "4d2a9b6c1f7e"
 down_revision: Union[str, None] = "f3a1c09b8d12"
@@ -28,7 +28,9 @@ def upgrade() -> None:
         sa.Column("growth_text", sa.Text(), nullable=False, server_default=""),
         sa.Column("growth_metadata", sa.JSON(), nullable=True),
         sa.Column("note_records", sa.JSON(), nullable=True),
-        sa.Column("updated_at", sa.DateTime(), nullable=True, server_default=sa.func.now()),
+        sa.Column(
+            "updated_at", sa.DateTime(), nullable=True, server_default=sa.func.now()
+        ),
         sa.PrimaryKeyConstraint("actor_id"),
     )
 

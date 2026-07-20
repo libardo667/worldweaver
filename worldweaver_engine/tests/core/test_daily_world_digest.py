@@ -10,7 +10,9 @@ from sqlalchemy.orm import sessionmaker
 
 
 def _load_digest_module():
-    script_path = Path(__file__).resolve().parents[2] / "scripts" / "daily_world_digest.py"
+    script_path = (
+        Path(__file__).resolve().parents[2] / "scripts" / "daily_world_digest.py"
+    )
     spec = importlib.util.spec_from_file_location("daily_world_digest", script_path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -40,7 +42,9 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
     shard_dir = tmp_path / "shards" / "ww_test"
     residents_dir = shard_dir / "residents" / "mariko_tanaka" / "identity"
     residents_dir.mkdir(parents=True, exist_ok=True)
-    (residents_dir / "resident_id.txt").write_text("resident-mariko\n", encoding="utf-8")
+    (residents_dir / "resident_id.txt").write_text(
+        "resident-mariko\n", encoding="utf-8"
+    )
     now = datetime.now(timezone.utc)
     memory_dir = shard_dir / "residents" / "mariko_tanaka" / "memory"
     memory_dir.mkdir(parents=True, exist_ok=True)
@@ -121,10 +125,20 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
                             "resting": True,
                             "reason": "deep_night_lull",
                         },
-                        "_resident_memory_projection": {"pending_research": ["one", "two"]},
+                        "_resident_memory_projection": {
+                            "pending_research": ["one", "two"]
+                        },
                         "_resident_subjective_projection": {
-                            "dialogue_state": {"active_partner": "Elaine Cho", "direct_urgency": 0.9},
-                            "state_pressure": {"signals": [{"kind": "crowding"}, {"kind": "event_pull"}]},
+                            "dialogue_state": {
+                                "active_partner": "Elaine Cho",
+                                "direct_urgency": 0.9,
+                            },
+                            "state_pressure": {
+                                "signals": [
+                                    {"kind": "crowding"},
+                                    {"kind": "event_pull"},
+                                ]
+                            },
                         },
                     }
                 },
@@ -221,7 +235,9 @@ def test_build_digest_for_shard_summarizes_current_runtime(tmp_path):
     assert report["growth_watch"]["proposed"] == 1
     assert "Mariko Tanaka" in report["growth_watch"]["residents"]
     assert report["intent_heartbeat"]["current_top_pulls"][0]["intent_type"] == "move"
-    assert report["intent_heartbeat"]["high_priority_moments"][0]["intent_type"] == "move"
+    assert (
+        report["intent_heartbeat"]["high_priority_moments"][0]["intent_type"] == "move"
+    )
     assert report["intent_heartbeat"]["dominant_triggers"][0][0] == "chat_heard"
 
     markdown = digest.render_markdown(report)
@@ -255,7 +271,9 @@ def test_build_digest_for_shard_can_include_conversation_themes(tmp_path):
     shard_dir = tmp_path / "shards" / "ww_test"
     residents_dir = shard_dir / "residents" / "elaine_cho" / "identity"
     residents_dir.mkdir(parents=True, exist_ok=True)
-    (residents_dir / "resident_id.txt").write_text("resident-elaine\n", encoding="utf-8")
+    (residents_dir / "resident_id.txt").write_text(
+        "resident-elaine\n", encoding="utf-8"
+    )
 
     now = datetime.now(timezone.utc)
     with Session.begin() as session:

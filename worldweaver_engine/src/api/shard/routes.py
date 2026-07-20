@@ -7,7 +7,10 @@ from fastapi import APIRouter
 
 from ...config import settings
 from ...services.city_pack_service import get_city_pack_preview
-from ...services.shard_experience import PublicShardExperience, configured_shard_experience
+from ...services.shard_experience import (
+    PublicShardExperience,
+    configured_shard_experience,
+)
 
 router = APIRouter(prefix="/api/shard", tags=["shard"])
 

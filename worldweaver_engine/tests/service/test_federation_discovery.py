@@ -2,15 +2,36 @@ from src.services import federation_discovery
 
 
 def test_routes_join_local_geography_to_all_matching_live_nodes(monkeypatch):
-    monkeypatch.setattr(federation_discovery.settings, "shard_id", "sf-neighborhood-node")
+    monkeypatch.setattr(
+        federation_discovery.settings, "shard_id", "sf-neighborhood-node"
+    )
     routes = [
         {"id": "sf-pdx", "from": "san_francisco", "to": "portland", "mode": "train"},
         {"id": "sf-la", "from": "san_francisco", "to": "los_angeles", "mode": "flight"},
     ]
     registry = [
-        {"shard_id": "rose-city-coop", "city_id": "portland", "shard_type": "city", "shard_url": "https://pdx-api.example", "client_url": "https://pdx.example", "status": "healthy"},
-        {"shard_id": "portland-library", "city_id": "portland", "shard_type": "city", "shard_url": "https://library.example", "status": "offline"},
-        {"shard_id": "world", "city_id": "portland", "shard_type": "world", "shard_url": "https://world.example", "status": "healthy"},
+        {
+            "shard_id": "rose-city-coop",
+            "city_id": "portland",
+            "shard_type": "city",
+            "shard_url": "https://pdx-api.example",
+            "client_url": "https://pdx.example",
+            "status": "healthy",
+        },
+        {
+            "shard_id": "portland-library",
+            "city_id": "portland",
+            "shard_type": "city",
+            "shard_url": "https://library.example",
+            "status": "offline",
+        },
+        {
+            "shard_id": "world",
+            "city_id": "portland",
+            "shard_type": "world",
+            "shard_url": "https://world.example",
+            "status": "healthy",
+        },
     ]
 
     resolved = federation_discovery.resolve_inter_city_routes(
@@ -20,14 +41,19 @@ def test_routes_join_local_geography_to_all_matching_live_nodes(monkeypatch):
     )
 
     assert resolved[0]["availability"] == "available"
-    assert [node["shard_id"] for node in resolved[0]["nodes"]] == ["rose-city-coop", "portland-library"]
+    assert [node["shard_id"] for node in resolved[0]["nodes"]] == [
+        "rose-city-coop",
+        "portland-library",
+    ]
     assert resolved[0]["nodes"][0]["shard_url"] == "https://pdx-api.example"
     assert resolved[0]["nodes"][0]["client_url"] == "https://pdx.example"
     assert resolved[1]["availability"] == "unhosted"
 
 
 def test_routes_remain_visible_when_registry_is_unavailable(monkeypatch):
-    monkeypatch.setattr(federation_discovery.settings, "shard_id", "sf-neighborhood-node")
+    monkeypatch.setattr(
+        federation_discovery.settings, "shard_id", "sf-neighborhood-node"
+    )
 
     resolved = federation_discovery.resolve_inter_city_routes(
         city_id="san_francisco",

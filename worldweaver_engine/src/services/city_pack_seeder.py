@@ -52,8 +52,16 @@ _NODE_CORRIDOR = "corridor"
 def _pack_entry_location(pack: dict[str, Any], neighborhoods: list[dict]) -> str:
     """Resolve one published travel-hub entry to its canonical place name."""
 
-    names_by_id = {str(item.get("id") or "").strip().lower(): str(item.get("name") or "").strip() for item in neighborhoods if str(item.get("id") or "").strip() and str(item.get("name") or "").strip()}
-    names = [str(item.get("name") or "").strip() for item in neighborhoods if str(item.get("name") or "").strip()]
+    names_by_id = {
+        str(item.get("id") or "").strip().lower(): str(item.get("name") or "").strip()
+        for item in neighborhoods
+        if str(item.get("id") or "").strip() and str(item.get("name") or "").strip()
+    }
+    names = [
+        str(item.get("name") or "").strip()
+        for item in neighborhoods
+        if str(item.get("name") or "").strip()
+    ]
     for hub in pack.get("travel_hubs", []):
         if not isinstance(hub, dict):
             continue
@@ -92,14 +100,23 @@ def seed_world_from_city_pack(
 
     pack = get_pack(city_id)
     if not pack:
-        raise ValueError(f"No city pack found for city_id={city_id!r}. " "Run: python scripts/build_city_pack.py")
+        raise ValueError(
+            f"No city pack found for city_id={city_id!r}. "
+            "Run: python scripts/build_city_pack.py"
+        )
 
     # Clear only nodes/edges belonging to this city before re-seeding.
     # This preserves nodes from other cities so multiple city packs can coexist.
     from sqlalchemy import or_  # noqa: PLC0415
     from ..models import WorldEdge, WorldNode  # noqa: PLC0415
 
-    city_node_ids = [int(node_id) for (node_id,) in db.query(WorldNode.id).filter(WorldNode.metadata_json["city_id"].as_string() == city_id).all() if node_id is not None]
+    city_node_ids = [
+        int(node_id)
+        for (node_id,) in db.query(WorldNode.id)
+        .filter(WorldNode.metadata_json["city_id"].as_string() == city_id)
+        .all()
+        if node_id is not None
+    ]
     deleted_edges = 0
     deleted_nodes = 0
     if city_node_ids:
@@ -113,7 +130,11 @@ def seed_world_from_city_pack(
             )
             .delete(synchronize_session=False)
         )
-        deleted_nodes = db.query(WorldNode).filter(WorldNode.id.in_(city_node_ids)).delete(synchronize_session=False)
+        deleted_nodes = (
+            db.query(WorldNode)
+            .filter(WorldNode.id.in_(city_node_ids))
+            .delete(synchronize_session=False)
+        )
     db.flush()
     logger.info(
         "[city_pack_seed] cleared %d nodes and %d edges for city_id=%r before re-seeding",
@@ -138,14 +159,18 @@ def seed_world_from_city_pack(
     key_landmarks = [lm for lm in landmarks if lm.get("description") or lm.get("type")]
 
     if enrich_descriptions:
-        client = get_llm_client(policy=platform_shared_policy(owner_id="city_pack_seed"))
+        client = get_llm_client(
+            policy=platform_shared_policy(owner_id="city_pack_seed")
+        )
         model = get_city_builder_model()
 
         # Seeding is intentionally slow — give each batch call plenty of time.
         # Never less than 120s; respects a higher setting if configured.
         _seed_timeout = max(120, settings.llm_timeout_seconds)
 
-        def _llm(system: str, user: str, max_tokens: int = 2000, op: str = "city_pack_seed") -> str:
+        def _llm(
+            system: str, user: str, max_tokens: int = 2000, op: str = "city_pack_seed"
+        ) -> str:
             resp = _chat_completion_with_retry(
                 client,
                 model=model,
@@ -163,7 +188,9 @@ def seed_world_from_city_pack(
 
         # ── Step 1: World narrative frame ────────────────────────────────────
         logger.info("[city_pack_seed] step 1/4 — generating world narrative")
-        narrative = _generate_narrative(neighborhoods, world_theme, world_description, tone, _llm)
+        narrative = _generate_narrative(
+            neighborhoods, world_theme, world_description, tone, _llm
+        )
         logger.info(
             "[city_pack_seed] narrative era=%r tension=%r",
             narrative.get("era"),
@@ -172,21 +199,38 @@ def seed_world_from_city_pack(
 
         # ── Steps 2/3/4: Enrich neighborhoods, transit, and landmarks in parallel ─
         logger.info(
-            "[city_pack_seed] steps 2-4 — enriching %d neighborhoods, %d transit stops, " "%d landmarks (all in parallel)",
+            "[city_pack_seed] steps 2-4 — enriching %d neighborhoods, %d transit stops, "
+            "%d landmarks (all in parallel)",
             len(neighborhoods),
             len(all_stops),
             len(key_landmarks),
         )
         with ThreadPoolExecutor(max_workers=3) as pool:
-            f_hood = pool.submit(_enrich_neighborhoods, neighborhoods, landmarks, corridors, narrative, _llm)
-            f_transit = pool.submit(_enrich_transit, all_stops, narrative, _llm) if all_stops else None
-            f_landmark = pool.submit(_enrich_landmarks, key_landmarks, narrative, _llm) if key_landmarks else None
+            f_hood = pool.submit(
+                _enrich_neighborhoods,
+                neighborhoods,
+                landmarks,
+                corridors,
+                narrative,
+                _llm,
+            )
+            f_transit = (
+                pool.submit(_enrich_transit, all_stops, narrative, _llm)
+                if all_stops
+                else None
+            )
+            f_landmark = (
+                pool.submit(_enrich_landmarks, key_landmarks, narrative, _llm)
+                if key_landmarks
+                else None
+            )
             hood_descriptions = f_hood.result()
             transit_descriptions = f_transit.result() if f_transit else {}
             landmark_descriptions = f_landmark.result() if f_landmark else {}
     else:
         logger.info(
-            "[city_pack_seed] fast mode — skipping LLM enrichment for %d neighborhoods, " "%d transit stops, and %d landmarks",
+            "[city_pack_seed] fast mode — skipping LLM enrichment for %d neighborhoods, "
+            "%d transit stops, and %d landmarks",
             len(neighborhoods),
             len(all_stops),
             len(key_landmarks),
@@ -196,7 +240,10 @@ def seed_world_from_city_pack(
             "atmosphere": f"A city alive with {world_theme}.",
             "central_tension": "Change and continuity pull against each other block by block.",
             "themes": ["displacement", "community", "identity", "memory"],
-            "tone_notes": ("Ground everything in physical, sensory detail using the city pack's " "existing geography and prose."),
+            "tone_notes": (
+                "Ground everything in physical, sensory detail using the city pack's "
+                "existing geography and prose."
+            ),
         }
         hood_descriptions = {}
         transit_descriptions = {}
@@ -226,15 +273,22 @@ def seed_world_from_city_pack(
     # the intra-city pathfinder but make city connections queryable.
     inter_city_edges = _seed_inter_city_routes(db, city_id)
     if inter_city_edges:
-        logger.info("[city_pack_seed] seeded %d inter-city transit edges", inter_city_edges)
+        logger.info(
+            "[city_pack_seed] seeded %d inter-city transit edges", inter_city_edges
+        )
 
     material_pools_seeded = _seed_material_pool_fixtures(db)
     if material_pools_seeded:
-        logger.info("[city_pack_seed] founded %d replenishing material pool(s)", material_pools_seeded)
+        logger.info(
+            "[city_pack_seed] founded %d replenishing material pool(s)",
+            material_pools_seeded,
+        )
 
     stoops_seeded = _seed_stoop_fixtures(db, pack)
     if stoops_seeded:
-        logger.info("[city_pack_seed] founded %d bounded stoop fixture(s)", stoops_seeded)
+        logger.info(
+            "[city_pack_seed] founded %d bounded stoop fixture(s)", stoops_seeded
+        )
 
     return {
         "city_id": city_id,
@@ -260,10 +314,16 @@ def seed_world_from_city_pack(
 def _seed_material_pool_fixtures(db: Session) -> int:
     """Refound active ruleset materials after a development reset and city seed."""
 
-    from .shard_experience import GameCapability, configured_game_declaration  # noqa: PLC0415
+    from .shard_experience import (
+        GameCapability,
+        configured_game_declaration,
+    )  # noqa: PLC0415
 
     declaration = configured_game_declaration()
-    if declaration is None or GameCapability.REPLENISHING_MATERIALS not in declaration.capabilities:
+    if (
+        declaration is None
+        or GameCapability.REPLENISHING_MATERIALS not in declaration.capabilities
+    ):
         return 0
 
     from .material_making import initialize_material_pools  # noqa: PLC0415
@@ -278,7 +338,10 @@ def _seed_stoop_fixtures(db: Session, pack: dict[str, Any]) -> int:
     if not fixtures:
         return 0
 
-    from .shard_experience import GameCapability, configured_game_declaration  # noqa: PLC0415
+    from .shard_experience import (
+        GameCapability,
+        configured_game_declaration,
+    )  # noqa: PLC0415
 
     declaration = configured_game_declaration()
     if declaration is None or GameCapability.STOOPS not in declaration.capabilities:
@@ -400,7 +463,10 @@ def _generate_narrative(
     _llm,
 ) -> dict[str, Any]:
     """Generate a cohesive narrative frame from city pack data."""
-    hood_lines = "\n".join(f"  - {n['name']} ({n.get('region', '?')}): {n.get('vibe', '')}" for n in neighborhoods)
+    hood_lines = "\n".join(
+        f"  - {n['name']} ({n.get('region', '?')}): {n.get('vibe', '')}"
+        for n in neighborhoods
+    )
 
     system = (
         "You are establishing the narrative frame for a persistent world set in real "
@@ -438,7 +504,10 @@ def _generate_narrative(
             "atmosphere": f"A city alive with {world_theme}.",
             "central_tension": "Change and continuity pull against each other block by block.",
             "themes": ["displacement", "community", "identity", "memory"],
-            "tone_notes": ("Ground everything in physical, sensory detail. " "Be specific about streets, light, smell. Write in present tense."),
+            "tone_notes": (
+                "Ground everything in physical, sensory detail. "
+                "Be specific about streets, light, smell. Write in present tense."
+            ),
         }
 
 
@@ -467,7 +536,13 @@ def _enrich_neighborhoods(
         for hood in c.get("neighborhoods", []):
             cors_by_hood.setdefault(hood, []).append(c["name"])
 
-    context = f"World context:\n" f"  Era: {narrative.get('era', 'present day')}\n" f"  Atmosphere: {narrative.get('atmosphere', '')}\n" f"  Central tension: {narrative.get('central_tension', '')}\n" f"  Tone guidance: {narrative.get('tone_notes', '')}\n"
+    context = (
+        f"World context:\n"
+        f"  Era: {narrative.get('era', 'present day')}\n"
+        f"  Atmosphere: {narrative.get('atmosphere', '')}\n"
+        f"  Central tension: {narrative.get('central_tension', '')}\n"
+        f"  Tone guidance: {narrative.get('tone_notes', '')}\n"
+    )
 
     system = (
         "You are writing location descriptions for a persistent world set in real "
@@ -475,7 +550,8 @@ def _enrich_neighborhoods(
         "  - What it physically feels like to be there (light, texture, sound, smell)\n"
         "  - Who inhabits or moves through the space and why\n"
         "  - The particular tensions or textures that define this block of the city\n\n"
-        "Ground every sentence in real geography. Do not invent. Write in present tense.\n\n" + context
+        "Ground every sentence in real geography. Do not invent. Write in present tense.\n\n"
+        + context
     )
 
     # Group by region so batches are geographically coherent
@@ -495,7 +571,10 @@ def _enrich_neighborhoods(
                     "id": n["id"],
                     "name": n["name"],
                     "vibe": n.get("vibe", ""),
-                    "adjacent_to": [a.replace("-", " ").title() for a in n.get("adjacent_to", [])[:6]],
+                    "adjacent_to": [
+                        a.replace("-", " ").title()
+                        for a in n.get("adjacent_to", [])[:6]
+                    ],
                 }
                 lms = lms_by_hood.get(n["id"], [])[:4]
                 if lms:
@@ -515,14 +594,25 @@ def _enrich_neighborhoods(
             )
             all_batches.append((region, batch, user))
 
-    logger.info("[city_pack_seed] neighborhoods: running %d batches concurrently", len(all_batches))
+    logger.info(
+        "[city_pack_seed] neighborhoods: running %d batches concurrently",
+        len(all_batches),
+    )
     results: dict[str, str] = {}
     max_workers = min(len(all_batches), 8)
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        future_to_meta = {pool.submit(_llm, system, user, 2500, "city_pack_neighborhoods"): (region, batch) for region, batch, user in all_batches}
+        future_to_meta = {
+            pool.submit(_llm, system, user, 2500, "city_pack_neighborhoods"): (
+                region,
+                batch,
+            )
+            for region, batch, user in all_batches
+        }
         for fut in as_completed(future_to_meta):
             region, batch = future_to_meta[fut]
-            _parse_id_description_list(fut.result(), results, f"neighborhood batch region={region!r}")
+            _parse_id_description_list(
+                fut.result(), results, f"neighborhood batch region={region!r}"
+            )
             logger.info(
                 "[city_pack_seed] neighborhoods batch done — region=%r hoods=%s",
                 region,
@@ -543,7 +633,11 @@ def _enrich_transit(
     _llm,
 ) -> dict[str, str]:
     """Generate 2-3 sentence descriptions for transit stops in batches."""
-    context = f"Era: {narrative.get('era', 'present day')}. " f"Atmosphere: {narrative.get('atmosphere', '')} " f"Tone: {narrative.get('tone_notes', '')}"
+    context = (
+        f"Era: {narrative.get('era', 'present day')}. "
+        f"Atmosphere: {narrative.get('atmosphere', '')} "
+        f"Tone: {narrative.get('tone_notes', '')}"
+    )
 
     system = (
         "You are writing descriptions for San Francisco transit stops in a persistent "
@@ -569,14 +663,24 @@ def _enrich_transit(
             }
             for s in batch
         ]
-        user = f"{json.dumps(batch_data, indent=2)}\n\n" "Respond with a valid JSON array only — no markdown, no code fences:\n" '[{"id": "...", "description": "..."}, ...]\n\n' "IMPORTANT: plain ASCII-safe strings only inside the JSON."
+        user = (
+            f"{json.dumps(batch_data, indent=2)}\n\n"
+            "Respond with a valid JSON array only — no markdown, no code fences:\n"
+            '[{"id": "...", "description": "..."}, ...]\n\n'
+            "IMPORTANT: plain ASCII-safe strings only inside the JSON."
+        )
         batches.append((batch, user))
 
-    logger.info("[city_pack_seed] transit: running %d batches concurrently", len(batches))
+    logger.info(
+        "[city_pack_seed] transit: running %d batches concurrently", len(batches)
+    )
     results: dict[str, str] = {}
     max_workers = min(len(batches), 8)
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = {pool.submit(_llm, system, user, 1800, "city_pack_transit"): batch for batch, user in batches}
+        futures = {
+            pool.submit(_llm, system, user, 1800, "city_pack_transit"): batch
+            for batch, user in batches
+        }
         for fut in as_completed(futures):
             _parse_id_description_list(fut.result(), results, "transit batch")
 
@@ -594,7 +698,10 @@ def _enrich_landmarks(
     _llm,
 ) -> dict[str, str]:
     """Generate 2-3 sentence descriptions for key landmarks in batches."""
-    context = f"Era: {narrative.get('era', 'present day')}. " f"Tone: {narrative.get('tone_notes', '')}"
+    context = (
+        f"Era: {narrative.get('era', 'present day')}. "
+        f"Tone: {narrative.get('tone_notes', '')}"
+    )
 
     system = (
         "You are writing descriptions for San Francisco landmarks in a persistent world. "
@@ -619,14 +726,24 @@ def _enrich_landmarks(
             }
             for lm in batch
         ]
-        user = f"{json.dumps(batch_data, indent=2)}\n\n" "Respond with a valid JSON array only — no markdown, no code fences:\n" '[{"id": "...", "description": "..."}, ...]\n\n' "IMPORTANT: plain ASCII-safe strings only inside the JSON."
+        user = (
+            f"{json.dumps(batch_data, indent=2)}\n\n"
+            "Respond with a valid JSON array only — no markdown, no code fences:\n"
+            '[{"id": "...", "description": "..."}, ...]\n\n'
+            "IMPORTANT: plain ASCII-safe strings only inside the JSON."
+        )
         batches.append((batch, user))
 
-    logger.info("[city_pack_seed] landmarks: running %d batches concurrently", len(batches))
+    logger.info(
+        "[city_pack_seed] landmarks: running %d batches concurrently", len(batches)
+    )
     results: dict[str, str] = {}
     max_workers = min(len(batches), 8)
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = {pool.submit(_llm, system, user, 2000, "city_pack_landmarks"): batch for batch, user in batches}
+        futures = {
+            pool.submit(_llm, system, user, 2000, "city_pack_landmarks"): batch
+            for batch, user in batches
+        }
         for fut in as_completed(futures):
             _parse_id_description_list(fut.result(), results, "landmark batch")
 
@@ -725,8 +842,12 @@ def _write_to_graph(
         hood_id = stop.get("neighborhood", "")
         hood_node = hood_nodes.get(hood_id)
         if hood_node:
-            _upsert_world_edge(db, node.id, hood_node.id, "serves", None, confidence=1.0)
-            _upsert_world_edge(db, hood_node.id, node.id, "has_transit", None, confidence=1.0)
+            _upsert_world_edge(
+                db, node.id, hood_node.id, "serves", None, confidence=1.0
+            )
+            _upsert_world_edge(
+                db, hood_node.id, node.id, "has_transit", None, confidence=1.0
+            )
             counts["edges"] += 2
 
     db.flush()
@@ -765,7 +886,9 @@ def _write_to_graph(
         hood_id = lm.get("neighborhood", "")
         hood_node = hood_nodes.get(hood_id)
         if hood_node:
-            _upsert_world_edge(db, node.id, hood_node.id, "located_in", None, confidence=1.0)
+            _upsert_world_edge(
+                db, node.id, hood_node.id, "located_in", None, confidence=1.0
+            )
             counts["edges"] += 1
 
     # ── Street corridors ─────────────────────────────────────────────────────
@@ -788,7 +911,9 @@ def _write_to_graph(
         for hood_id in c.get("neighborhoods", []):
             hood_node = hood_nodes.get(hood_id)
             if hood_node:
-                _upsert_world_edge(db, node.id, hood_node.id, "runs_through", None, confidence=1.0)
+                _upsert_world_edge(
+                    db, node.id, hood_node.id, "runs_through", None, confidence=1.0
+                )
                 counts["edges"] += 1
 
     db.commit()
@@ -850,7 +975,11 @@ def _parse_id_description_list(raw: str, out: dict[str, str], label: str) -> Non
                 items = []
 
             for item in items:
-                if isinstance(item, dict) and item.get("id") and item.get("description"):
+                if (
+                    isinstance(item, dict)
+                    and item.get("id")
+                    and item.get("description")
+                ):
                     out[item["id"]] = item["description"]
             return
         except Exception:

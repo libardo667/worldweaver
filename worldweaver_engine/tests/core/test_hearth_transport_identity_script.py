@@ -14,7 +14,9 @@ def _run(script: Path, private_key: Path, descriptor: Path | None = None):
 
 
 def test_script_creates_verifies_and_repairs_public_descriptor(tmp_path):
-    script = Path(__file__).resolve().parents[2] / "scripts" / "hearth_transport_identity.py"
+    script = (
+        Path(__file__).resolve().parents[2] / "scripts" / "hearth_transport_identity.py"
+    )
     private_key = tmp_path / "hearth-host" / "identity" / "transport.key"
     descriptor = tmp_path / "hearth-host.json"
 
@@ -32,11 +34,15 @@ def test_script_creates_verifies_and_repairs_public_descriptor(tmp_path):
     repaired = _run(script, private_key, descriptor)
     assert repaired.returncode == 0, repaired.stderr
     assert json.loads(repaired.stdout)["status"] == "repaired"
-    assert json.loads(descriptor.read_text(encoding="utf-8")) == (created_payload["descriptor"])
+    assert json.loads(descriptor.read_text(encoding="utf-8")) == (
+        created_payload["descriptor"]
+    )
 
 
 def test_script_refuses_orphaned_or_mismatched_public_descriptor(tmp_path):
-    script = Path(__file__).resolve().parents[2] / "scripts" / "hearth_transport_identity.py"
+    script = (
+        Path(__file__).resolve().parents[2] / "scripts" / "hearth_transport_identity.py"
+    )
     first_key = tmp_path / "first" / "transport.key"
     first_descriptor = tmp_path / "first.json"
     second_key = tmp_path / "second" / "transport.key"

@@ -32,7 +32,9 @@ def _summary(draft: CityDraft) -> dict:
     return {
         **draft.metadata,
         "section_count": len(sections),
-        "locked_section_count": sum(section.get("locked") is True for section in sections),
+        "locked_section_count": sum(
+            section.get("locked") is True for section in sections
+        ),
         "preview_dir": str((_store_path(draft.draft_id) / "preview").resolve()),
     }
 
@@ -46,7 +48,11 @@ def _print(value: object) -> None:
 
 
 def _create(args: argparse.Namespace) -> int:
-    config_path = Path(args.config) if args.config else ENGINE_ROOT / "scripts" / "city_configs" / f"{args.city}.json"
+    config_path = (
+        Path(args.config)
+        if args.config
+        else ENGINE_ROOT / "scripts" / "city_configs" / f"{args.city}.json"
+    )
     if not config_path.is_file():
         raise FileNotFoundError(f"city configuration not found: {config_path}")
     source = json.loads(config_path.read_text(encoding="utf-8"))
@@ -73,7 +79,14 @@ def _section(args: argparse.Namespace) -> int:
         expected_revision=args.expected_revision,
     )
     summary = _summary(draft)
-    summary["section_preview"] = str((_store_path(args.draft_id) / "preview" / "sections" / f"{args.section_id}.svg").resolve())
+    summary["section_preview"] = str(
+        (
+            _store_path(args.draft_id)
+            / "preview"
+            / "sections"
+            / f"{args.section_id}.svg"
+        ).resolve()
+    )
     _print(summary)
     return 0
 
@@ -82,7 +95,10 @@ def _preview(args: argparse.Namespace) -> int:
     draft = _ACTIVE_STORE.get(args.draft_id)
     path = _store_path(args.draft_id) / "preview" / "generated_map.svg"
     if args.section_id:
-        known_sections = {section["id"] for section in draft.preview.files["generated_map.json"]["sections"]}
+        known_sections = {
+            section["id"]
+            for section in draft.preview.files["generated_map.json"]["sections"]
+        }
         if args.section_id not in known_sections:
             raise ValueError(f"unknown map section: {args.section_id}")
         path = path.parent / "sections" / f"{args.section_id}.svg"
@@ -91,7 +107,9 @@ def _preview(args: argparse.Namespace) -> int:
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Work on a local city draft without touching data/cities")
+    parser = argparse.ArgumentParser(
+        description="Work on a local city draft without touching data/cities"
+    )
     parser.add_argument(
         "--root",
         default=str(DEFAULT_CITY_DRAFTS_DIR),
@@ -99,7 +117,9 @@ def _parser() -> argparse.ArgumentParser:
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
-    create = commands.add_parser("create", help="create a draft from one city configuration")
+    create = commands.add_parser(
+        "create", help="create a draft from one city configuration"
+    )
     source = create.add_mutually_exclusive_group(required=True)
     source.add_argument("--city", help="configuration name from scripts/city_configs")
     source.add_argument("--config", help="path to a city configuration JSON file")
@@ -113,7 +133,9 @@ def _parser() -> argparse.ArgumentParser:
     inspect.add_argument("draft_id")
     inspect.set_defaults(handler=_inspect)
 
-    section = commands.add_parser("section", help="lock, unlock, or reroll one draft map section")
+    section = commands.add_parser(
+        "section", help="lock, unlock, or reroll one draft map section"
+    )
     section.add_argument("draft_id")
     section.add_argument("section_id")
     section.add_argument("action", choices=("lock", "unlock", "reroll"))

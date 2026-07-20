@@ -84,7 +84,10 @@ def _compose_postgres_url(env: dict[str, str], *, host_accessible: bool) -> str:
     if host_accessible and host in {"db", "postgres", "host.docker.internal"}:
         host = "127.0.0.1"
         port = str(env.get("WW_DB_EXTERNAL_PORT") or port).strip() or port
-    return "postgresql+psycopg://" f"{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{quote_plus(name)}"
+    return (
+        "postgresql+psycopg://"
+        f"{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{quote_plus(name)}"
+    )
 
 
 def _discover_city_shards() -> list[ShardSpec]:
@@ -95,7 +98,13 @@ def _discover_city_shards() -> list[ShardSpec]:
         env = _load_env_file(shard_dir / ".env")
         if str(env.get("SHARD_TYPE") or "").strip().lower() == "world":
             continue
-        if not (str(env.get("WW_DB_NAME") or "").strip() and (str(env.get("WW_DB_EXTERNAL_PORT") or "").strip() or str(env.get("WW_DB_HOST") or "").strip())):
+        if not (
+            str(env.get("WW_DB_NAME") or "").strip()
+            and (
+                str(env.get("WW_DB_EXTERNAL_PORT") or "").strip()
+                or str(env.get("WW_DB_HOST") or "").strip()
+            )
+        ):
             continue
         shards.append(ShardSpec(name=shard_dir.name, shard_dir=shard_dir, env=env))
     return shards
@@ -132,7 +141,11 @@ def _parse_iso(value: Any) -> datetime | None:
 
 
 def _display_name_from_slug(slug: str) -> str:
-    return " ".join(part.capitalize() for part in str(slug or "").replace("-", "_").split("_") if part)
+    return " ".join(
+        part.capitalize()
+        for part in str(slug or "").replace("-", "_").split("_")
+        if part
+    )
 
 
 def _session_display_name(session_id: str) -> str:
@@ -145,7 +158,11 @@ def _session_display_name(session_id: str) -> str:
 def _resident_dirs(residents_dir: Path) -> list[Path]:
     if not residents_dir.exists():
         return []
-    return [path for path in sorted(residents_dir.iterdir()) if path.is_dir() and not path.name.startswith("_")]
+    return [
+        path
+        for path in sorted(residents_dir.iterdir())
+        if path.is_dir() and not path.name.startswith("_")
+    ]
 
 
 def _actor_to_slug(residents_dir: Path) -> dict[str, str]:
@@ -218,7 +235,9 @@ def _location_from_event_delta(delta: Any) -> str:
     raw = str(delta.get("destination") or delta.get("location") or "").strip()
     if raw:
         return raw
-    variables = delta.get("variables") if isinstance(delta.get("variables"), dict) else {}
+    variables = (
+        delta.get("variables") if isinstance(delta.get("variables"), dict) else {}
+    )
     return str(variables.get("location") or "").strip()
 
 
@@ -259,7 +278,9 @@ def _payload_summary(intent_type: str, payload: Any) -> str:
     return str(data.get("content") or data.get("text") or "").strip()
 
 
-def _build_intent_heartbeat(*, residents_dir: Path, since_utc: datetime) -> dict[str, Any]:
+def _build_intent_heartbeat(
+    *, residents_dir: Path, since_utc: datetime
+) -> dict[str, Any]:
     current_top_pulls: list[dict[str, Any]] = []
     high_priority_moments: list[dict[str, Any]] = []
     intent_counts: Counter[str] = Counter()
@@ -276,12 +297,19 @@ def _build_intent_heartbeat(*, residents_dir: Path, since_utc: datetime) -> dict
                 snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
             except json.JSONDecodeError:
                 snapshot = {}
-            queued = list(snapshot.get("queued_intents") or []) if isinstance(snapshot, dict) else []
+            queued = (
+                list(snapshot.get("queued_intents") or [])
+                if isinstance(snapshot, dict)
+                else []
+            )
             queued = [item for item in queued if isinstance(item, dict)]
             if queued:
                 top = sorted(
                     queued,
-                    key=lambda item: (-float(item.get("priority") or 0.0), str(item.get("created_at") or "")),
+                    key=lambda item: (
+                        -float(item.get("priority") or 0.0),
+                        str(item.get("created_at") or ""),
+                    ),
                 )[0]
                 current_top_pulls.append(
                     {
@@ -289,7 +317,10 @@ def _build_intent_heartbeat(*, residents_dir: Path, since_utc: datetime) -> dict
                         "intent_type": str(top.get("intent_type") or "").strip(),
                         "priority": round(float(top.get("priority") or 0.0), 3),
                         "target_loop": str(top.get("target_loop") or "").strip(),
-                        "summary": _payload_summary(str(top.get("intent_type") or "").strip(), top.get("payload") or {}),
+                        "summary": _payload_summary(
+                            str(top.get("intent_type") or "").strip(),
+                            top.get("payload") or {},
+                        ),
                     }
                 )
 
@@ -298,7 +329,9 @@ def _build_intent_heartbeat(*, residents_dir: Path, since_utc: datetime) -> dict
         for event in events:
             if str(event.get("event_type") or "").strip() != "packet_emitted":
                 continue
-            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            payload = (
+                event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            )
             packet_id = str(payload.get("packet_id") or "").strip()
             packet_type = str(payload.get("packet_type") or "").strip()
             if packet_id and packet_type:
@@ -311,7 +344,9 @@ def _build_intent_heartbeat(*, residents_dir: Path, since_utc: datetime) -> dict
             event_ts = _parse_iso(event.get("ts"))
             if event_ts is None or event_ts < since_utc:
                 continue
-            payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            payload = (
+                event.get("payload") if isinstance(event.get("payload"), dict) else {}
+            )
             intent_type = str(payload.get("intent_type") or "").strip()
             if not intent_type:
                 continue
@@ -322,8 +357,16 @@ def _build_intent_heartbeat(*, residents_dir: Path, since_utc: datetime) -> dict
             intent_counts[intent_type] += 1
             intent_priority_totals[intent_type] += priority
 
-            source_packet_ids = [str(item).strip() for item in list(payload.get("source_packet_ids") or []) if str(item).strip()]
-            source_types = [packet_type_by_id[item] for item in source_packet_ids if item in packet_type_by_id]
+            source_packet_ids = [
+                str(item).strip()
+                for item in list(payload.get("source_packet_ids") or [])
+                if str(item).strip()
+            ]
+            source_types = [
+                packet_type_by_id[item]
+                for item in source_packet_ids
+                if item in packet_type_by_id
+            ]
             for source_type in source_types:
                 trigger_counts[source_type] += 1
 
@@ -334,13 +377,20 @@ def _build_intent_heartbeat(*, residents_dir: Path, since_utc: datetime) -> dict
                         "ts": event_ts.isoformat(),
                         "intent_type": intent_type,
                         "priority": round(priority, 3),
-                        "summary": _payload_summary(intent_type, payload.get("payload") or {}),
+                        "summary": _payload_summary(
+                            intent_type, payload.get("payload") or {}
+                        ),
                         "source_types": source_types[:4],
                     }
                 )
 
-    current_top_pulls.sort(key=lambda item: (-float(item["priority"]), item["resident"]))
-    high_priority_moments.sort(key=lambda item: (-float(item["priority"]), item["ts"], item["resident"]), reverse=False)
+    current_top_pulls.sort(
+        key=lambda item: (-float(item["priority"]), item["resident"])
+    )
+    high_priority_moments.sort(
+        key=lambda item: (-float(item["priority"]), item["ts"], item["resident"]),
+        reverse=False,
+    )
     dominant_pulls = sorted(
         (
             (
@@ -404,16 +454,22 @@ def _render_bullets(items: list[str], *, empty: str) -> list[str]:
 
 
 def _chat_message_ts(row: Any) -> datetime:
-    return _parse_iso(getattr(row, "created_at", None)) or datetime.min.replace(tzinfo=timezone.utc)
+    return _parse_iso(getattr(row, "created_at", None)) or datetime.min.replace(
+        tzinfo=timezone.utc
+    )
 
 
-def _sample_conversation_lines(recent_chat: list[Any], *, max_messages: int) -> list[str]:
+def _sample_conversation_lines(
+    recent_chat: list[Any], *, max_messages: int
+) -> list[str]:
     ordered = sorted(recent_chat, key=_chat_message_ts, reverse=True)
     samples: list[str] = []
     seen: set[tuple[str, str, str]] = set()
     for row in ordered:
         location = str(getattr(row, "location", "") or "").strip()
-        speaker = str(getattr(row, "display_name", "") or getattr(row, "session_id", "") or "").strip()
+        speaker = str(
+            getattr(row, "display_name", "") or getattr(row, "session_id", "") or ""
+        ).strip()
         message = " ".join(str(getattr(row, "message", "") or "").strip().split())
         if not location or not speaker or not message:
             continue
@@ -442,7 +498,11 @@ def _extract_text_response(response: Any) -> str:
     if isinstance(content, list):
         parts: list[str] = []
         for item in content:
-            text = getattr(item, "text", None) if not isinstance(item, dict) else item.get("text")
+            text = (
+                getattr(item, "text", None)
+                if not isinstance(item, dict)
+                else item.get("text")
+            )
             if text:
                 parts.append(str(text))
         return "\n".join(parts).strip()
@@ -466,9 +526,21 @@ def _parse_theme_analysis(raw_text: str) -> dict[str, Any]:
             return {"status": "parse_error", "raw": text}
     if not isinstance(payload, dict):
         return {"status": "parse_error", "raw": text}
-    themes = [str(item).strip() for item in list(payload.get("themes") or []) if str(item).strip()]
-    tensions = [str(item).strip() for item in list(payload.get("tensions") or []) if str(item).strip()]
-    oddities = [str(item).strip() for item in list(payload.get("oddities") or []) if str(item).strip()]
+    themes = [
+        str(item).strip()
+        for item in list(payload.get("themes") or [])
+        if str(item).strip()
+    ]
+    tensions = [
+        str(item).strip()
+        for item in list(payload.get("tensions") or [])
+        if str(item).strip()
+    ]
+    oddities = [
+        str(item).strip()
+        for item in list(payload.get("oddities") or [])
+        if str(item).strip()
+    ]
     summary = str(payload.get("summary") or "").strip()
     return {
         "status": "ok",
@@ -486,9 +558,15 @@ def _summarize_conversation_themes_with_llm(
     lines: list[str],
     model: str = "",
 ) -> dict[str, Any]:
-    from src.services.llm_client import get_llm_client, get_model, platform_shared_policy
+    from src.services.llm_client import (
+        get_llm_client,
+        get_model,
+        platform_shared_policy,
+    )
 
-    client = get_llm_client(policy=platform_shared_policy(owner_id=f"daily_world_digest:{shard_name}"))
+    client = get_llm_client(
+        policy=platform_shared_policy(owner_id=f"daily_world_digest:{shard_name}")
+    )
     if client is None:
         return {"status": "unavailable", "reason": "no_llm_client"}
 
@@ -500,7 +578,11 @@ def _summarize_conversation_themes_with_llm(
         "summary must be one concise paragraph. themes, tensions, oddities must each be arrays of short strings. "
         "Focus on repeated motifs, cluster dynamics, shared obsessions, groundedness vs abstraction, and whether the talk sounds socially healthy."
     )
-    user_prompt = f"City: {city_id}\n" f"Shard: {shard_name}\n" f"Recent public chat lines ({len(lines)}):\n" + "\n".join(lines)
+    user_prompt = (
+        f"City: {city_id}\n"
+        f"Shard: {shard_name}\n"
+        f"Recent public chat lines ({len(lines)}):\n" + "\n".join(lines)
+    )
     response = client.chat.completions.create(
         model=chosen_model,
         temperature=0.2,
@@ -526,10 +608,19 @@ def _build_conversation_themes(
 ) -> dict[str, Any]:
     lines = _sample_conversation_lines(recent_chat, max_messages=max_messages)
     if not lines:
-        return {"status": "no_chat", "sample_count": 0, "summary": "", "themes": [], "tensions": [], "oddities": []}
+        return {
+            "status": "no_chat",
+            "sample_count": 0,
+            "summary": "",
+            "themes": [],
+            "tensions": [],
+            "oddities": [],
+        }
     analyzer = summarizer or _summarize_conversation_themes_with_llm
     try:
-        result = analyzer(shard_name=shard_name, city_id=city_id, lines=lines, model=theme_model)
+        result = analyzer(
+            shard_name=shard_name, city_id=city_id, lines=lines, model=theme_model
+        )
     except Exception as exc:
         result = {"status": "error", "reason": f"{exc.__class__.__name__}: {exc}"}
     if not isinstance(result, dict):
@@ -554,7 +645,11 @@ def _build_narrative_weather(
         cluster_text = f"around {top_cluster[0]} ({top_cluster[1]} residents)"
     else:
         cluster_text = "without a dominant cluster"
-    return f"The shard held {live_count} live residents, clustering most strongly {cluster_text}. " f"In the last window it logged {utterance} utterances, {movement} movements, and {actions} embodied actions. " f"{promotion_count} soul-growth promotion(s) landed."
+    return (
+        f"The shard held {live_count} live residents, clustering most strongly {cluster_text}. "
+        f"In the last window it logged {utterance} utterances, {movement} movements, and {actions} embodied actions. "
+        f"{promotion_count} soul-growth promotion(s) landed."
+    )
 
 
 def build_digest_for_shard(
@@ -589,15 +684,42 @@ def build_digest_for_shard(
     actor_slug_map = _actor_to_slug(residents_dir)
 
     with Session() as session:
-        live_rows = session.query(SessionVars).filter(SessionVars.actor_id.is_not(None)).all()
-        resident_rows = [row for row in live_rows if str(getattr(row, "session_id", "") or "").strip() and str(getattr(row, "actor_id", "") or "").strip() in actor_slug_map]
-        orphan_rows = [row for row in live_rows if str(getattr(row, "session_id", "") or "").strip() and str(getattr(row, "actor_id", "") or "").strip() and str(getattr(row, "actor_id", "") or "").strip() not in actor_slug_map]
+        live_rows = (
+            session.query(SessionVars).filter(SessionVars.actor_id.is_not(None)).all()
+        )
+        resident_rows = [
+            row
+            for row in live_rows
+            if str(getattr(row, "session_id", "") or "").strip()
+            and str(getattr(row, "actor_id", "") or "").strip() in actor_slug_map
+        ]
+        orphan_rows = [
+            row
+            for row in live_rows
+            if str(getattr(row, "session_id", "") or "").strip()
+            and str(getattr(row, "actor_id", "") or "").strip()
+            and str(getattr(row, "actor_id", "") or "").strip() not in actor_slug_map
+        ]
 
-        recent_events = session.query(WorldEvent).filter(WorldEvent.created_at >= since_utc).all()
-        recent_chat = session.query(LocationChat).filter(LocationChat.created_at >= since_utc).all()
-        recent_dm = session.query(DirectMessage).filter(DirectMessage.sent_at >= since_utc).all()
+        recent_events = (
+            session.query(WorldEvent).filter(WorldEvent.created_at >= since_utc).all()
+        )
+        recent_chat = (
+            session.query(LocationChat)
+            .filter(LocationChat.created_at >= since_utc)
+            .all()
+        )
+        recent_dm = (
+            session.query(DirectMessage)
+            .filter(DirectMessage.sent_at >= since_utc)
+            .all()
+        )
         growth_rows = session.query(ResidentIdentityGrowth).all()
-        resident_actor_ids = [str(getattr(row, "actor_id", "") or "").strip() for row in resident_rows if str(getattr(row, "actor_id", "") or "").strip()]
+        resident_actor_ids = [
+            str(getattr(row, "actor_id", "") or "").strip()
+            for row in resident_rows
+            if str(getattr(row, "actor_id", "") or "").strip()
+        ]
 
     live_count = len(resident_rows)
     resident_dir_count = len(_resident_dirs(residents_dir))
@@ -631,13 +753,17 @@ def build_digest_for_shard(
             pair_name, urgency = pair
             dialogue_pairs[pair_name].append(urgency)
 
-    event_counts: Counter[str] = Counter(str(getattr(event, "event_type", "") or "").strip() for event in recent_events)
+    event_counts: Counter[str] = Counter(
+        str(getattr(event, "event_type", "") or "").strip() for event in recent_events
+    )
     movement_locations: Counter[str] = Counter()
     roamers: dict[str, set[str]] = defaultdict(set)
     for event in recent_events:
         if str(getattr(event, "event_type", "") or "").strip() != "movement":
             continue
-        destination = _location_from_event_delta(getattr(event, "world_state_delta", {}) or {})
+        destination = _location_from_event_delta(
+            getattr(event, "world_state_delta", {}) or {}
+        )
         if not destination:
             continue
         movement_locations[destination] += 1
@@ -651,25 +777,44 @@ def build_digest_for_shard(
         ((name, len(locations)) for name, locations in roamers.items()),
         key=lambda item: (-item[1], item[0]),
     )[:5]
-    top_chat_locations = Counter(str(getattr(row, "location", "") or "").strip() for row in recent_chat if str(getattr(row, "location", "") or "").strip()).most_common(5)
+    top_chat_locations = Counter(
+        str(getattr(row, "location", "") or "").strip()
+        for row in recent_chat
+        if str(getattr(row, "location", "") or "").strip()
+    ).most_common(5)
     strongest_pairs = sorted(
-        ((pair_name, len(urgencies), round(sum(urgencies) / len(urgencies), 2)) for pair_name, urgencies in dialogue_pairs.items()),
+        (
+            (pair_name, len(urgencies), round(sum(urgencies) / len(urgencies), 2))
+            for pair_name, urgencies in dialogue_pairs.items()
+        ),
         key=lambda item: (-item[2], -item[1], item[0]),
     )[:5]
-    unread_dm_count = sum(1 for row in recent_dm if getattr(row, "read_at", None) is None)
-    duplicate_names = sorted(name for name, count in duplicate_name_counts.items() if name and count > 1)
-    orphan_sessions = sorted(f"{str(getattr(row, 'session_id', '') or '').strip()} @ {str(_current_location_from_vars(getattr(row, 'vars', {}) or {}) or 'unknown')}" for row in orphan_rows)
+    unread_dm_count = sum(
+        1 for row in recent_dm if getattr(row, "read_at", None) is None
+    )
+    duplicate_names = sorted(
+        name for name, count in duplicate_name_counts.items() if name and count > 1
+    )
+    orphan_sessions = sorted(
+        f"{str(getattr(row, 'session_id', '') or '').strip()} @ {str(_current_location_from_vars(getattr(row, 'vars', {}) or {}) or 'unknown')}"
+        for row in orphan_rows
+    )
     saturated = []
     for row in resident_rows:
         count = _pending_research_count(getattr(row, "vars", {}) or {})
         if count >= 6:
-            saturated.append(_session_display_name(str(getattr(row, "session_id", "") or "")))
+            saturated.append(
+                _session_display_name(str(getattr(row, "session_id", "") or ""))
+            )
     saturated = sorted(set(saturated))
 
     promotions: list[dict[str, Any]] = []
     for row in growth_rows:
         metadata = dict(getattr(row, "growth_metadata", {}) or {})
-        preview = str(metadata.get("growth_preview") or str(getattr(row, "growth_text", "") or "")[:120]).strip()
+        preview = str(
+            metadata.get("growth_preview")
+            or str(getattr(row, "growth_text", "") or "")[:120]
+        ).strip()
         promoted_at = _parse_iso(metadata.get("promoted_at"))
         if promoted_at is None or not preview:
             continue
@@ -686,8 +831,16 @@ def build_digest_for_shard(
         )
     promotions.sort(key=lambda item: item["promoted_at"], reverse=True)
 
-    avg_research = round(sum(research_counts) / len(research_counts), 2) if research_counts else 0.0
-    avg_pressure = round(sum(pressure_counts) / len(pressure_counts), 2) if pressure_counts else 0.0
+    avg_research = (
+        round(sum(research_counts) / len(research_counts), 2)
+        if research_counts
+        else 0.0
+    )
+    avg_pressure = (
+        round(sum(pressure_counts) / len(pressure_counts), 2)
+        if pressure_counts
+        else 0.0
+    )
 
     top_cluster = top_clusters[0] if top_clusters else None
     report = {
@@ -767,7 +920,11 @@ def render_markdown(report: dict[str, Any]) -> str:
             [
                 f"{population['live_residents']} live resident session(s)",
                 f"{population['resident_dirs']} resident director(ies) on disk",
-                ("new residents: " + ", ".join(population["new_residents"]) if population["new_residents"] else "new residents: none"),
+                (
+                    "new residents: " + ", ".join(population["new_residents"])
+                    if population["new_residents"]
+                    else "new residents: none"
+                ),
             ],
             empty="No population data.",
         )
@@ -776,48 +933,119 @@ def render_markdown(report: dict[str, Any]) -> str:
     movement = report["movement"]
     movement_items: list[str] = []
     if movement["top_clusters"]:
-        movement_items.append("current clusters: " + ", ".join(f"{location} ({count})" for location, count in movement["top_clusters"]))
+        movement_items.append(
+            "current clusters: "
+            + ", ".join(
+                f"{location} ({count})" for location, count in movement["top_clusters"]
+            )
+        )
     if movement["top_movement_locations"]:
-        movement_items.append("movement destinations: " + ", ".join(f"{location} ({count})" for location, count in movement["top_movement_locations"]))
+        movement_items.append(
+            "movement destinations: "
+            + ", ".join(
+                f"{location} ({count})"
+                for location, count in movement["top_movement_locations"]
+            )
+        )
     if movement["top_roamers"]:
-        movement_items.append("widest ranging: " + ", ".join(f"{name} ({count} locations)" for name, count in movement["top_roamers"]))
+        movement_items.append(
+            "widest ranging: "
+            + ", ".join(
+                f"{name} ({count} locations)" for name, count in movement["top_roamers"]
+            )
+        )
     lines.extend(_render_bullets(movement_items, empty="No movement signal yet."))
 
     lines.extend(["", "**Social Life**"])
     social = report["social"]
     social_items: list[str] = []
     if social["top_chat_locations"]:
-        social_items.append("top chat locations: " + ", ".join(f"{location} ({count})" for location, count in social["top_chat_locations"]))
+        social_items.append(
+            "top chat locations: "
+            + ", ".join(
+                f"{location} ({count})"
+                for location, count in social["top_chat_locations"]
+            )
+        )
     if social["strongest_dialogue_pairs"]:
-        social_items.append("dialogue pairs: " + ", ".join(f"{pair} (urgency {urgency}, {count} resident views)" for pair, count, urgency in social["strongest_dialogue_pairs"]))
-    social_items.append(f"direct messages: {social['direct_messages_sent']} sent in window, {social['direct_messages_unread']} unread")
+        social_items.append(
+            "dialogue pairs: "
+            + ", ".join(
+                f"{pair} (urgency {urgency}, {count} resident views)"
+                for pair, count, urgency in social["strongest_dialogue_pairs"]
+            )
+        )
+    social_items.append(
+        f"direct messages: {social['direct_messages_sent']} sent in window, {social['direct_messages_unread']} unread"
+    )
     lines.extend(_render_bullets(social_items, empty="No social signal yet."))
 
     lines.extend(["", "**Intent Heartbeat**"])
     heartbeat = report["intent_heartbeat"]
     heartbeat_items: list[str] = []
     if heartbeat["current_top_pulls"]:
-        heartbeat_items.append("current top pulls: " + ", ".join(f"{item['resident']} -> {item['intent_type']} {item['priority']}" + (f" ({item['summary']})" if item.get("summary") else "") for item in heartbeat["current_top_pulls"]))
+        heartbeat_items.append(
+            "current top pulls: "
+            + ", ".join(
+                f"{item['resident']} -> {item['intent_type']} {item['priority']}"
+                + (f" ({item['summary']})" if item.get("summary") else "")
+                for item in heartbeat["current_top_pulls"]
+            )
+        )
     if heartbeat["dominant_pulls"]:
-        heartbeat_items.append("dominant pulls this window: " + ", ".join(f"{intent_type} ({count}, avg {avg_priority})" for intent_type, count, avg_priority in heartbeat["dominant_pulls"]))
+        heartbeat_items.append(
+            "dominant pulls this window: "
+            + ", ".join(
+                f"{intent_type} ({count}, avg {avg_priority})"
+                for intent_type, count, avg_priority in heartbeat["dominant_pulls"]
+            )
+        )
     if heartbeat["high_priority_moments"]:
         heartbeat_items.append(
-            "high-priority moments: " + "; ".join(f"{item['resident']} -> {item['intent_type']} {item['priority']}" + (f" via {', '.join(item['source_types'])}" if item.get("source_types") else "") + (f" ({item['summary']})" if item.get("summary") else "") for item in heartbeat["high_priority_moments"][:5])
+            "high-priority moments: "
+            + "; ".join(
+                f"{item['resident']} -> {item['intent_type']} {item['priority']}"
+                + (
+                    f" via {', '.join(item['source_types'])}"
+                    if item.get("source_types")
+                    else ""
+                )
+                + (f" ({item['summary']})" if item.get("summary") else "")
+                for item in heartbeat["high_priority_moments"][:5]
+            )
         )
     if heartbeat["dominant_triggers"]:
-        heartbeat_items.append("common triggers: " + ", ".join(f"{trigger} ({count})" for trigger, count in heartbeat["dominant_triggers"]))
-    lines.extend(_render_bullets(heartbeat_items, empty="No intent-heartbeat signal yet."))
+        heartbeat_items.append(
+            "common triggers: "
+            + ", ".join(
+                f"{trigger} ({count})"
+                for trigger, count in heartbeat["dominant_triggers"]
+            )
+        )
+    lines.extend(
+        _render_bullets(heartbeat_items, empty="No intent-heartbeat signal yet.")
+    )
 
     lines.extend(["", "**Behavioral Health**"])
     health = report["behavioral_health"]
     event_counts = health["event_counts"]
     health_items = [
-        "world events: " + ", ".join(f"{label}={int(event_counts.get(label, 0))}" for label in ("utterance", "movement", "freeform_action")),
+        "world events: "
+        + ", ".join(
+            f"{label}={int(event_counts.get(label, 0))}"
+            for label in ("utterance", "movement", "freeform_action")
+        ),
         f"average pending research: {health['average_pending_research']}",
         f"average pressure signals: {health['average_pressure_signals']}",
     ]
     if health["rest_snapshot"]:
-        health_items.append("rest snapshot: " + ", ".join(f"{state}={count}" for state, count in sorted(health["rest_snapshot"].items())))
+        health_items.append(
+            "rest snapshot: "
+            + ", ".join(
+                f"{state}={count}"
+                for state, count in sorted(health["rest_snapshot"].items())
+            )
+        )
     lines.extend(_render_bullets(health_items, empty="No behavioral signal yet."))
 
     if report.get("conversation_themes"):
@@ -831,44 +1059,78 @@ def render_markdown(report: dict[str, Any]) -> str:
             if summary:
                 theme_items.append(f"summary ({sample_count} sampled lines): {summary}")
             if themes.get("themes"):
-                theme_items.append("recurring themes: " + "; ".join(str(item) for item in themes["themes"]))
+                theme_items.append(
+                    "recurring themes: "
+                    + "; ".join(str(item) for item in themes["themes"])
+                )
             if themes.get("tensions"):
-                theme_items.append("tensions: " + "; ".join(str(item) for item in themes["tensions"]))
+                theme_items.append(
+                    "tensions: " + "; ".join(str(item) for item in themes["tensions"])
+                )
             if themes.get("oddities"):
-                theme_items.append("oddities: " + "; ".join(str(item) for item in themes["oddities"]))
+                theme_items.append(
+                    "oddities: " + "; ".join(str(item) for item in themes["oddities"])
+                )
         elif status == "no_chat":
             theme_items.append("No public chat to analyze in this window.")
         elif status == "unavailable":
-            theme_items.append("Conversation theme analysis unavailable because no LLM client is configured.")
+            theme_items.append(
+                "Conversation theme analysis unavailable because no LLM client is configured."
+            )
         else:
             reason = str(themes.get("reason") or themes.get("raw") or status).strip()
             theme_items.append(f"Conversation theme analysis unavailable: {reason}")
-        lines.extend(_render_bullets(theme_items, empty="No conversation-theme signal yet."))
+        lines.extend(
+            _render_bullets(theme_items, empty="No conversation-theme signal yet.")
+        )
 
     lines.extend(["", "**Identity**"])
     growth_watch = report.get("growth_watch") or {}
     if growth_watch.get("proposed") or growth_watch.get("promoted"):
-        lines.extend(_render_bullets([f"growth proposals: proposed={int(growth_watch.get('proposed') or 0)}, promoted={int(growth_watch.get('promoted') or 0)}" + (f" ({', '.join(growth_watch.get('residents') or [])})" if growth_watch.get("residents") else "")], empty="No identity-growth proposals in this window."))
+        lines.extend(
+            _render_bullets(
+                [
+                    f"growth proposals: proposed={int(growth_watch.get('proposed') or 0)}, promoted={int(growth_watch.get('promoted') or 0)}"
+                    + (
+                        f" ({', '.join(growth_watch.get('residents') or [])})"
+                        if growth_watch.get("residents")
+                        else ""
+                    )
+                ],
+                empty="No identity-growth proposals in this window.",
+            )
+        )
     promotions = report["identity"]["promotions"]
     if promotions:
         lines.extend(
             _render_bullets(
-                [f"{item['resident']} at {item['promoted_at']}: {item['preview']}" for item in promotions],
+                [
+                    f"{item['resident']} at {item['promoted_at']}: {item['preview']}"
+                    for item in promotions
+                ],
                 empty="No identity activity.",
             )
         )
     else:
-        lines.extend(_render_bullets([], empty="No soul-growth promotions in this window."))
+        lines.extend(
+            _render_bullets([], empty="No soul-growth promotions in this window.")
+        )
 
     lines.extend(["", "**Alerts**"])
     alerts = report["alerts"]
     alert_items: list[str] = []
     if alerts["duplicate_live_names"]:
-        alert_items.append("duplicate live names: " + ", ".join(alerts["duplicate_live_names"]))
+        alert_items.append(
+            "duplicate live names: " + ", ".join(alerts["duplicate_live_names"])
+        )
     if alerts["research_saturation"]:
-        alert_items.append("research saturation: " + ", ".join(alerts["research_saturation"]))
+        alert_items.append(
+            "research saturation: " + ", ".join(alerts["research_saturation"])
+        )
     if alerts.get("orphan_live_sessions"):
-        alert_items.append("orphan live sessions: " + "; ".join(alerts["orphan_live_sessions"]))
+        alert_items.append(
+            "orphan live sessions: " + "; ".join(alerts["orphan_live_sessions"])
+        )
     lines.extend(_render_bullets(alert_items, empty="No steward alerts."))
     lines.append("")
     return "\n".join(lines)
@@ -896,14 +1158,19 @@ def _publication_city_summary(report: dict[str, Any]) -> str:
         conversation_text = str(themes["summary"]).strip()
     elif social["top_chat_locations"]:
         location, count = social["top_chat_locations"][0]
-        conversation_text = f"public talk concentrated most around {location} ({count} lines)"
+        conversation_text = (
+            f"public talk concentrated most around {location} ({count} lines)"
+        )
 
     pull_text = ""
     if heartbeat["dominant_pulls"]:
         intent_type, count, avg_priority = heartbeat["dominant_pulls"][0]
         pull_text = f" The strongest pull type was {intent_type} ({count} staged, avg priority {avg_priority})."
 
-    return f"In {city_name}, {cluster_text}, and {movement_text}. " f"{conversation_text.rstrip('.')}.{pull_text}"
+    return (
+        f"In {city_name}, {cluster_text}, and {movement_text}. "
+        f"{conversation_text.rstrip('.')}.{pull_text}"
+    )
 
 
 def render_publication_markdown(
@@ -912,10 +1179,18 @@ def render_publication_markdown(
     lookback_hours: int,
     timezone_name: str,
 ) -> str:
-    generated_values = [_parse_iso(report.get("generated_at_local")) for report in reports if _parse_iso(report.get("generated_at_local")) is not None]
+    generated_values = [
+        _parse_iso(report.get("generated_at_local"))
+        for report in reports
+        if _parse_iso(report.get("generated_at_local")) is not None
+    ]
     generated_local = ""
     if generated_values:
-        generated_local = max(generated_values).astimezone(ZoneInfo(timezone_name)).strftime("%Y-%m-%d %I:%M %p %Z")
+        generated_local = (
+            max(generated_values)
+            .astimezone(ZoneInfo(timezone_name))
+            .strftime("%Y-%m-%d %I:%M %p %Z")
+        )
 
     lines = [
         "# WorldWeaver Morning Brief",
@@ -948,85 +1223,223 @@ def render_publication_markdown(
                 lines.append(f"{str(themes['summary']).strip()}")
                 lines.append("")
             elif status == "unavailable":
-                lines.append("Conversation-theme analysis was unavailable for this run.")
+                lines.append(
+                    "Conversation-theme analysis was unavailable for this run."
+                )
                 lines.append("")
 
         lines.append("**Where The Day Gathered**")
         gathered: list[str] = []
         if movement["top_clusters"]:
-            gathered.append("Current clusters: " + ", ".join(f"{location} ({count})" for location, count in movement["top_clusters"][:4]))
+            gathered.append(
+                "Current clusters: "
+                + ", ".join(
+                    f"{location} ({count})"
+                    for location, count in movement["top_clusters"][:4]
+                )
+            )
         if movement["top_movement_locations"]:
-            gathered.append("Main destinations: " + ", ".join(f"{location} ({count})" for location, count in movement["top_movement_locations"][:4]))
+            gathered.append(
+                "Main destinations: "
+                + ", ".join(
+                    f"{location} ({count})"
+                    for location, count in movement["top_movement_locations"][:4]
+                )
+            )
         if social["top_chat_locations"]:
-            gathered.append("Conversation centers: " + ", ".join(f"{location} ({count})" for location, count in social["top_chat_locations"][:4]))
-        lines.extend(_render_bullets(gathered, empty="No strong geographic or social clustering yet."))
+            gathered.append(
+                "Conversation centers: "
+                + ", ".join(
+                    f"{location} ({count})"
+                    for location, count in social["top_chat_locations"][:4]
+                )
+            )
+        lines.extend(
+            _render_bullets(
+                gathered, empty="No strong geographic or social clustering yet."
+            )
+        )
 
         lines.extend(["", "**What Residents Were Pulled Toward**"])
         pulls: list[str] = []
         if heartbeat["dominant_pulls"]:
-            pulls.append("Dominant pulls: " + ", ".join(f"{intent_type} ({count}, avg priority {avg_priority})" for intent_type, count, avg_priority in heartbeat["dominant_pulls"][:5]))
+            pulls.append(
+                "Dominant pulls: "
+                + ", ".join(
+                    f"{intent_type} ({count}, avg priority {avg_priority})"
+                    for intent_type, count, avg_priority in heartbeat["dominant_pulls"][
+                        :5
+                    ]
+                )
+            )
         if heartbeat["current_top_pulls"]:
-            pulls.append("Current top pulls: " + ", ".join(f"{item['resident']} -> {item['intent_type']}" + (f" ({item['summary']})" if item.get("summary") else "") for item in heartbeat["current_top_pulls"][:5]))
+            pulls.append(
+                "Current top pulls: "
+                + ", ".join(
+                    f"{item['resident']} -> {item['intent_type']}"
+                    + (f" ({item['summary']})" if item.get("summary") else "")
+                    for item in heartbeat["current_top_pulls"][:5]
+                )
+            )
         if heartbeat["dominant_triggers"]:
-            pulls.append("Common triggers: " + ", ".join(f"{trigger} ({count})" for trigger, count in heartbeat["dominant_triggers"][:4]))
+            pulls.append(
+                "Common triggers: "
+                + ", ".join(
+                    f"{trigger} ({count})"
+                    for trigger, count in heartbeat["dominant_triggers"][:4]
+                )
+            )
         lines.extend(_render_bullets(pulls, empty="No strong intent heartbeat yet."))
 
         lines.extend(["", "**Identity Growth**"])
         growth_watch = report.get("growth_watch") or {}
         growth_notes: list[str] = []
         if growth_watch.get("proposed") or growth_watch.get("promoted"):
-            growth_notes.append(f"Growth proposals: proposed={int(growth_watch.get('proposed') or 0)}, promoted={int(growth_watch.get('promoted') or 0)}" + (f" ({', '.join(growth_watch.get('residents') or [])})" if growth_watch.get("residents") else ""))
-        lines.extend(_render_bullets(growth_notes, empty="No identity-growth proposals in this window."))
+            growth_notes.append(
+                f"Growth proposals: proposed={int(growth_watch.get('proposed') or 0)}, promoted={int(growth_watch.get('promoted') or 0)}"
+                + (
+                    f" ({', '.join(growth_watch.get('residents') or [])})"
+                    if growth_watch.get("residents")
+                    else ""
+                )
+            )
+        lines.extend(
+            _render_bullets(
+                growth_notes, empty="No identity-growth proposals in this window."
+            )
+        )
 
         lines.extend(["", "**Notable Developments**"])
         developments: list[str] = []
         if population["new_residents"]:
-            developments.append("New residents: " + ", ".join(population["new_residents"][:8]))
+            developments.append(
+                "New residents: " + ", ".join(population["new_residents"][:8])
+            )
         if social["strongest_dialogue_pairs"]:
-            developments.append("Strongest dialogue pairs: " + ", ".join(f"{pair} (urgency {urgency})" for pair, _count, urgency in social["strongest_dialogue_pairs"][:4]))
-        developments.append("Activity mix: " + ", ".join(f"{label}={int(health['event_counts'].get(label, 0))}" for label in ("utterance", "movement", "freeform_action")))
-        developments.append(f"Research pressure averaged {health['average_pending_research']}; pressure signals averaged {health['average_pressure_signals']}.")
+            developments.append(
+                "Strongest dialogue pairs: "
+                + ", ".join(
+                    f"{pair} (urgency {urgency})"
+                    for pair, _count, urgency in social["strongest_dialogue_pairs"][:4]
+                )
+            )
+        developments.append(
+            "Activity mix: "
+            + ", ".join(
+                f"{label}={int(health['event_counts'].get(label, 0))}"
+                for label in ("utterance", "movement", "freeform_action")
+            )
+        )
+        developments.append(
+            f"Research pressure averaged {health['average_pending_research']}; pressure signals averaged {health['average_pressure_signals']}."
+        )
         if themes.get("status") == "ok":
             if themes.get("themes"):
-                developments.append("Recurring themes: " + "; ".join(str(item) for item in themes["themes"][:4]))
+                developments.append(
+                    "Recurring themes: "
+                    + "; ".join(str(item) for item in themes["themes"][:4])
+                )
             if themes.get("tensions"):
-                developments.append("Tensions: " + "; ".join(str(item) for item in themes["tensions"][:3]))
+                developments.append(
+                    "Tensions: "
+                    + "; ".join(str(item) for item in themes["tensions"][:3])
+                )
             if themes.get("oddities"):
-                developments.append("Oddities: " + "; ".join(str(item) for item in themes["oddities"][:3]))
+                developments.append(
+                    "Oddities: "
+                    + "; ".join(str(item) for item in themes["oddities"][:3])
+                )
         if identity["promotions"]:
-            developments.append("Soul-growth promotions: " + "; ".join(f"{item['resident']}: {item['preview']}" for item in identity["promotions"][:3]))
-        lines.extend(_render_bullets(developments, empty="No notable developments yet."))
+            developments.append(
+                "Soul-growth promotions: "
+                + "; ".join(
+                    f"{item['resident']}: {item['preview']}"
+                    for item in identity["promotions"][:3]
+                )
+            )
+        lines.extend(
+            _render_bullets(developments, empty="No notable developments yet.")
+        )
 
         lines.extend(["", "**Steward Notes**"])
         steward_notes: list[str] = []
         if alerts["duplicate_live_names"]:
-            steward_notes.append("Duplicate live names: " + ", ".join(alerts["duplicate_live_names"]))
+            steward_notes.append(
+                "Duplicate live names: " + ", ".join(alerts["duplicate_live_names"])
+            )
         if alerts["research_saturation"]:
-            steward_notes.append("Research saturation: " + ", ".join(alerts["research_saturation"]))
+            steward_notes.append(
+                "Research saturation: " + ", ".join(alerts["research_saturation"])
+            )
         if alerts.get("orphan_live_sessions"):
-            steward_notes.append("Orphan live sessions: " + "; ".join(alerts["orphan_live_sessions"][:6]))
+            steward_notes.append(
+                "Orphan live sessions: " + "; ".join(alerts["orphan_live_sessions"][:6])
+            )
         if not steward_notes:
             steward_notes.append("No immediate stewardship alerts in this window.")
-        lines.extend(_render_bullets(steward_notes, empty="No immediate stewardship alerts in this window."))
+        lines.extend(
+            _render_bullets(
+                steward_notes, empty="No immediate stewardship alerts in this window."
+            )
+        )
 
     lines.append("")
     return "\n".join(lines)
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Build a daily steward digest for WorldWeaver shards.")
-    parser.add_argument("--shard-dir", default="", help="Specific shard dir relative to workspace, e.g. shards/ww_sfo")
-    parser.add_argument("--all-cities", action="store_true", help="Report every city shard instead of just one")
-    parser.add_argument("--lookback-hours", type=int, default=24, help="Lookback window in hours (default: 24)")
-    parser.add_argument("--timezone", default="America/Los_Angeles", help="Output timezone (default: America/Los_Angeles)")
-    parser.add_argument("--format", choices=("markdown", "json", "publication_markdown"), default="markdown")
+    parser = argparse.ArgumentParser(
+        description="Build a daily steward digest for WorldWeaver shards."
+    )
+    parser.add_argument(
+        "--shard-dir",
+        default="",
+        help="Specific shard dir relative to workspace, e.g. shards/ww_sfo",
+    )
+    parser.add_argument(
+        "--all-cities",
+        action="store_true",
+        help="Report every city shard instead of just one",
+    )
+    parser.add_argument(
+        "--lookback-hours",
+        type=int,
+        default=24,
+        help="Lookback window in hours (default: 24)",
+    )
+    parser.add_argument(
+        "--timezone",
+        default="America/Los_Angeles",
+        help="Output timezone (default: America/Los_Angeles)",
+    )
+    parser.add_argument(
+        "--format",
+        choices=("markdown", "json", "publication_markdown"),
+        default="markdown",
+    )
     parser.add_argument("--output", default="", help="Optional output file path")
-    parser.add_argument("--conversation-themes", action="store_true", help="Use the platform LLM to summarize recent public-chat themes")
-    parser.add_argument("--theme-message-limit", type=int, default=60, help="Max recent public chat lines to sample for theme analysis")
-    parser.add_argument("--theme-model", default="", help="Optional model override for conversation theme analysis")
+    parser.add_argument(
+        "--conversation-themes",
+        action="store_true",
+        help="Use the platform LLM to summarize recent public-chat themes",
+    )
+    parser.add_argument(
+        "--theme-message-limit",
+        type=int,
+        default=60,
+        help="Max recent public chat lines to sample for theme analysis",
+    )
+    parser.add_argument(
+        "--theme-model",
+        default="",
+        help="Optional model override for conversation theme analysis",
+    )
     args = parser.parse_args()
 
-    shards = _resolve_shards(shard_dir=str(args.shard_dir or "").strip() or None, all_cities=bool(args.all_cities))
+    shards = _resolve_shards(
+        shard_dir=str(args.shard_dir or "").strip() or None,
+        all_cities=bool(args.all_cities),
+    )
     if not shards:
         print("No city shards found.")
         return 1
@@ -1084,7 +1497,9 @@ def main() -> int:
     if args.output:
         output_path = Path(args.output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(rendered + ("\n" if not rendered.endswith("\n") else ""), encoding="utf-8")
+        output_path.write_text(
+            rendered + ("\n" if not rendered.endswith("\n") else ""), encoding="utf-8"
+        )
         print(str(output_path))
     else:
         print(rendered)

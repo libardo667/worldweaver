@@ -74,11 +74,19 @@ class ResidentAuthority(Base):
     identity_public_key = Column(String(64), nullable=False, unique=True)
     identity_key_id = Column(String(48), nullable=False, unique=True, index=True)
     active_runtime_generation = Column(Integer, nullable=True)
-    recovery_policy_version = Column(Integer, nullable=False, default=1, server_default="1")
-    admission_reason = Column(String(500), nullable=False, default="", server_default="")
-    admitted_by = Column(String(80), nullable=False, default="internal", server_default="internal")
+    recovery_policy_version = Column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    admission_reason = Column(
+        String(500), nullable=False, default="", server_default=""
+    )
+    admitted_by = Column(
+        String(80), nullable=False, default="internal", server_default="internal"
+    )
     bound_at = Column(DateTime, server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 class ResidentSessionAuthority(Base):
@@ -100,7 +108,9 @@ class ResidentSessionAuthority(Base):
     actor_id = Column(String(36), nullable=False, index=True)
     runtime_generation = Column(Integer, nullable=False)
     bound_at = Column(DateTime, server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 class ResidentRequestNonce(Base):
@@ -125,7 +135,9 @@ class ResidentRequestNonce(Base):
     actor_id = Column(String(36), nullable=False, index=True)
     runtime_generation = Column(Integer, nullable=False)
     signed_at = Column(DateTime, nullable=False)
-    received_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
+    received_at = Column(
+        DateTime, server_default=func.now(), nullable=False, index=True
+    )
 
 
 class ResidentIdentityGrowth(Base):
@@ -161,7 +173,8 @@ class DurableObject(Base):
     __tablename__ = "durable_objects"
     __table_args__ = (
         CheckConstraint(
-            "(custodian_actor_id IS NOT NULL AND location IS NULL) OR " "(custodian_actor_id IS NULL AND location IS NOT NULL)",
+            "(custodian_actor_id IS NOT NULL AND location IS NULL) OR "
+            "(custodian_actor_id IS NULL AND location IS NOT NULL)",
             name="ck_durable_objects_one_attachment",
         ),
         Index("ix_durable_objects_custodian_status", "custodian_actor_id", "status"),
@@ -184,11 +197,18 @@ class DurableObject(Base):
     created_by_actor_id = Column(String(36), nullable=False)
     provenance_kind = Column(String(40), nullable=False)
     provenance_ref = Column(String(120), nullable=True)
-    provenance_event_id = Column(Integer, ForeignKey("world_events.id", ondelete="RESTRICT"), nullable=True, index=True)
+    provenance_event_id = Column(
+        Integer,
+        ForeignKey("world_events.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     properties_json = Column(JSON, nullable=False, default=dict)
     revision = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 class ConsequenceReceipt(Base):
@@ -205,13 +225,24 @@ class ConsequenceReceipt(Base):
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    receipt_id = Column(String(36), nullable=False, unique=True, default=lambda: str(_uuid.uuid4()))
+    receipt_id = Column(
+        String(36), nullable=False, unique=True, default=lambda: str(_uuid.uuid4())
+    )
     actor_id = Column(String(36), nullable=False, index=True)
     session_id = Column(String(64), nullable=False)
     idempotency_key = Column(String(128), nullable=False)
     operation = Column(String(50), nullable=False)
-    object_id = Column(String(36), ForeignKey("durable_objects.object_id", ondelete="RESTRICT"), nullable=False)
-    world_event_id = Column(Integer, ForeignKey("world_events.id", ondelete="RESTRICT"), nullable=False, unique=True)
+    object_id = Column(
+        String(36),
+        ForeignKey("durable_objects.object_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    world_event_id = Column(
+        Integer,
+        ForeignKey("world_events.id", ondelete="RESTRICT"),
+        nullable=False,
+        unique=True,
+    )
     payload_json = Column(JSON, nullable=False, default=dict)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
 
@@ -237,7 +268,9 @@ class ObjectExchange(Base):
         Index("ix_object_exchanges_recipient_status", "recipient_actor_id", "status"),
     )
 
-    exchange_id = Column(String(36), primary_key=True, default=lambda: str(_uuid.uuid4()))
+    exchange_id = Column(
+        String(36), primary_key=True, default=lambda: str(_uuid.uuid4())
+    )
     proposer_actor_id = Column(String(36), nullable=False)
     recipient_actor_id = Column(String(36), nullable=False)
     offered_object_id = Column(
@@ -273,7 +306,9 @@ class ExchangeReceipt(Base):
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    receipt_id = Column(String(36), nullable=False, unique=True, default=lambda: str(_uuid.uuid4()))
+    receipt_id = Column(
+        String(36), nullable=False, unique=True, default=lambda: str(_uuid.uuid4())
+    )
     actor_id = Column(String(36), nullable=False, index=True)
     session_id = Column(String(64), nullable=False)
     idempotency_key = Column(String(128), nullable=False)
@@ -298,7 +333,9 @@ class WorldStoop(Base):
 
     __tablename__ = "world_stoops"
     __table_args__ = (
-        CheckConstraint("capacity > 0 AND capacity <= 50", name="ck_world_stoops_bounded_capacity"),
+        CheckConstraint(
+            "capacity > 0 AND capacity <= 50", name="ck_world_stoops_bounded_capacity"
+        ),
         Index("ix_world_stoops_location", "location"),
     )
 
@@ -308,7 +345,9 @@ class WorldStoop(Base):
     location = Column(String(200), nullable=False)
     capacity = Column(Integer, nullable=False)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 class StoopObjectEntry(Base):
@@ -357,7 +396,9 @@ class StoopReceipt(Base):
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    receipt_id = Column(String(36), nullable=False, unique=True, default=lambda: str(_uuid.uuid4()))
+    receipt_id = Column(
+        String(36), nullable=False, unique=True, default=lambda: str(_uuid.uuid4())
+    )
     actor_id = Column(String(36), nullable=False, index=True)
     session_id = Column(String(64), nullable=False)
     idempotency_key = Column(String(128), nullable=False)
@@ -389,10 +430,23 @@ class MaterialPool(Base):
             "location",
             name="uq_material_pools_ruleset_material_location",
         ),
-        CheckConstraint("capacity_units > 0", name="ck_material_pools_positive_capacity"),
-        CheckConstraint("available_units >= 0 AND available_units <= capacity_units", name="ck_material_pools_bounded_available"),
-        CheckConstraint("replenish_units > 0 AND replenish_every_seconds > 0", name="ck_material_pools_positive_replenishment"),
-        Index("ix_material_pools_ruleset_location", "ruleset_id", "ruleset_version", "location"),
+        CheckConstraint(
+            "capacity_units > 0", name="ck_material_pools_positive_capacity"
+        ),
+        CheckConstraint(
+            "available_units >= 0 AND available_units <= capacity_units",
+            name="ck_material_pools_bounded_available",
+        ),
+        CheckConstraint(
+            "replenish_units > 0 AND replenish_every_seconds > 0",
+            name="ck_material_pools_positive_replenishment",
+        ),
+        Index(
+            "ix_material_pools_ruleset_location",
+            "ruleset_id",
+            "ruleset_version",
+            "location",
+        ),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -408,7 +462,9 @@ class MaterialPool(Base):
     replenish_every_seconds = Column(Integer, nullable=False)
     last_replenished_at = Column(DateTime, nullable=False)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 class SpaceAccessPolicy(Base):
@@ -428,7 +484,9 @@ class SpaceAccessPolicy(Base):
     note = Column(String(500), nullable=False, default="")
     revision = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 class SpaceAccessGrant(Base):
@@ -436,7 +494,9 @@ class SpaceAccessGrant(Base):
 
     __tablename__ = "space_access_grants"
     __table_args__ = (
-        UniqueConstraint("location", "actor_id", name="uq_space_access_grants_location_actor"),
+        UniqueConstraint(
+            "location", "actor_id", name="uq_space_access_grants_location_actor"
+        ),
         Index("ix_space_access_grants_actor_active", "actor_id", "active"),
     )
 
@@ -451,7 +511,9 @@ class SpaceAccessGrant(Base):
     granted_by_actor_id = Column(String(36), nullable=False)
     revision = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+    updated_at = Column(
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 class SpaceAccessRequest(Base):
@@ -466,7 +528,9 @@ class SpaceAccessRequest(Base):
         Index("ix_space_access_requests_location_status", "location", "status"),
     )
 
-    request_id = Column(String(36), primary_key=True, default=lambda: str(_uuid.uuid4()))
+    request_id = Column(
+        String(36), primary_key=True, default=lambda: str(_uuid.uuid4())
+    )
     location = Column(
         String(200),
         ForeignKey("space_access_policies.location", ondelete="RESTRICT"),
@@ -495,7 +559,9 @@ class SpaceAccessReceipt(Base):
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    receipt_id = Column(String(36), nullable=False, unique=True, default=lambda: str(_uuid.uuid4()))
+    receipt_id = Column(
+        String(36), nullable=False, unique=True, default=lambda: str(_uuid.uuid4())
+    )
     actor_id = Column(String(36), nullable=False, index=True)
     session_id = Column(String(64), nullable=False)
     idempotency_key = Column(String(128), nullable=False)
@@ -515,7 +581,11 @@ class WorldNode(Base):
     """Typed graph node representing a world concept/entity/location."""
 
     __tablename__ = "world_nodes"
-    __table_args__ = (UniqueConstraint("node_type", "normalized_name", name="uq_world_nodes_type_name"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "node_type", "normalized_name", name="uq_world_nodes_type_name"
+        ),
+    )
 
     id = Column(Integer, primary_key=True)
     node_type = Column(String(50), nullable=False, default="concept")
@@ -597,7 +667,9 @@ class WorldTrace(Base):
     """
 
     __tablename__ = "world_traces"
-    __table_args__ = (Index("ix_world_traces_location_expires_at", "location", "expires_at"),)
+    __table_args__ = (
+        Index("ix_world_traces_location_expires_at", "location", "expires_at"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     session_id = Column(String(64), nullable=False, index=True)
@@ -646,7 +718,9 @@ class DirectMessage(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     from_name = Column(String(60), nullable=False)
     from_session_id = Column(String(64), nullable=True, index=True)  # reply routing
-    to_name = Column(String(64), nullable=False, index=True)  # agent slug or player session_id
+    to_name = Column(
+        String(64), nullable=False, index=True
+    )  # agent slug or player session_id
     body = Column(Text, nullable=False)
     sent_at = Column(DateTime, server_default=func.now(), index=True)
     read_at = Column(DateTime, nullable=True)  # NULL = unread
@@ -660,11 +734,15 @@ class FederationShard(Base):
     shard_id = Column(String(80), primary_key=True)
     shard_url = Column(String(255), nullable=False)
     client_url = Column(String(255), nullable=True)
-    shard_type = Column(String(20), nullable=False, default="city")  # city|world|neighborhood
+    shard_type = Column(
+        String(20), nullable=False, default="city"
+    )  # city|world|neighborhood
     city_id = Column(String(80), nullable=True)
     public_key = Column(String(80), nullable=True)
     identity_bound_at = Column(DateTime, nullable=True)
-    admission_state = Column(String(20), nullable=False, default="approved", server_default="approved")
+    admission_state = Column(
+        String(20), nullable=False, default="approved", server_default="approved"
+    )
     admitted_at = Column(DateTime, nullable=True)
     revoked_at = Column(DateTime, nullable=True)
     revocation_reason = Column(String(255), nullable=True)
@@ -692,13 +770,17 @@ class FederationRequestNonce(Base):
     """Short-lived replay guard for signed node requests."""
 
     __tablename__ = "federation_request_nonces"
-    __table_args__ = (UniqueConstraint("node_id", "nonce", name="uq_federation_request_node_nonce"),)
+    __table_args__ = (
+        UniqueConstraint("node_id", "nonce", name="uq_federation_request_node_nonce"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     node_id = Column(String(80), nullable=False, index=True)
     nonce = Column(String(80), nullable=False)
     signed_at = Column(DateTime, nullable=False)
-    received_at = Column(DateTime, server_default=func.now(), nullable=False, index=True)
+    received_at = Column(
+        DateTime, server_default=func.now(), nullable=False, index=True
+    )
 
 
 class FederationActor(Base):
@@ -707,7 +789,9 @@ class FederationActor(Base):
     __tablename__ = "federation_actors"
 
     actor_id = Column(String(36), primary_key=True, default=lambda: str(_uuid.uuid4()))
-    actor_type = Column(String(20), nullable=False, default="human")  # human|agent|player_shadow
+    actor_type = Column(
+        String(20), nullable=False, default="human"
+    )  # human|agent|player_shadow
     display_name = Column(String(120), nullable=False)
     handle = Column(String(80), nullable=True, unique=True, index=True)
     home_shard = Column(String(80), nullable=False)
@@ -778,7 +862,13 @@ class FederationTraveler(Base):
     __tablename__ = "federation_travelers"
 
     id = Column(Integer, primary_key=True)
-    travel_id = Column(String(64), nullable=False, unique=True, index=True, default=lambda: str(_uuid.uuid4()))
+    travel_id = Column(
+        String(64),
+        nullable=False,
+        unique=True,
+        index=True,
+        default=lambda: str(_uuid.uuid4()),
+    )
     resident_id = Column(String(36), nullable=False, index=True)
     name = Column(String(120), nullable=False)
     from_shard = Column(String(80), nullable=False)

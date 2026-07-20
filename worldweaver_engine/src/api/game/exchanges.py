@@ -24,11 +24,15 @@ router = APIRouter(prefix="/world/exchanges", tags=["world exchanges"])
 
 class ExchangeCommandRequest(BaseModel):
     session_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
-    idempotency_key: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:-]+$")
+    idempotency_key: str = Field(
+        min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:-]+$"
+    )
 
 
 class ExchangeOfferRequest(ExchangeCommandRequest):
-    recipient_session_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    recipient_session_id: str = Field(
+        min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"
+    )
     offered_object_id: str = Field(min_length=1, max_length=36)
     requested_object_id: str = Field(min_length=1, max_length=36)
 

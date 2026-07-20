@@ -36,9 +36,13 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now()),
     )
-    op.create_index("ix_shard_travel_handoffs_actor_id", "shard_travel_handoffs", ["actor_id"])
+    op.create_index(
+        "ix_shard_travel_handoffs_actor_id", "shard_travel_handoffs", ["actor_id"]
+    )
 
 
 def downgrade() -> None:
-    op.drop_index("ix_shard_travel_handoffs_actor_id", table_name="shard_travel_handoffs")
+    op.drop_index(
+        "ix_shard_travel_handoffs_actor_id", table_name="shard_travel_handoffs"
+    )
     op.drop_table("shard_travel_handoffs")

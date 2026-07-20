@@ -44,20 +44,43 @@ class SettingsReadinessResponse(BaseModel):
 @router.get("/settings/readiness", response_model=SettingsReadinessResponse)
 def get_settings_readiness():
     """Report shard infrastructure without making human play depend on an LLM key."""
-    jwt_ready = bool(str(settings.jwt_secret or "").strip()) and str(settings.jwt_secret or "").strip() != "CHANGE_ME_IN_PRODUCTION"
+    jwt_ready = (
+        bool(str(settings.jwt_secret or "").strip())
+        and str(settings.jwt_secret or "").strip() != "CHANGE_ME_IN_PRODUCTION"
+    )
     encryption_ready = bool(str(settings.data_encryption_key or "").strip())
-    federation_url_ready = settings.shard_type != "city" or bool(str(settings.federation_url or "").strip())
-    public_url_ready = settings.shard_type != "city" or bool(str(settings.public_url or "").strip())
+    federation_url_ready = settings.shard_type != "city" or bool(
+        str(settings.federation_url or "").strip()
+    )
+    public_url_ready = settings.shard_type != "city" or bool(
+        str(settings.public_url or "").strip()
+    )
     node_key_setting = str(settings.node_private_key_path or "").strip()
     node_key_path = Path(node_key_setting).expanduser() if node_key_setting else None
     node_key_exists = bool(node_key_path and node_key_path.is_file())
-    node_key_private = bool(node_key_exists and node_key_path is not None and node_key_path.stat().st_mode & 0o077 == 0)
+    node_key_private = bool(
+        node_key_exists
+        and node_key_path is not None
+        and node_key_path.stat().st_mode & 0o077 == 0
+    )
     node_identity_ready = not node_key_setting or (node_key_exists and node_key_private)
     legacy_federation_token_ready = bool(str(settings.federation_token or "").strip())
-    federation_auth_ready = settings.shard_type != "city" or ((node_key_setting and node_identity_ready) or (not node_key_setting and legacy_federation_token_ready))
-    resend_ready = bool(str(settings.resend_api_key or "").strip()) and bool(str(settings.resend_from_email or "").strip())
-    agent_inference_key_ready = bool(str(os.environ.get("WW_INFERENCE_KEY") or "").strip() or str(os.environ.get("OPENROUTER_API_KEY") or "").strip() or str(settings.openrouter_api_key or "").strip())
-    agent_inference_model_ready = bool(str(os.environ.get("WW_INFERENCE_MODEL") or "").strip() or str(settings.llm_model or "").strip())
+    federation_auth_ready = settings.shard_type != "city" or (
+        (node_key_setting and node_identity_ready)
+        or (not node_key_setting and legacy_federation_token_ready)
+    )
+    resend_ready = bool(str(settings.resend_api_key or "").strip()) and bool(
+        str(settings.resend_from_email or "").strip()
+    )
+    agent_inference_key_ready = bool(
+        str(os.environ.get("WW_INFERENCE_KEY") or "").strip()
+        or str(os.environ.get("OPENROUTER_API_KEY") or "").strip()
+        or str(settings.openrouter_api_key or "").strip()
+    )
+    agent_inference_model_ready = bool(
+        str(os.environ.get("WW_INFERENCE_MODEL") or "").strip()
+        or str(settings.llm_model or "").strip()
+    )
 
     runtime_missing: list[str] = []
     if not jwt_ready:
@@ -80,35 +103,67 @@ def get_settings_readiness():
             label="JWT signing",
             ok=jwt_ready,
             severity="error",
-            message="JWT signing secret is configured." if jwt_ready else "JWT signing secret is still using the placeholder value.",
+            message=(
+                "JWT signing secret is configured."
+                if jwt_ready
+                else "JWT signing secret is still using the placeholder value."
+            ),
         ),
         ReadinessCheck(
             code="data_encryption_key",
             label="Data encryption",
             ok=encryption_ready,
             severity="error",
-            message="Data encryption key is configured." if encryption_ready else "Data encryption key is missing.",
+            message=(
+                "Data encryption key is configured."
+                if encryption_ready
+                else "Data encryption key is missing."
+            ),
         ),
         ReadinessCheck(
             code="federation_url",
             label="Federation root",
             ok=federation_url_ready,
             severity="error",
-            message=("Not required on the world shard." if settings.shard_type != "city" else f"Federation root set to {settings.federation_url}." if federation_url_ready else "City shard has no federation root URL configured."),
+            message=(
+                "Not required on the world shard."
+                if settings.shard_type != "city"
+                else (
+                    f"Federation root set to {settings.federation_url}."
+                    if federation_url_ready
+                    else "City shard has no federation root URL configured."
+                )
+            ),
         ),
         ReadinessCheck(
             code="public_url",
             label="Public shard URL",
             ok=public_url_ready,
             severity="error",
-            message=("Not required on the world shard." if settings.shard_type != "city" else f"Public shard URL set to {settings.public_url}." if public_url_ready else "City shard has no public URL configured."),
+            message=(
+                "Not required on the world shard."
+                if settings.shard_type != "city"
+                else (
+                    f"Public shard URL set to {settings.public_url}."
+                    if public_url_ready
+                    else "City shard has no public URL configured."
+                )
+            ),
         ),
         ReadinessCheck(
             code="node_identity",
             label="Node identity",
             ok=node_identity_ready,
             severity="error" if node_key_setting else "info",
-            message=("Folder-owned node signing key is configured with private permissions." if node_key_setting and node_identity_ready else "Configured node signing key is missing or readable by other users." if node_key_setting else "No folder-owned node signing key is configured."),
+            message=(
+                "Folder-owned node signing key is configured with private permissions."
+                if node_key_setting and node_identity_ready
+                else (
+                    "Configured node signing key is missing or readable by other users."
+                    if node_key_setting
+                    else "No folder-owned node signing key is configured."
+                )
+            ),
         ),
         ReadinessCheck(
             code="federation_auth",
@@ -118,29 +173,57 @@ def get_settings_readiness():
             message=(
                 "Not required on the world shard."
                 if settings.shard_type != "city"
-                else "Signed node authentication is configured." if node_key_setting and node_identity_ready else "A legacy shared federation token is configured; migrate this folder to a node identity." if legacy_federation_token_ready else "Federation authentication is missing."
+                else (
+                    "Signed node authentication is configured."
+                    if node_key_setting and node_identity_ready
+                    else (
+                        "A legacy shared federation token is configured; migrate this folder to a node identity."
+                        if legacy_federation_token_ready
+                        else "Federation authentication is missing."
+                    )
+                )
             ),
         ),
         ReadinessCheck(
             code="email_delivery",
-            label="Email verification" if settings.require_email_verification else "Welcome email",
+            label=(
+                "Email verification"
+                if settings.require_email_verification
+                else "Welcome email"
+            ),
             ok=resend_ready,
             severity="error" if settings.require_email_verification else "info",
-            message=(f"Email delivery configured from {settings.resend_from_email}." if resend_ready else "Email verification is required, but delivery is not configured." if settings.require_email_verification else "Optional welcome email delivery is not configured."),
+            message=(
+                f"Email delivery configured from {settings.resend_from_email}."
+                if resend_ready
+                else (
+                    "Email verification is required, but delivery is not configured."
+                    if settings.require_email_verification
+                    else "Optional welcome email delivery is not configured."
+                )
+            ),
         ),
         ReadinessCheck(
             code="agent_inference_key",
             label="Resident inference key",
             ok=agent_inference_key_ready,
             severity="info",
-            message=("Resident inference key is configured in this backend process." if agent_inference_key_ready else "This backend process has no resident inference key. Bounded resident runners verify their own key before waking; human world actions do not need one."),
+            message=(
+                "Resident inference key is configured in this backend process."
+                if agent_inference_key_ready
+                else "This backend process has no resident inference key. Bounded resident runners verify their own key before waking; human world actions do not need one."
+            ),
         ),
         ReadinessCheck(
             code="agent_inference_model",
             label="Resident inference model",
             ok=agent_inference_model_ready,
             severity="info",
-            message=("Resident inference model is configured in this backend process." if agent_inference_model_ready else "This backend process has no resident inference model. Bounded resident runners verify their own model before waking; human world actions do not need one."),
+            message=(
+                "Resident inference model is configured in this backend process."
+                if agent_inference_model_ready
+                else "This backend process has no resident inference model. Bounded resident runners verify their own model before waking; human world actions do not need one."
+            ),
         ),
     ]
     startup_ready = all(check.ok for check in checks if check.severity == "error")

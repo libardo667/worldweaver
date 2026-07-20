@@ -98,7 +98,9 @@ class RelationshipDomain:
         for attr, change_amount in changes.items():
             if hasattr(rel, attr) and isinstance(change_amount, (int, float)):
                 current = getattr(rel, attr)
-                setattr(rel, attr, max(-100.0, min(100.0, current + float(change_amount))))
+                setattr(
+                    rel, attr, max(-100.0, min(100.0, current + float(change_amount)))
+                )
         rel.last_interaction = datetime.now(timezone.utc)
         rel.interaction_count += 1
         if memory:

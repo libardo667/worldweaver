@@ -22,7 +22,9 @@ def _secret_material() -> str:
     if explicit:
         return explicit
     fallback = str(settings.jwt_secret or "").strip()
-    log.warning("WW_DATA_ENCRYPTION_KEY not set; falling back to WW_JWT_SECRET for secret encryption.")
+    log.warning(
+        "WW_DATA_ENCRYPTION_KEY not set; falling back to WW_JWT_SECRET for secret encryption."
+    )
     return fallback
 
 

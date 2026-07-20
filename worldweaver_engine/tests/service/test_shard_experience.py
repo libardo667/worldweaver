@@ -69,10 +69,19 @@ def test_game_declaration_becomes_plain_language_entry_disclosure(tmp_path):
     assert experience.ruleset is not None
     assert experience.ruleset.id == "test-private-town"
     assert experience.ruleset.version == "0.1.0"
-    assert [item.id for item in experience.entry_disclosure.capabilities] == ["durable_objects", "custody", "placement"]
+    assert [item.id for item in experience.entry_disclosure.capabilities] == [
+        "durable_objects",
+        "custody",
+        "placement",
+    ]
     assert experience.entry_disclosure.enabled_stakes == []
-    assert {item.id for item in experience.entry_disclosure.disabled_stakes} == {item.value for item in DisabledStake}
-    assert all(item.title and item.description for item in experience.entry_disclosure.disabled_stakes)
+    assert {item.id for item in experience.entry_disclosure.disabled_stakes} == {
+        item.value for item in DisabledStake
+    }
+    assert all(
+        item.title and item.description
+        for item in experience.entry_disclosure.disabled_stakes
+    )
     assert "stay on this shard" in str(experience.entry_disclosure.boundary_notice)
 
 
@@ -92,7 +101,10 @@ def test_game_declaration_cannot_enable_a_harmful_stake(tmp_path):
     path = tmp_path / "harmful-experience.json"
     path.write_text(json.dumps(declaration), encoding="utf-8")
 
-    with pytest.raises(ShardExperienceConfigurationError, match="does not permit enabled harmful stakes"):
+    with pytest.raises(
+        ShardExperienceConfigurationError,
+        match="does not permit enabled harmful stakes",
+    ):
         load_shard_experience(path, shard_id="private-town", shard_type="city")
 
 
@@ -109,7 +121,9 @@ def test_game_declaration_rejects_unknown_capabilities(tmp_path):
     path = tmp_path / "unknown-capability.json"
     path.write_text(json.dumps(declaration), encoding="utf-8")
 
-    with pytest.raises(ShardExperienceConfigurationError, match="narration_changes_reality"):
+    with pytest.raises(
+        ShardExperienceConfigurationError, match="narration_changes_reality"
+    ):
         load_shard_experience(path, shard_id="private-town", shard_type="city")
 
 
@@ -120,27 +134,43 @@ def test_stoop_capability_requires_object_placement(tmp_path):
     path = tmp_path / "unimplemented-capability.json"
     path.write_text(json.dumps(declaration), encoding="utf-8")
 
-    with pytest.raises(ShardExperienceConfigurationError, match="stoops also requires: placement"):
+    with pytest.raises(
+        ShardExperienceConfigurationError, match="stoops also requires: placement"
+    ):
         load_shard_experience(path, shard_id="private-town", shard_type="city")
 
 
 def test_game_declaration_rejects_materials_used_as_resident_needs(tmp_path):
-    example_path = Path(__file__).resolve().parents[2] / "data" / "rulesets" / "private_constructive_game.v1.example.json"
+    example_path = (
+        Path(__file__).resolve().parents[2]
+        / "data"
+        / "rulesets"
+        / "private_constructive_game.v1.example.json"
+    )
     declaration = json.loads(example_path.read_text(encoding="utf-8"))
     declaration["materials"][0]["used_for_resident_need"] = True
     path = tmp_path / "resident-need-material.json"
     path.write_text(json.dumps(declaration), encoding="utf-8")
 
-    with pytest.raises(ShardExperienceConfigurationError, match="used_for_resident_need"):
+    with pytest.raises(
+        ShardExperienceConfigurationError, match="used_for_resident_need"
+    ):
         load_shard_experience(path, shard_id="private-town", shard_type="city")
 
 
 def test_game_declaration_rejects_recipe_with_unknown_material(tmp_path):
-    example_path = Path(__file__).resolve().parents[2] / "data" / "rulesets" / "private_constructive_game.v1.example.json"
+    example_path = (
+        Path(__file__).resolve().parents[2]
+        / "data"
+        / "rulesets"
+        / "private_constructive_game.v1.example.json"
+    )
     declaration = json.loads(example_path.read_text(encoding="utf-8"))
     declaration["recipes"][0]["inputs"] = {"imaginary_ore": 1}
     path = tmp_path / "unknown-recipe-material.json"
     path.write_text(json.dumps(declaration), encoding="utf-8")
 
-    with pytest.raises(ShardExperienceConfigurationError, match="unknown materials.*imaginary_ore"):
+    with pytest.raises(
+        ShardExperienceConfigurationError, match="unknown materials.*imaginary_ore"
+    ):
         load_shard_experience(path, shard_id="private-town", shard_type="city")

@@ -1,7 +1,12 @@
 """Integration tests for full session state persistence."""
 
 from src.models import SessionVars
-from tests.integration_state_helpers import get_manager, record_projection_event, save_and_reload_session, save_manager
+from tests.integration_state_helpers import (
+    get_manager,
+    record_projection_event,
+    save_and_reload_session,
+    save_manager,
+)
 
 
 def test_variables_survive_restart(db_session):
@@ -43,7 +48,9 @@ def test_empty_inventory_survives(db_session):
 def test_relationship_survives_restart(db_session):
     sid = "test-rel"
     m = get_manager(db_session, sid)
-    m.update_relationship("player", "Greta", {"trust": 40.0, "respect": 25.0}, memory="She saved you.")
+    m.update_relationship(
+        "player", "Greta", {"trust": 40.0, "respect": 25.0}, memory="She saved you."
+    )
     m2 = save_and_reload_session(db_session, sid)
     rel = m2.get_relationship("player", "Greta")
     assert rel.trust == 40.0 and rel.respect == 25.0
@@ -62,7 +69,9 @@ def test_multiple_relationships_survive(db_session):
 def test_environment_survives_restart(db_session):
     sid = "test-env"
     m = get_manager(db_session, sid)
-    m.update_environment({"weather": "stormy", "time_of_day": "night", "danger_level": 7})
+    m.update_environment(
+        {"weather": "stormy", "time_of_day": "night", "danger_level": 7}
+    )
     m2 = save_and_reload_session(db_session, sid)
     assert m2.environment.weather == "stormy" and m2.environment.danger_level == 7
 

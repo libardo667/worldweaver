@@ -60,7 +60,9 @@ def upgrade() -> None:
         sa.column("vars", sa.JSON()),
     )
     connection = op.get_bind()
-    rows = connection.execute(sa.select(session_vars.c.session_id, session_vars.c.vars)).mappings()
+    rows = connection.execute(
+        sa.select(session_vars.c.session_id, session_vars.c.vars)
+    ).mappings()
     for row in rows:
         cleaned, changed = _without_private_runtime_fields(row["vars"])
         if not changed:

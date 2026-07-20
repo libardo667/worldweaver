@@ -58,7 +58,9 @@ def decode_token_subject(token: str) -> Optional[DecodedTokenSubject]:
     subject = str(payload.get("sub") or "").strip()
     if not subject:
         return None
-    token_type = str(payload.get("token_type") or "legacy_player").strip() or "legacy_player"
+    token_type = (
+        str(payload.get("token_type") or "legacy_player").strip() or "legacy_player"
+    )
     return DecodedTokenSubject(subject=subject, token_type=token_type)
 
 
@@ -133,7 +135,9 @@ def require_player(
 ) -> Player:
     """Dependency: raises 401 if not authenticated."""
     if not player:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
+        )
     return player
 
 

@@ -95,7 +95,9 @@ class TestFailingMigration:
     def test_malformed_inventory_raises(self, fixture_v2_full):
         bad = dict(fixture_v2_full)
         # Unknown keyword arg causes TypeError during ItemState(**d) construction.
-        bad["inventory"] = {"sword": {"id": "sword", "name": "ok", "unknown_field": True}}
+        bad["inventory"] = {
+            "sword": {"id": "sword", "name": "ok", "unknown_field": True}
+        }
         manager = AdvancedStateManager("test")
         with pytest.raises((ValueError, TypeError)):
             manager.import_state(bad)

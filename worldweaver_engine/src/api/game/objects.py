@@ -24,11 +24,15 @@ router = APIRouter(prefix="/world/objects", tags=["world objects"])
 
 class ObjectCommandRequest(BaseModel):
     session_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
-    idempotency_key: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:-]+$")
+    idempotency_key: str = Field(
+        min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:-]+$"
+    )
 
 
 class GiveObjectRequest(ObjectCommandRequest):
-    recipient_session_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    recipient_session_id: str = Field(
+        min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"
+    )
 
 
 def _raise_http(exc: ConsequenceDomainError) -> None:
@@ -61,7 +65,11 @@ def get_world_object(
     """Inspect one carried or co-located object without a global object feed."""
 
     try:
-        return {"object": inspect_durable_object(db, session_id=session_id, object_id=object_id)}
+        return {
+            "object": inspect_durable_object(
+                db, session_id=session_id, object_id=object_id
+            )
+        }
     except ConsequenceDomainError as exc:
         _raise_http(exc)
 

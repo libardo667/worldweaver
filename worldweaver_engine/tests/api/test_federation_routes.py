@@ -22,7 +22,12 @@ from src.api.federation.routes import (
     list_shards,
     start_travel,
 )
-from src.models import FederationActor, FederationResident, FederationShard, FederationTraveler
+from src.models import (
+    FederationActor,
+    FederationResident,
+    FederationShard,
+    FederationTraveler,
+)
 from src.database import get_db
 from src.services.federation_node_auth import (
     NODE_ID_HEADER,
@@ -114,9 +119,13 @@ def _seed_travel_nodes_and_actor(db_session):
 
 
 @pytest.mark.asyncio
-async def test_signed_registration_binds_node_key_and_rejects_replay(db_session, monkeypatch, tmp_path):
+async def test_signed_registration_binds_node_key_and_rejects_replay(
+    db_session, monkeypatch, tmp_path
+):
     monkeypatch.setattr("src.api.federation.routes.settings.federation_token", "")
-    monkeypatch.setattr("src.api.federation.routes.settings.federation_admission_mode", "open")
+    monkeypatch.setattr(
+        "src.api.federation.routes.settings.federation_admission_mode", "open"
+    )
     private_key = tmp_path / "identity" / "node.key"
     descriptor = generate_node_identity(
         private_key_path=private_key,
@@ -149,7 +158,9 @@ async def test_signed_registration_binds_node_key_and_rejects_replay(db_session,
         body=body,
         headers=headers,
     )
-    response = register_shard(RegisterShardRequest(**payload_data), db_session, principal)
+    response = register_shard(
+        RegisterShardRequest(**payload_data), db_session, principal
+    )
     shard = db_session.get(FederationShard, "river-coop-1")
 
     assert response["registered"] is True
@@ -174,9 +185,13 @@ async def test_signed_registration_binds_node_key_and_rejects_replay(db_session,
 
 
 @pytest.mark.asyncio
-async def test_closed_directory_requires_steward_admission_before_registration(db_session, monkeypatch, tmp_path):
+async def test_closed_directory_requires_steward_admission_before_registration(
+    db_session, monkeypatch, tmp_path
+):
     monkeypatch.setattr("src.api.federation.routes.settings.federation_token", "")
-    monkeypatch.setattr("src.api.federation.routes.settings.federation_admission_mode", "closed")
+    monkeypatch.setattr(
+        "src.api.federation.routes.settings.federation_admission_mode", "closed"
+    )
     private_key = tmp_path / "identity" / "node.key"
     descriptor = generate_node_identity(
         private_key_path=private_key,
@@ -236,14 +251,21 @@ async def test_closed_directory_requires_steward_admission_before_registration(d
         body=body,
         headers=admitted_headers,
     )
-    response = register_shard(RegisterShardRequest(**payload_data), db_session, admitted_principal)
+    response = register_shard(
+        RegisterShardRequest(**payload_data), db_session, admitted_principal
+    )
 
     assert response["registered"] is True
-    assert db_session.get(FederationShard, "invited-node-1").shard_url == "https://alderbank.example"
+    assert (
+        db_session.get(FederationShard, "invited-node-1").shard_url
+        == "https://alderbank.example"
+    )
 
 
 @pytest.mark.asyncio
-async def test_revoked_node_is_hidden_and_cannot_make_signed_calls(db_session, monkeypatch, tmp_path):
+async def test_revoked_node_is_hidden_and_cannot_make_signed_calls(
+    db_session, monkeypatch, tmp_path
+):
     monkeypatch.setattr("src.api.federation.routes.settings.federation_token", "")
     private_key = tmp_path / "identity" / "node.key"
     descriptor = generate_node_identity(
@@ -261,7 +283,9 @@ async def test_revoked_node_is_hidden_and_cannot_make_signed_calls(db_session, m
         city_id="alderbank",
         reason="Temporary admission for revocation test.",
     )
-    revoke_node(db_session, node_id="revoked-node-1", reason="The steward retired this node.")
+    revoke_node(
+        db_session, node_id="revoked-node-1", reason="The steward retired this node."
+    )
     headers = signed_request_headers(
         node_id="revoked-node-1",
         private_key_path=private_key,
@@ -283,9 +307,13 @@ async def test_revoked_node_is_hidden_and_cannot_make_signed_calls(db_session, m
     assert list_shards(db_session)["shards"] == []
 
 
-def test_signed_registration_and_replay_guard_work_through_http(db_session, monkeypatch, tmp_path):
+def test_signed_registration_and_replay_guard_work_through_http(
+    db_session, monkeypatch, tmp_path
+):
     monkeypatch.setattr("src.api.federation.routes.settings.federation_token", "")
-    monkeypatch.setattr("src.api.federation.routes.settings.federation_admission_mode", "open")
+    monkeypatch.setattr(
+        "src.api.federation.routes.settings.federation_admission_mode", "open"
+    )
     private_key = tmp_path / "identity" / "node.key"
     descriptor = generate_node_identity(
         private_key_path=private_key,
@@ -355,7 +383,10 @@ def test_signed_registration_and_replay_guard_work_through_http(db_session, monk
     assert private_residents.status_code == 401
     assert registered.status_code == 200
     assert registered.json()["registered"] is True
-    assert db_session.get(FederationShard, "http-node-1").public_key == descriptor["public_key"]
+    assert (
+        db_session.get(FederationShard, "http-node-1").public_key
+        == descriptor["public_key"]
+    )
     assert impersonation.status_code == 401
     assert "signature is invalid" in impersonation.json()["detail"]
     assert replay.status_code == 409
@@ -378,7 +409,9 @@ def test_signed_node_cannot_report_for_another_node(db_session):
         receive_pulse(
             payload,
             db_session,
-            AuthenticatedNode(node_id="another-node", public_key="public", method="signature"),
+            AuthenticatedNode(
+                node_id="another-node", public_key="public", method="signature"
+            ),
         )
     assert forbidden.value.status_code == 403
 
@@ -437,7 +470,9 @@ def test_receive_pulse_upserts_existing_resident_without_duplicate(db_session):
 
 
 def test_registry_keeps_api_and_human_client_urls_separate(db_session, monkeypatch):
-    monkeypatch.setattr("src.api.federation.routes.settings.federation_admission_mode", "open")
+    monkeypatch.setattr(
+        "src.api.federation.routes.settings.federation_admission_mode", "open"
+    )
     registered = register_shard(
         RegisterShardRequest(
             shard_id="alderbank-node",

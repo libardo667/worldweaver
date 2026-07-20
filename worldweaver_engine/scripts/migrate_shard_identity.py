@@ -50,11 +50,17 @@ def _with_backend_identity_mount(text: str) -> str:
     if _IDENTITY_MOUNT.strip() in {line.strip() for line in text.splitlines()}:
         return text
     lines = text.splitlines()
-    backend_index = next((index for index, line in enumerate(lines) if line == "  backend:"), None)
+    backend_index = next(
+        (index for index, line in enumerate(lines) if line == "  backend:"), None
+    )
     if backend_index is None:
         raise ValueError("Compose file has no top-level backend service.")
     volumes_index = next(
-        (index for index in range(backend_index + 1, len(lines)) if lines[index] == "    volumes:"),
+        (
+            index
+            for index in range(backend_index + 1, len(lines))
+            if lines[index] == "    volumes:"
+        ),
         None,
     )
     if volumes_index is None:
@@ -114,7 +120,9 @@ def migrate_shard_identity(
             city_id=city_id,
         )
 
-    env_text = _set_env_value(env_path.read_text(encoding="utf-8"), _KEY_SETTING, configured_path)
+    env_text = _set_env_value(
+        env_path.read_text(encoding="utf-8"), _KEY_SETTING, configured_path
+    )
     if drop_legacy_token:
         env_text = _set_env_value(env_text, "FEDERATION_TOKEN", "")
     env_path.write_text(env_text, encoding="utf-8")
@@ -123,8 +131,12 @@ def migrate_shard_identity(
         _with_backend_identity_mount(compose_path.read_text(encoding="utf-8")),
         encoding="utf-8",
     )
-    gitignore_text = gitignore_path.read_text(encoding="utf-8") if gitignore_path.exists() else ""
-    gitignore_path.write_text(_with_private_key_ignored(gitignore_text), encoding="utf-8")
+    gitignore_text = (
+        gitignore_path.read_text(encoding="utf-8") if gitignore_path.exists() else ""
+    )
+    gitignore_path.write_text(
+        _with_private_key_ignored(gitignore_text), encoding="utf-8"
+    )
     return descriptor
 
 

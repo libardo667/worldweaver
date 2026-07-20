@@ -27,7 +27,9 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=120), nullable=False),
         sa.Column("description", sa.Text(), nullable=False, server_default=""),
         sa.Column("object_kind", sa.String(length=80), nullable=False),
-        sa.Column("status", sa.String(length=20), nullable=False, server_default="active"),
+        sa.Column(
+            "status", sa.String(length=20), nullable=False, server_default="active"
+        ),
         sa.Column("custodian_actor_id", sa.String(length=36), nullable=True),
         sa.Column("location", sa.String(length=200), nullable=True),
         sa.Column("origin_shard_id", sa.String(length=80), nullable=False),
@@ -37,18 +39,35 @@ def upgrade() -> None:
         sa.Column("provenance_event_id", sa.Integer(), nullable=True),
         sa.Column("properties_json", sa.JSON(), nullable=False),
         sa.Column("revision", sa.Integer(), nullable=False, server_default="1"),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(), server_default=sa.func.now(), nullable=False
+        ),
         sa.CheckConstraint(
-            "(custodian_actor_id IS NOT NULL AND location IS NULL) OR " "(custodian_actor_id IS NULL AND location IS NOT NULL)",
+            "(custodian_actor_id IS NOT NULL AND location IS NULL) OR "
+            "(custodian_actor_id IS NULL AND location IS NOT NULL)",
             name="ck_durable_objects_one_attachment",
         ),
-        sa.ForeignKeyConstraint(["provenance_event_id"], ["world_events.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["provenance_event_id"], ["world_events.id"], ondelete="RESTRICT"
+        ),
         sa.PrimaryKeyConstraint("object_id"),
     )
-    op.create_index("ix_durable_objects_provenance_event_id", "durable_objects", ["provenance_event_id"])
-    op.create_index("ix_durable_objects_custodian_status", "durable_objects", ["custodian_actor_id", "status"])
-    op.create_index("ix_durable_objects_location_status", "durable_objects", ["location", "status"])
+    op.create_index(
+        "ix_durable_objects_provenance_event_id",
+        "durable_objects",
+        ["provenance_event_id"],
+    )
+    op.create_index(
+        "ix_durable_objects_custodian_status",
+        "durable_objects",
+        ["custodian_actor_id", "status"],
+    )
+    op.create_index(
+        "ix_durable_objects_location_status", "durable_objects", ["location", "status"]
+    )
 
     op.create_table(
         "consequence_receipts",
@@ -61,24 +80,44 @@ def upgrade() -> None:
         sa.Column("object_id", sa.String(length=36), nullable=False),
         sa.Column("world_event_id", sa.Integer(), nullable=False),
         sa.Column("payload_json", sa.JSON(), nullable=False),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
-        sa.ForeignKeyConstraint(["object_id"], ["durable_objects.object_id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["world_event_id"], ["world_events.id"], ondelete="RESTRICT"),
+        sa.Column(
+            "created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False
+        ),
+        sa.ForeignKeyConstraint(
+            ["object_id"], ["durable_objects.object_id"], ondelete="RESTRICT"
+        ),
+        sa.ForeignKeyConstraint(
+            ["world_event_id"], ["world_events.id"], ondelete="RESTRICT"
+        ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("actor_id", "idempotency_key", name="uq_consequence_receipts_actor_idempotency"),
+        sa.UniqueConstraint(
+            "actor_id",
+            "idempotency_key",
+            name="uq_consequence_receipts_actor_idempotency",
+        ),
         sa.UniqueConstraint("receipt_id"),
         sa.UniqueConstraint("world_event_id"),
     )
-    op.create_index("ix_consequence_receipts_actor_id", "consequence_receipts", ["actor_id"])
-    op.create_index("ix_consequence_receipts_object_created", "consequence_receipts", ["object_id", "created_at"])
+    op.create_index(
+        "ix_consequence_receipts_actor_id", "consequence_receipts", ["actor_id"]
+    )
+    op.create_index(
+        "ix_consequence_receipts_object_created",
+        "consequence_receipts",
+        ["object_id", "created_at"],
+    )
 
 
 def downgrade() -> None:
-    op.drop_index("ix_consequence_receipts_object_created", table_name="consequence_receipts")
+    op.drop_index(
+        "ix_consequence_receipts_object_created", table_name="consequence_receipts"
+    )
     op.drop_index("ix_consequence_receipts_actor_id", table_name="consequence_receipts")
     op.drop_table("consequence_receipts")
 
     op.drop_index("ix_durable_objects_location_status", table_name="durable_objects")
     op.drop_index("ix_durable_objects_custodian_status", table_name="durable_objects")
-    op.drop_index("ix_durable_objects_provenance_event_id", table_name="durable_objects")
+    op.drop_index(
+        "ix_durable_objects_provenance_event_id", table_name="durable_objects"
+    )
     op.drop_table("durable_objects")

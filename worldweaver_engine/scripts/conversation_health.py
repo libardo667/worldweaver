@@ -15,15 +15,32 @@ if str(ROOT) not in sys.path:
 
 from src.database import SessionLocal  # noqa: E402
 from src.models import LocationChat  # noqa: E402
-from src.services.conversation_health import PublicConversationMessage, analyze_public_conversation  # noqa: E402
+from src.services.conversation_health import (  # noqa: E402
+    PublicConversationMessage,
+    analyze_public_conversation,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--since-hours", type=float, default=24.0, help="public chat lookback window (0.25-720 hours)")
-    parser.add_argument("--minimum-speakers", type=int, default=3, help="minimum population for language metrics (3-100)")
-    parser.add_argument("--windows", type=int, default=3, help="ordered comparison windows (2-12)")
-    parser.add_argument("--shuffle-seed", type=int, default=0, help="repeatable null-comparison seed")
+    parser.add_argument(
+        "--since-hours",
+        type=float,
+        default=24.0,
+        help="public chat lookback window (0.25-720 hours)",
+    )
+    parser.add_argument(
+        "--minimum-speakers",
+        type=int,
+        default=3,
+        help="minimum population for language metrics (3-100)",
+    )
+    parser.add_argument(
+        "--windows", type=int, default=3, help="ordered comparison windows (2-12)"
+    )
+    parser.add_argument(
+        "--shuffle-seed", type=int, default=0, help="repeatable null-comparison seed"
+    )
     args = parser.parse_args(argv)
     if not 0.25 <= args.since_hours <= 720:
         parser.error("--since-hours must be between 0.25 and 720")
@@ -32,14 +49,25 @@ def main(argv: list[str] | None = None) -> int:
     if not 2 <= args.windows <= 12:
         parser.error("--windows must be between 2 and 12")
 
-    since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=args.since_hours)
+    since = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
+        hours=args.since_hours
+    )
     with SessionLocal() as db:
-        rows = db.query(LocationChat).filter(LocationChat.created_at >= since).order_by(LocationChat.created_at.asc()).all()
+        rows = (
+            db.query(LocationChat)
+            .filter(LocationChat.created_at >= since)
+            .order_by(LocationChat.created_at.asc())
+            .all()
+        )
         messages = [
             PublicConversationMessage(
                 speaker_key=str(row.display_name or row.session_id or "").strip(),
                 body=str(row.message or ""),
-                created_at=row.created_at.replace(tzinfo=timezone.utc) if row.created_at and row.created_at.tzinfo is None else row.created_at,
+                created_at=(
+                    row.created_at.replace(tzinfo=timezone.utc)
+                    if row.created_at and row.created_at.tzinfo is None
+                    else row.created_at
+                ),
                 location_key=str(row.location or ""),
             )
             for row in rows

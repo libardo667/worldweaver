@@ -35,13 +35,22 @@ def test_node_trust_changes_are_explicit_and_audited(db_session):
         reason="The steward verified a replacement descriptor out of band.",
     )
 
-    events = db_session.query(FederationNodeTrustEvent).filter(FederationNodeTrustEvent.node_id == "alderbank-node").order_by(FederationNodeTrustEvent.id).all()
+    events = (
+        db_session.query(FederationNodeTrustEvent)
+        .filter(FederationNodeTrustEvent.node_id == "alderbank-node")
+        .order_by(FederationNodeTrustEvent.id)
+        .all()
+    )
     assert admitted.shard_id == "alderbank-node"
     assert revoked_at is not None
     assert recovered.admission_state == "approved"
     assert recovered.public_key == "replacement-public-key"
     assert recovered.revoked_at is None
-    assert [event.event_type for event in events] == ["admitted", "revoked", "key_recovered"]
+    assert [event.event_type for event in events] == [
+        "admitted",
+        "revoked",
+        "key_recovered",
+    ]
     assert events[-1].previous_public_key == "first-public-key"
 
 
@@ -65,4 +74,6 @@ def test_node_key_cannot_change_without_revocation(db_session):
             reason="Attempted replacement without revocation.",
         )
 
-    assert db_session.get(FederationShard, "fixed-node").public_key == "first-public-key"
+    assert (
+        db_session.get(FederationShard, "fixed-node").public_key == "first-public-key"
+    )

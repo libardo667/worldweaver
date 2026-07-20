@@ -3,14 +3,25 @@ from pathlib import Path
 import pytest
 
 from src.config import settings
-from src.models import DurableObject, SessionVars, StoopObjectEntry, StoopReceipt, WorldNode
+from src.models import (
+    DurableObject,
+    SessionVars,
+    StoopObjectEntry,
+    StoopReceipt,
+    WorldNode,
+)
 from src.services.consequence_objects import found_durable_object
 from src.services.world_stoops import found_world_stoop
 
 
 @pytest.fixture()
 def game_rules(monkeypatch):
-    example = Path(__file__).resolve().parents[2] / "data" / "rulesets" / "private_constructive_game.v1.example.json"
+    example = (
+        Path(__file__).resolve().parents[2]
+        / "data"
+        / "rulesets"
+        / "private_constructive_game.v1.example.json"
+    )
     monkeypatch.setattr(settings, "shard_experience_path", str(example))
     monkeypatch.setattr(settings, "shard_id", "test-game-shard")
 
@@ -87,16 +98,22 @@ def test_stoop_routes_are_local_elective_and_retry_safe(client, db_session, game
 
     take_payload = {"session_id": "visitor", "idempotency_key": "api-take-stoop-object"}
     taken = client.post(f"/api/world/stoops/entries/{entry_id}/take", json=take_payload)
-    take_replay = client.post(f"/api/world/stoops/entries/{entry_id}/take", json=take_payload)
+    take_replay = client.post(
+        f"/api/world/stoops/entries/{entry_id}/take", json=take_payload
+    )
     assert taken.status_code == 200
     assert take_replay.status_code == 200
     assert take_replay.json()["replayed"] is True
-    assert db_session.get(DurableObject, object_id).custodian_actor_id == "actor-visitor"
+    assert (
+        db_session.get(DurableObject, object_id).custodian_actor_id == "actor-visitor"
+    )
     assert db_session.get(StoopObjectEntry, entry_id).status == "taken"
     assert db_session.query(StoopReceipt).count() == 2
 
 
-def test_sessionless_onlooker_can_browse_stoops_by_location(client, db_session, game_rules):
+def test_sessionless_onlooker_can_browse_stoops_by_location(
+    client, db_session, game_rules
+):
     object_id = _setup(db_session)
     client.post(
         "/api/world/stoops/lantern-stoop/leave",
@@ -112,7 +129,9 @@ def test_sessionless_onlooker_can_browse_stoops_by_location(client, db_session, 
     assert shells.json()["location"] == "Lantern Square"
     assert shells.json()["stoops"][0]["active_count"] == 1
 
-    browsed = client.get("/api/world/stoops/lantern-stoop", params={"location": "Lantern Square"})
+    browsed = client.get(
+        "/api/world/stoops/lantern-stoop", params={"location": "Lantern Square"}
+    )
     assert browsed.status_code == 200
     entry = browsed.json()["entries"][0]
     assert entry["object"]["name"] == "Paper lantern"
@@ -122,7 +141,9 @@ def test_sessionless_onlooker_can_browse_stoops_by_location(client, db_session, 
     assert "can_withdraw" not in entry
     assert "created_by_actor_id" not in entry["object"]["provenance"]
 
-    elsewhere = client.get("/api/world/stoops/lantern-stoop", params={"location": "Somewhere Else"})
+    elsewhere = client.get(
+        "/api/world/stoops/lantern-stoop", params={"location": "Somewhere Else"}
+    )
     assert elsewhere.status_code == 403
 
     neither = client.get("/api/world/stoops")

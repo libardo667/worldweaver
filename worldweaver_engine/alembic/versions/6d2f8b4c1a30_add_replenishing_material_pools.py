@@ -35,9 +35,15 @@ def upgrade() -> None:
         sa.Column("replenish_units", sa.Integer(), nullable=False),
         sa.Column("replenish_every_seconds", sa.Integer(), nullable=False),
         sa.Column("last_replenished_at", sa.DateTime(), nullable=False),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
-        sa.CheckConstraint("capacity_units > 0", name="ck_material_pools_positive_capacity"),
+        sa.Column(
+            "created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(), server_default=sa.func.now(), nullable=False
+        ),
+        sa.CheckConstraint(
+            "capacity_units > 0", name="ck_material_pools_positive_capacity"
+        ),
         sa.CheckConstraint(
             "available_units >= 0 AND available_units <= capacity_units",
             name="ck_material_pools_bounded_available",

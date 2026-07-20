@@ -2,7 +2,11 @@
 
 import pytest
 
-from src.services.embedding_service import EMBEDDING_DIMENSIONS, cosine_similarity, embed_text
+from src.services.embedding_service import (
+    EMBEDDING_DIMENSIONS,
+    cosine_similarity,
+    embed_text,
+)
 
 
 class TestCosineSimlarity:

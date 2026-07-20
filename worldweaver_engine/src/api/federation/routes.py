@@ -70,23 +70,34 @@ async def _require_node(
     x_ww_timestamp: Optional[str] = Header(default=None, alias=NODE_TIMESTAMP_HEADER),
     x_ww_nonce: Optional[str] = Header(default=None, alias=NODE_NONCE_HEADER),
     x_ww_signature: Optional[str] = Header(default=None, alias=NODE_SIGNATURE_HEADER),
-    x_ww_node_public_key: Optional[str] = Header(default=None, alias=NODE_PUBLIC_KEY_HEADER),
+    x_ww_node_public_key: Optional[str] = Header(
+        default=None, alias=NODE_PUBLIC_KEY_HEADER
+    ),
 ) -> AuthenticatedNode:
     """Authenticate a node signature, with a temporary shared-token fallback."""
     node_id = str(x_ww_node_id or "").strip()
     if not node_id:
-        if settings.federation_token and x_federation_token == settings.federation_token:
-            return AuthenticatedNode(node_id=None, public_key=None, method="legacy_token")
+        if (
+            settings.federation_token
+            and x_federation_token == settings.federation_token
+        ):
+            return AuthenticatedNode(
+                node_id=None, public_key=None, method="legacy_token"
+            )
         raise HTTPException(status_code=401, detail="Missing signed node identity.")
 
     shard = db.get(FederationShard, node_id)
     if shard is not None and shard.admission_state != "approved":
-        raise HTTPException(status_code=403, detail="Node identity is revoked or not admitted.")
+        raise HTTPException(
+            status_code=403, detail="Node identity is revoked or not admitted."
+        )
     supplied_public_key = str(x_ww_node_public_key or "").strip() or None
     public_key = str(shard.public_key or "").strip() if shard is not None else ""
     if not public_key:
         if request.url.path != "/api/federation/register" or not supplied_public_key:
-            raise HTTPException(status_code=401, detail="Node identity is not registered.")
+            raise HTTPException(
+                status_code=401, detail="Node identity is not registered."
+            )
         public_key = supplied_public_key
 
     headers = {
@@ -106,7 +117,9 @@ async def _require_node(
         raise HTTPException(status_code=401, detail=str(exc)) from exc
 
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
-    db.query(FederationRequestNonce).filter(FederationRequestNonce.received_at < cutoff).delete(synchronize_session=False)
+    db.query(FederationRequestNonce).filter(
+        FederationRequestNonce.received_at < cutoff
+    ).delete(synchronize_session=False)
     db.add(
         FederationRequestNonce(
             node_id=node_id,
@@ -118,7 +131,9 @@ async def _require_node(
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(status_code=409, detail="Signed node request was already used.") from exc
+        raise HTTPException(
+            status_code=409, detail="Signed node request was already used."
+        ) from exc
     return AuthenticatedNode(node_id=node_id, public_key=public_key, method="signature")
 
 
@@ -136,7 +151,11 @@ def _compute_shard_status(last_pulse_ts: Optional[datetime], interval: int) -> s
         return "offline"
     now = datetime.now(timezone.utc)
     # Ensure comparison works regardless of tz-awareness
-    lp = last_pulse_ts.replace(tzinfo=timezone.utc) if last_pulse_ts.tzinfo is None else last_pulse_ts
+    lp = (
+        last_pulse_ts.replace(tzinfo=timezone.utc)
+        if last_pulse_ts.tzinfo is None
+        else last_pulse_ts
+    )
     age_seconds = (now - lp).total_seconds()
     if age_seconds > _SHARD_OFFLINE_HOURS * 3600:
         return "offline"
@@ -249,7 +268,9 @@ class FederationEmailVerificationResendRequest(BaseModel):
 class StartTravelRequest(BaseModel):
     """Ask the federation root to coordinate one actor's node-to-node trip."""
 
-    travel_id: str = Field(default_factory=lambda: str(uuid.uuid4()), min_length=1, max_length=64)
+    travel_id: str = Field(
+        default_factory=lambda: str(uuid.uuid4()), min_length=1, max_length=64
+    )
     actor_id: str = Field(min_length=1, max_length=36)
     source_shard: str = Field(min_length=1, max_length=80)
     destination_shard: str = Field(min_length=1, max_length=80)
@@ -273,9 +294,13 @@ def _require_claimed_node(
     action: str,
 ) -> None:
     """Bind a signed caller to the node named by a request payload or path."""
-    signed_node_id = authenticated_node.node_id if authenticated_node is not None else None
+    signed_node_id = (
+        authenticated_node.node_id if authenticated_node is not None else None
+    )
     if signed_node_id and signed_node_id != claimed_node_id:
-        raise HTTPException(status_code=403, detail=f"Only node '{claimed_node_id}' may {action}.")
+        raise HTTPException(
+            status_code=403, detail=f"Only node '{claimed_node_id}' may {action}."
+        )
 
 
 def _travel_payload(record: FederationTraveler) -> Dict[str, Any]:
@@ -292,14 +317,20 @@ def _travel_payload(record: FederationTraveler) -> Dict[str, Any]:
         "arrival_hub": record.arrival_hub,
         "reason": record.reason,
         "status": record.status,
-        "requested_at": record.requested_ts.isoformat() if record.requested_ts else None,
+        "requested_at": (
+            record.requested_ts.isoformat() if record.requested_ts else None
+        ),
         "departed_at": record.departed_ts.isoformat() if record.departed_ts else None,
         "arrived_at": record.arrived_ts.isoformat() if record.arrived_ts else None,
     }
 
 
 def _travel_record_or_404(db: Session, travel_id: str) -> FederationTraveler:
-    record = db.query(FederationTraveler).filter(FederationTraveler.travel_id == travel_id).first()
+    record = (
+        db.query(FederationTraveler)
+        .filter(FederationTraveler.travel_id == travel_id)
+        .first()
+    )
     if record is None:
         raise HTTPException(status_code=404, detail=f"Travel '{travel_id}' not found.")
     return record
@@ -337,11 +368,15 @@ def register_shard(
     authenticated_node: AuthenticatedNode = Depends(_require_node),
 ):
     """Register or re-register a shard with the federation root."""
-    _require_claimed_node(authenticated_node, payload.shard_id, action="register this identity")
+    _require_claimed_node(
+        authenticated_node, payload.shard_id, action="register this identity"
+    )
     shard = db.get(FederationShard, payload.shard_id)
     if shard is None:
         if settings.federation_admission_mode.strip().lower() != "open":
-            raise HTTPException(status_code=403, detail="Node is not admitted by this directory.")
+            raise HTTPException(
+                status_code=403, detail="Node is not admitted by this directory."
+            )
         now = datetime.now(timezone.utc)
         shard = FederationShard(
             shard_id=payload.shard_id,
@@ -353,15 +388,23 @@ def register_shard(
             FederationNodeTrustEvent(
                 node_id=payload.shard_id,
                 event_type="admitted_open",
-                public_key=authenticated_node.public_key if authenticated_node is not None else None,
+                public_key=(
+                    authenticated_node.public_key
+                    if authenticated_node is not None
+                    else None
+                ),
                 reason="Directory was configured for open node admission.",
             )
         )
     elif shard.admission_state != "approved":
-        raise HTTPException(status_code=403, detail="Node identity is revoked or not admitted.")
+        raise HTTPException(
+            status_code=403, detail="Node identity is revoked or not admitted."
+        )
     if authenticated_node is not None and authenticated_node.node_id:
         if shard.public_key and shard.public_key != authenticated_node.public_key:
-            raise HTTPException(status_code=409, detail="Node identity is already bound to another key.")
+            raise HTTPException(
+                status_code=409, detail="Node identity is already bound to another key."
+            )
         if not shard.public_key:
             shard.public_key = authenticated_node.public_key
             shard.identity_bound_at = datetime.now(timezone.utc)
@@ -370,7 +413,11 @@ def register_shard(
     shard.shard_type = payload.shard_type
     shard.city_id = payload.city_id
     db.commit()
-    log.info("Federation: shard registered shard_id=%s url=%s", payload.shard_id, payload.shard_url)
+    log.info(
+        "Federation: shard registered shard_id=%s url=%s",
+        payload.shard_id,
+        payload.shard_url,
+    )
     return {"registered": True, "shard_id": payload.shard_id}
 
 
@@ -381,10 +428,14 @@ def deregister_shard(
     authenticated_node: AuthenticatedNode = Depends(_require_node),
 ):
     """Mark a shard as offline (explicit deregistration)."""
-    _require_claimed_node(authenticated_node, payload.shard_id, action="deregister this identity")
+    _require_claimed_node(
+        authenticated_node, payload.shard_id, action="deregister this identity"
+    )
     shard = db.get(FederationShard, payload.shard_id)
     if shard is None:
-        raise HTTPException(status_code=404, detail=f"Shard '{payload.shard_id}' not found.")
+        raise HTTPException(
+            status_code=404, detail=f"Shard '{payload.shard_id}' not found."
+        )
     # Mark offline by clearing last_pulse_ts beyond 24h threshold
     shard.last_pulse_ts = datetime(2000, 1, 1)
     db.commit()
@@ -398,7 +449,9 @@ def register_human_actor(
     db: Session = Depends(get_db),
     authenticated_node: AuthenticatedNode = Depends(_require_node),
 ) -> Dict[str, Any]:
-    _require_claimed_node(authenticated_node, payload.origin_shard, action="originate this account")
+    _require_claimed_node(
+        authenticated_node, payload.origin_shard, action="originate this account"
+    )
     bundle = register_human_actor_local(
         db,
         origin_shard=payload.origin_shard.strip() or current_shard_id(),
@@ -510,15 +563,30 @@ def start_travel(
     actor_id = payload.actor_id.strip()
     source_shard = payload.source_shard.strip()
     destination_shard = payload.destination_shard.strip()
-    _require_claimed_node(authenticated_node, source_shard, action="start this departure")
+    _require_claimed_node(
+        authenticated_node, source_shard, action="start this departure"
+    )
     if source_shard == destination_shard:
-        raise HTTPException(status_code=422, detail="Source and destination nodes must differ.")
+        raise HTTPException(
+            status_code=422, detail="Source and destination nodes must differ."
+        )
 
-    existing = db.query(FederationTraveler).filter(FederationTraveler.travel_id == travel_id).first()
+    existing = (
+        db.query(FederationTraveler)
+        .filter(FederationTraveler.travel_id == travel_id)
+        .first()
+    )
     if existing is not None:
-        same_trip = existing.resident_id == actor_id and existing.from_shard == source_shard and existing.to_shard == destination_shard
+        same_trip = (
+            existing.resident_id == actor_id
+            and existing.from_shard == source_shard
+            and existing.to_shard == destination_shard
+        )
         if not same_trip:
-            raise HTTPException(status_code=409, detail=f"Travel ID '{travel_id}' already describes another trip.")
+            raise HTTPException(
+                status_code=409,
+                detail=f"Travel ID '{travel_id}' already describes another trip.",
+            )
         return {"travel": _travel_payload(existing), "idempotent": True}
 
     actor = db.get(FederationActor, actor_id)
@@ -527,9 +595,14 @@ def start_travel(
     source_node = db.get(FederationShard, source_shard)
     destination_node = db.get(FederationShard, destination_shard)
     if source_node is None or source_node.admission_state != "approved":
-        raise HTTPException(status_code=404, detail=f"Source node '{source_shard}' is not registered.")
+        raise HTTPException(
+            status_code=404, detail=f"Source node '{source_shard}' is not registered."
+        )
     if destination_node is None or destination_node.admission_state != "approved":
-        raise HTTPException(status_code=404, detail=f"Destination node '{destination_shard}' is not registered.")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Destination node '{destination_shard}' is not registered.",
+        )
     if actor.current_shard != source_shard:
         raise HTTPException(
             status_code=409,
@@ -545,7 +618,9 @@ def start_travel(
         .first()
     )
     if open_trip is not None:
-        raise HTTPException(status_code=409, detail=f"Actor '{actor_id}' already has an open trip.")
+        raise HTTPException(
+            status_code=409, detail=f"Actor '{actor_id}' already has an open trip."
+        )
 
     record = FederationTraveler(
         travel_id=travel_id,
@@ -577,13 +652,19 @@ def mark_travel_departed(
     """Let the source node confirm that its local incarnation has stopped."""
     record = _travel_record_or_404(db, travel_id)
     reporting_shard = payload.shard_id.strip()
-    _require_claimed_node(authenticated_node, reporting_shard, action="confirm this departure")
+    _require_claimed_node(
+        authenticated_node, reporting_shard, action="confirm this departure"
+    )
     if reporting_shard != record.from_shard:
-        raise HTTPException(status_code=403, detail="Only the source node may confirm departure.")
+        raise HTTPException(
+            status_code=403, detail="Only the source node may confirm departure."
+        )
     if record.status == "traveling":
         return {"travel": _travel_payload(record), "idempotent": True}
     if record.status != "departing":
-        raise HTTPException(status_code=409, detail=f"Travel is already '{record.status}'.")
+        raise HTTPException(
+            status_code=409, detail=f"Travel is already '{record.status}'."
+        )
 
     record.status = "traveling"
     record.departed_ts = datetime.now(timezone.utc)
@@ -605,13 +686,19 @@ def mark_travel_arrived(
     """Let the destination node confirm it has booted the actor locally."""
     record = _travel_record_or_404(db, travel_id)
     reporting_shard = payload.shard_id.strip()
-    _require_claimed_node(authenticated_node, reporting_shard, action="confirm this arrival")
+    _require_claimed_node(
+        authenticated_node, reporting_shard, action="confirm this arrival"
+    )
     if reporting_shard != record.to_shard:
-        raise HTTPException(status_code=403, detail="Only the destination node may confirm arrival.")
+        raise HTTPException(
+            status_code=403, detail="Only the destination node may confirm arrival."
+        )
     if record.status == "arrived":
         return {"travel": _travel_payload(record), "idempotent": True}
     if record.status != "traveling":
-        raise HTTPException(status_code=409, detail="Travel must be departed before it can arrive.")
+        raise HTTPException(
+            status_code=409, detail="Travel must be departed before it can arrive."
+        )
 
     record.status = "arrived"
     record.arrived_ts = datetime.now(timezone.utc)
@@ -643,10 +730,14 @@ def receive_pulse(
     authenticated_node: AuthenticatedNode = Depends(_require_node),
 ) -> Dict[str, Any]:
     """Receive a heartbeat pulse from a city shard. Returns pending mailbox messages."""
-    _require_claimed_node(authenticated_node, payload.shard_id, action="send this pulse")
+    _require_claimed_node(
+        authenticated_node, payload.shard_id, action="send this pulse"
+    )
     shard = db.get(FederationShard, payload.shard_id)
     if shard is None:
-        raise HTTPException(status_code=404, detail=f"Shard '{payload.shard_id}' not registered.")
+        raise HTTPException(
+            status_code=404, detail=f"Shard '{payload.shard_id}' not registered."
+        )
 
     # Stale/out-of-order pulse protection
     last_seq = shard.last_pulse_seq or 0
@@ -704,7 +795,9 @@ def receive_pulse(
             resident.last_location = r.location
         if r.last_act_ts:
             try:
-                resident.last_act_ts = datetime.fromisoformat(r.last_act_ts.replace("Z", "+00:00"))
+                resident.last_act_ts = datetime.fromisoformat(
+                    r.last_act_ts.replace("Z", "+00:00")
+                )
             except ValueError:
                 pass
 
@@ -713,7 +806,9 @@ def receive_pulse(
         departed_at = datetime.now(timezone.utc)
         if t.departed_ts:
             try:
-                departed_at = datetime.fromisoformat(t.departed_ts.replace("Z", "+00:00"))
+                departed_at = datetime.fromisoformat(
+                    t.departed_ts.replace("Z", "+00:00")
+                )
             except ValueError:
                 pass
         record = FederationTraveler(
@@ -746,7 +841,9 @@ def receive_pulse(
             open_record.status = "arrived"
             if t.arrived_ts:
                 try:
-                    open_record.arrived_ts = datetime.fromisoformat(t.arrived_ts.replace("Z", "+00:00"))
+                    open_record.arrived_ts = datetime.fromisoformat(
+                        t.arrived_ts.replace("Z", "+00:00")
+                    )
                 except ValueError:
                     open_record.arrived_ts = datetime.now(timezone.utc)
             else:
@@ -799,7 +896,12 @@ def receive_pulse(
 @router.get("/shards")
 def list_shards(db: Session = Depends(get_db)) -> Dict[str, Any]:
     """List admitted shards with computed health status."""
-    shards = db.query(FederationShard).filter(FederationShard.admission_state == "approved").order_by(FederationShard.shard_id).all()
+    shards = (
+        db.query(FederationShard)
+        .filter(FederationShard.admission_state == "approved")
+        .order_by(FederationShard.shard_id)
+        .all()
+    )
     interval = settings.federation_pulse_interval
     return {
         "shards": [
@@ -810,10 +912,14 @@ def list_shards(db: Session = Depends(get_db)) -> Dict[str, Any]:
                 "shard_type": s.shard_type,
                 "city_id": s.city_id,
                 "public_key": s.public_key,
-                "last_pulse_ts": s.last_pulse_ts.isoformat() if s.last_pulse_ts else None,
+                "last_pulse_ts": (
+                    s.last_pulse_ts.isoformat() if s.last_pulse_ts else None
+                ),
                 "last_pulse_seq": s.last_pulse_seq,
                 "status": _compute_shard_status(s.last_pulse_ts, interval),
-                "registered_at": s.registered_at.isoformat() if s.registered_at else None,
+                "registered_at": (
+                    s.registered_at.isoformat() if s.registered_at else None
+                ),
             }
             for s in shards
         ]
@@ -861,7 +967,12 @@ def get_traveler_history(
     actor = db.get(FederationActor, resident_id)
     if actor is None:
         raise HTTPException(status_code=404, detail=f"Actor '{resident_id}' not found.")
-    records = db.query(FederationTraveler).filter(FederationTraveler.resident_id == resident_id).order_by(FederationTraveler.id).all()
+    records = (
+        db.query(FederationTraveler)
+        .filter(FederationTraveler.resident_id == resident_id)
+        .order_by(FederationTraveler.id)
+        .all()
+    )
     return {
         "actor_id": resident_id,
         "resident_id": resident_id,
@@ -915,7 +1026,9 @@ def send_cross_shard_dm(
     authenticated_node: AuthenticatedNode = Depends(_require_node),
 ) -> Dict[str, Any]:
     """Deposit a cross-shard DM into the federation mailbox."""
-    _require_claimed_node(authenticated_node, payload.from_shard, action="send from this node")
+    _require_claimed_node(
+        authenticated_node, payload.from_shard, action="send from this node"
+    )
     msg = FederationMessage(
         from_resident_id=payload.from_resident_id,
         from_shard=payload.from_shard,

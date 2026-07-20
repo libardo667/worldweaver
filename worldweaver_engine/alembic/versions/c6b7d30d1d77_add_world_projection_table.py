@@ -5,11 +5,11 @@ Revises: 9c7a6d5b4e31
 Create Date: 2026-03-02 10:15:00.000000
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-
 
 # revision identifiers, used by Alembic.
 revision: str = "c6b7d30d1d77"
@@ -39,7 +39,9 @@ def upgrade() -> None:
         sa.UniqueConstraint("path", name="uq_world_projection_path"),
     )
     op.create_index("ix_world_projection_path", "world_projection", ["path"])
-    op.create_index("ix_world_projection_source_event", "world_projection", ["source_event_id"])
+    op.create_index(
+        "ix_world_projection_source_event", "world_projection", ["source_event_id"]
+    )
 
 
 def downgrade() -> None:

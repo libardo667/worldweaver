@@ -19,7 +19,9 @@ router = APIRouter(prefix="/world", tags=["world making"])
 class MakeObjectRequest(BaseModel):
     session_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
     recipe_id: str = Field(min_length=1, max_length=80, pattern=r"^[a-z0-9._-]+$")
-    idempotency_key: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:-]+$")
+    idempotency_key: str = Field(
+        min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:-]+$"
+    )
 
 
 def _raise_http(exc: ConsequenceDomainError) -> None:

@@ -29,7 +29,9 @@ def upgrade() -> None:
         sa.Column("location", sa.String(length=200), nullable=False),
         sa.Column("target", sa.String(length=200), nullable=True),
         sa.Column("body", sa.Text(), nullable=False),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False
+        ),
         sa.Column("expires_at", sa.DateTime(), nullable=False),
     )
     op.create_index("ix_world_traces_session_id", "world_traces", ["session_id"])

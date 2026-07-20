@@ -31,7 +31,9 @@ def test_public_client_can_read_and_leave_the_same_local_marks_as_residents():
 
 def test_public_client_keeps_actor_password_recovery_on_the_public_entry_path():
     source = PUBLIC_API.read_text(encoding="utf-8")
-    app = (ENGINE_ROOT / "client-public" / "src" / "App.tsx").read_text(encoding="utf-8")
+    app = (ENGINE_ROOT / "client-public" / "src" / "App.tsx").read_text(
+        encoding="utf-8"
+    )
     join = (PUBLIC_COMPONENTS / "JoinFlow.tsx").read_text(encoding="utf-8")
 
     assert '"/api/auth/request-password-reset"' in source
@@ -42,7 +44,9 @@ def test_public_client_keeps_actor_password_recovery_on_the_public_entry_path():
 
 def test_public_client_carries_email_verification_links_into_the_join_flow():
     source = PUBLIC_API.read_text(encoding="utf-8")
-    app = (ENGINE_ROOT / "client-public" / "src" / "App.tsx").read_text(encoding="utf-8")
+    app = (ENGINE_ROOT / "client-public" / "src" / "App.tsx").read_text(
+        encoding="utf-8"
+    )
     join = (PUBLIC_COMPONENTS / "JoinFlow.tsx").read_text(encoding="utf-8")
 
     assert '"/api/auth/verify-email"' in source
@@ -93,7 +97,9 @@ def test_public_client_keeps_keyboard_and_reduced_motion_guards():
 
 def test_schematic_map_keeps_layout_stable_and_does_not_draw_containment_as_a_path():
     world_map = (PUBLIC_COMPONENTS / "WorldMap.tsx").read_text(encoding="utf-8")
-    app = (ENGINE_ROOT / "client-public" / "src" / "App.tsx").read_text(encoding="utf-8")
+    app = (ENGINE_ROOT / "client-public" / "src" / "App.tsx").read_text(
+        encoding="utf-8"
+    )
     place_panel = (PUBLIC_COMPONENTS / "PlacePanel.tsx").read_text(encoding="utf-8")
 
     assert "stableOffsetAngle(node.key)" in world_map
@@ -122,7 +128,9 @@ def test_schematic_map_uses_a_precompiled_field_drawing_without_generating_in_th
 
 def test_public_client_can_keep_shard_api_traffic_under_a_same_origin_prefix():
     api = PUBLIC_API.read_text(encoding="utf-8")
-    base = (ENGINE_ROOT / "client-public" / "src" / "api" / "base.ts").read_text(encoding="utf-8")
+    base = (ENGINE_ROOT / "client-public" / "src" / "api" / "base.ts").read_text(
+        encoding="utf-8"
+    )
     vite = PUBLIC_VITE.read_text(encoding="utf-8")
 
     assert "localShardPath(path)" in api
@@ -131,17 +139,26 @@ def test_public_client_can_keep_shard_api_traffic_under_a_same_origin_prefix():
     assert "VITE_WW_SHARD_ROUTES" in vite
     assert "shardProxyEntries" in vite
 
-    store = (ENGINE_ROOT / "client-public" / "src" / "session" / "store.ts").read_text(encoding="utf-8")
+    store = (ENGINE_ROOT / "client-public" / "src" / "session" / "store.ts").read_text(
+        encoding="utf-8"
+    )
     assert "localKey(SESSION_KEY)" in store
     assert "localKey(PLACE_KEY)" in store
 
 
 def test_public_client_travel_redirect_carries_only_a_recoverable_trip_id():
-    app = (ENGINE_ROOT / "client-public" / "src" / "App.tsx").read_text(encoding="utf-8")
+    app = (ENGINE_ROOT / "client-public" / "src" / "App.tsx").read_text(
+        encoding="utf-8"
+    )
     arrival = (PUBLIC_COMPONENTS / "TravelArrival.tsx").read_text(encoding="utf-8")
-    recovery = (PUBLIC_COMPONENTS / "TravelDepartureRecovery.tsx").read_text(encoding="utf-8")
+    recovery = (PUBLIC_COMPONENTS / "TravelDepartureRecovery.tsx").read_text(
+        encoding="utf-8"
+    )
 
-    assert 'destination.pathname = `${destination.pathname.replace(/\\/$/, "")}/travel/arrive`' in app
+    assert (
+        'destination.pathname = `${destination.pathname.replace(/\\/$/, "")}/travel/arrive`'
+        in app
+    )
     assert 'destination.searchParams.set("travel_id", departingTravelId)' in app
     assert 'searchParams.set("token"' not in app
     assert "postTravelArrival(travelId, sessionId)" in arrival

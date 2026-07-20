@@ -27,7 +27,12 @@ from src.services.resident_protocol import (  # noqa: E402
 
 
 def _authority_payload(db, row: ResidentAuthority) -> dict[str, object]:
-    sessions = db.query(ResidentSessionAuthority).filter(ResidentSessionAuthority.actor_id == row.actor_id).order_by(ResidentSessionAuthority.session_id).all()
+    sessions = (
+        db.query(ResidentSessionAuthority)
+        .filter(ResidentSessionAuthority.actor_id == row.actor_id)
+        .order_by(ResidentSessionAuthority.session_id)
+        .all()
+    )
     return {
         "actor_id": row.actor_id,
         "hearth_shard_id": row.hearth_shard_id,
@@ -52,7 +57,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("list", help="list admitted resident public identities")
-    admit = commands.add_parser("admit", help="admit one reviewed resident public identity")
+    admit = commands.add_parser(
+        "admit", help="admit one reviewed resident public identity"
+    )
     admit.add_argument(
         "--descriptor-stdin",
         action="store_true",
@@ -93,7 +100,11 @@ def main() -> int:
     with SessionLocal() as db:
         try:
             if args.command == "list":
-                rows = db.query(ResidentAuthority).order_by(ResidentAuthority.actor_id).all()
+                rows = (
+                    db.query(ResidentAuthority)
+                    .order_by(ResidentAuthority.actor_id)
+                    .all()
+                )
                 payload: object = [_authority_payload(db, row) for row in rows]
             else:
                 assert descriptor is not None

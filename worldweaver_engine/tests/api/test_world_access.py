@@ -10,7 +10,12 @@ from src.services.world_memory import seed_location_graph
 
 @pytest.fixture()
 def game_rules(monkeypatch):
-    example = Path(__file__).resolve().parents[2] / "data" / "rulesets" / "private_constructive_game.v1.example.json"
+    example = (
+        Path(__file__).resolve().parents[2]
+        / "data"
+        / "rulesets"
+        / "private_constructive_game.v1.example.json"
+    )
     monkeypatch.setattr(settings, "shard_experience_path", str(example))
     monkeypatch.setattr(settings, "shard_id", "test-game-shard")
 

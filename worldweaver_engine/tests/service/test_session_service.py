@@ -84,14 +84,18 @@ def test_new_session_defaults_are_neutral_and_no_pickaxe(db_session):
 
 
 def test_session_consistency_mode_defaults_to_cache(monkeypatch):
-    monkeypatch.setattr("src.services.session_service.settings.session_consistency_mode", "cache")
+    monkeypatch.setattr(
+        "src.services.session_service.settings.session_consistency_mode", "cache"
+    )
     assert get_session_consistency_mode() == "cache"
 
 
 def test_stateless_mode_reconstructs_manager_each_call(monkeypatch, db_session):
     _state_managers.clear()
     session_id = "stateless-reconstruct"
-    monkeypatch.setattr("src.services.session_service.settings.session_consistency_mode", "stateless")
+    monkeypatch.setattr(
+        "src.services.session_service.settings.session_consistency_mode", "stateless"
+    )
 
     first = get_state_manager(session_id, db_session)
     first.set_variable("gold", 3)

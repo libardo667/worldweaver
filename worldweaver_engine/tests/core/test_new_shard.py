@@ -6,7 +6,11 @@ import shutil
 
 
 def _read_env(path: Path) -> dict[str, str]:
-    return dict(line.split("=", 1) for line in path.read_text(encoding="utf-8").splitlines() if line and not line.startswith("#") and "=" in line)
+    return dict(
+        line.split("=", 1)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line and not line.startswith("#") and "=" in line
+    )
 
 
 def test_new_shard_keeps_node_identity_separate_from_city_pack(tmp_path: Path) -> None:
@@ -38,7 +42,9 @@ def test_new_shard_keeps_node_identity_separate_from_city_pack(tmp_path: Path) -
     assert "COMPOSE_PROJECT_NAME=rose-city-coop-1\n" in env_text
 
 
-def test_new_world_directory_is_closed_and_has_folder_local_trust_commands(tmp_path: Path) -> None:
+def test_new_world_directory_is_closed_and_has_folder_local_trust_commands(
+    tmp_path: Path,
+) -> None:
     script = Path(__file__).resolve().parents[2] / "scripts" / "new_shard.py"
     subprocess.run(
         [
@@ -59,7 +65,9 @@ def test_new_world_directory_is_closed_and_has_folder_local_trust_commands(tmp_p
     generated_env = _read_env(shard / ".env")
     assert generated_env["SHARD_TYPE"] == "world"
     assert generated_env["WW_FEDERATION_ADMISSION_MODE"] == "closed"
-    assert '"127.0.0.1:${BACKEND_PORT}:8000"' in (shard / "docker-compose.yml").read_text(encoding="utf-8")
+    assert '"127.0.0.1:${BACKEND_PORT}:8000"' in (
+        shard / "docker-compose.yml"
+    ).read_text(encoding="utf-8")
     checked = subprocess.run(
         [sys.executable, str(shard / "ww.py"), "check", "--offline"],
         cwd=shard,
@@ -144,7 +152,10 @@ def test_new_shards_receive_separate_secure_local_secrets(tmp_path: Path) -> Non
 
     generated: list[dict[str, str]] = []
     transport_descriptors: list[dict[str, str]] = []
-    for directory_name, shard_id in (("first", "river-coop-1"), ("second", "river-coop-2")):
+    for directory_name, shard_id in (
+        ("first", "river-coop-1"),
+        ("second", "river-coop-2"),
+    ):
         base_dir = tmp_path / directory_name
         subprocess.run(
             [
@@ -165,13 +176,21 @@ def test_new_shards_receive_separate_secure_local_secrets(tmp_path: Path) -> Non
         env_path = base_dir / "ww_pdx" / ".env"
         generated.append(_read_env(env_path))
         assert env_path.stat().st_mode & 0o077 == 0
-        assert (base_dir / "ww_pdx" / "identity" / "node.key").stat().st_mode & 0o077 == 0
-        descriptor = json.loads((base_dir / "ww_pdx" / "node.json").read_text(encoding="utf-8"))
+        assert (
+            base_dir / "ww_pdx" / "identity" / "node.key"
+        ).stat().st_mode & 0o077 == 0
+        descriptor = json.loads(
+            (base_dir / "ww_pdx" / "node.json").read_text(encoding="utf-8")
+        )
         assert descriptor["node_id"] == shard_id
         assert descriptor["city_id"] == "portland"
-        transport_key = base_dir / "ww_pdx" / "hearth-host" / "identity" / "transport.key"
+        transport_key = (
+            base_dir / "ww_pdx" / "hearth-host" / "identity" / "transport.key"
+        )
         assert transport_key.stat().st_mode & 0o077 == 0
-        transport_descriptor = json.loads((base_dir / "ww_pdx" / "hearth-host.json").read_text(encoding="utf-8"))
+        transport_descriptor = json.loads(
+            (base_dir / "ww_pdx" / "hearth-host.json").read_text(encoding="utf-8")
+        )
         assert transport_descriptor["schema"] == "worldweaver.hearth-transport"
         assert transport_descriptor["transport_key_id"].startswith("x25519:")
         assert transport_descriptor["transport_public_key"] != descriptor["public_key"]
@@ -187,12 +206,17 @@ def test_new_shards_receive_separate_secure_local_secrets(tmp_path: Path) -> Non
     assert first["WW_DATA_ENCRYPTION_KEY"] != second["WW_DATA_ENCRYPTION_KEY"]
     assert first["WW_DB_PASSWORD"] != second["WW_DB_PASSWORD"]
     assert first["WW_NODE_PRIVATE_KEY_PATH"] == "identity/node.key"
-    assert transport_descriptors[0]["transport_key_id"] != transport_descriptors[1]["transport_key_id"]
+    assert (
+        transport_descriptors[0]["transport_key_id"]
+        != transport_descriptors[1]["transport_key_id"]
+    )
     assert first["WW_REQUIRE_EMAIL_VERIFICATION"] == "false"
     assert "CHANGE_ME" not in first["WW_JWT_SECRET"]
 
 
-def test_new_game_shard_copies_versioned_experience_and_uses_readable_name(tmp_path: Path) -> None:
+def test_new_game_shard_copies_versioned_experience_and_uses_readable_name(
+    tmp_path: Path,
+) -> None:
     city_pack = tmp_path / "pack"
     city_pack.mkdir()
     (city_pack / "neighborhoods.json").write_text("[]", encoding="utf-8")
@@ -228,10 +252,14 @@ def test_new_game_shard_copies_versioned_experience_and_uses_readable_name(tmp_p
     env_text = (shard / ".env").read_text(encoding="utf-8")
     assert "CITY_ID=alderbank\n" in env_text
     assert "SHARD_ID=ww_alderbank\n" in env_text
-    assert "WW_SHARD_EXPERIENCE_PATH=/app/data/rulesets/alderbank.game.json\n" in env_text
+    assert (
+        "WW_SHARD_EXPERIENCE_PATH=/app/data/rulesets/alderbank.game.json\n" in env_text
+    )
     assert "FEDERATION_URL=http://localhost:9000\n" in env_text
     assert "WW_RUNTIME_FEDERATION_URL=http://ww_world-backend:8000\n" in env_text
-    assert (shard / "data" / "rulesets" / "alderbank.game.json").read_text(encoding="utf-8") == experience.read_text(encoding="utf-8")
+    assert (shard / "data" / "rulesets" / "alderbank.game.json").read_text(
+        encoding="utf-8"
+    ) == experience.read_text(encoding="utf-8")
     compose_text = (shard / "docker-compose.yml").read_text(encoding="utf-8")
     assert "../../worldweaver_engine" not in compose_text
     assert "../../ww_agent" not in compose_text
@@ -242,8 +270,12 @@ def test_new_game_shard_copies_versioned_experience_and_uses_readable_name(tmp_p
     assert "./hearth-host" not in compose_text
 
     generated_env = _read_env(shard / ".env")
-    assert generated_env["WW_ENGINE_IMAGE"].startswith("ghcr.io/libardo667/worldweaver-engine:sha-")
-    assert generated_env["WW_AGENT_IMAGE"].startswith("ghcr.io/libardo667/worldweaver-agent:sha-")
+    assert generated_env["WW_ENGINE_IMAGE"].startswith(
+        "ghcr.io/libardo667/worldweaver-engine:sha-"
+    )
+    assert generated_env["WW_AGENT_IMAGE"].startswith(
+        "ghcr.io/libardo667/worldweaver-agent:sha-"
+    )
     assert (shard / "ww.py").is_file()
     checked = subprocess.run(
         [sys.executable, str(shard / "ww.py"), "check", "--offline"],
@@ -279,7 +311,9 @@ def test_new_game_shard_copies_versioned_experience_and_uses_readable_name(tmp_p
     assert "Hearth transport identity is incomplete" in incomplete.stderr
 
 
-def test_folder_operator_verifies_generated_maps_before_publication(tmp_path: Path) -> None:
+def test_folder_operator_verifies_generated_maps_before_publication(
+    tmp_path: Path,
+) -> None:
     engine_root = Path(__file__).resolve().parents[2]
     city_pack = engine_root / "data" / "cities" / "alderbank"
     script = engine_root / "scripts" / "new_shard.py"
@@ -332,14 +366,30 @@ def test_folder_operator_verifies_generated_maps_before_publication(tmp_path: Pa
 
     changed_canonical_pack = tmp_path / "changed-canonical-pack"
     shutil.copytree(city_pack, changed_canonical_pack)
-    neighborhoods = json.loads((changed_canonical_pack / "neighborhoods.json").read_text(encoding="utf-8"))
-    neighborhoods[0]["vibe"] = "A canonical city change that map-only publication must refuse."
-    (changed_canonical_pack / "neighborhoods.json").write_text(json.dumps(neighborhoods, indent=2) + "\n", encoding="utf-8")
+    neighborhoods = json.loads(
+        (changed_canonical_pack / "neighborhoods.json").read_text(encoding="utf-8")
+    )
+    neighborhoods[0][
+        "vibe"
+    ] = "A canonical city change that map-only publication must refuse."
+    (changed_canonical_pack / "neighborhoods.json").write_text(
+        json.dumps(neighborhoods, indent=2) + "\n", encoding="utf-8"
+    )
     rejected_canonical_change = subprocess.run(
-        [sys.executable, str(shard / "ww.py"), "map", "publish", str(changed_canonical_pack), "--yes"],
+        [
+            sys.executable,
+            str(shard / "ww.py"),
+            "map",
+            "publish",
+            str(changed_canonical_pack),
+            "--yes",
+        ],
         cwd=shard,
         capture_output=True,
         text=True,
     )
     assert rejected_canonical_change.returncode == 1
-    assert "cannot change canonical city-pack file neighborhoods.json" in rejected_canonical_change.stderr
+    assert (
+        "cannot change canonical city-pack file neighborhoods.json"
+        in rejected_canonical_change.stderr
+    )

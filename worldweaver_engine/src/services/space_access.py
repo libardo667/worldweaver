@@ -26,7 +26,11 @@ from ..models import (
     SpaceAccessRequest,
     WorldNode,
 )
-from .event_submission import WorldEventCommand, structural_event_idempotency_key, submit_world_event
+from .event_submission import (
+    WorldEventCommand,
+    structural_event_idempotency_key,
+    submit_world_event,
+)
 from .shard_experience import (
     GameCapability,
     GameCapabilityUnavailable,
@@ -74,13 +78,19 @@ def _variables(raw: Any) -> dict[str, Any]:
 def _actor_context(db: Session, session_id: str) -> ActorContext:
     normalized = str(session_id or "").strip()
     if not _SESSION_RE.fullmatch(normalized):
-        raise SpaceAccessError("invalid_session", "Invalid session ID.", status_code=422)
+        raise SpaceAccessError(
+            "invalid_session", "Invalid session ID.", status_code=422
+        )
     row = db.get(SessionVars, normalized)
     if row is None:
-        raise SpaceAccessError("session_not_found", "Session not found.", status_code=404)
+        raise SpaceAccessError(
+            "session_not_found", "Session not found.", status_code=404
+        )
     actor_id = str(row.actor_id or "").strip()
     if not actor_id:
-        raise SpaceAccessError("actor_identity_required", "Session has no stable actor identity.")
+        raise SpaceAccessError(
+            "actor_identity_required", "Session has no stable actor identity."
+        )
     return ActorContext(
         session_id=normalized,
         actor_id=actor_id,
@@ -107,20 +117,28 @@ def _require_space_permissions() -> None:
     try:
         require_game_capabilities(GameCapability.SPACE_PERMISSIONS)
     except GameCapabilityUnavailable as exc:
-        raise SpaceAccessError("game_capability_unavailable", str(exc), status_code=403) from exc
+        raise SpaceAccessError(
+            "game_capability_unavailable", str(exc), status_code=403
+        ) from exc
 
 
 def space_permissions_enabled() -> bool:
     """Return whether destination checks should apply on this process."""
 
     declaration = configured_game_declaration()
-    return bool(declaration and GameCapability.SPACE_PERMISSIONS in declaration.capabilities)
+    return bool(
+        declaration and GameCapability.SPACE_PERMISSIONS in declaration.capabilities
+    )
 
 
 def _normalize_location(value: str) -> str:
     location = str(value or "").strip()
     if not location or len(location) > 200:
-        raise SpaceAccessError("invalid_location", "Location must contain 1 to 200 characters.", status_code=422)
+        raise SpaceAccessError(
+            "invalid_location",
+            "Location must contain 1 to 200 characters.",
+            status_code=422,
+        )
     return location
 
 
@@ -134,7 +152,9 @@ def _require_known_place(db: Session, location: str) -> None:
         .first()
     )
     if exists is None:
-        raise SpaceAccessError("location_not_found", "That exact place does not exist.", status_code=404)
+        raise SpaceAccessError(
+            "location_not_found", "That exact place does not exist.", status_code=404
+        )
 
 
 def _policy(db: Session, location: str, *, lock: bool = False) -> SpaceAccessPolicy:
@@ -143,11 +163,15 @@ def _policy(db: Session, location: str, *, lock: bool = False) -> SpaceAccessPol
         query = query.with_for_update()
     row = query.one_or_none()
     if row is None:
-        raise SpaceAccessError("space_not_controlled", "That place has no access rule.", status_code=404)
+        raise SpaceAccessError(
+            "space_not_controlled", "That place has no access rule.", status_code=404
+        )
     return row
 
 
-def _active_grant(db: Session, *, location: str, actor_id: str) -> SpaceAccessGrant | None:
+def _active_grant(
+    db: Session, *, location: str, actor_id: str
+) -> SpaceAccessGrant | None:
     return (
         db.query(SpaceAccessGrant)
         .filter(
@@ -159,7 +183,9 @@ def _active_grant(db: Session, *, location: str, actor_id: str) -> SpaceAccessGr
     )
 
 
-def _policy_payload(row: SpaceAccessPolicy, *, actor_id: str, admitted: bool) -> dict[str, Any]:
+def _policy_payload(
+    row: SpaceAccessPolicy, *, actor_id: str, admitted: bool
+) -> dict[str, Any]:
     is_controller = str(row.controller_actor_id) == actor_id
     mode = str(row.mode)
     if mode == "public":
@@ -206,7 +232,9 @@ def access_status(db: Session, *, session_id: str, location: str) -> dict[str, A
             "request_pending": False,
             "active_grants": [],
         }
-    admitted = _active_grant(db, location=normalized, actor_id=context.actor_id) is not None
+    admitted = (
+        _active_grant(db, location=normalized, actor_id=context.actor_id) is not None
+    )
     payload = _policy_payload(row, actor_id=context.actor_id, admitted=admitted)
     pending = (
         db.query(SpaceAccessRequest.request_id)
@@ -233,17 +261,26 @@ def access_status(db: Session, *, session_id: str, location: str) -> dict[str, A
             .all()
         )
         for grant in grants:
-            session = db.query(SessionVars).filter(SessionVars.actor_id == grant.actor_id).order_by(SessionVars.session_id.asc()).first()
+            session = (
+                db.query(SessionVars)
+                .filter(SessionVars.actor_id == grant.actor_id)
+                .order_by(SessionVars.session_id.asc())
+                .first()
+            )
             payload["active_grants"].append(
                 {
                     "actor_id": str(grant.actor_id),
-                    "session_id": str(session.session_id) if session is not None else "",
+                    "session_id": (
+                        str(session.session_id) if session is not None else ""
+                    ),
                 }
             )
     return payload
 
 
-def assert_route_entry_allowed(db: Session, *, session_id: str, destinations: list[str]) -> None:
+def assert_route_entry_allowed(
+    db: Session, *, session_id: str, destinations: list[str]
+) -> None:
     """Reject the first protected destination before movement mutates state.
 
     Ordinary shards and places without a policy remain public. The origin is
@@ -262,11 +299,21 @@ def assert_route_entry_allowed(db: Session, *, session_id: str, destinations: li
         row = db.get(SpaceAccessPolicy, location)
         if row is None:
             continue
-        admitted = _active_grant(db, location=location, actor_id=context.actor_id) is not None
+        admitted = (
+            _active_grant(db, location=location, actor_id=context.actor_id) is not None
+        )
         status = _policy_payload(row, actor_id=context.actor_id, admitted=admitted)
         if not status["can_enter"]:
-            code = "space_closed" if status["entry_reason"] == "closed" else "space_access_required"
-            message = f"{location} is closed to new entry." if code == "space_closed" else f"You need permission to enter {location}."
+            code = (
+                "space_closed"
+                if status["entry_reason"] == "closed"
+                else "space_access_required"
+            )
+            message = (
+                f"{location} is closed to new entry."
+                if code == "space_closed"
+                else f"You need permission to enter {location}."
+            )
             raise SpaceAccessError(code, message, status_code=403)
 
 
@@ -287,12 +334,19 @@ def found_space_policy(
         raise SpaceAccessError("invalid_mode", "Unknown access mode.", status_code=422)
     actor_id = str(controller_actor_id or "").strip()
     if not actor_id or len(actor_id) > 36:
-        raise SpaceAccessError("invalid_controller", "A stable controller actor ID is required.", status_code=422)
+        raise SpaceAccessError(
+            "invalid_controller",
+            "A stable controller actor ID is required.",
+            status_code=422,
+        )
     _require_known_place(db, normalized)
     existing = db.get(SpaceAccessPolicy, normalized)
     if existing is not None:
         if existing.controller_actor_id != actor_id:
-            raise SpaceAccessError("policy_already_exists", "That place already has a different controller.")
+            raise SpaceAccessError(
+                "policy_already_exists",
+                "That place already has a different controller.",
+            )
         return existing
     row = SpaceAccessPolicy(
         location=normalized,
@@ -325,7 +379,10 @@ def _existing_receipt(
     if row is None:
         return None
     if row.operation != operation or row.location != location:
-        raise SpaceAccessError("idempotency_conflict", "That retry key was already used for a different access command.")
+        raise SpaceAccessError(
+            "idempotency_conflict",
+            "That retry key was already used for a different access command.",
+        )
     return row
 
 
@@ -337,7 +394,9 @@ def _receipt_payload(row: SpaceAccessReceipt, *, replayed: bool) -> dict[str, An
             "receipt_id": str(row.receipt_id),
             "operation": str(row.operation),
             "location": str(row.location),
-            "world_event_id": int(row.world_event_id) if row.world_event_id is not None else None,
+            "world_event_id": (
+                int(row.world_event_id) if row.world_event_id is not None else None
+            ),
             "created_at": row.created_at.isoformat() if row.created_at else None,
             "result": dict(row.payload_json or {}),
         },
@@ -364,7 +423,9 @@ def _record_receipt(
                 summary=str(public_event["summary"]),
                 delta=dict(public_event["delta"]),
                 metadata={"surface": "space_access_command"},
-                idempotency_key=structural_event_idempotency_key(operation, idempotency_key),
+                idempotency_key=structural_event_idempotency_key(
+                    operation, idempotency_key
+                ),
                 skip_graph_extraction=True,
                 skip_projection=True,
                 preserve_event_type=True,
@@ -406,7 +467,12 @@ def _begin_command(
         operation=operation,
         location=normalized_location,
     )
-    return context, key, normalized_location, (_receipt_payload(existing, replayed=True) if existing else None)
+    return (
+        context,
+        key,
+        normalized_location,
+        (_receipt_payload(existing, replayed=True) if existing else None),
+    )
 
 
 def _recover_duplicate(
@@ -426,7 +492,9 @@ def _recover_duplicate(
         location=location,
     )
     if existing is None:
-        raise SpaceAccessError("transaction_conflict", "The access command conflicted and was not applied.")
+        raise SpaceAccessError(
+            "transaction_conflict", "The access command conflicted and was not applied."
+        )
     return _receipt_payload(existing, replayed=True)
 
 
@@ -454,10 +522,22 @@ def set_space_mode(
         raise SpaceAccessError("invalid_mode", "Unknown access mode.", status_code=422)
     row = _policy(db, location, lock=True)
     if row.controller_actor_id != context.actor_id:
-        raise SpaceAccessError("not_space_controller", "Only this place's controller can change its access rule.", status_code=403)
-    if row.mode == normalized_mode and (note is None or row.note == str(note or "").strip()):
-        raise SpaceAccessError("no_access_change", "That access rule is already in effect.")
-    before = {"mode": str(row.mode), "note": str(row.note or ""), "revision": int(row.revision or 1)}
+        raise SpaceAccessError(
+            "not_space_controller",
+            "Only this place's controller can change its access rule.",
+            status_code=403,
+        )
+    if row.mode == normalized_mode and (
+        note is None or row.note == str(note or "").strip()
+    ):
+        raise SpaceAccessError(
+            "no_access_change", "That access rule is already in effect."
+        )
+    before = {
+        "mode": str(row.mode),
+        "note": str(row.note or ""),
+        "revision": int(row.revision or 1),
+    }
     row.mode = normalized_mode
     if note is not None:
         row.note = str(note or "").strip()[:500]
@@ -465,7 +545,11 @@ def set_space_mode(
     db.flush()
     result = {
         "before": before,
-        "after": {"mode": str(row.mode), "note": str(row.note or ""), "revision": int(row.revision)},
+        "after": {
+            "mode": str(row.mode),
+            "note": str(row.note or ""),
+            "revision": int(row.revision),
+        },
     }
     try:
         return _record_receipt(
@@ -488,7 +572,13 @@ def set_space_mode(
             },
         )
     except IntegrityError:
-        return _recover_duplicate(db, context=context, idempotency_key=key, operation=operation, location=location)
+        return _recover_duplicate(
+            db,
+            context=context,
+            idempotency_key=key,
+            operation=operation,
+            location=location,
+        )
 
 
 def request_space_access(
@@ -513,12 +603,19 @@ def request_space_access(
     status = _policy_payload(
         row,
         actor_id=context.actor_id,
-        admitted=_active_grant(db, location=location, actor_id=context.actor_id) is not None,
+        admitted=_active_grant(db, location=location, actor_id=context.actor_id)
+        is not None,
     )
     if status["can_enter"]:
-        raise SpaceAccessError("access_already_available", "You can already enter that place.")
+        raise SpaceAccessError(
+            "access_already_available", "You can already enter that place."
+        )
     if row.mode != "requestable":
-        raise SpaceAccessError("space_not_requestable", "That place is not accepting access requests.", status_code=403)
+        raise SpaceAccessError(
+            "space_not_requestable",
+            "That place is not accepting access requests.",
+            status_code=403,
+        )
     pending = (
         db.query(SpaceAccessRequest)
         .filter(
@@ -529,7 +626,10 @@ def request_space_access(
         .one_or_none()
     )
     if pending is not None:
-        raise SpaceAccessError("request_already_pending", "You already have a pending request for that place.")
+        raise SpaceAccessError(
+            "request_already_pending",
+            "You already have a pending request for that place.",
+        )
     request = SpaceAccessRequest(
         location=location,
         requester_actor_id=context.actor_id,
@@ -556,7 +656,13 @@ def request_space_access(
             result=result,
         )
     except IntegrityError:
-        return _recover_duplicate(db, context=context, idempotency_key=key, operation=operation, location=location)
+        return _recover_duplicate(
+            db,
+            context=context,
+            idempotency_key=key,
+            operation=operation,
+            location=location,
+        )
 
 
 def invite_to_space(
@@ -579,13 +685,29 @@ def invite_to_space(
         return replay
     row = _policy(db, location, lock=True)
     if row.controller_actor_id != context.actor_id:
-        raise SpaceAccessError("not_space_controller", "Only this place's controller can admit someone.", status_code=403)
+        raise SpaceAccessError(
+            "not_space_controller",
+            "Only this place's controller can admit someone.",
+            status_code=403,
+        )
     recipient_actor_id = _recipient_actor_id(db, recipient_session_id)
     if recipient_actor_id == context.actor_id:
-        raise SpaceAccessError("controller_already_admitted", "The controller already has access.")
-    grant = db.query(SpaceAccessGrant).filter(SpaceAccessGrant.location == location, SpaceAccessGrant.actor_id == recipient_actor_id).with_for_update().one_or_none()
+        raise SpaceAccessError(
+            "controller_already_admitted", "The controller already has access."
+        )
+    grant = (
+        db.query(SpaceAccessGrant)
+        .filter(
+            SpaceAccessGrant.location == location,
+            SpaceAccessGrant.actor_id == recipient_actor_id,
+        )
+        .with_for_update()
+        .one_or_none()
+    )
     if grant is not None and grant.active:
-        raise SpaceAccessError("actor_already_admitted", "That person is already admitted.")
+        raise SpaceAccessError(
+            "actor_already_admitted", "That person is already admitted."
+        )
     if grant is None:
         grant = SpaceAccessGrant(
             location=location,
@@ -599,7 +721,9 @@ def invite_to_space(
         grant.granted_by_actor_id = context.actor_id
         grant.revision = int(grant.revision or 1) + 1
     db.flush()
-    result = {"grant": {"location": location, "actor_id": recipient_actor_id, "active": True}}
+    result = {
+        "grant": {"location": location, "actor_id": recipient_actor_id, "active": True}
+    }
     try:
         return _record_receipt(
             db,
@@ -610,7 +734,13 @@ def invite_to_space(
             result=result,
         )
     except IntegrityError:
-        return _recover_duplicate(db, context=context, idempotency_key=key, operation=operation, location=location)
+        return _recover_duplicate(
+            db,
+            context=context,
+            idempotency_key=key,
+            operation=operation,
+            location=location,
+        )
 
 
 def revoke_space_access(
@@ -633,15 +763,33 @@ def revoke_space_access(
         return replay
     row = _policy(db, location, lock=True)
     if row.controller_actor_id != context.actor_id:
-        raise SpaceAccessError("not_space_controller", "Only this place's controller can revoke access.", status_code=403)
+        raise SpaceAccessError(
+            "not_space_controller",
+            "Only this place's controller can revoke access.",
+            status_code=403,
+        )
     recipient_actor_id = _recipient_actor_id(db, recipient_session_id)
-    grant = db.query(SpaceAccessGrant).filter(SpaceAccessGrant.location == location, SpaceAccessGrant.actor_id == recipient_actor_id).with_for_update().one_or_none()
+    grant = (
+        db.query(SpaceAccessGrant)
+        .filter(
+            SpaceAccessGrant.location == location,
+            SpaceAccessGrant.actor_id == recipient_actor_id,
+        )
+        .with_for_update()
+        .one_or_none()
+    )
     if grant is None or not grant.active:
-        raise SpaceAccessError("active_grant_not_found", "That person does not have active access.", status_code=404)
+        raise SpaceAccessError(
+            "active_grant_not_found",
+            "That person does not have active access.",
+            status_code=404,
+        )
     grant.active = False
     grant.revision = int(grant.revision or 1) + 1
     db.flush()
-    result = {"grant": {"location": location, "actor_id": recipient_actor_id, "active": False}}
+    result = {
+        "grant": {"location": location, "actor_id": recipient_actor_id, "active": False}
+    }
     try:
         return _record_receipt(
             db,
@@ -652,7 +800,13 @@ def revoke_space_access(
             result=result,
         )
     except IntegrityError:
-        return _recover_duplicate(db, context=context, idempotency_key=key, operation=operation, location=location)
+        return _recover_duplicate(
+            db,
+            context=context,
+            idempotency_key=key,
+            operation=operation,
+            location=location,
+        )
 
 
 def pending_requests(db: Session, *, session_id: str, location: str) -> dict[str, Any]:
@@ -663,8 +817,22 @@ def pending_requests(db: Session, *, session_id: str, location: str) -> dict[str
     normalized = _normalize_location(location)
     row = _policy(db, normalized)
     if row.controller_actor_id != context.actor_id:
-        raise SpaceAccessError("not_space_controller", "Only this place's controller can review its requests.", status_code=403)
-    requests = db.query(SpaceAccessRequest).filter(SpaceAccessRequest.location == normalized, SpaceAccessRequest.status == "pending").order_by(SpaceAccessRequest.created_at.asc(), SpaceAccessRequest.request_id.asc()).all()
+        raise SpaceAccessError(
+            "not_space_controller",
+            "Only this place's controller can review its requests.",
+            status_code=403,
+        )
+    requests = (
+        db.query(SpaceAccessRequest)
+        .filter(
+            SpaceAccessRequest.location == normalized,
+            SpaceAccessRequest.status == "pending",
+        )
+        .order_by(
+            SpaceAccessRequest.created_at.asc(), SpaceAccessRequest.request_id.asc()
+        )
+        .all()
+    )
     return {
         "location": normalized,
         "requests": [
@@ -692,11 +860,20 @@ def resolve_access_request(
 ) -> dict[str, Any]:
     _require_space_permissions()
     context = _actor_context(db, session_id)
-    request = db.query(SpaceAccessRequest).filter(SpaceAccessRequest.request_id == str(request_id or "").strip()).with_for_update().one_or_none()
+    request = (
+        db.query(SpaceAccessRequest)
+        .filter(SpaceAccessRequest.request_id == str(request_id or "").strip())
+        .with_for_update()
+        .one_or_none()
+    )
     if request is None:
-        raise SpaceAccessError("access_request_not_found", "Access request not found.", status_code=404)
+        raise SpaceAccessError(
+            "access_request_not_found", "Access request not found.", status_code=404
+        )
     location = str(request.location)
-    operation = "space_access_admitted" if decision == "admitted" else "space_access_denied"
+    operation = (
+        "space_access_admitted" if decision == "admitted" else "space_access_denied"
+    )
     key = _idempotency_key(idempotency_key)
     existing = _existing_receipt(
         db,
@@ -709,11 +886,19 @@ def resolve_access_request(
         return _receipt_payload(existing, replayed=True)
     policy = _policy(db, location, lock=True)
     if policy.controller_actor_id != context.actor_id:
-        raise SpaceAccessError("not_space_controller", "Only this place's controller can resolve its requests.", status_code=403)
+        raise SpaceAccessError(
+            "not_space_controller",
+            "Only this place's controller can resolve its requests.",
+            status_code=403,
+        )
     if request.status != "pending":
-        raise SpaceAccessError("request_already_resolved", "That access request was already resolved.")
+        raise SpaceAccessError(
+            "request_already_resolved", "That access request was already resolved."
+        )
     if decision not in ("admitted", "denied"):
-        raise SpaceAccessError("invalid_decision", "Decision must be admitted or denied.", status_code=422)
+        raise SpaceAccessError(
+            "invalid_decision", "Decision must be admitted or denied.", status_code=422
+        )
     request.status = decision
     request.resolved_by_actor_id = context.actor_id
     request.resolved_at = _utcnow()
@@ -759,4 +944,10 @@ def resolve_access_request(
             result=result,
         )
     except IntegrityError:
-        return _recover_duplicate(db, context=context, idempotency_key=key, operation=operation, location=location)
+        return _recover_duplicate(
+            db,
+            context=context,
+            idempotency_key=key,
+            operation=operation,
+            location=location,
+        )

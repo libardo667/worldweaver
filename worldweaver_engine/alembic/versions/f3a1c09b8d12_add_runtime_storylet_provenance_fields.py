@@ -5,11 +5,11 @@ Revises: c6b7d30d1d77
 Create Date: 2026-03-02 13:10:00.000000
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-
 
 # revision identifiers, used by Alembic.
 revision: str = "f3a1c09b8d12"
@@ -28,9 +28,7 @@ def upgrade() -> None:
                 server_default="authored",
             )
         )
-        batch_op.add_column(
-            sa.Column("seed_event_ids", sa.JSON(), nullable=True)
-        )
+        batch_op.add_column(sa.Column("seed_event_ids", sa.JSON(), nullable=True))
         batch_op.add_column(sa.Column("expires_at", sa.DateTime(), nullable=True))
 
 

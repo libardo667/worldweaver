@@ -15,12 +15,21 @@ def section_ids(source: Mapping[str, Any]) -> tuple[str, ...]:
     width = grid.get("width", 72)
     height = grid.get("height", 54)
     section_size = grid.get("section_size", 18)
-    if any(not isinstance(value, int) or isinstance(value, bool) or value <= 0 for value in (width, height, section_size)):
+    if any(
+        not isinstance(value, int) or isinstance(value, bool) or value <= 0
+        for value in (width, height, section_size)
+    ):
         raise ValueError("fictional_map grid dimensions must be positive integers")
-    return tuple(f"section-{x // section_size}-{y // section_size}" for y in range(0, height, section_size) for x in range(0, width, section_size))
+    return tuple(
+        f"section-{x // section_size}-{y // section_size}"
+        for y in range(0, height, section_size)
+        for x in range(0, width, section_size)
+    )
 
 
-def edit_section(config: Mapping[str, Any], *, section_id: str, action: str) -> dict[str, Any]:
+def edit_section(
+    config: Mapping[str, Any], *, section_id: str, action: str
+) -> dict[str, Any]:
     """Return a copied config with one explicit lock, unlock, or reroll edit."""
     if action not in {"lock", "unlock", "reroll"}:
         raise ValueError("section action must be lock, unlock, or reroll")
@@ -44,15 +53,23 @@ def edit_section(config: Mapping[str, Any], *, section_id: str, action: str) -> 
     if not isinstance(current, dict):
         raise ValueError(f"section '{section_id}' override must be an object")
     revision = current.get("revision", 0)
-    if not isinstance(revision, int) or isinstance(revision, bool) or not 0 <= revision <= 9999:
-        raise ValueError(f"section '{section_id}' revision must be an integer between 0 and 9999")
+    if (
+        not isinstance(revision, int)
+        or isinstance(revision, bool)
+        or not 0 <= revision <= 9999
+    ):
+        raise ValueError(
+            f"section '{section_id}' revision must be an integer between 0 and 9999"
+        )
     locked = current.get("locked", default_locked)
     if not isinstance(locked, bool):
         raise ValueError(f"section '{section_id}' locked state must be true or false")
 
     if action == "reroll":
         if locked:
-            raise ValueError(f"section '{section_id}' is locked; unlock it before rerolling")
+            raise ValueError(
+                f"section '{section_id}' is locked; unlock it before rerolling"
+            )
         if revision == 9999:
             raise ValueError(f"section '{section_id}' has reached its revision limit")
         revision += 1
@@ -67,8 +84,16 @@ def edit_section(config: Mapping[str, Any], *, section_id: str, action: str) -> 
 def section_preview_svg(svg: str, section: Mapping[str, Any]) -> str:
     """Crop one compiler-owned SVG to a section without regenerating the map."""
     coordinates = tuple(section.get(field) for field in ("x", "y", "width", "height"))
-    if any(not isinstance(value, int) or isinstance(value, bool) or value <= 0 for value in coordinates[2:]) or any(not isinstance(value, int) or isinstance(value, bool) or value < 0 for value in coordinates[:2]):
-        raise ValueError("map section needs non-negative coordinates and positive dimensions")
+    if any(
+        not isinstance(value, int) or isinstance(value, bool) or value <= 0
+        for value in coordinates[2:]
+    ) or any(
+        not isinstance(value, int) or isinstance(value, bool) or value < 0
+        for value in coordinates[:2]
+    ):
+        raise ValueError(
+            "map section needs non-negative coordinates and positive dimensions"
+        )
     x, y, width, height = coordinates
     cropped, replacements = re.subn(
         r'viewBox="[^"]+"',

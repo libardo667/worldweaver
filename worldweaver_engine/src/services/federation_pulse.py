@@ -48,7 +48,9 @@ def _session_vars_payload(raw_vars: Any) -> Dict[str, Any]:
 
 
 def _resident_slug(name: str) -> str:
-    normalized = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    normalized = (
+        unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    )
     slug = _NON_ALNUM_RE.sub("_", normalized.strip().lower())
     slug = _MULTI_UNDERSCORE_RE.sub("_", slug).strip("_")
     if not slug:
@@ -70,7 +72,9 @@ def _reseat_pulse_seq(last_known_seq: int = 0) -> int:
     return min(next_seq, _MAX_PULSE_SEQ)
 
 
-def _resident_id_for(session_id: str, residents_base: Optional[str] = None) -> Optional[str]:
+def _resident_id_for(
+    session_id: str, residents_base: Optional[str] = None
+) -> Optional[str]:
     """Return the resident_id for a session slug, creating identity/resident_id.txt if needed."""
     # Session IDs follow the pattern {name}-{timestamp}
     name = session_id.split("-")[0] if "-" in session_id else session_id
@@ -92,7 +96,9 @@ def _resident_id_for(session_id: str, residents_base: Optional[str] = None) -> O
     try:
         id_file.write_text(f"{rid}\n", encoding="utf-8")
     except OSError as exc:
-        log.warning("Could not persist resident_id for %s at %s: %s", name, id_file, exc)
+        log.warning(
+            "Could not persist resident_id for %s at %s: %s", name, id_file, exc
+        )
         return None
     _RESIDENT_ID_CACHE[name] = rid
     log.info("Created resident actor id for %s at %s", name, id_file)
@@ -141,7 +147,9 @@ def _build_pulse_payload(db_session: Any, pulse_seq: int) -> Dict[str, Any]:
             continue  # skip incomplete/bootstrap sessions
         session_id = str(row.session_id)
         name = session_id.split("-")[0] if "-" in session_id else session_id
-        resident_id = str(getattr(row, "actor_id", "") or "").strip() or _resident_id_for(session_id)
+        resident_id = str(
+            getattr(row, "actor_id", "") or ""
+        ).strip() or _resident_id_for(session_id)
         if not resident_id:
             continue  # can't federate without a durable ID
         residents.append(
@@ -217,7 +225,9 @@ async def run_pulse_loop(db_factory: Any, interval_seconds: int) -> None:
         finally:
             db.close()
 
-        response = await asyncio.get_event_loop().run_in_executor(None, _post_pulse_sync, url, payload)
+        response = await asyncio.get_event_loop().run_in_executor(
+            None, _post_pulse_sync, url, payload
+        )
         if response is None:
             # The common startup order is backend -> register. If the first pulse
             # reaches the root before registration, do not leave the node falsely
@@ -233,7 +243,9 @@ async def run_pulse_loop(db_factory: Any, interval_seconds: int) -> None:
                 reason,
             )
             if reason == "stale_pulse":
-                pulse_seq = _reseat_pulse_seq(int(response.get("last_seq") or pulse_seq))
+                pulse_seq = _reseat_pulse_seq(
+                    int(response.get("last_seq") or pulse_seq)
+                )
                 log.info(
                     "Federation pulse reseated: shard=%s next_seq=%s",
                     payload.get("shard_id"),

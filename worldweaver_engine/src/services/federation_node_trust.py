@@ -19,7 +19,9 @@ class FederationNodeTrustError(ValueError):
 def _required(value: str, label: str, *, maximum: int) -> str:
     normalized = str(value or "").strip()
     if not normalized or len(normalized) > maximum:
-        raise FederationNodeTrustError(f"{label} must be between 1 and {maximum} characters.")
+        raise FederationNodeTrustError(
+            f"{label} must be between 1 and {maximum} characters."
+        )
     return normalized
 
 
@@ -38,9 +40,13 @@ def admit_node(
     existing = db.get(FederationShard, node_id)
     if existing is not None:
         if existing.public_key != public_key:
-            raise FederationNodeTrustError("This node ID is already bound to another key. Revoke it before key recovery.")
+            raise FederationNodeTrustError(
+                "This node ID is already bound to another key. Revoke it before key recovery."
+            )
         if existing.admission_state == "revoked":
-            raise FederationNodeTrustError("This node is revoked. Use explicit key recovery rather than admitting it again.")
+            raise FederationNodeTrustError(
+                "This node is revoked. Use explicit key recovery rather than admitting it again."
+            )
         return existing
 
     now = datetime.now(timezone.utc)
@@ -110,9 +116,13 @@ def recover_node_key(
     if shard is None:
         raise FederationNodeTrustError("Unknown nodes must be admitted, not recovered.")
     if shard.admission_state != "revoked":
-        raise FederationNodeTrustError("Revoke the old node identity before recovering its key.")
+        raise FederationNodeTrustError(
+            "Revoke the old node identity before recovering its key."
+        )
     if shard.public_key == public_key:
-        raise FederationNodeTrustError("Recovery requires a newly generated public key.")
+        raise FederationNodeTrustError(
+            "Recovery requires a newly generated public key."
+        )
 
     previous_key = shard.public_key
     now = datetime.now(timezone.utc)

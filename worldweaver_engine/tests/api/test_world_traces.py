@@ -56,7 +56,9 @@ def test_trace_derives_author_and_location_without_entering_event_feed(db_sessio
     assert get_agent_scene(author_id, db_session)["traces_here"] == []
 
 
-def test_human_trace_view_uses_the_same_local_marks_without_session_ids(client, db_session):
+def test_human_trace_view_uses_the_same_local_marks_without_session_ids(
+    client, db_session
+):
     author_id = "test_resident-20260714-120000"
     viewer_id = "human_player-20260719-120000"
     db_session.add_all([_session(author_id), _session(viewer_id)])
@@ -64,7 +66,11 @@ def test_human_trace_view_uses_the_same_local_marks_without_session_ids(client, 
 
     posted = client.post(
         "/api/world/traces",
-        json={"session_id": author_id, "body": "three blue chalk lines", "target": "the bakery lintel"},
+        json={
+            "session_id": author_id,
+            "body": "three blue chalk lines",
+            "target": "the bakery lintel",
+        },
     )
     assert posted.status_code == 200
 
@@ -95,18 +101,41 @@ def test_trace_visibility_is_location_bounded_and_expiry_bounded(db_session):
     )
     db_session.commit()
     post_world_trace(
-        LeaveWorldTraceRequest(session_id=author_id, body="a paper crane", target="the sill"),
+        LeaveWorldTraceRequest(
+            session_id=author_id, body="a paper crane", target="the sill"
+        ),
         db_session,
     )
 
-    assert len(_active_world_traces(db_session, location="Chinatown", viewer_session_id=viewer_id)) == 1
-    assert _active_world_traces(db_session, location="Mission", viewer_session_id=elsewhere_id) == []
+    assert (
+        len(
+            _active_world_traces(
+                db_session, location="Chinatown", viewer_session_id=viewer_id
+            )
+        )
+        == 1
+    )
+    assert (
+        _active_world_traces(
+            db_session, location="Mission", viewer_session_id=elsewhere_id
+        )
+        == []
+    )
 
     row = db_session.query(WorldTrace).one()
-    row.expires_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=1)
+    row.expires_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
+        seconds=1
+    )
     db_session.commit()
-    assert _active_world_traces(db_session, location="Chinatown", viewer_session_id=viewer_id) == []
-    assert db_session.query(WorldTrace).count() == 1  # decay hides history; it does not rewrite it
+    assert (
+        _active_world_traces(
+            db_session, location="Chinatown", viewer_session_id=viewer_id
+        )
+        == []
+    )
+    assert (
+        db_session.query(WorldTrace).count() == 1
+    )  # decay hides history; it does not rewrite it
 
 
 def test_trace_requires_canonical_session_location(db_session):

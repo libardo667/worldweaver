@@ -6,7 +6,14 @@ import json
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi import HTTPException
 
-from src.models import ResidentAuthority, ResidentRequestNonce, ResidentSessionAuthority, SessionVars, ShardTravelHandoff, WorldEvent
+from src.models import (
+    ResidentAuthority,
+    ResidentRequestNonce,
+    ResidentSessionAuthority,
+    SessionVars,
+    ShardTravelHandoff,
+    WorldEvent,
+)
 from src.services.federation_identity import current_shard_id
 from src.services.resident_authority import bind_resident_identity
 from src.services.resident_protocol import (
@@ -17,13 +24,19 @@ from src.services.resident_protocol import (
 
 
 class TestGameEndpoints:
-    def test_private_state_and_public_maintenance_routes_do_not_exist(self, seeded_client):
+    def test_private_state_and_public_maintenance_routes_do_not_exist(
+        self, seeded_client
+    ):
         requests = [
             ("get", "/api/state/never-seen", None),
             ("get", "/api/state/never-seen/vars", None),
             ("post", "/api/state/never-seen/vars", {"vars": {"private": True}}),
             ("get", "/api/state/never-seen/identity-growth", None),
-            ("post", "/api/state/never-seen/identity-growth", {"growth_text": "rewrite"}),
+            (
+                "post",
+                "/api/state/never-seen/identity-growth",
+                {"growth_text": "rewrite"},
+            ),
             ("post", "/api/cleanup-sessions", None),
             ("post", "/api/session/prune-duplicate-agents", {}),
             ("post", "/api/reset-session", None),
@@ -41,7 +54,9 @@ class TestGameEndpoints:
         response = seeded_client.post("/api/dev/hard-reset")
         assert response.status_code == 404
 
-    def test_session_bootstrap_persists_resident_actor_id(self, seeded_client, seeded_world_id, db_session):
+    def test_session_bootstrap_persists_resident_actor_id(
+        self, seeded_client, seeded_world_id, db_session
+    ):
         session_id = "resident-bootstrap-session"
         actor_id = "resident-actor-123"
 
@@ -72,9 +87,14 @@ class TestGameEndpoints:
         )
         assert bootstrap_event.summary.startswith("Test Resident arrived at ")
         assert bootstrap_event.embedding is not None
-        assert bootstrap_event.world_state_delta["__action_meta__"]["surface"] == "session_bootstrap"
+        assert (
+            bootstrap_event.world_state_delta["__action_meta__"]["surface"]
+            == "session_bootstrap"
+        )
 
-    def test_pre_admitted_resident_can_bootstrap_one_generation_with_exact_proof(self, seeded_client, seeded_world_id, db_session):
+    def test_pre_admitted_resident_can_bootstrap_one_generation_with_exact_proof(
+        self, seeded_client, seeded_world_id, db_session
+    ):
         actor_id = "signed-resident-actor"
         session_id = "signed-resident-session"
         identity_private = Ed25519PrivateKey.generate()
@@ -137,7 +157,9 @@ class TestGameEndpoints:
         assert replay.status_code == 409
         assert replay.json()["detail"]["code"] == "session_id_in_use"
 
-    def test_signed_resident_bootstrap_refuses_unsigned_traffic(self, seeded_client, seeded_world_id):
+    def test_signed_resident_bootstrap_refuses_unsigned_traffic(
+        self, seeded_client, seeded_world_id
+    ):
         response = seeded_client.post(
             "/api/session/bootstrap/resident",
             json={
@@ -151,7 +173,9 @@ class TestGameEndpoints:
         assert response.status_code == 401
         assert response.json()["detail"]["code"] == "resident_proof_required"
 
-    def test_signed_resident_bootstrap_cannot_replace_an_existing_session(self, seeded_client, seeded_world_id, db_session):
+    def test_signed_resident_bootstrap_cannot_replace_an_existing_session(
+        self, seeded_client, seeded_world_id, db_session
+    ):
         actor_id = "signed-collision-actor"
         identity_private = Ed25519PrivateKey.generate()
         runtime_private = Ed25519PrivateKey.generate()
@@ -161,7 +185,13 @@ class TestGameEndpoints:
             hearth_shard_id="hearth:signed-collision-actor",
             identity_public_key=encoded_public_key(identity_private.public_key()),
         )
-        db_session.add(SessionVars(session_id="occupied-session", actor_id="someone-else", vars={"name": "Still Here"}))
+        db_session.add(
+            SessionVars(
+                session_id="occupied-session",
+                actor_id="someone-else",
+                vars={"name": "Still Here"},
+            )
+        )
         db_session.commit()
         certificate = issue_runtime_certificate(
             identity_private_key=identity_private,
@@ -196,11 +226,18 @@ class TestGameEndpoints:
 
         assert response.status_code == 409
         assert response.json()["detail"]["code"] == "session_id_in_use"
-        assert db_session.get(SessionVars, "occupied-session").actor_id == "someone-else"
-        assert db_session.get(ResidentAuthority, actor_id).active_runtime_generation is None
+        assert (
+            db_session.get(SessionVars, "occupied-session").actor_id == "someone-else"
+        )
+        assert (
+            db_session.get(ResidentAuthority, actor_id).active_runtime_generation
+            is None
+        )
         assert db_session.query(ResidentRequestNonce).count() == 0
 
-    def test_session_bootstrap_prunes_stale_duplicate_agent_sessions(self, seeded_client, seeded_world_id, db_session):
+    def test_session_bootstrap_prunes_stale_duplicate_agent_sessions(
+        self, seeded_client, seeded_world_id, db_session
+    ):
         stale_session_id = "test_resident-20260317-010101"
         fresh_session_id = "test_resident-20260318-020202"
 
@@ -239,7 +276,12 @@ class TestGameEndpoints:
 
         assert db_session.get(SessionVars, stale_session_id) is None
         assert db_session.get(SessionVars, fresh_session_id) is not None
-        assert db_session.query(WorldEvent).filter(WorldEvent.session_id == stale_session_id).count() == 0
+        assert (
+            db_session.query(WorldEvent)
+            .filter(WorldEvent.session_id == stale_session_id)
+            .count()
+            == 0
+        )
 
     def test_session_leave_retires_presence_without_erasing_history(
         self,
@@ -258,7 +300,12 @@ class TestGameEndpoints:
             },
         )
         assert bootstrap.status_code == 200
-        event_ids = [row.id for row in db_session.query(WorldEvent).filter(WorldEvent.session_id == session_id).all()]
+        event_ids = [
+            row.id
+            for row in db_session.query(WorldEvent)
+            .filter(WorldEvent.session_id == session_id)
+            .all()
+        ]
         assert event_ids
 
         response = seeded_client.post(
@@ -269,7 +316,12 @@ class TestGameEndpoints:
         assert response.status_code == 200
         assert response.json()["deleted"] == {"sessions": 1}
         assert db_session.get(SessionVars, session_id) is None
-        assert [row.id for row in db_session.query(WorldEvent).filter(WorldEvent.session_id == session_id).all()] == event_ids
+        assert [
+            row.id
+            for row in db_session.query(WorldEvent)
+            .filter(WorldEvent.session_id == session_id)
+            .all()
+        ] == event_ids
 
     def test_session_travel_departure_retires_presence_and_is_idempotent(
         self,
@@ -317,11 +369,13 @@ class TestGameEndpoints:
         departures = []
         monkeypatch.setattr(
             "src.api.game.state.federation_travel.start_federated_travel",
-            lambda **kwargs: starts.append(kwargs) or {"travel": {"status": "departing"}, "idempotent": False},
+            lambda **kwargs: starts.append(kwargs)
+            or {"travel": {"status": "departing"}, "idempotent": False},
         )
         monkeypatch.setattr(
             "src.api.game.state.federation_travel.confirm_federated_departure",
-            lambda **kwargs: departures.append(kwargs) or {"travel": {"status": "traveling"}, "idempotent": False},
+            lambda **kwargs: departures.append(kwargs)
+            or {"travel": {"status": "traveling"}, "idempotent": False},
         )
         request = {
             "travel_id": "trip-local-001",
@@ -337,7 +391,10 @@ class TestGameEndpoints:
         assert response.status_code == 200
         assert response.json()["handoff"]["status"] == "traveling"
         assert response.json()["handoff"]["destination_url"] == "https://rose.example"
-        assert response.json()["handoff"]["destination_client_url"] == "https://play.rose.example"
+        assert (
+            response.json()["handoff"]["destination_client_url"]
+            == "https://play.rose.example"
+        )
         assert repeated.status_code == 200
         assert repeated.json()["idempotent"] is True
         assert len(starts) == 1
@@ -349,7 +406,11 @@ class TestGameEndpoints:
         assert handoff is not None and handoff.status == "traveling"
         assert handoff.departure_hub_id == "emeryville-sf-transfer"
         assert handoff.arrival_hub_id == "portland-union-station"
-        departure_events = db_session.query(WorldEvent).filter(WorldEvent.event_type == "cross_shard_departure").all()
+        departure_events = (
+            db_session.query(WorldEvent)
+            .filter(WorldEvent.event_type == "cross_shard_departure")
+            .all()
+        )
         assert len(departure_events) == 1
 
     def test_session_travel_departure_can_recover_after_federation_confirmation_fails(
@@ -382,7 +443,14 @@ class TestGameEndpoints:
                         "departure_hub": "Emeryville / San Francisco transfer",
                         "arrival_hub_id": "portland-union-station",
                         "arrival_hub": "Portland Union Station",
-                        "nodes": [{"shard_id": "rose-city-coop-1", "shard_url": "https://rose.example", "client_url": "https://play.rose.example", "status": "healthy"}],
+                        "nodes": [
+                            {
+                                "shard_id": "rose-city-coop-1",
+                                "shard_url": "https://rose.example",
+                                "client_url": "https://play.rose.example",
+                                "status": "healthy",
+                            }
+                        ],
                     }
                 ],
             },
@@ -502,7 +570,9 @@ class TestGameEndpoints:
             "arrival_hub": "Emeryville / San Francisco transfer",
             "status": "traveling",
         }
-        monkeypatch.setattr("src.api.game.state.current_shard_id", lambda: "bay-commons-1")
+        monkeypatch.setattr(
+            "src.api.game.state.current_shard_id", lambda: "bay-commons-1"
+        )
         monkeypatch.setattr(
             "src.api.game.state.federation_travel.get_federated_travel",
             lambda **_kwargs: {"travel": trip},
@@ -510,9 +580,13 @@ class TestGameEndpoints:
         confirmations = []
         monkeypatch.setattr(
             "src.api.game.state.federation_travel.confirm_federated_arrival",
-            lambda **kwargs: confirmations.append(kwargs) or {"travel": {"status": "arrived"}, "idempotent": False},
+            lambda **kwargs: confirmations.append(kwargs)
+            or {"travel": {"status": "arrived"}, "idempotent": False},
         )
-        request = {"travel_id": trip["travel_id"], "session_id": "arriving-resident-session"}
+        request = {
+            "travel_id": trip["travel_id"],
+            "session_id": "arriving-resident-session",
+        }
 
         response = seeded_client.post("/api/session/travel/arrive", json=request)
         repeated = seeded_client.post("/api/session/travel/arrive", json=request)
@@ -523,13 +597,19 @@ class TestGameEndpoints:
         assert response.json()["place"] == "Embarcadero"
         assert repeated.status_code == 200
         assert repeated.json()["idempotent"] is True
-        assert confirmations == [{"travel_id": "trip-arrival-001", "destination_shard": "bay-commons-1"}]
+        assert confirmations == [
+            {"travel_id": "trip-arrival-001", "destination_shard": "bay-commons-1"}
+        ]
 
         session = db_session.get(SessionVars, "arriving-resident-session")
         assert session is not None
         assert session.actor_id == "actor-arriving-resident"
         assert session.vars["variables"]["location"] == "Embarcadero"
-        events = db_session.query(WorldEvent).filter(WorldEvent.session_id == "arriving-resident-session").all()
+        events = (
+            db_session.query(WorldEvent)
+            .filter(WorldEvent.session_id == "arriving-resident-session")
+            .all()
+        )
         assert [event.event_type for event in events].count("session_bootstrap") == 1
         assert [event.event_type for event in events].count("cross_shard_arrival") == 1
 
@@ -551,7 +631,9 @@ class TestGameEndpoints:
             "arrival_hub": "Emeryville / San Francisco transfer",
             "status": "traveling",
         }
-        monkeypatch.setattr("src.api.game.state.current_shard_id", lambda: "bay-commons-1")
+        monkeypatch.setattr(
+            "src.api.game.state.current_shard_id", lambda: "bay-commons-1"
+        )
         monkeypatch.setattr(
             "src.api.game.state.federation_travel.get_federated_travel",
             lambda **_kwargs: {"travel": trip},
@@ -566,7 +648,10 @@ class TestGameEndpoints:
         )
         response = seeded_client.post(
             "/api/session/travel/arrive",
-            json={"travel_id": trip["travel_id"], "session_id": "recovering-arrival-session"},
+            json={
+                "travel_id": trip["travel_id"],
+                "session_id": "recovering-arrival-session",
+            },
         )
 
         assert response.status_code == 202
@@ -582,7 +667,11 @@ class TestGameEndpoints:
 
         assert retry.status_code == 200
         assert retry.json()["handoff"]["status"] == "arrived"
-        events = db_session.query(WorldEvent).filter(WorldEvent.session_id == "recovering-arrival-session").all()
+        events = (
+            db_session.query(WorldEvent)
+            .filter(WorldEvent.session_id == "recovering-arrival-session")
+            .all()
+        )
         assert [event.event_type for event in events].count("session_bootstrap") == 1
         assert [event.event_type for event in events].count("cross_shard_arrival") == 1
 
@@ -593,7 +682,9 @@ class TestGameEndpoints:
         db_session,
         monkeypatch,
     ):
-        monkeypatch.setattr("src.api.game.state.current_shard_id", lambda: "bay-commons-1")
+        monkeypatch.setattr(
+            "src.api.game.state.current_shard_id", lambda: "bay-commons-1"
+        )
         monkeypatch.setattr(
             "src.api.game.state.federation_travel.get_federated_travel",
             lambda **_kwargs: {
@@ -612,7 +703,10 @@ class TestGameEndpoints:
 
         response = seeded_client.post(
             "/api/session/travel/arrive",
-            json={"travel_id": "trip-arrival-003", "session_id": "misrouted-arrival-session"},
+            json={
+                "travel_id": "trip-arrival-003",
+                "session_id": "misrouted-arrival-session",
+            },
         )
 
         assert response.status_code == 409

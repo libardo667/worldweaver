@@ -32,7 +32,11 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     radius_km = 6371.0
     latitude_delta = math.radians(lat2 - lat1)
     longitude_delta = math.radians(lon2 - lon1)
-    value = math.sin(latitude_delta / 2) ** 2 + (math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(longitude_delta / 2) ** 2)
+    value = math.sin(latitude_delta / 2) ** 2 + (
+        math.cos(math.radians(lat1))
+        * math.cos(math.radians(lat2))
+        * math.sin(longitude_delta / 2) ** 2
+    )
     return radius_km * 2 * math.asin(math.sqrt(value))
 
 
@@ -43,8 +47,12 @@ def _slugify(name: str) -> str:
     return value.strip("-")
 
 
-def _compute_neighborhood_adjacency(neighborhoods: Sequence[Mapping[str, Any]], threshold_km: float = 1.8) -> dict[str, list[str]]:
-    adjacency: dict[str, list[str]] = {str(neighborhood["id"]): [] for neighborhood in neighborhoods}
+def _compute_neighborhood_adjacency(
+    neighborhoods: Sequence[Mapping[str, Any]], threshold_km: float = 1.8
+) -> dict[str, list[str]]:
+    adjacency: dict[str, list[str]] = {
+        str(neighborhood["id"]): [] for neighborhood in neighborhoods
+    }
     for index, first in enumerate(neighborhoods):
         for second in neighborhoods[index + 1 :]:
             distance = _haversine_km(
@@ -59,7 +67,9 @@ def _compute_neighborhood_adjacency(neighborhoods: Sequence[Mapping[str, Any]], 
     return adjacency
 
 
-def _assign_nearest_neighborhood(records: list[dict[str, Any]], neighborhoods: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def _assign_nearest_neighborhood(
+    records: list[dict[str, Any]], neighborhoods: Sequence[Mapping[str, Any]]
+) -> list[dict[str, Any]]:
     known_ids = {str(neighborhood["id"]) for neighborhood in neighborhoods}
     for record in records:
         if str(record.get("neighborhood") or "") in known_ids:
@@ -78,13 +88,18 @@ def _assign_nearest_neighborhood(records: list[dict[str, Any]], neighborhoods: S
     return records
 
 
-def merge_osm_neighborhoods(curated: Sequence[Mapping[str, Any]], osm: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def merge_osm_neighborhoods(
+    curated: Sequence[Mapping[str, Any]], osm: Sequence[Mapping[str, Any]]
+) -> list[dict[str, Any]]:
     merged = copy.deepcopy(list(curated))
     existing_coordinates = [(float(item["lat"]), float(item["lon"])) for item in merged]
     for source in osm:
         latitude = float(source["lat"])
         longitude = float(source["lon"])
-        if not str(source.get("name") or "").strip() or any(_haversine_km(latitude, longitude, existing_lat, existing_lon) < 0.5 for existing_lat, existing_lon in existing_coordinates):
+        if not str(source.get("name") or "").strip() or any(
+            _haversine_km(latitude, longitude, existing_lat, existing_lon) < 0.5
+            for existing_lat, existing_lon in existing_coordinates
+        ):
             continue
         merged.append(
             {
@@ -100,7 +115,9 @@ def merge_osm_neighborhoods(curated: Sequence[Mapping[str, Any]], osm: Sequence[
     return merged
 
 
-def merge_osm_landmarks(curated: Sequence[Mapping[str, Any]], osm: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def merge_osm_landmarks(
+    curated: Sequence[Mapping[str, Any]], osm: Sequence[Mapping[str, Any]]
+) -> list[dict[str, Any]]:
     merged = copy.deepcopy(list(curated))
     existing_names = {str(item.get("name") or "").lower() for item in merged}
     for source in osm:
@@ -122,7 +139,9 @@ def merge_osm_landmarks(curated: Sequence[Mapping[str, Any]], osm: Sequence[Mapp
     return merged
 
 
-def merge_osm_transit(curated: Sequence[Mapping[str, Any]], osm: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def merge_osm_transit(
+    curated: Sequence[Mapping[str, Any]], osm: Sequence[Mapping[str, Any]]
+) -> list[dict[str, Any]]:
     merged = copy.deepcopy(list(curated))
     by_name = {str(item["name"]).lower(): item for item in merged}
     for source in osm:
@@ -144,7 +163,9 @@ def merge_osm_transit(curated: Sequence[Mapping[str, Any]], osm: Sequence[Mappin
     return merged
 
 
-def build_neighborhoods(raw: Sequence[Mapping[str, Any]], *, default_grounding: str = "grounded_geo") -> list[dict[str, Any]]:
+def build_neighborhoods(
+    raw: Sequence[Mapping[str, Any]], *, default_grounding: str = "grounded_geo"
+) -> list[dict[str, Any]]:
     by_name: dict[str, dict[str, Any]] = {}
     for source in raw:
         item = copy.deepcopy(dict(source))
@@ -158,7 +179,11 @@ def build_neighborhoods(raw: Sequence[Mapping[str, Any]], *, default_grounding: 
     adjacency = _compute_neighborhood_adjacency(neighborhoods)
     for neighborhood in neighborhoods:
         explicit = neighborhood.get("adjacent_to")
-        neighborhood["adjacent_to"] = sorted({str(item).strip() for item in explicit if str(item).strip()}) if isinstance(explicit, list) else sorted(adjacency[str(neighborhood["id"])])
+        neighborhood["adjacent_to"] = (
+            sorted({str(item).strip() for item in explicit if str(item).strip()})
+            if isinstance(explicit, list)
+            else sorted(adjacency[str(neighborhood["id"])])
+        )
     return sorted(neighborhoods, key=lambda item: str(item["name"]))
 
 
@@ -172,8 +197,12 @@ def build_transit_graph(
     graph: dict[str, Any] = {}
     for system in systems:
         system_id = str(system["id"])
-        stations = _assign_nearest_neighborhood(copy.deepcopy(processed_stations.get(system_id, [])), neighborhoods)
-        station_ids = [_slugify(f"{system_id}-{station['name']}") for station in stations]
+        stations = _assign_nearest_neighborhood(
+            copy.deepcopy(processed_stations.get(system_id, [])), neighborhoods
+        )
+        station_ids = [
+            _slugify(f"{system_id}-{station['name']}") for station in stations
+        ]
         final_stations: list[dict[str, Any]] = []
         for index, station in enumerate(stations):
             connections: list[str] = []
@@ -182,7 +211,9 @@ def build_transit_graph(
             if index < len(stations) - 1:
                 connections.append(station_ids[index + 1])
             if isinstance(station.get("connects_to"), list):
-                connections = list(set([*connections, *map(str, station["connects_to"])]))
+                connections = list(
+                    set([*connections, *map(str, station["connects_to"])])
+                )
             final = {
                 "id": station_ids[index],
                 "name": station["name"],
@@ -237,7 +268,9 @@ def build_landmarks(
     return sorted(result, key=lambda item: str(item["name"]))
 
 
-def build_corridors(raw: Sequence[Mapping[str, Any]], *, default_grounding: str = "grounded_geo") -> list[dict[str, Any]]:
+def build_corridors(
+    raw: Sequence[Mapping[str, Any]], *, default_grounding: str = "grounded_geo"
+) -> list[dict[str, Any]]:
     return [
         {
             "id": _slugify(str(corridor["name"])),
@@ -268,7 +301,9 @@ def assemble_city_pack(
     default_grounding = "fictional" if fictional else "grounded_geo"
 
     neighborhoods = build_neighborhoods(
-        merge_osm_neighborhoods(source.get("curated_neighborhoods", []), osm_neighborhoods),
+        merge_osm_neighborhoods(
+            source.get("curated_neighborhoods", []), osm_neighborhoods
+        ),
         default_grounding=default_grounding,
     )
     landmarks = build_landmarks(
@@ -281,7 +316,9 @@ def assemble_city_pack(
     total_transit_stations = 0
     for system in source.get("transit_systems", []):
         system_id = str(system["id"])
-        processed = merge_osm_transit(system.get("stations", []), provided_transit.get(system_id, []))
+        processed = merge_osm_transit(
+            system.get("stations", []), provided_transit.get(system_id, [])
+        )
         processed_transit[system_id] = processed
         total_transit_stations += len(processed)
     transit_graph = build_transit_graph(
@@ -296,7 +333,9 @@ def assemble_city_pack(
     )
     compiled_map: CompiledFictionalMap | None = None
     if fictional and isinstance(source.get("fictional_map"), dict):
-        compiled_map = compile_fictional_map(source, neighborhoods=neighborhoods, landmarks=landmarks)
+        compiled_map = compile_fictional_map(
+            source, neighborhoods=neighborhoods, landmarks=landmarks
+        )
 
     bounds: dict[str, float] = {}
     bbox_parts = default_bbox.split(",")
@@ -313,8 +352,22 @@ def assemble_city_pack(
         "version": str(source.get("pack_version") or "1.0.0"),
         "built_at": built_at or datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "bounds": bounds,
-        "source": str(source.get("source") or ("WorldWeaver curated fictional geography" if fictional else "openstreetmap.org + curated")),
-        "license": str(source.get("license") or ("Original fictional pack data; repository license applies" if fictional else "ODbL (openstreetmap.org/copyright) for OSM-derived data")),
+        "source": str(
+            source.get("source")
+            or (
+                "WorldWeaver curated fictional geography"
+                if fictional
+                else "openstreetmap.org + curated"
+            )
+        ),
+        "license": str(
+            source.get("license")
+            or (
+                "Original fictional pack data; repository license applies"
+                if fictional
+                else "ODbL (openstreetmap.org/copyright) for OSM-derived data"
+            )
+        ),
         "fictional": fictional,
         "counts": {
             "neighborhoods": len(neighborhoods),
@@ -324,7 +377,9 @@ def assemble_city_pack(
             "travel_hubs": len(travel_hubs),
             "inter_city_routes": len(inter_city),
             "stoops": len(stoops),
-            "map_sections": len(compiled_map.artifact["sections"]) if compiled_map else 0,
+            "map_sections": (
+                len(compiled_map.artifact["sections"]) if compiled_map else 0
+            ),
         },
     }
     if compiled_map:
@@ -347,7 +402,9 @@ def assemble_city_pack(
     }
     if compiled_map:
         files["generated_map.json"] = compiled_map.artifact
-    report = require_valid_city_pack({filename.removesuffix(".json"): data for filename, data in files.items()})
+    report = require_valid_city_pack(
+        {filename.removesuffix(".json"): data for filename, data in files.items()}
+    )
     return BuiltCityPack(
         files=files,
         generated_map_svg=compiled_map.svg if compiled_map else None,

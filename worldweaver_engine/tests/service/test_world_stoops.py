@@ -12,7 +12,11 @@ from src.models import (
     WorldNode,
     WorldStoop,
 )
-from src.services.consequence_objects import ConsequenceDomainError, found_durable_object, visible_durable_objects
+from src.services.consequence_objects import (
+    ConsequenceDomainError,
+    found_durable_object,
+    visible_durable_objects,
+)
 from src.services.world_stoops import (
     browse_world_stoop,
     found_world_stoop,
@@ -25,7 +29,12 @@ from src.services.world_stoops import (
 
 @pytest.fixture()
 def game_rules(monkeypatch):
-    example = Path(__file__).resolve().parents[2] / "data" / "rulesets" / "private_constructive_game.v1.example.json"
+    example = (
+        Path(__file__).resolve().parents[2]
+        / "data"
+        / "rulesets"
+        / "private_constructive_game.v1.example.json"
+    )
     monkeypatch.setattr(settings, "shard_experience_path", str(example))
     monkeypatch.setattr(settings, "shard_id", "test-game-shard")
 
@@ -42,7 +51,9 @@ def _place(db) -> None:
     db.commit()
 
 
-def _session(db, session_id: str, actor_id: str, location: str = "Lantern Square") -> None:
+def _session(
+    db, session_id: str, actor_id: str, location: str = "Lantern Square"
+) -> None:
     db.add(
         SessionVars(
             session_id=session_id,
@@ -81,7 +92,9 @@ def test_leave_is_voluntary_and_take_is_first_claim_atomic(db_session, game_rule
     _session(db_session, "maker", "actor-maker")
     _session(db_session, "visitor", "actor-visitor")
     _stoop(db_session)
-    object_id = _found(db_session, session_id="maker", key="found-lantern", name="Paper lantern")
+    object_id = _found(
+        db_session, session_id="maker", key="found-lantern", name="Paper lantern"
+    )
 
     left = leave_object_on_stoop(
         db_session,
@@ -100,7 +113,9 @@ def test_leave_is_voluntary_and_take_is_first_claim_atomic(db_session, game_rule
     assert visible_durable_objects(db_session, session_id="maker") == []
     assert visible_durable_objects(db_session, session_id="visitor") == []
 
-    browsed = browse_world_stoop(db_session, session_id="visitor", stoop_id="lantern-stoop")
+    browsed = browse_world_stoop(
+        db_session, session_id="visitor", stoop_id="lantern-stoop"
+    )
     assert browsed["count"] == 1
     assert browsed["entries"][0]["can_take"] is True
     assert "created_by_actor_id" not in browsed["entries"][0]["object"]["provenance"]
@@ -121,11 +136,19 @@ def test_leave_is_voluntary_and_take_is_first_claim_atomic(db_session, game_rule
     db_session.expire_all()
     assert taken["entry"]["status"] == "taken"
     assert replay["replayed"] is True
-    assert db_session.get(DurableObject, object_id).custodian_actor_id == "actor-visitor"
+    assert (
+        db_session.get(DurableObject, object_id).custodian_actor_id == "actor-visitor"
+    )
     assert db_session.get(StoopObjectEntry, entry_id).status == "taken"
-    assert visible_durable_objects(db_session, session_id="visitor")[0]["relation"] == "carried"
+    assert (
+        visible_durable_objects(db_session, session_id="visitor")[0]["relation"]
+        == "carried"
+    )
     assert db_session.query(StoopReceipt).count() == 2
-    assert [row.event_type for row in db_session.query(WorldEvent).order_by(WorldEvent.id).all()][-2:] == [
+    assert [
+        row.event_type
+        for row in db_session.query(WorldEvent).order_by(WorldEvent.id).all()
+    ][-2:] == [
         "stoop_object_left",
         "stoop_object_taken",
     ]
@@ -135,8 +158,12 @@ def test_capacity_refuses_property_instead_of_composting_it(db_session, game_rul
     _place(db_session)
     _session(db_session, "maker", "actor-maker")
     _stoop(db_session, capacity=1)
-    first_id = _found(db_session, session_id="maker", key="found-first", name="First token")
-    second_id = _found(db_session, session_id="maker", key="found-second", name="Second token")
+    first_id = _found(
+        db_session, session_id="maker", key="found-first", name="First token"
+    )
+    second_id = _found(
+        db_session, session_id="maker", key="found-second", name="Second token"
+    )
     leave_object_on_stoop(
         db_session,
         session_id="maker",
@@ -157,8 +184,16 @@ def test_capacity_refuses_property_instead_of_composting_it(db_session, game_rul
     assert full.value.code == "stoop_full"
     assert db_session.get(DurableObject, first_id).location == "Lantern Square"
     assert db_session.get(DurableObject, second_id).custodian_actor_id == "actor-maker"
-    assert db_session.query(StoopObjectEntry).filter(StoopObjectEntry.status == "active").count() == 1
-    assert local_stoops(db_session, session_id="maker")["stoops"][0]["space_remaining"] == 0
+    assert (
+        db_session.query(StoopObjectEntry)
+        .filter(StoopObjectEntry.status == "active")
+        .count()
+        == 1
+    )
+    assert (
+        local_stoops(db_session, session_id="maker")["stoops"][0]["space_remaining"]
+        == 0
+    )
 
 
 def test_only_depositor_can_withdraw_an_available_entry(db_session, game_rules):
@@ -166,16 +201,16 @@ def test_only_depositor_can_withdraw_an_available_entry(db_session, game_rules):
     _session(db_session, "maker", "actor-maker")
     _session(db_session, "visitor", "actor-visitor")
     _stoop(db_session)
-    object_id = _found(db_session, session_id="maker", key="found-withdraw", name="Folded map")
+    object_id = _found(
+        db_session, session_id="maker", key="found-withdraw", name="Folded map"
+    )
     entry_id = leave_object_on_stoop(
         db_session,
         session_id="maker",
         stoop_id="lantern-stoop",
         object_id=object_id,
         idempotency_key="leave-map",
-    )[
-        "entry"
-    ]["entry_id"]
+    )["entry"]["entry_id"]
 
     with pytest.raises(ConsequenceDomainError) as refused:
         withdraw_stoop_object(
@@ -194,7 +229,10 @@ def test_only_depositor_can_withdraw_an_available_entry(db_session, game_rules):
     )
     assert withdrawn["entry"]["status"] == "withdrawn"
     assert db_session.get(DurableObject, object_id).custodian_actor_id == "actor-maker"
-    assert visible_durable_objects(db_session, session_id="maker")[0]["relation"] == "carried"
+    assert (
+        visible_durable_objects(db_session, session_id="maker")[0]["relation"]
+        == "carried"
+    )
 
 
 def test_stoop_requires_exact_location_for_browse_and_commands(db_session, game_rules):
@@ -209,21 +247,23 @@ def test_stoop_requires_exact_location_for_browse_and_commands(db_session, game_
     assert local_stoops(db_session, session_id="maker")["stoops"] == []
 
 
-def test_take_event_failure_rolls_back_entry_and_object(db_session, game_rules, monkeypatch):
+def test_take_event_failure_rolls_back_entry_and_object(
+    db_session, game_rules, monkeypatch
+):
     _place(db_session)
     _session(db_session, "maker", "actor-maker")
     _session(db_session, "visitor", "actor-visitor")
     _stoop(db_session)
-    object_id = _found(db_session, session_id="maker", key="found-failure", name="Carved bird")
+    object_id = _found(
+        db_session, session_id="maker", key="found-failure", name="Carved bird"
+    )
     entry_id = leave_object_on_stoop(
         db_session,
         session_id="maker",
         stoop_id="lantern-stoop",
         object_id=object_id,
         idempotency_key="leave-before-failure",
-    )[
-        "entry"
-    ]["entry_id"]
+    )["entry"]["entry_id"]
 
     def fail_event(*_args, **_kwargs):
         raise RuntimeError("event store unavailable")
@@ -250,7 +290,9 @@ def test_session_cleanup_preserves_stoop_evidence(db_session, game_rules):
     _place(db_session)
     _session(db_session, "maker", "actor-maker")
     _stoop(db_session)
-    object_id = _found(db_session, session_id="maker", key="found-cleanup", name="Small bell")
+    object_id = _found(
+        db_session, session_id="maker", key="found-cleanup", name="Small bell"
+    )
     leave_object_on_stoop(
         db_session,
         session_id="maker",
@@ -273,7 +315,9 @@ def test_full_reset_deletes_stoop_history_before_objects(db_session, game_rules)
     _place(db_session)
     _session(db_session, "maker", "actor-maker")
     _stoop(db_session)
-    object_id = _found(db_session, session_id="maker", key="found-reset", name="Small bell")
+    object_id = _found(
+        db_session, session_id="maker", key="found-reset", name="Small bell"
+    )
     leave_object_on_stoop(
         db_session,
         session_id="maker",

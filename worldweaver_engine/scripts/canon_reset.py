@@ -110,7 +110,10 @@ def _compose_postgres_url(env: dict[str, str]) -> str:
     user = str(env.get("WW_DB_USER") or "postgres").strip() or "postgres"
     password = str(env.get("WW_DB_PASSWORD") or "postgres")
     port = str(env.get("WW_DB_PORT") or "5432").strip() or "5432"
-    return "postgresql+psycopg://" f"{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{quote_plus(name)}"
+    return (
+        "postgresql+psycopg://"
+        f"{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{quote_plus(name)}"
+    )
 
 
 def _find_city_shard(city_id: str | None = None) -> Path | None:
@@ -132,7 +135,11 @@ def _find_city_shard(city_id: str | None = None) -> Path | None:
             return shard_dir
     if requested:
         return None
-    city_shards = [path for path in sorted(SHARDS_ROOT.iterdir()) if path.is_dir() and path.name != "ww_world"]
+    city_shards = [
+        path
+        for path in sorted(SHARDS_ROOT.iterdir())
+        if path.is_dir() and path.name != "ww_world"
+    ]
     return city_shards[0] if city_shards else None
 
 
@@ -164,10 +171,17 @@ def _docker_stop_agent(shard_dir: Path | None, dry_run: bool) -> None:
         print("  warning: no shard dir resolved — skipping agent stop")
         return
     compose_file = shard_dir / "docker-compose.yml"
-    print(f"  {' '.join([*cmd, '-p', shard_dir.name, '-f', str(compose_file), 'stop', 'agent'])}")
+    print(
+        f"  {' '.join([*cmd, '-p', shard_dir.name, '-f', str(compose_file), 'stop', 'agent'])}"
+    )
     if not dry_run:
         try:
-            subprocess.run([*cmd, "-p", shard_dir.name, "-f", str(compose_file), "stop", "agent"], check=True, capture_output=True, cwd=str(WORKSPACE_ROOT))
+            subprocess.run(
+                [*cmd, "-p", shard_dir.name, "-f", str(compose_file), "stop", "agent"],
+                check=True,
+                capture_output=True,
+                cwd=str(WORKSPACE_ROOT),
+            )
             print("  ok: agent stopped")
         except subprocess.CalledProcessError:
             print("  warning: could not stop agent (not running?)")
@@ -182,9 +196,22 @@ def _docker_stack_down(shard_dir: Path | None, dry_run: bool) -> None:
         print("  warning: no shard dir resolved — skipping stack-down")
         return
     compose_file = shard_dir / "docker-compose.yml"
-    print(f"  {' '.join([*cmd, '-p', shard_dir.name, '-f', str(compose_file), 'down', '--remove-orphans'])}")
+    print(
+        f"  {' '.join([*cmd, '-p', shard_dir.name, '-f', str(compose_file), 'down', '--remove-orphans'])}"
+    )
     if not dry_run:
-        subprocess.run([*cmd, "-p", shard_dir.name, "-f", str(compose_file), "down", "--remove-orphans"], cwd=str(WORKSPACE_ROOT))
+        subprocess.run(
+            [
+                *cmd,
+                "-p",
+                shard_dir.name,
+                "-f",
+                str(compose_file),
+                "down",
+                "--remove-orphans",
+            ],
+            cwd=str(WORKSPACE_ROOT),
+        )
 
 
 def _docker_stack_up_build(shard_dir: Path | None, dry_run: bool) -> None:
@@ -196,12 +223,28 @@ def _docker_stack_up_build(shard_dir: Path | None, dry_run: bool) -> None:
         print("  warning: no shard dir resolved — skipping stack-up")
         return
     compose_file = shard_dir / "docker-compose.yml"
-    print(f"  {' '.join([*cmd, '-p', shard_dir.name, '-f', str(compose_file), 'up', '-d', '--build'])}")
+    print(
+        f"  {' '.join([*cmd, '-p', shard_dir.name, '-f', str(compose_file), 'up', '-d', '--build'])}"
+    )
     if not dry_run:
-        subprocess.run([*cmd, "-p", shard_dir.name, "-f", str(compose_file), "up", "-d", "--build"], cwd=str(WORKSPACE_ROOT))
+        subprocess.run(
+            [
+                *cmd,
+                "-p",
+                shard_dir.name,
+                "-f",
+                str(compose_file),
+                "up",
+                "-d",
+                "--build",
+            ],
+            cwd=str(WORKSPACE_ROOT),
+        )
 
 
-def _docker_fix_resident_ownership(shard_dir: Path | None, residents_dir: Path, dry_run: bool) -> None:
+def _docker_fix_resident_ownership(
+    shard_dir: Path | None, residents_dir: Path, dry_run: bool
+) -> None:
     cmd = _compose_cmd()
     if not cmd or shard_dir is None:
         return
@@ -214,12 +257,26 @@ def _docker_fix_resident_ownership(shard_dir: Path | None, residents_dir: Path, 
     uid = os.getuid()
     gid = os.getgid()
     shell_cmd = f"chown -R {uid}:{gid} {str(container_path)!s}"
-    print(f"  {' '.join([*cmd, '-p', shard_dir.name, '-f', str(shard_dir / 'docker-compose.yml'), 'exec', '-T', 'backend', 'sh', '-lc', shell_cmd])}")
+    print(
+        f"  {' '.join([*cmd, '-p', shard_dir.name, '-f', str(shard_dir / 'docker-compose.yml'), 'exec', '-T', 'backend', 'sh', '-lc', shell_cmd])}"
+    )
     if dry_run:
         return
     try:
         subprocess.run(
-            [*cmd, "-p", shard_dir.name, "-f", str(shard_dir / "docker-compose.yml"), "exec", "-T", "backend", "sh", "-lc", shell_cmd],
+            [
+                *cmd,
+                "-p",
+                shard_dir.name,
+                "-f",
+                str(shard_dir / "docker-compose.yml"),
+                "exec",
+                "-T",
+                "backend",
+                "sh",
+                "-lc",
+                shell_cmd,
+            ],
             cwd=str(WORKSPACE_ROOT),
             check=True,
             capture_output=True,
@@ -236,7 +293,9 @@ def _docker_fix_resident_ownership(shard_dir: Path | None, residents_dir: Path, 
 # ---------------------------------------------------------------------------
 
 
-def _resolve_db_url(override: str | None, *, shard_dir: Path | None = None) -> str | None:
+def _resolve_db_url(
+    override: str | None, *, shard_dir: Path | None = None
+) -> str | None:
     if override:
         return _normalize_database_url(override)
     if shard_dir is not None:
@@ -244,7 +303,9 @@ def _resolve_db_url(override: str | None, *, shard_dir: Path | None = None) -> s
         component_url = _compose_postgres_url(shard_env)
         if component_url:
             return component_url
-        explicit = str(shard_env.get("WW_DATABASE_URL") or shard_env.get("DATABASE_URL") or "").strip()
+        explicit = str(
+            shard_env.get("WW_DATABASE_URL") or shard_env.get("DATABASE_URL") or ""
+        ).strip()
         if explicit:
             return _normalize_database_url(explicit)
         db_file = str(shard_env.get("CITY_DB_FILE") or "").strip()
@@ -264,7 +325,9 @@ def _resolve_db_url(override: str | None, *, shard_dir: Path | None = None) -> s
     if component_url:
         return component_url
 
-    explicit = (os.environ.get("WW_DATABASE_URL") or os.environ.get("DATABASE_URL") or "").strip()
+    explicit = (
+        os.environ.get("WW_DATABASE_URL") or os.environ.get("DATABASE_URL") or ""
+    ).strip()
     if explicit:
         return _normalize_database_url(explicit)
 
@@ -355,18 +418,28 @@ def _canon_prune(db_url: str, *, clear_events: bool, dry_run: bool) -> dict:
                 delete_ids.add(int(n.id))
                 delete_names.append(f"{n.node_type}:{n.name}")
 
-        print(f"  WorldNodes: {result['nodes_kept']} canon (keep), {len(delete_ids)} non-canon (delete)")
+        print(
+            f"  WorldNodes: {result['nodes_kept']} canon (keep), {len(delete_ids)} non-canon (delete)"
+        )
         if delete_names[:10]:
             sample = ", ".join(delete_names[:8])
-            suffix = f"… (+{len(delete_names) - 8} more)" if len(delete_names) > 8 else ""
+            suffix = (
+                f"… (+{len(delete_names) - 8} more)" if len(delete_names) > 8 else ""
+            )
             print(f"    sample: {sample}{suffix}")
 
         if delete_ids:
-            edges_q = session.query(WorldEdge).filter(WorldEdge.source_node_id.in_(delete_ids) | WorldEdge.target_node_id.in_(delete_ids))
+            edges_q = session.query(WorldEdge).filter(
+                WorldEdge.source_node_id.in_(delete_ids)
+                | WorldEdge.target_node_id.in_(delete_ids)
+            )
             edge_count = edges_q.count()
             print(f"  WorldEdges touching deleted nodes: {edge_count}")
 
-            facts_q = session.query(WorldFact).filter(WorldFact.subject_node_id.in_(delete_ids) | WorldFact.location_node_id.in_(delete_ids))
+            facts_q = session.query(WorldFact).filter(
+                WorldFact.subject_node_id.in_(delete_ids)
+                | WorldFact.location_node_id.in_(delete_ids)
+            )
             fact_count = facts_q.count()
             print(f"  WorldFacts touching deleted nodes: {fact_count}")
 
@@ -375,7 +448,9 @@ def _canon_prune(db_url: str, *, clear_events: bool, dry_run: bool) -> dict:
                 result["edges_deleted"] = edge_count
                 facts_q.delete(synchronize_session=False)
                 result["facts_deleted"] = fact_count
-                session.query(WorldNode).filter(WorldNode.id.in_(delete_ids)).delete(synchronize_session=False)
+                session.query(WorldNode).filter(WorldNode.id.in_(delete_ids)).delete(
+                    synchronize_session=False
+                )
                 result["nodes_deleted"] = len(delete_ids)
                 session.flush()
 
@@ -383,7 +458,11 @@ def _canon_prune(db_url: str, *, clear_events: bool, dry_run: bool) -> dict:
             ev_count = session.query(WorldEvent).count()
             fa_count = session.query(WorldFact).count()  # remaining after node prune
             wp_count = session.query(WorldProjection).count()
-            edge_event_count = session.query(WorldEdge).filter(WorldEdge.source_event_id.is_not(None)).count()
+            edge_event_count = (
+                session.query(WorldEdge)
+                .filter(WorldEdge.source_event_id.is_not(None))
+                .count()
+            )
             lc_count = session.query(LocationChat).count()
             wt_count = session.query(WorldTrace).count()
             dp_count = session.query(DoulaPoll).count()
@@ -404,7 +483,9 @@ def _canon_prune(db_url: str, *, clear_events: bool, dry_run: bool) -> dict:
             print(f"  MaterialPools to clear: {material_pool_count}")
             if not dry_run:
                 session.query(WorldProjection).delete(synchronize_session=False)
-                session.query(WorldEdge).filter(WorldEdge.source_event_id.is_not(None)).delete(synchronize_session=False)
+                session.query(WorldEdge).filter(
+                    WorldEdge.source_event_id.is_not(None)
+                ).delete(synchronize_session=False)
                 session.query(WorldFact).delete(synchronize_session=False)
                 session.query(ConsequenceReceipt).delete(synchronize_session=False)
                 session.query(DurableObject).delete(synchronize_session=False)
@@ -421,7 +502,9 @@ def _canon_prune(db_url: str, *, clear_events: bool, dry_run: bool) -> dict:
                 result["material_pools_deleted"] = material_pool_count
                 result["facts_deleted"] += fa_count
         else:
-            print("  WorldEvents/WorldFacts/WorldTraces/DMs: preserved (pass --clear-events to wipe)")
+            print(
+                "  WorldEvents/WorldFacts/WorldTraces/DMs: preserved (pass --clear-events to wipe)"
+            )
 
         if not dry_run:
             session.commit()
@@ -445,9 +528,27 @@ def _canon_prune_via_backend(
     if not compose_file.exists():
         raise RuntimeError(f"shard compose file missing: {compose_file}")
 
-    py = "import json, sys; " "sys.path.insert(0, '/app/scripts'); " "import canon_reset; " f"result = canon_reset._canon_prune({db_url!r}, clear_events={clear_events!r}, dry_run={dry_run!r}); " "print(json.dumps(result))"
+    py = (
+        "import json, sys; "
+        "sys.path.insert(0, '/app/scripts'); "
+        "import canon_reset; "
+        f"result = canon_reset._canon_prune({db_url!r}, clear_events={clear_events!r}, dry_run={dry_run!r}); "
+        "print(json.dumps(result))"
+    )
     proc = subprocess.run(
-        [*cmd, "-p", shard_dir.name, "-f", str(compose_file), "exec", "-T", "backend", "python", "-c", py],
+        [
+            *cmd,
+            "-p",
+            shard_dir.name,
+            "-f",
+            str(compose_file),
+            "exec",
+            "-T",
+            "backend",
+            "python",
+            "-c",
+            py,
+        ],
         cwd=str(WORKSPACE_ROOT),
         check=True,
         capture_output=True,
@@ -459,11 +560,19 @@ def _canon_prune_via_backend(
     try:
         return json.loads(lines[-1])
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"could not parse backend prune result: {lines[-1]}") from exc
+        raise RuntimeError(
+            f"could not parse backend prune result: {lines[-1]}"
+        ) from exc
 
 
 def _resident_slugs(residents_dir: Path) -> list[str]:
-    found = [d.name for d in residents_dir.iterdir() if d.is_dir() and not d.name.startswith("_") and (d / "identity" / "SOUL.md").exists()]
+    found = [
+        d.name
+        for d in residents_dir.iterdir()
+        if d.is_dir()
+        and not d.name.startswith("_")
+        and (d / "identity" / "SOUL.md").exists()
+    ]
     return sorted(found)
 
 
@@ -475,7 +584,11 @@ def _clear_resident_sessions(
     clear_all: bool = False,
     dry_run: bool,
 ) -> dict[str, int]:
-    actor_ids = [str(actor_id or "").strip() for actor_id in list(resident_actor_ids or []) if str(actor_id or "").strip()]
+    actor_ids = [
+        str(actor_id or "").strip()
+        for actor_id in list(resident_actor_ids or [])
+        if str(actor_id or "").strip()
+    ]
     if not resident_slugs and not actor_ids and not clear_all:
         return {"sessions_deleted": 0}
     try:
@@ -495,13 +608,19 @@ def _clear_resident_sessions(
 
     with Session() as session:
         if clear_all:
-            q = session.query(SessionVars).filter(~SessionVars.session_id.like("world-%"))
+            q = session.query(SessionVars).filter(
+                ~SessionVars.session_id.like("world-%")
+            )
         else:
-            filters = [SessionVars.session_id.like(f"{slug}-%") for slug in resident_slugs]
+            filters = [
+                SessionVars.session_id.like(f"{slug}-%") for slug in resident_slugs
+            ]
             if actor_ids:
                 filters.append(SessionVars.actor_id.in_(actor_ids))
             q = session.query(SessionVars).filter(or_(*filters))
-        session_ids = [str(row[0]) for row in q.with_entities(SessionVars.session_id).all()]
+        session_ids = [
+            str(row[0]) for row in q.with_entities(SessionVars.session_id).all()
+        ]
         print(f"  Resident SessionVars rows to clear: {len(session_ids)}")
         if session_ids[:10]:
             sample = ", ".join(session_ids[:8])
@@ -521,7 +640,11 @@ def _clear_resident_identity_growth(
     clear_all: bool = False,
     dry_run: bool,
 ) -> dict[str, int]:
-    actor_ids = [str(actor_id or "").strip() for actor_id in resident_actor_ids if str(actor_id or "").strip()]
+    actor_ids = [
+        str(actor_id or "").strip()
+        for actor_id in resident_actor_ids
+        if str(actor_id or "").strip()
+    ]
     if not actor_ids and not clear_all:
         return {"identity_growth_deleted": 0}
     try:
@@ -543,7 +666,10 @@ def _clear_resident_identity_growth(
         q = session.query(ResidentIdentityGrowth)
         if not clear_all:
             q = q.filter(ResidentIdentityGrowth.actor_id.in_(actor_ids))
-        actor_ids = [str(row[0]) for row in q.with_entities(ResidentIdentityGrowth.actor_id).all()]
+        actor_ids = [
+            str(row[0])
+            for row in q.with_entities(ResidentIdentityGrowth.actor_id).all()
+        ]
         print(f"  Resident identity-growth rows to clear: {len(actor_ids)}")
         if actor_ids[:10]:
             sample = ", ".join(actor_ids[:8])
@@ -567,15 +693,35 @@ def _clear_resident_sessions_via_backend(
 ) -> dict[str, int]:
     cmd = _compose_cmd()
     if not cmd:
-        raise RuntimeError("docker compose unavailable for backend-assisted session cleanup")
+        raise RuntimeError(
+            "docker compose unavailable for backend-assisted session cleanup"
+        )
 
     compose_file = shard_dir / "docker-compose.yml"
     if not compose_file.exists():
         raise RuntimeError(f"shard compose file missing: {compose_file}")
 
-    py = "import json, sys; " "sys.path.insert(0, '/app/scripts'); " "import canon_reset; " f"result = canon_reset._clear_resident_sessions({db_url!r}, resident_slugs={resident_slugs!r}, resident_actor_ids={resident_actor_ids!r}, clear_all={clear_all!r}, dry_run={dry_run!r}); " "print(json.dumps(result))"
+    py = (
+        "import json, sys; "
+        "sys.path.insert(0, '/app/scripts'); "
+        "import canon_reset; "
+        f"result = canon_reset._clear_resident_sessions({db_url!r}, resident_slugs={resident_slugs!r}, resident_actor_ids={resident_actor_ids!r}, clear_all={clear_all!r}, dry_run={dry_run!r}); "
+        "print(json.dumps(result))"
+    )
     proc = subprocess.run(
-        [*cmd, "-p", shard_dir.name, "-f", str(compose_file), "exec", "-T", "backend", "python", "-c", py],
+        [
+            *cmd,
+            "-p",
+            shard_dir.name,
+            "-f",
+            str(compose_file),
+            "exec",
+            "-T",
+            "backend",
+            "python",
+            "-c",
+            py,
+        ],
         cwd=str(WORKSPACE_ROOT),
         check=True,
         capture_output=True,
@@ -587,7 +733,9 @@ def _clear_resident_sessions_via_backend(
     try:
         return json.loads(lines[-1])
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"could not parse backend session cleanup result: {lines[-1]}") from exc
+        raise RuntimeError(
+            f"could not parse backend session cleanup result: {lines[-1]}"
+        ) from exc
 
 
 def _clear_resident_identity_growth_via_backend(
@@ -600,15 +748,35 @@ def _clear_resident_identity_growth_via_backend(
 ) -> dict[str, int]:
     cmd = _compose_cmd()
     if not cmd:
-        raise RuntimeError("docker compose unavailable for backend-assisted identity-growth cleanup")
+        raise RuntimeError(
+            "docker compose unavailable for backend-assisted identity-growth cleanup"
+        )
 
     compose_file = shard_dir / "docker-compose.yml"
     if not compose_file.exists():
         raise RuntimeError(f"shard compose file missing: {compose_file}")
 
-    py = "import json, sys; " "sys.path.insert(0, '/app/scripts'); " "import canon_reset; " f"result = canon_reset._clear_resident_identity_growth({db_url!r}, resident_actor_ids={resident_actor_ids!r}, clear_all={clear_all!r}, dry_run={dry_run!r}); " "print(json.dumps(result))"
+    py = (
+        "import json, sys; "
+        "sys.path.insert(0, '/app/scripts'); "
+        "import canon_reset; "
+        f"result = canon_reset._clear_resident_identity_growth({db_url!r}, resident_actor_ids={resident_actor_ids!r}, clear_all={clear_all!r}, dry_run={dry_run!r}); "
+        "print(json.dumps(result))"
+    )
     proc = subprocess.run(
-        [*cmd, "-p", shard_dir.name, "-f", str(compose_file), "exec", "-T", "backend", "python", "-c", py],
+        [
+            *cmd,
+            "-p",
+            shard_dir.name,
+            "-f",
+            str(compose_file),
+            "exec",
+            "-T",
+            "backend",
+            "python",
+            "-c",
+            py,
+        ],
         cwd=str(WORKSPACE_ROOT),
         check=True,
         capture_output=True,
@@ -616,11 +784,15 @@ def _clear_resident_identity_growth_via_backend(
     )
     lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
     if not lines:
-        raise RuntimeError("backend-assisted identity-growth cleanup returned no output")
+        raise RuntimeError(
+            "backend-assisted identity-growth cleanup returned no output"
+        )
     try:
         return json.loads(lines[-1])
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"could not parse backend identity-growth cleanup result: {lines[-1]}") from exc
+        raise RuntimeError(
+            f"could not parse backend identity-growth cleanup result: {lines[-1]}"
+        ) from exc
 
 
 def _resident_actor_ids(residents_dir: Path) -> list[str]:
@@ -674,7 +846,11 @@ def _clear_federation_residue(
     }
 
     with Session() as session:
-        actor_filter = FederationResident.resident_id.in_(resident_actor_ids) if resident_actor_ids else false()
+        actor_filter = (
+            FederationResident.resident_id.in_(resident_actor_ids)
+            if resident_actor_ids
+            else false()
+        )
         message_actor_filter = (
             or_(
                 FederationMessage.from_resident_id.in_(resident_actor_ids),
@@ -683,7 +859,11 @@ def _clear_federation_residue(
             if resident_actor_ids
             else false()
         )
-        traveler_actor_filter = FederationTraveler.resident_id.in_(resident_actor_ids) if resident_actor_ids else false()
+        traveler_actor_filter = (
+            FederationTraveler.resident_id.in_(resident_actor_ids)
+            if resident_actor_ids
+            else false()
+        )
 
         messages_q = session.query(FederationMessage).filter(
             or_(
@@ -718,9 +898,15 @@ def _clear_federation_residue(
         print(f"  FederationResidents to clear: {resident_count}")
 
         if not dry_run:
-            result["federation_messages_deleted"] = int(messages_q.delete(synchronize_session=False))
-            result["federation_travelers_deleted"] = int(travelers_q.delete(synchronize_session=False))
-            result["federation_residents_deleted"] = int(residents_q.delete(synchronize_session=False))
+            result["federation_messages_deleted"] = int(
+                messages_q.delete(synchronize_session=False)
+            )
+            result["federation_travelers_deleted"] = int(
+                travelers_q.delete(synchronize_session=False)
+            )
+            result["federation_residents_deleted"] = int(
+                residents_q.delete(synchronize_session=False)
+            )
             session.commit()
 
     return result
@@ -736,15 +922,35 @@ def _clear_federation_residue_via_backend(
 ) -> dict[str, int]:
     cmd = _compose_cmd()
     if not cmd:
-        raise RuntimeError("docker compose unavailable for backend-assisted federation cleanup")
+        raise RuntimeError(
+            "docker compose unavailable for backend-assisted federation cleanup"
+        )
 
     compose_file = shard_dir / "docker-compose.yml"
     if not compose_file.exists():
         raise RuntimeError(f"shard compose file missing: {compose_file}")
 
-    py = "import json, sys; " "sys.path.insert(0, '/app/scripts'); " "import canon_reset; " f"result = canon_reset._clear_federation_residue({db_url!r}, shard_id={shard_id!r}, resident_actor_ids={resident_actor_ids!r}, dry_run={dry_run!r}); " "print(json.dumps(result))"
+    py = (
+        "import json, sys; "
+        "sys.path.insert(0, '/app/scripts'); "
+        "import canon_reset; "
+        f"result = canon_reset._clear_federation_residue({db_url!r}, shard_id={shard_id!r}, resident_actor_ids={resident_actor_ids!r}, dry_run={dry_run!r}); "
+        "print(json.dumps(result))"
+    )
     proc = subprocess.run(
-        [*cmd, "-p", shard_dir.name, "-f", str(compose_file), "exec", "-T", "backend", "python", "-c", py],
+        [
+            *cmd,
+            "-p",
+            shard_dir.name,
+            "-f",
+            str(compose_file),
+            "exec",
+            "-T",
+            "backend",
+            "python",
+            "-c",
+            py,
+        ],
         cwd=str(WORKSPACE_ROOT),
         check=True,
         capture_output=True,
@@ -756,7 +962,9 @@ def _clear_federation_residue_via_backend(
     try:
         return json.loads(lines[-1])
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"could not parse backend federation cleanup result: {lines[-1]}") from exc
+        raise RuntimeError(
+            f"could not parse backend federation cleanup result: {lines[-1]}"
+        ) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -867,7 +1075,13 @@ def _reset_resident(resident_dir: Path, dry_run: bool) -> None:
 
 
 def _reset_residents(residents_dir: Path, dry_run: bool) -> None:
-    found = [d for d in residents_dir.iterdir() if d.is_dir() and not d.name.startswith("_") and (d / "identity" / "SOUL.md").exists()]
+    found = [
+        d
+        for d in residents_dir.iterdir()
+        if d.is_dir()
+        and not d.name.startswith("_")
+        and (d / "identity" / "SOUL.md").exists()
+    ]
     if not found:
         print("  No residents found to reset.")
         return
@@ -882,7 +1096,9 @@ def _neutral_start(residents_dir: Path, dry_run: bool) -> None:
     This is a destructive fresh-start: all souls, memory, and identity are
     removed. The doula will reseed from scratch when the stack comes back up.
     """
-    found = [d for d in residents_dir.iterdir() if d.is_dir() and not d.name.startswith("_")]
+    found = [
+        d for d in residents_dir.iterdir() if d.is_dir() and not d.name.startswith("_")
+    ]
     if not found:
         print("  No resident directories found.")
     else:
@@ -923,7 +1139,9 @@ def main() -> int:
         default=None,
         help="Residents directory (default: shard-local residents when a shard is resolved)",
     )
-    parser.add_argument("--no-residents", action="store_true", help="Skip resident reset")
+    parser.add_argument(
+        "--no-residents", action="store_true", help="Skip resident reset"
+    )
     parser.add_argument(
         "--neutral-start",
         action="store_true",
@@ -934,7 +1152,9 @@ def main() -> int:
         action="store_true",
         help="Delete WorldEvent/WorldFact/LocationChat history (default: preserve)",
     )
-    parser.add_argument("--dry-run", action="store_true", help="Preview without modifying")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Preview without modifying"
+    )
     args = parser.parse_args()
 
     shard_dir: Path | None = None
@@ -964,7 +1184,9 @@ def main() -> int:
     # ── Step 1: prune non-canon nodes ────────────────────────────────────────
     db_url = _resolve_db_url(args.db_url, shard_dir=shard_dir)
     if not db_url:
-        print("ERROR: No database found. Set shard WW_DB_* / WW_DATABASE_URL / DATABASE_URL, or ensure sqlite compat DB exists.")
+        print(
+            "ERROR: No database found. Set shard WW_DB_* / WW_DATABASE_URL / DATABASE_URL, or ensure sqlite compat DB exists."
+        )
         return 1
 
     print(f"[1/{total_steps}] Pruning non-canon nodes")
@@ -973,7 +1195,9 @@ def main() -> int:
         print("      (--clear-events: WorldEvent/WorldFact history will be wiped)")
     try:
         if shard_dir is not None and _db_url_uses_compose_hostname(db_url):
-            print("      db host is Docker-internal; running prune inside backend container")
+            print(
+                "      db host is Docker-internal; running prune inside backend container"
+            )
             counts = _canon_prune_via_backend(
                 shard_dir,
                 db_url,
@@ -981,19 +1205,30 @@ def main() -> int:
                 dry_run=args.dry_run,
             )
         else:
-            counts = _canon_prune(db_url, clear_events=args.clear_events, dry_run=args.dry_run)
+            counts = _canon_prune(
+                db_url, clear_events=args.clear_events, dry_run=args.dry_run
+            )
     except Exception as exc:
         print(f"ERROR during DB prune: {exc}")
         return 1
 
     if not args.dry_run:
-        print(f"  Deleted: {counts['nodes_deleted']} nodes, {counts['edges_deleted']} edges, " f"{counts['facts_deleted']} facts, {counts['events_deleted']} events")
+        print(
+            f"  Deleted: {counts['nodes_deleted']} nodes, {counts['edges_deleted']} edges, "
+            f"{counts['facts_deleted']} facts, {counts['events_deleted']} events"
+        )
 
     residents_dir = Path(args.residents_dir)
     resident_slugs = _resident_slugs(residents_dir) if residents_dir.exists() else []
-    resident_actor_ids = _resident_actor_ids(residents_dir) if residents_dir.exists() else []
+    resident_actor_ids = (
+        _resident_actor_ids(residents_dir) if residents_dir.exists() else []
+    )
     shard_id = _shard_id_for(shard_dir)
-    shard_type = str(_load_env_file(shard_dir / ".env").get("SHARD_TYPE") or "").strip().lower() if shard_dir else ""
+    shard_type = (
+        str(_load_env_file(shard_dir / ".env").get("SHARD_TYPE") or "").strip().lower()
+        if shard_dir
+        else ""
+    )
     if args.clear_events and shard_type != "world" and shard_id:
         print("      clearing shard-scoped federation residue")
         world_shard_dir = _find_world_shard()
@@ -1137,7 +1372,9 @@ def main() -> int:
     print(f"\nDone.{suffix}")
     if not args.dry_run:
         if args.neutral_start:
-            print("  City-pack geography intact.  All residents cleared.  Stack is coming up fresh.")
+            print(
+                "  City-pack geography intact.  All residents cleared.  Stack is coming up fresh."
+            )
         else:
             print("  City-pack geography intact.  Stack is coming up fresh.")
     return 0

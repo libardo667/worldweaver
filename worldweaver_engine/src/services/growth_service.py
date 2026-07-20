@@ -21,10 +21,22 @@ def append_growth_proposals(
     incoming: list[dict[str, Any]],
 ) -> int:
     """Append compatibility proposals as posted, deduplicated by pulse ID."""
-    existing = [proposal for proposal in list(row.growth_proposals or []) if isinstance(proposal, dict)]
-    seen = {str(proposal.get("pulse_id") or "") for proposal in existing if str(proposal.get("pulse_id") or "")}
+    existing = [
+        proposal
+        for proposal in list(row.growth_proposals or [])
+        if isinstance(proposal, dict)
+    ]
+    seen = {
+        str(proposal.get("pulse_id") or "")
+        for proposal in existing
+        if str(proposal.get("pulse_id") or "")
+    }
     legacy_metadata = dict(row.growth_metadata or {})
-    seen.update(str(pulse_id) for pulse_id in legacy_metadata.get("promoted_pulse_ids") or [] if str(pulse_id))
+    seen.update(
+        str(pulse_id)
+        for pulse_id in legacy_metadata.get("promoted_pulse_ids") or []
+        if str(pulse_id)
+    )
 
     added: list[dict[str, Any]] = []
     for proposal in list(incoming or []):

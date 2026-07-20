@@ -19,12 +19,17 @@ def test_settings_readiness_reports_missing_shard_infrastructure(monkeypatch, cl
     assert data["startup_ready"] is False
     assert data["missing"] == data["runtime_missing"]
     assert "jwt_secret" in data["runtime_missing"]
-    assert all(check["code"] not in {"api_key", "model", "demo_access", "observer_mode"} for check in data["checks"])
+    assert all(
+        check["code"] not in {"api_key", "model", "demo_access", "observer_mode"}
+        for check in data["checks"]
+    )
     assert any(check["code"] == "public_url" for check in data["checks"])
     assert data["shard"]["city_id"] == settings.city_id
 
 
-def test_missing_resident_inference_does_not_block_human_world_actions(monkeypatch, client):
+def test_missing_resident_inference_does_not_block_human_world_actions(
+    monkeypatch, client
+):
     monkeypatch.setenv("OPENROUTER_API_KEY", "")
     monkeypatch.setenv("LLM_API_KEY", "")
     monkeypatch.setenv("OPENAI_API_KEY", "")
@@ -47,10 +52,15 @@ def test_missing_resident_inference_does_not_block_human_world_actions(monkeypat
     assert checks["agent_inference_key"]["ok"] is False
     assert checks["agent_inference_model"]["ok"] is False
     assert checks["agent_inference_key"]["severity"] == "info"
-    assert "Bounded resident runners verify their own key" in checks["agent_inference_key"]["message"]
+    assert (
+        "Bounded resident runners verify their own key"
+        in checks["agent_inference_key"]["message"]
+    )
 
 
-def test_required_email_verification_blocks_readiness_without_delivery(monkeypatch, client):
+def test_required_email_verification_blocks_readiness_without_delivery(
+    monkeypatch, client
+):
     monkeypatch.setattr(settings, "jwt_secret", "test-secret")
     monkeypatch.setattr(settings, "data_encryption_key", "enc-key")
     monkeypatch.setattr(settings, "federation_url", "http://example.test")
@@ -87,7 +97,9 @@ def test_settings_readiness_complete(monkeypatch, client):
     assert len(data["runtime_missing"]) == 0
 
 
-def test_settings_readiness_world_shard_marks_city_checks_not_required(monkeypatch, client):
+def test_settings_readiness_world_shard_marks_city_checks_not_required(
+    monkeypatch, client
+):
     """World shard diagnostics should not imply city-only federation config is missing."""
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
     monkeypatch.setattr(settings, "llm_model", "test-model")

@@ -98,7 +98,9 @@ def _fixture():
         expires_at=NOW + 3600,
         certificate_id="certificate-123",
     )
-    body = json.dumps({"session_id": "resident-session", "message": "hello"}, separators=(",", ":")).encode()
+    body = json.dumps(
+        {"session_id": "resident-session", "message": "hello"}, separators=(",", ":")
+    ).encode()
     headers = signed_resident_request_headers(
         runtime_private_key=runtime_private,
         certificate=certificate,
@@ -151,7 +153,9 @@ def test_certificate_and_exact_request_verify_to_narrow_actor_context():
         ({"required_scope": "session.bootstrap"}, "scope"),
     ],
 )
-def test_certificate_rejects_wrong_actor_generation_audience_or_scope(override, message):
+def test_certificate_rejects_wrong_actor_generation_audience_or_scope(
+    override, message
+):
     identity_private, _runtime_private, _certificate, body, headers = _fixture()
 
     with pytest.raises(ResidentProtocolError, match=message):
@@ -166,7 +170,9 @@ def test_certificate_rejects_wrong_actor_generation_audience_or_scope(override, 
         ({"body": b'{"session_id":"someone-else"}'}, "signature"),
     ],
 )
-def test_request_signature_cannot_move_to_another_method_target_or_body(override, message):
+def test_request_signature_cannot_move_to_another_method_target_or_body(
+    override, message
+):
     identity_private, _runtime_private, _certificate, body, headers = _fixture()
 
     with pytest.raises(ResidentProtocolError, match=message):
@@ -190,9 +196,13 @@ def test_request_rejects_wrong_runtime_key_and_changed_certificate():
         _verify(identity_private, body, wrong_headers)
 
     changed = dict(wrong_headers)
-    raw = ResidentRuntimeCertificate.decode_header(changed[RESIDENT_CERTIFICATE_HEADER]).to_dict()
+    raw = ResidentRuntimeCertificate.decode_header(
+        changed[RESIDENT_CERTIFICATE_HEADER]
+    ).to_dict()
     raw["actor_id"] = "actor-other"
-    changed[RESIDENT_CERTIFICATE_HEADER] = ResidentRuntimeCertificate.from_dict(raw).encode_header()
+    changed[RESIDENT_CERTIFICATE_HEADER] = ResidentRuntimeCertificate.from_dict(
+        raw
+    ).encode_header()
     with pytest.raises(ResidentProtocolError, match="actor"):
         _verify(identity_private, body, changed)
 
@@ -255,10 +265,14 @@ def test_request_rejects_missing_headers_old_timestamp_and_tampered_certificate_
     with pytest.raises(ResidentProtocolError, match="timestamp"):
         _verify(identity_private, body, headers, now=NOW + 301)
 
-    raw = ResidentRuntimeCertificate.decode_header(headers[RESIDENT_CERTIFICATE_HEADER]).to_dict()
+    raw = ResidentRuntimeCertificate.decode_header(
+        headers[RESIDENT_CERTIFICATE_HEADER]
+    ).to_dict()
     raw["identity_signature"] = raw["identity_signature"][:-2] + "aa"
     tampered = dict(headers)
-    tampered[RESIDENT_CERTIFICATE_HEADER] = ResidentRuntimeCertificate.from_dict(raw).encode_header()
+    tampered[RESIDENT_CERTIFICATE_HEADER] = ResidentRuntimeCertificate.from_dict(
+        raw
+    ).encode_header()
     with pytest.raises(ResidentProtocolError, match="signature"):
         _verify(identity_private, body, tampered)
 

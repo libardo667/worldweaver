@@ -24,11 +24,17 @@ from src.services.hearth_transport import (  # noqa: E402
 
 def _load_descriptor(path: Path) -> HearthTransportDescriptor:
     if not path.is_file() or path.is_symlink():
-        raise HearthTransportError(f"Hearth transport descriptor is missing or unsafe: {path}")
+        raise HearthTransportError(
+            f"Hearth transport descriptor is missing or unsafe: {path}"
+        )
     try:
-        return HearthTransportDescriptor.from_dict(json.loads(path.read_text(encoding="utf-8")))
+        return HearthTransportDescriptor.from_dict(
+            json.loads(path.read_text(encoding="utf-8"))
+        )
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise HearthTransportError(f"Could not load hearth transport descriptor: {path}") from exc
+        raise HearthTransportError(
+            f"Could not load hearth transport descriptor: {path}"
+        ) from exc
 
 
 def ensure_identity(
@@ -38,9 +44,14 @@ def ensure_identity(
     """Create missing identity material or verify an existing complete pair."""
 
     private_exists = private_key_path.exists() or private_key_path.is_symlink()
-    descriptor_exists = bool(descriptor_path is not None and (descriptor_path.exists() or descriptor_path.is_symlink()))
+    descriptor_exists = bool(
+        descriptor_path is not None
+        and (descriptor_path.exists() or descriptor_path.is_symlink())
+    )
     if descriptor_exists and not private_exists:
-        raise HearthTransportError("Refusing to replace a public descriptor whose private key is missing.")
+        raise HearthTransportError(
+            "Refusing to replace a public descriptor whose private key is missing."
+        )
 
     if private_exists:
         derived = descriptor_for_hearth_transport_private_key(private_key_path)
@@ -53,7 +64,9 @@ def ensure_identity(
         if descriptor_exists:
             recorded = _load_descriptor(descriptor_path)
             if recorded != derived:
-                raise HearthTransportError("Public hearth transport descriptor does not match its private key.")
+                raise HearthTransportError(
+                    "Public hearth transport descriptor does not match its private key."
+                )
         else:
             write_hearth_transport_descriptor(descriptor_path, derived)
             status = "created" if not private_exists else "repaired"

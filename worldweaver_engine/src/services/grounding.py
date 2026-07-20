@@ -62,7 +62,9 @@ _WMO_CONDITIONS: dict[int, str] = {
 }
 
 
-def _fetch_open_meteo_weather(latitude: float, longitude: float, timezone_name: str) -> dict[str, Any]:
+def _fetch_open_meteo_weather(
+    latitude: float, longitude: float, timezone_name: str
+) -> dict[str, Any]:
     """Fetch current weather from Open-Meteo (free, no API key)."""
     import urllib.request
     from urllib.parse import urlencode
@@ -123,7 +125,9 @@ def get_sf_weather() -> dict[str, Any]:
         _weather_cache = _fetch_sf_weather()
         _weather_cache_ts = now_ts
     except Exception as exc:
-        logger.warning("grounding: weather fetch failed (%s) — using cached/default", exc)
+        logger.warning(
+            "grounding: weather fetch failed (%s) — using cached/default", exc
+        )
         if not _weather_cache:
             # First-call failure: return a safe default (SF is often foggy/mild)
             _weather_cache = {
@@ -153,7 +157,10 @@ def get_city_weather(city_id: str) -> dict[str, Any]:
     manifest, weather_config = _city_config(city_id)
     fictional = bool(manifest.get("fictional", weather_config.get("fictional", False)))
     if fictional:
-        description = str(weather_config.get("default_conditions") or "Local conditions are not specified.").strip()
+        description = str(
+            weather_config.get("default_conditions")
+            or "Local conditions are not specified."
+        ).strip()
         return {
             "condition": description,
             "temperature_f": None,
@@ -180,15 +187,24 @@ def get_city_weather(city_id: str) -> dict[str, Any]:
 
     now_ts = time.monotonic()
     cached = _city_weather_cache.get(city_id)
-    if cached and now_ts - _city_weather_cache_ts.get(city_id, 0.0) < _WEATHER_CACHE_TTL:
+    if (
+        cached
+        and now_ts - _city_weather_cache_ts.get(city_id, 0.0) < _WEATHER_CACHE_TTL
+    ):
         return cached
     try:
-        fresh = _fetch_open_meteo_weather(float(latitude), float(longitude), timezone_name)
+        fresh = _fetch_open_meteo_weather(
+            float(latitude), float(longitude), timezone_name
+        )
         _city_weather_cache[city_id] = fresh
         _city_weather_cache_ts[city_id] = now_ts
         return fresh
     except Exception as exc:
-        logger.warning("grounding: weather fetch failed for %s (%s) — using cached/default", city_id, exc)
+        logger.warning(
+            "grounding: weather fetch failed for %s (%s) — using cached/default",
+            city_id,
+            exc,
+        )
         if cached:
             return cached
         return {
@@ -236,7 +252,9 @@ def _fetch_sf_news(max_items: int = 5) -> list[dict]:
                 ns = {"atom": "http://www.w3.org/2005/Atom"}
                 for entry in root.findall("atom:entry", ns)[:max_items]:
                     title_el = entry.find("atom:title", ns)
-                    title = (title_el.text or "").strip() if title_el is not None else ""
+                    title = (
+                        (title_el.text or "").strip() if title_el is not None else ""
+                    )
                     if title:
                         items.append({"title": title})
             if items:
@@ -310,9 +328,15 @@ def get_city_time_context(city_id: str) -> dict:
     weather = get_city_weather(city_id)
 
     return {
-        "city": str(manifest.get("city") or weather_config.get("city") or city_id.replace("_", " ").title()),
+        "city": str(
+            manifest.get("city")
+            or weather_config.get("city")
+            or city_id.replace("_", " ").title()
+        ),
         "city_id": city_id,
-        "fictional": bool(manifest.get("fictional", weather_config.get("fictional", False))),
+        "fictional": bool(
+            manifest.get("fictional", weather_config.get("fictional", False))
+        ),
         "timezone": timezone_name,
         "datetime_str": datetime_str,  # "Wednesday, March 11 at 2:34 PM"
         "day_of_week": day_name,  # "Wednesday"

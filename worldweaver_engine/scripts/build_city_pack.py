@@ -76,11 +76,16 @@ def _overpass_query(query: str, timeout: int = 60, retries: int = 4) -> dict:
                 OVERPASS_URL,
                 data={"data": query},
                 timeout=timeout,
-                headers={"User-Agent": "WorldWeaver-CityPackBuilder/1.0 (worldweaver project)"},
+                headers={
+                    "User-Agent": "WorldWeaver-CityPackBuilder/1.0 (worldweaver project)"
+                },
             )
             if resp.status_code == 429 or resp.status_code >= 500:
                 if attempt < retries - 1:
-                    print(f"  [retry] HTTP {resp.status_code} — waiting {delay}s before retry {attempt + 2}/{retries}...", file=sys.stderr)
+                    print(
+                        f"  [retry] HTTP {resp.status_code} — waiting {delay}s before retry {attempt + 2}/{retries}...",
+                        file=sys.stderr,
+                    )
                     time.sleep(delay)
                     delay *= 2  # exponential backoff
                     continue
@@ -88,7 +93,10 @@ def _overpass_query(query: str, timeout: int = 60, retries: int = 4) -> dict:
             return resp.json()
         except httpx.TimeoutException:
             if attempt < retries - 1:
-                print(f"  [retry] timeout — waiting {delay}s before retry {attempt + 2}/{retries}...", file=sys.stderr)
+                print(
+                    f"  [retry] timeout — waiting {delay}s before retry {attempt + 2}/{retries}...",
+                    file=sys.stderr,
+                )
                 time.sleep(delay)
                 delay *= 2
                 continue
@@ -251,7 +259,15 @@ out center;
             if not lat or not lon:
                 continue
             tags = el.get("tags", {})
-            ltype = tags.get("leisure") or tags.get("tourism") or tags.get("amenity") or tags.get("historic") or tags.get("natural") or tags.get("shop") or "landmark"
+            ltype = (
+                tags.get("leisure")
+                or tags.get("tourism")
+                or tags.get("amenity")
+                or tags.get("historic")
+                or tags.get("natural")
+                or tags.get("shop")
+                or "landmark"
+            )
             results.append(
                 {
                     "name": name,
@@ -306,9 +322,15 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
             bbox_key = system.get("bbox_key", "default")
             bbox = config.get("bboxes", {}).get(bbox_key, default_bbox)
             if not bbox:
-                print(f"  [skip] {system['name']} — no bbox configured", file=sys.stderr)
+                print(
+                    f"  [skip] {system['name']} — no bbox configured", file=sys.stderr
+                )
                 continue
-            source = "config query" if system.get("query_template") else "auto-generated query"
+            source = (
+                "config query"
+                if system.get("query_template")
+                else "auto-generated query"
+            )
             print(f"Pulling {system['name']} stations ({source})...")
             stations = _pull_transit_system_auto(system, bbox)
             osm_transit[sys_id] = stations
@@ -342,7 +364,9 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
 
     for filename, data in built.files.items():
         path = output_dir / filename
-        path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        path.write_text(
+            json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
         size_kb = path.stat().st_size / 1024
         print(f"  Wrote {filename} ({size_kb:.1f} KB)")
 
@@ -356,16 +380,34 @@ def build_pack(city_config_path: Path, output_dir: Path, offline: bool = False) 
         *built.files,
         *(["generated_map.svg"] if built.generated_map_svg is not None else []),
     ]
-    print(f"  Total: {sum((output_dir / filename).stat().st_size for filename in output_filenames) / 1024:.1f} KB")
+    print(
+        f"  Total: {sum((output_dir / filename).stat().st_size for filename in output_filenames) / 1024:.1f} KB"
+    )
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Build a WorldWeaver city pack from OpenStreetMap")
+    parser = argparse.ArgumentParser(
+        description="Build a WorldWeaver city pack from OpenStreetMap"
+    )
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--city", help="City ID to load from scripts/city_configs/ (e.g. san_francisco, portland)")
-    group.add_argument("--all", action="store_true", help="Build packs for every config in scripts/city_configs/")
-    parser.add_argument("--output", help="Output directory (only valid with --city). Defaults to data/cities/{city_id}")
-    parser.add_argument("--offline", action="store_true", help="Skip Overpass API, use curated data only")
+    group.add_argument(
+        "--city",
+        help="City ID to load from scripts/city_configs/ (e.g. san_francisco, portland)",
+    )
+    group.add_argument(
+        "--all",
+        action="store_true",
+        help="Build packs for every config in scripts/city_configs/",
+    )
+    parser.add_argument(
+        "--output",
+        help="Output directory (only valid with --city). Defaults to data/cities/{city_id}",
+    )
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="Skip Overpass API, use curated data only",
+    )
     args = parser.parse_args()
 
     configs_dir = Path(__file__).parent / "city_configs"
@@ -375,7 +417,9 @@ def main() -> None:
         if not configs:
             print(f"No city configs found in {configs_dir}", file=sys.stderr)
             sys.exit(1)
-        print(f"Building {len(configs)} city pack(s): {', '.join(c.stem for c in configs)}\n")
+        print(
+            f"Building {len(configs)} city pack(s): {', '.join(c.stem for c in configs)}\n"
+        )
         failed = []
         for config_path in configs:
             city_id = config_path.stem
@@ -393,7 +437,9 @@ def main() -> None:
     else:
         city_id = args.city
         config_path = configs_dir / f"{city_id}.json"
-        output_dir = Path(args.output) if args.output else Path("data") / "cities" / city_id
+        output_dir = (
+            Path(args.output) if args.output else Path("data") / "cities" / city_id
+        )
         build_pack(config_path, output_dir, offline=args.offline)
 
 

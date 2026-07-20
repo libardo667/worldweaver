@@ -52,7 +52,10 @@ class RequestActorCredentials:
 
     @property
     def has_resident_proof(self) -> bool:
-        return any(str(self.resident_headers.get(name) or "").strip() for name in _RESIDENT_HEADERS)
+        return any(
+            str(self.resident_headers.get(name) or "").strip()
+            for name in _RESIDENT_HEADERS
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,7 +75,9 @@ async def get_request_actor_credentials(
 ) -> RequestActorCredentials:
     """Gather human or resident proof without yet claiming a session."""
 
-    resident_headers = {name: str(request.headers.get(name) or "") for name in _RESIDENT_HEADERS}
+    resident_headers = {
+        name: str(request.headers.get(name) or "") for name in _RESIDENT_HEADERS
+    }
     has_resident_proof = any(value.strip() for value in resident_headers.values())
     if player is not None and has_resident_proof:
         raise HTTPException(
@@ -120,12 +125,18 @@ def authorize_session_actor(
     """Resolve one human JWT or resident signature to the session's actor."""
 
     normalized_session_id = str(session_id or "").strip()
-    session_row = db.get(SessionVars, normalized_session_id) if normalized_session_id else None
+    session_row = (
+        db.get(SessionVars, normalized_session_id) if normalized_session_id else None
+    )
 
     if credentials.player is not None:
         player = credentials.player
         player_actor_id = str(player.actor_id or player.id or "").strip()
-        if session_row is None or session_row.player_id != player.id or str(session_row.actor_id or "").strip() != player_actor_id:
+        if (
+            session_row is None
+            or session_row.player_id != player.id
+            or str(session_row.actor_id or "").strip() != player_actor_id
+        ):
             raise ActorAuthorizationError(
                 "session_actor_mismatch",
                 "The logged-in actor does not control this session.",
@@ -151,7 +162,11 @@ def authorize_session_actor(
                 headers=credentials.resident_headers,
             )
         except ResidentAuthorityError as exc:
-            error_status = status.HTTP_409_CONFLICT if exc.code in {"replayed_request", "retired_generation"} else status.HTTP_401_UNAUTHORIZED
+            error_status = (
+                status.HTTP_409_CONFLICT
+                if exc.code in {"replayed_request", "retired_generation"}
+                else status.HTTP_401_UNAUTHORIZED
+            )
             raise ActorAuthorizationError(
                 exc.code,
                 str(exc),

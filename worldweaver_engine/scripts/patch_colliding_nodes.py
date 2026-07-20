@@ -70,7 +70,10 @@ def _compose_postgres_url(env: dict[str, str]) -> str:
     user = str(env.get("WW_DB_USER") or "postgres").strip() or "postgres"
     password = str(env.get("WW_DB_PASSWORD") or "postgres")
     port = str(env.get("WW_DB_PORT") or "5432").strip() or "5432"
-    return "postgresql+psycopg://" f"{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{quote_plus(name)}"
+    return (
+        "postgresql+psycopg://"
+        f"{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{quote_plus(name)}"
+    )
 
 
 def _resolve_db_url(shard_dir: Path | None = None) -> str | None:
@@ -79,7 +82,9 @@ def _resolve_db_url(shard_dir: Path | None = None) -> str | None:
         component_url = _compose_postgres_url(shard_env)
         if component_url:
             return component_url
-        explicit = str(shard_env.get("WW_DATABASE_URL") or shard_env.get("DATABASE_URL") or "").strip()
+        explicit = str(
+            shard_env.get("WW_DATABASE_URL") or shard_env.get("DATABASE_URL") or ""
+        ).strip()
         if explicit:
             return _normalize_database_url(explicit)
         db_file = str(shard_env.get("CITY_DB_FILE") or "").strip()
@@ -100,7 +105,9 @@ def _resolve_db_url(shard_dir: Path | None = None) -> str | None:
     if env_component_url:
         return env_component_url
 
-    explicit = (os.environ.get("WW_DATABASE_URL") or os.environ.get("DATABASE_URL") or "").strip()
+    explicit = (
+        os.environ.get("WW_DATABASE_URL") or os.environ.get("DATABASE_URL") or ""
+    ).strip()
     if explicit:
         return _normalize_database_url(explicit)
 
@@ -115,7 +122,9 @@ def _resolve_db_url(shard_dir: Path | None = None) -> str | None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Patch colliding city-pack neighborhood nodes.")
+    parser = argparse.ArgumentParser(
+        description="Patch colliding city-pack neighborhood nodes."
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument(
         "--shard-dir",
@@ -134,7 +143,9 @@ def main() -> int:
 
     db_url = _resolve_db_url(shard_dir=shard_dir)
     if not db_url:
-        print("ERROR: No database found. Set shard WW_DB_* / WW_DATABASE_URL / DATABASE_URL, or ensure sqlite compat DB exists.")
+        print(
+            "ERROR: No database found. Set shard WW_DB_* / WW_DATABASE_URL / DATABASE_URL, or ensure sqlite compat DB exists."
+        )
         return 1
 
     cities_dir = ROOT / "data" / "cities"
@@ -167,7 +178,9 @@ def main() -> int:
             norm = _normalize(hood["name"])
             name_to_cities[norm][city_id] = hood
 
-    collisions = {norm: cities for norm, cities in name_to_cities.items() if len(cities) > 1}
+    collisions = {
+        norm: cities for norm, cities in name_to_cities.items() if len(cities) > 1
+    }
     if not collisions:
         print("No name collisions found — nothing to do.")
         return 0
@@ -235,7 +248,9 @@ def main() -> int:
                     # Node already correctly tagged — just ensure metadata is right
                     node = existing_by_city[city_id]
                     city_node_map[city_id] = node
-                    print(f"  [{city_id}] node id={node.id} already exists — refreshing metadata")
+                    print(
+                        f"  [{city_id}] node id={node.id} already exists — refreshing metadata"
+                    )
                     if not args.dry_run:
                         existing = dict(node.metadata_json or {})
                         existing.update(correct_meta)
@@ -244,12 +259,19 @@ def main() -> int:
                     # No correctly-tagged node — find the "stolen" node or create fresh
                     # The stolen node is one tagged with a different city_id
                     stolen = next(
-                        (n for n in existing_nodes if (n.metadata_json or {}).get("city_id") != city_id and (n.metadata_json or {}).get("city_id") in cities),
+                        (
+                            n
+                            for n in existing_nodes
+                            if (n.metadata_json or {}).get("city_id") != city_id
+                            and (n.metadata_json or {}).get("city_id") in cities
+                        ),
                         None,
                     )
                     if stolen and city_id not in existing_by_city:
                         # The stolen node belongs to another city — create a new one
-                        print(f"  [{city_id}] creating new node (name was stolen by {(stolen.metadata_json or {}).get('city_id')})")
+                        print(
+                            f"  [{city_id}] creating new node (name was stolen by {(stolen.metadata_json or {}).get('city_id')})"
+                        )
                         if not args.dry_run:
                             new_node = WorldNode(
                                 node_type="location",
@@ -263,7 +285,9 @@ def main() -> int:
                             total_created += 1
                             print(f"    created id={new_node.id}")
                         else:
-                            print(f"    [dry-run] would create node for {city_id}/{hood['name']}")
+                            print(
+                                f"    [dry-run] would create node for {city_id}/{hood['name']}"
+                            )
                     else:
                         print(f"  [{city_id}] no stolen node found — creating fresh")
                         if not args.dry_run:
@@ -301,12 +325,18 @@ def main() -> int:
 
             # For now: delete any edges between new city nodes and wrong-city nodes
             # and reconstruct from pack adjacency data (handled by repair_graph).
-            print("  Note: run repair_graph.py after this to reconnect any newly created nodes.")
+            print(
+                "  Note: run repair_graph.py after this to reconnect any newly created nodes."
+            )
 
         if not args.dry_run:
             session.commit()
-            print(f"\nDone: created={total_created} rewired={total_rewired} deleted={total_deleted}")
-            print("Run `python scripts/repair_graph.py` to connect any newly-created orphan nodes.")
+            print(
+                f"\nDone: created={total_created} rewired={total_rewired} deleted={total_deleted}"
+            )
+            print(
+                "Run `python scripts/repair_graph.py` to connect any newly-created orphan nodes."
+            )
         else:
             print("\n[dry-run] No changes made.")
 

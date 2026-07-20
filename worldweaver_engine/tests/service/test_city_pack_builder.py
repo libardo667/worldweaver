@@ -52,4 +52,6 @@ def test_shared_builder_keeps_source_records_out_of_the_input_config():
         "lat": 45.6,
         "lon": -122.8,
     }
-    assert any(item["name"] == "Test Quarter" for item in built.files["neighborhoods.json"])
+    assert any(
+        item["name"] == "Test Quarter" for item in built.files["neighborhoods.json"]
+    )

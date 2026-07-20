@@ -7,7 +7,11 @@ from typing import Optional
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-_ENV_FILE = None if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("PYTEST_VERSION") else ".env"
+_ENV_FILE = (
+    None
+    if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("PYTEST_VERSION")
+    else ".env"
+)
 
 
 class Settings(BaseSettings):
@@ -52,20 +56,32 @@ class Settings(BaseSettings):
     # Shard / Federation Settings
     city_id: str = Field(default="san_francisco", validation_alias="CITY_ID")
     shard_id: Optional[str] = Field(default=None, validation_alias="SHARD_ID")
-    shard_type: str = Field(default="city", validation_alias="SHARD_TYPE")  # "city" | "world" | "neighborhood"
-    federation_url: Optional[str] = Field(default=None, validation_alias="FEDERATION_URL")
-    federation_pulse_interval: int = Field(default=300, validation_alias="FEDERATION_PULSE_INTERVAL_SECONDS")
+    shard_type: str = Field(
+        default="city", validation_alias="SHARD_TYPE"
+    )  # "city" | "world" | "neighborhood"
+    federation_url: Optional[str] = Field(
+        default=None, validation_alias="FEDERATION_URL"
+    )
+    federation_pulse_interval: int = Field(
+        default=300, validation_alias="FEDERATION_PULSE_INTERVAL_SECONDS"
+    )
     city_db_file: str = Field(default="worldweaver.db", validation_alias="CITY_DB_FILE")
-    federation_token: Optional[str] = Field(default=None, validation_alias="FEDERATION_TOKEN")
+    federation_token: Optional[str] = Field(
+        default=None, validation_alias="FEDERATION_TOKEN"
+    )
     federation_admission_mode: str = Field(
         default="closed",
         validation_alias="WW_FEDERATION_ADMISSION_MODE",
     )
-    node_private_key_path: Optional[str] = Field(default=None, validation_alias="WW_NODE_PRIVATE_KEY_PATH")
+    node_private_key_path: Optional[str] = Field(
+        default=None, validation_alias="WW_NODE_PRIVATE_KEY_PATH"
+    )
     public_url: Optional[str] = Field(default=None, validation_alias="WW_PUBLIC_URL")
     client_url: Optional[str] = Field(default=None, validation_alias="WW_CLIENT_URL")
     cors_origins: str = Field(default="*", validation_alias="WW_CORS_ORIGINS")
-    trust_cloudflare_proxy: bool = Field(default=False, validation_alias="WW_TRUST_CLOUDFLARE_PROXY")
+    trust_cloudflare_proxy: bool = Field(
+        default=False, validation_alias="WW_TRUST_CLOUDFLARE_PROXY"
+    )
     auth_rate_limit_per_minute: int = Field(
         default=30,
         ge=0,
@@ -75,11 +91,20 @@ class Settings(BaseSettings):
         default=None,
         validation_alias="WW_SHARD_EXPERIENCE_PATH",
     )
-    model_config = SettingsConfigDict(env_file=_ENV_FILE, env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=_ENV_FILE, env_file_encoding="utf-8", extra="ignore"
+    )
 
     def get_effective_api_key(self) -> Optional[str]:
         """Return the most specific API key available."""
-        return os.environ.get("OPENROUTER_API_KEY") or os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY") or self.openrouter_api_key or self.llm_api_key or self.openai_api_key
+        return (
+            os.environ.get("OPENROUTER_API_KEY")
+            or os.environ.get("LLM_API_KEY")
+            or os.environ.get("OPENAI_API_KEY")
+            or self.openrouter_api_key
+            or self.llm_api_key
+            or self.openai_api_key
+        )
 
     def get_cors_origins(self) -> list[str]:
         """Return the steward-configured browser origins without guessing."""
@@ -91,10 +116,18 @@ class Settings(BaseSettings):
         return bool(self.get_effective_api_key() and self.llm_model)
 
     # Auth
-    jwt_secret: str = Field(default="CHANGE_ME_IN_PRODUCTION", validation_alias="WW_JWT_SECRET")
-    jwt_expire_minutes: int = Field(default=60 * 24 * 7, validation_alias="WW_JWT_EXPIRE_MINUTES")
-    data_encryption_key: Optional[str] = Field(default=None, validation_alias="WW_DATA_ENCRYPTION_KEY")
-    resend_api_key: Optional[str] = Field(default=None, validation_alias="RESEND_API_KEY")
+    jwt_secret: str = Field(
+        default="CHANGE_ME_IN_PRODUCTION", validation_alias="WW_JWT_SECRET"
+    )
+    jwt_expire_minutes: int = Field(
+        default=60 * 24 * 7, validation_alias="WW_JWT_EXPIRE_MINUTES"
+    )
+    data_encryption_key: Optional[str] = Field(
+        default=None, validation_alias="WW_DATA_ENCRYPTION_KEY"
+    )
+    resend_api_key: Optional[str] = Field(
+        default=None, validation_alias="RESEND_API_KEY"
+    )
     resend_from_email: str = Field(
         default="noreply@worldweaver.example.com",
         validation_alias="RESEND_FROM_EMAIL",

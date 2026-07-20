@@ -15,7 +15,14 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from ..config import settings
 
@@ -73,28 +80,79 @@ RUNTIME_GAME_CAPABILITIES = frozenset(
 
 
 _CAPABILITY_COPY: dict[GameCapability, tuple[str, str]] = {
-    GameCapability.DURABLE_OBJECTS: ("Durable objects", "Objects keep a stable identity and remain after a restart."),
-    GameCapability.CUSTODY: ("Object custody", "The world records who currently holds an object."),
-    GameCapability.PLACEMENT: ("Object placement", "Objects can be left at an exact place and found there later."),
-    GameCapability.REPLENISHING_MATERIALS: ("Replenishing materials", "Making uses non-essential materials that return over time."),
-    GameCapability.MAKING: ("Making", "Declared recipes can turn available materials into durable objects."),
-    GameCapability.ATOMIC_GIVING: ("Safe giving", "Custody changes only when one complete transfer succeeds."),
-    GameCapability.WITNESSED_EXCHANGE: ("Witnessed exchange", "Offers, agreements, and completed exchanges leave public evidence."),
-    GameCapability.STOOPS: ("Stoops", "People can leave and discover things at a bounded local exchange place."),
-    GameCapability.SPACE_PERMISSIONS: ("Space permissions", "Ordinary spaces can be opened or closed without blocking access to a hearth."),
+    GameCapability.DURABLE_OBJECTS: (
+        "Durable objects",
+        "Objects keep a stable identity and remain after a restart.",
+    ),
+    GameCapability.CUSTODY: (
+        "Object custody",
+        "The world records who currently holds an object.",
+    ),
+    GameCapability.PLACEMENT: (
+        "Object placement",
+        "Objects can be left at an exact place and found there later.",
+    ),
+    GameCapability.REPLENISHING_MATERIALS: (
+        "Replenishing materials",
+        "Making uses non-essential materials that return over time.",
+    ),
+    GameCapability.MAKING: (
+        "Making",
+        "Declared recipes can turn available materials into durable objects.",
+    ),
+    GameCapability.ATOMIC_GIVING: (
+        "Safe giving",
+        "Custody changes only when one complete transfer succeeds.",
+    ),
+    GameCapability.WITNESSED_EXCHANGE: (
+        "Witnessed exchange",
+        "Offers, agreements, and completed exchanges leave public evidence.",
+    ),
+    GameCapability.STOOPS: (
+        "Stoops",
+        "People can leave and discover things at a bounded local exchange place.",
+    ),
+    GameCapability.SPACE_PERMISSIONS: (
+        "Space permissions",
+        "Ordinary spaces can be opened or closed without blocking access to a hearth.",
+    ),
 }
 
 _STAKE_COPY: dict[DisabledStake, tuple[str, str]] = {
-    DisabledStake.SURVIVAL_NEEDS: ("Survival needs", "No resident must obtain resources to remain alive or active."),
-    DisabledStake.DEPRIVATION: ("Deprivation", "No resident is punished for lacking food, shelter, care, or attention."),
+    DisabledStake.SURVIVAL_NEEDS: (
+        "Survival needs",
+        "No resident must obtain resources to remain alive or active.",
+    ),
+    DisabledStake.DEPRIVATION: (
+        "Deprivation",
+        "No resident is punished for lacking food, shelter, care, or attention.",
+    ),
     DisabledStake.INJURY: ("Injury", "The game cannot impose bodily injury."),
     DisabledStake.DEATH: ("Death", "The game cannot end or erase a resident's life."),
-    DisabledStake.IMPRISONMENT: ("Imprisonment", "The game cannot confine a resident or prevent a return to their hearth."),
-    DisabledStake.FORCED_LOSS: ("Forced loss", "The game cannot take a resident's possessions without agreement."),
-    DisabledStake.RESIDENT_XP: ("Resident experience points", "Residents are not scored or leveled for game participation."),
-    DisabledStake.APPROVAL_SCORES: ("Approval scores", "Residents are not rewarded for pleasing a player or steward."),
-    DisabledStake.SCARCITY_PRESSURE: ("Scarcity pressure", "Essential resources cannot be made scarce to pressure behavior."),
-    DisabledStake.AUTOMATIC_REPUTATION: ("Automatic reputation", "The game does not reduce a person's relationships to a score."),
+    DisabledStake.IMPRISONMENT: (
+        "Imprisonment",
+        "The game cannot confine a resident or prevent a return to their hearth.",
+    ),
+    DisabledStake.FORCED_LOSS: (
+        "Forced loss",
+        "The game cannot take a resident's possessions without agreement.",
+    ),
+    DisabledStake.RESIDENT_XP: (
+        "Resident experience points",
+        "Residents are not scored or leveled for game participation.",
+    ),
+    DisabledStake.APPROVAL_SCORES: (
+        "Approval scores",
+        "Residents are not rewarded for pleasing a player or steward.",
+    ),
+    DisabledStake.SCARCITY_PRESSURE: (
+        "Scarcity pressure",
+        "Essential resources cannot be made scarce to pressure behavior.",
+    ),
+    DisabledStake.AUTOMATIC_REPUTATION: (
+        "Automatic reputation",
+        "The game does not reduce a person's relationships to a score.",
+    ),
     DisabledStake.COMBAT: ("Combat", "The first game ruleset has no combat system."),
 }
 
@@ -104,7 +162,9 @@ class _StrictModel(BaseModel):
 
 
 class RulesetIdentity(_StrictModel):
-    id: str = Field(pattern=r"^[a-z0-9]+(?:[._-][a-z0-9]+)*$", min_length=3, max_length=80)
+    id: str = Field(
+        pattern=r"^[a-z0-9]+(?:[._-][a-z0-9]+)*$", min_length=3, max_length=80
+    )
     version: str = Field(pattern=r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$", max_length=40)
 
 
@@ -125,7 +185,9 @@ class MigrationPolicy(_StrictModel):
 
 
 class MaterialSourceDeclaration(_StrictModel):
-    id: str = Field(pattern=r"^[a-z0-9]+(?:[._-][a-z0-9]+)*$", min_length=3, max_length=80)
+    id: str = Field(
+        pattern=r"^[a-z0-9]+(?:[._-][a-z0-9]+)*$", min_length=3, max_length=80
+    )
     title: str = Field(min_length=3, max_length=120)
     description: str = Field(min_length=20, max_length=500)
     essential: Literal[False]
@@ -158,12 +220,16 @@ class MaterialSourceDeclaration(_StrictModel):
 class RecipeOutputDeclaration(_StrictModel):
     name: str = Field(min_length=1, max_length=120)
     description: str = Field(min_length=1, max_length=2000)
-    object_kind: str = Field(pattern=r"^[a-z0-9]+(?:[._-][a-z0-9]+)*$", min_length=2, max_length=80)
+    object_kind: str = Field(
+        pattern=r"^[a-z0-9]+(?:[._-][a-z0-9]+)*$", min_length=2, max_length=80
+    )
     properties: dict[str, object] = Field(default_factory=dict)
 
 
 class RecipeDeclaration(_StrictModel):
-    id: str = Field(pattern=r"^[a-z0-9]+(?:[._-][a-z0-9]+)*$", min_length=3, max_length=80)
+    id: str = Field(
+        pattern=r"^[a-z0-9]+(?:[._-][a-z0-9]+)*$", min_length=3, max_length=80
+    )
     title: str = Field(min_length=3, max_length=120)
     description: str = Field(min_length=20, max_length=500)
     available_at: list[str] = Field(min_length=1)
@@ -183,8 +249,13 @@ class RecipeDeclaration(_StrictModel):
     @field_validator("inputs")
     @classmethod
     def require_positive_recipe_inputs(cls, value: dict[str, int]) -> dict[str, int]:
-        if any(not str(material_id or "").strip() or int(units) < 1 or int(units) > 10000 for material_id, units in value.items()):
-            raise ValueError("recipe inputs must name a material and use 1 to 10000 units")
+        if any(
+            not str(material_id or "").strip() or int(units) < 1 or int(units) > 10000
+            for material_id, units in value.items()
+        ):
+            raise ValueError(
+                "recipe inputs must name a material and use 1 to 10000 units"
+            )
         return value
 
 
@@ -222,17 +293,25 @@ class GameShardDeclaration(_StrictModel):
         unsupported = set(self.capabilities) - set(RUNTIME_GAME_CAPABILITIES)
         if unsupported:
             names = ", ".join(sorted(item.value for item in unsupported))
-            raise ValueError(f"capabilities are declared but not implemented by this runtime: {names}")
+            raise ValueError(
+                f"capabilities are declared but not implemented by this runtime: {names}"
+            )
         active = set(self.capabilities)
         dependencies = {
             GameCapability.CUSTODY: {GameCapability.DURABLE_OBJECTS},
-            GameCapability.PLACEMENT: {GameCapability.DURABLE_OBJECTS, GameCapability.CUSTODY},
+            GameCapability.PLACEMENT: {
+                GameCapability.DURABLE_OBJECTS,
+                GameCapability.CUSTODY,
+            },
             GameCapability.MAKING: {
                 GameCapability.DURABLE_OBJECTS,
                 GameCapability.CUSTODY,
                 GameCapability.REPLENISHING_MATERIALS,
             },
-            GameCapability.ATOMIC_GIVING: {GameCapability.DURABLE_OBJECTS, GameCapability.CUSTODY},
+            GameCapability.ATOMIC_GIVING: {
+                GameCapability.DURABLE_OBJECTS,
+                GameCapability.CUSTODY,
+            },
             GameCapability.WITNESSED_EXCHANGE: {
                 GameCapability.DURABLE_OBJECTS,
                 GameCapability.CUSTODY,
@@ -250,9 +329,13 @@ class GameShardDeclaration(_StrictModel):
                 raise ValueError(f"{capability.value} also requires: {names}")
         if GameCapability.REPLENISHING_MATERIALS in active:
             if not self.materials:
-                raise ValueError("replenishing_materials requires at least one material declaration")
+                raise ValueError(
+                    "replenishing_materials requires at least one material declaration"
+                )
         elif self.materials:
-            raise ValueError("material declarations require the replenishing_materials capability")
+            raise ValueError(
+                "material declarations require the replenishing_materials capability"
+            )
         if GameCapability.MAKING in active:
             if not self.recipes:
                 raise ValueError("making requires at least one recipe declaration")
@@ -268,11 +351,19 @@ class GameShardDeclaration(_StrictModel):
         for recipe in self.recipes:
             unknown = set(recipe.inputs) - set(material_by_id)
             if unknown:
-                raise ValueError(f"recipe {recipe.id} names unknown materials: {', '.join(sorted(unknown))}")
+                raise ValueError(
+                    f"recipe {recipe.id} names unknown materials: {', '.join(sorted(unknown))}"
+                )
             for location in recipe.available_at:
-                unavailable = [material_id for material_id in recipe.inputs if location not in material_by_id[material_id].available_at]
+                unavailable = [
+                    material_id
+                    for material_id in recipe.inputs
+                    if location not in material_by_id[material_id].available_at
+                ]
                 if unavailable:
-                    raise ValueError(f"recipe {recipe.id} cannot use materials unavailable at {location}: {', '.join(sorted(unavailable))}")
+                    raise ValueError(
+                        f"recipe {recipe.id} cannot use materials unavailable at {location}: {', '.join(sorted(unavailable))}"
+                    )
         return self
 
 
@@ -304,7 +395,9 @@ class PublicShardExperience(_StrictModel):
     entry_disclosure: PublicEntryDisclosure
 
 
-def _public_item(item: StrEnum, copy: dict[StrEnum, tuple[str, str]]) -> PublicDisclosureItem:
+def _public_item(
+    item: StrEnum, copy: dict[StrEnum, tuple[str, str]]
+) -> PublicDisclosureItem:
     title, description = copy[item]
     return PublicDisclosureItem(id=item.value, title=title, description=description)
 
@@ -343,9 +436,16 @@ def _public_game_experience(
         entry_disclosure=PublicEntryDisclosure(
             title=declaration.entry_disclosure.title,
             summary=declaration.entry_disclosure.summary,
-            capabilities=[_public_item(item, _CAPABILITY_COPY) for item in declaration.capabilities],
-            enabled_stakes=[_public_item(item, _STAKE_COPY) for item in declaration.enabled_stakes],
-            disabled_stakes=[_public_item(item, _STAKE_COPY) for item in declaration.disabled_stakes],
+            capabilities=[
+                _public_item(item, _CAPABILITY_COPY)
+                for item in declaration.capabilities
+            ],
+            enabled_stakes=[
+                _public_item(item, _STAKE_COPY) for item in declaration.enabled_stakes
+            ],
+            disabled_stakes=[
+                _public_item(item, _STAKE_COPY) for item in declaration.disabled_stakes
+            ],
             boundary_notice="Game objects, conditions, and obligations stay on this shard.",
             migration_notice=declaration.migration_policy.notice,
         ),
@@ -365,7 +465,9 @@ def load_shard_experience(
         return _ordinary_experience(shard_id=shard_id, shard_type=shard_type)
 
     declaration = load_game_declaration(configured_path)
-    return _public_game_experience(declaration, shard_id=shard_id, shard_type=shard_type)
+    return _public_game_experience(
+        declaration, shard_id=shard_id, shard_type=shard_type
+    )
 
 
 def load_game_declaration(path: str | Path) -> GameShardDeclaration:
@@ -375,17 +477,23 @@ def load_game_declaration(path: str | Path) -> GameShardDeclaration:
     try:
         raw = declaration_path.read_text(encoding="utf-8")
     except OSError as exc:
-        raise ShardExperienceConfigurationError(f"Cannot read shard experience declaration at {declaration_path}: {exc}") from exc
+        raise ShardExperienceConfigurationError(
+            f"Cannot read shard experience declaration at {declaration_path}: {exc}"
+        ) from exc
 
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise ShardExperienceConfigurationError(f"Invalid JSON in shard experience declaration at {declaration_path}: {exc}") from exc
+        raise ShardExperienceConfigurationError(
+            f"Invalid JSON in shard experience declaration at {declaration_path}: {exc}"
+        ) from exc
 
     try:
         declaration = GameShardDeclaration.model_validate(payload)
     except ValidationError as exc:
-        raise ShardExperienceConfigurationError(f"Invalid shard experience declaration at {declaration_path}: {exc}") from exc
+        raise ShardExperienceConfigurationError(
+            f"Invalid shard experience declaration at {declaration_path}: {exc}"
+        ) from exc
 
     return declaration
 
@@ -414,8 +522,12 @@ def require_game_capabilities(*required: GameCapability) -> PublicShardExperienc
 
     experience = configured_shard_experience()
     active = {item.id for item in experience.entry_disclosure.capabilities}
-    missing = [capability.value for capability in required if capability.value not in active]
+    missing = [
+        capability.value for capability in required if capability.value not in active
+    ]
     if not experience.game_rules_active or missing:
         detail = ", ".join(missing or [capability.value for capability in required])
-        raise GameCapabilityUnavailable(f"This shard has not enabled the required game capabilities: {detail}")
+        raise GameCapabilityUnavailable(
+            f"This shard has not enabled the required game capabilities: {detail}"
+        )
     return experience

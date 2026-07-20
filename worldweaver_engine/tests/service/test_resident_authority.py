@@ -154,14 +154,18 @@ def test_identity_binding_is_idempotent_but_cannot_be_silently_replaced(db_sessi
     )
 
     assert first is second
-    assert first.admission_reason == "Synthetic identity reviewed for the protocol test."
+    assert (
+        first.admission_reason == "Synthetic identity reviewed for the protocol test."
+    )
     assert first.admitted_by == "test-steward"
     with pytest.raises(ResidentAuthorityError, match="different public continuity"):
         bind_resident_identity(
             db_session,
             actor_id=ACTOR_ID,
             hearth_shard_id=HEARTH_ID,
-            identity_public_key=encoded_public_key(Ed25519PrivateKey.generate().public_key()),
+            identity_public_key=encoded_public_key(
+                Ed25519PrivateKey.generate().public_key()
+            ),
         )
     with pytest.raises(ResidentAuthorityError, match="another actor"):
         bind_resident_identity(
@@ -175,12 +179,16 @@ def test_identity_binding_is_idempotent_but_cannot_be_silently_replaced(db_sessi
             db_session,
             actor_id="actor-789",
             hearth_shard_id="hearth:actor-789",
-            identity_public_key=encoded_public_key(Ed25519PrivateKey.generate().public_key()),
+            identity_public_key=encoded_public_key(
+                Ed25519PrivateKey.generate().public_key()
+            ),
             admitted_by="local-steward",
         )
 
 
-def test_generation_activation_requires_the_admitted_identity_hearth_and_city(db_session):
+def test_generation_activation_requires_the_admitted_identity_hearth_and_city(
+    db_session,
+):
     identity_private = Ed25519PrivateKey.generate()
     runtime_private = Ed25519PrivateKey.generate()
     bind_resident_identity(
@@ -222,7 +230,9 @@ def test_generation_activation_requires_the_admitted_identity_hearth_and_city(db
         )
 
 
-def test_first_signed_request_activates_an_admitted_runtime_without_creating_a_session(db_session):
+def test_first_signed_request_activates_an_admitted_runtime_without_creating_a_session(
+    db_session,
+):
     identity_private = Ed25519PrivateKey.generate()
     runtime_private = Ed25519PrivateKey.generate()
     certificate = _certificate(identity_private, runtime_private)
@@ -273,7 +283,9 @@ def test_first_signed_request_rejects_unknown_or_mismatched_identity(db_session)
     assert mismatch.value.code == "actor_mismatch"
 
 
-def test_invalid_first_request_cannot_activate_generation_and_valid_proof_cannot_replay(db_session):
+def test_invalid_first_request_cannot_activate_generation_and_valid_proof_cannot_replay(
+    db_session,
+):
     identity_private = Ed25519PrivateKey.generate()
     runtime_private = Ed25519PrivateKey.generate()
     certificate = _certificate(identity_private, runtime_private)
@@ -312,9 +324,13 @@ def test_invalid_first_request_cannot_activate_generation_and_valid_proof_cannot
     assert replay.value.code == "replayed_request"
 
 
-def test_session_binding_rejects_humans_wrong_actors_and_inactive_generations(db_session):
+def test_session_binding_rejects_humans_wrong_actors_and_inactive_generations(
+    db_session,
+):
     _identity_private, _runtime_private, _certificate = _admit_and_bind(db_session)
-    db_session.add(SessionVars(session_id="wrong-actor", actor_id="actor-other", vars={}))
+    db_session.add(
+        SessionVars(session_id="wrong-actor", actor_id="actor-other", vars={})
+    )
     db_session.add(
         SessionVars(
             session_id="human-session",
@@ -348,7 +364,9 @@ def test_session_binding_rejects_humans_wrong_actors_and_inactive_generations(db
         )
 
 
-def test_authorized_request_consumes_nonce_once_and_keeps_it_after_caller_rollback(db_session):
+def test_authorized_request_consumes_nonce_once_and_keeps_it_after_caller_rollback(
+    db_session,
+):
     _identity_private, runtime_private, certificate = _admit_and_bind(db_session)
     headers = _headers(runtime_private, certificate)
 
@@ -362,7 +380,9 @@ def test_authorized_request_consumes_nonce_once_and_keeps_it_after_caller_rollba
     assert replay.value.code == "replayed_request"
 
 
-def test_new_generation_fences_the_old_session_before_signature_verification(db_session):
+def test_new_generation_fences_the_old_session_before_signature_verification(
+    db_session,
+):
     identity_private, old_runtime, old_certificate = _admit_and_bind(db_session)
     new_runtime = Ed25519PrivateKey.generate()
     new_certificate = _certificate(identity_private, new_runtime, generation=2)

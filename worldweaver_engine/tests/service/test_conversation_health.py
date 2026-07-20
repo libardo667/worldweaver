@@ -1,12 +1,17 @@
 from datetime import datetime, timedelta, timezone
 import json
 
-from src.services.conversation_health import PublicConversationMessage, analyze_public_conversation
+from src.services.conversation_health import (
+    PublicConversationMessage,
+    analyze_public_conversation,
+)
 
 START = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
 
-def _messages(bodies_by_speaker: dict[str, list[str]], *, locations: dict[str, str] | None = None) -> list[PublicConversationMessage]:
+def _messages(
+    bodies_by_speaker: dict[str, list[str]], *, locations: dict[str, str] | None = None
+) -> list[PublicConversationMessage]:
     rows: list[PublicConversationMessage] = []
     offset = 0
     for message_index in range(max(map(len, bodies_by_speaker.values()))):
@@ -26,7 +31,9 @@ def _messages(bodies_by_speaker: dict[str, list[str]], *, locations: dict[str, s
 
 
 def test_report_refuses_population_language_metrics_below_three_speakers():
-    report = analyze_public_conversation(_messages({"one": ["hello"], "two": ["hello"]}))
+    report = analyze_public_conversation(
+        _messages({"one": ["hello"], "two": ["hello"]})
+    )
 
     assert report == {
         "schema": "worldweaver.public-conversation-health",
@@ -59,8 +66,14 @@ def test_converged_population_scores_as_less_distinct_than_divergent_population(
     converged_report = analyze_public_conversation(converged)
     divergent_report = analyze_public_conversation(divergent)
 
-    assert converged_report["lexical"]["speaker_convergence"] > divergent_report["lexical"]["speaker_convergence"]
-    assert converged_report["lexical"]["distinctiveness_gap"] < divergent_report["lexical"]["distinctiveness_gap"]
+    assert (
+        converged_report["lexical"]["speaker_convergence"]
+        > divergent_report["lexical"]["speaker_convergence"]
+    )
+    assert (
+        converged_report["lexical"]["distinctiveness_gap"]
+        < divergent_report["lexical"]["distinctiveness_gap"]
+    )
     assert converged_report["topic_shape"]["civic_message_fraction"] == 1.0
     assert divergent_report["topic_shape"]["civic_message_fraction"] == 0.0
 
@@ -69,7 +82,10 @@ def test_report_never_emits_source_text_names_locations_or_sentinel():
     sentinel = "ultraviolet-capybara-sentinel"
     rows = _messages(
         {
-            "private-looking-name-one": [f"paint a mural {sentinel}", "fold paper birds"],
+            "private-looking-name-one": [
+                f"paint a mural {sentinel}",
+                "fold paper birds",
+            ],
             "private-looking-name-two": ["bake apricot bread", "share a warm meal"],
             "private-looking-name-three": ["tune the violin", "practice a dance"],
         },
@@ -97,7 +113,9 @@ def test_closed_pair_conversation_has_high_interaction_concentration():
             created_at=START + timedelta(minutes=index),
             location_key="square",
         )
-        for index, speaker in enumerate(("one", "two", "one", "two", "one", "two", "three"))
+        for index, speaker in enumerate(
+            ("one", "two", "one", "two", "one", "two", "three")
+        )
     ]
 
     report = analyze_public_conversation(rows)

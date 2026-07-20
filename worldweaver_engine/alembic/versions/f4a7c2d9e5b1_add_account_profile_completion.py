@@ -18,10 +18,19 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column("federation_actor_auth", sa.Column("profile_completed_at", sa.DateTime(), nullable=True))
-    op.add_column("players", sa.Column("profile_completed_at", sa.DateTime(), nullable=True))
-    op.execute("UPDATE federation_actor_auth SET profile_completed_at = CURRENT_TIMESTAMP WHERE profile_completed_at IS NULL")
-    op.execute("UPDATE players SET profile_completed_at = CURRENT_TIMESTAMP WHERE profile_completed_at IS NULL")
+    op.add_column(
+        "federation_actor_auth",
+        sa.Column("profile_completed_at", sa.DateTime(), nullable=True),
+    )
+    op.add_column(
+        "players", sa.Column("profile_completed_at", sa.DateTime(), nullable=True)
+    )
+    op.execute(
+        "UPDATE federation_actor_auth SET profile_completed_at = CURRENT_TIMESTAMP WHERE profile_completed_at IS NULL"
+    )
+    op.execute(
+        "UPDATE players SET profile_completed_at = CURRENT_TIMESTAMP WHERE profile_completed_at IS NULL"
+    )
 
 
 def downgrade() -> None:

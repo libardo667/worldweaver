@@ -33,7 +33,9 @@ def upgrade() -> None:
         sa.Column("status", sa.String(length=20), nullable=False),
         sa.Column("offered_at_location", sa.String(length=200), nullable=False),
         sa.Column("completed_at_location", sa.String(length=200), nullable=True),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False
+        ),
         sa.Column("resolved_at", sa.DateTime(), nullable=True),
         sa.CheckConstraint(
             "status IN ('open', 'completed', 'declined', 'cancelled')",
@@ -81,7 +83,9 @@ def upgrade() -> None:
         sa.Column("exchange_id", sa.String(length=36), nullable=False),
         sa.Column("world_event_id", sa.Integer(), nullable=False),
         sa.Column("payload_json", sa.JSON(), nullable=False),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(
             ["exchange_id"],
             ["object_exchanges.exchange_id"],
@@ -114,7 +118,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_exchange_receipts_exchange_created", table_name="exchange_receipts")
+    op.drop_index(
+        "ix_exchange_receipts_exchange_created", table_name="exchange_receipts"
+    )
     op.drop_index("ix_exchange_receipts_actor_id", table_name="exchange_receipts")
     op.drop_table("exchange_receipts")
     op.drop_index("ix_object_exchanges_recipient_status", table_name="object_exchanges")

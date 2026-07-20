@@ -5,11 +5,11 @@ Revises: b1c2d3e4f5a6
 Create Date: 2026-03-14 18:00:00.000000
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-
 
 revision: str = "c3d4e5f6a7b8"
 down_revision: Union[str, None] = "b1c2d3e4f5a6"
@@ -37,7 +37,9 @@ def upgrade() -> None:
         sa.Column("current_shard", sa.String(80), nullable=False),
         sa.Column("last_location", sa.String(200), nullable=True),
         sa.Column("last_act_ts", sa.DateTime(), nullable=True),
-        sa.Column("resident_type", sa.String(20), nullable=False, server_default="agent"),
+        sa.Column(
+            "resident_type", sa.String(20), nullable=False, server_default="agent"
+        ),
         sa.Column("status", sa.String(20), nullable=False, server_default="active"),
         sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now()),
     )

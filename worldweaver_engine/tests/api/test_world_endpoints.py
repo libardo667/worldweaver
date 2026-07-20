@@ -2,7 +2,15 @@
 
 from datetime import datetime, timedelta, timezone
 
-from src.models import DirectMessage, LocationChat, SessionVars, WorldEvent, WorldFact, WorldNode, WorldProjection
+from src.models import (
+    DirectMessage,
+    LocationChat,
+    SessionVars,
+    WorldEvent,
+    WorldFact,
+    WorldNode,
+    WorldProjection,
+)
 from src.services.session_service import get_state_manager, save_state
 
 
@@ -69,7 +77,9 @@ class TestWorldHistoryEndpoint:
         )
         db_session.commit()
 
-        resp = client.get("/api/world/history?session_id=event-filter-session&event_type=permanent_change")
+        resp = client.get(
+            "/api/world/history?session_id=event-filter-session&event_type=permanent_change"
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["count"] == 1
@@ -104,7 +114,10 @@ class TestWorldHistoryEndpoint:
         )
         db_session.commit()
 
-        resp = client.get("/api/world/history?session_id=time-filter-session&" "since=2026-01-01T11:00:00Z&until=2026-01-01T13:00:00Z")
+        resp = client.get(
+            "/api/world/history?session_id=time-filter-session&"
+            "since=2026-01-01T11:00:00Z&until=2026-01-01T13:00:00Z"
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["count"] == 1
@@ -116,7 +129,11 @@ class TestWorldHistoryEndpoint:
         resp = client.get("/api/world/history?since=not-a-timestamp")
         assert resp.status_code == 422
         detail = resp.json().get("detail", [])
-        assert any(isinstance(item, dict) and any(str(part) == "since" for part in item.get("loc", [])) for item in detail)
+        assert any(
+            isinstance(item, dict)
+            and any(str(part) == "since" for part in item.get("loc", []))
+            for item in detail
+        )
 
 
 class TestWorldFactsEndpoint:
@@ -138,7 +155,9 @@ class TestWorldGraphEndpoints:
     def test_graph_facts_returns_shape(self, seeded_client):
         seeded_client.post("/api/next", json={"session_id": "graph-api", "vars": {}})
 
-        resp = seeded_client.get("/api/world/graph/facts?query=bridge&session_id=graph-api")
+        resp = seeded_client.get(
+            "/api/world/graph/facts?query=bridge&session_id=graph-api"
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert "query" in data
@@ -147,7 +166,9 @@ class TestWorldGraphEndpoints:
 
 
 class TestAgentSceneEndpoints:
-    def test_digest_does_not_count_retired_resident_history_as_live_presence(self, seeded_client, db_session):
+    def test_digest_does_not_count_retired_resident_history_as_live_presence(
+        self, seeded_client, db_session
+    ):
         db_session.add(
             WorldEvent(
                 session_id="test_resident-20260316-120000",
@@ -167,9 +188,14 @@ class TestAgentSceneEndpoints:
         payload = response.json()
         assert payload["active_sessions"] == 0
         assert payload["roster"] == []
-        assert all("Test Resident" not in node["agent_names"] and node["agent_count"] == 0 for node in payload["location_graph"]["nodes"])
+        assert all(
+            "Test Resident" not in node["agent_names"] and node["agent_count"] == 0
+            for node in payload["location_graph"]["nodes"]
+        )
 
-    def test_scene_reads_presence_from_session_vars_without_state_manager(self, client, db_session, monkeypatch):
+    def test_scene_reads_presence_from_session_vars_without_state_manager(
+        self, client, db_session, monkeypatch
+    ):
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         db_session.add_all(
             [
@@ -196,7 +222,9 @@ class TestAgentSceneEndpoints:
         db_session.commit()
 
         def _fail(*args, **kwargs):
-            raise AssertionError("get_state_manager should not be used by scene endpoint")
+            raise AssertionError(
+                "get_state_manager should not be used by scene endpoint"
+            )
 
         monkeypatch.setattr("src.services.session_service.get_state_manager", _fail)
 
@@ -224,7 +252,10 @@ class TestAgentSceneEndpoints:
                 ),
                 SessionVars(
                     session_id="javier_reyes-20260316-120000",
-                    vars={"location": "Chinatown", "player_role": "Javier Reyes — watcher"},
+                    vars={
+                        "location": "Chinatown",
+                        "player_role": "Javier Reyes — watcher",
+                    },
                     updated_at=now,
                 ),
                 WorldEvent(
@@ -241,10 +272,17 @@ class TestAgentSceneEndpoints:
         response = client.get("/api/world/scene/test_resident-20260316-120000")
         assert response.status_code == 200
         payload = response.json()
-        javier = next(item for item in payload["present"] if item["name"] == "Javier Reyes")
-        assert javier["last_action"] == "Narrows focus, scanning the shifting light along the waterfront."
+        javier = next(
+            item for item in payload["present"] if item["name"] == "Javier Reyes"
+        )
+        assert (
+            javier["last_action"]
+            == "Narrows focus, scanning the shifting light along the waterfront."
+        )
 
-    def test_scene_includes_derived_ambient_presence(self, client, db_session, monkeypatch):
+    def test_scene_includes_derived_ambient_presence(
+        self, client, db_session, monkeypatch
+    ):
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         db_session.add(
             SessionVars(
@@ -304,7 +342,9 @@ class TestPluralSalience:
         assert place["label"]
 
     def test_weather_does_not_remove_place_salience(self):
-        items = self._ambient("Dragon gates, herbalists, dim sum", weather="clear, 65°F, 18 mph winds")
+        items = self._ambient(
+            "Dragon gates, herbalists, dim sum", weather="clear, 65°F, 18 mph winds"
+        )
         kinds = {i["kind"] for i in items}
         # Dilution, not removal: both the weather AND the place are loud at once.
         assert "weather_shelter_cluster" in kinds
@@ -312,7 +352,9 @@ class TestPluralSalience:
 
     def test_different_neighborhoods_are_loud_about_different_things(self):
         chinatown = self._ambient("Dragon gates, herbalists, dim sum, crowded streets")
-        embarcadero = self._ambient("Ferry Building, Bay Bridge views, the waterfront promenade")
+        embarcadero = self._ambient(
+            "Ferry Building, Bay Bridge views, the waterfront promenade"
+        )
         c = next(i for i in chinatown if i["kind"] == "place_character")
         e = next(i for i in embarcadero if i["kind"] == "place_character")
         assert c["label"] != e["label"]
@@ -325,7 +367,9 @@ class TestPluralSalience:
 
 
 class TestRosterDirectoryEndpoint:
-    def test_roster_directory_reads_recent_sessions_without_digest_state_manager(self, client, db_session, monkeypatch):
+    def test_roster_directory_reads_recent_sessions_without_digest_state_manager(
+        self, client, db_session, monkeypatch
+    ):
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         db_session.add_all(
             [
@@ -344,7 +388,9 @@ class TestRosterDirectoryEndpoint:
         db_session.commit()
 
         def _fail(*args, **kwargs):
-            raise AssertionError("get_state_manager should not be used by roster directory endpoint")
+            raise AssertionError(
+                "get_state_manager should not be used by roster directory endpoint"
+            )
 
         monkeypatch.setattr("src.services.session_service.get_state_manager", _fail)
 
@@ -353,13 +399,18 @@ class TestRosterDirectoryEndpoint:
         payload = response.json()
         assert payload["count"] == 2
 
-        roster = {(entry["recipient_type"], entry["recipient_key"]): entry for entry in payload["roster"]}
+        roster = {
+            (entry["recipient_type"], entry["recipient_key"]): entry
+            for entry in payload["roster"]
+        }
         assert ("agent", "test_resident") in roster
         assert roster[("agent", "test_resident")]["display_name"] == "Test Resident"
         assert ("player", "ww-levi") in roster
         assert roster[("player", "ww-levi")]["display_name"] == "Levi"
 
-    def test_scene_graph_aliases_disconnected_place_name_to_connected_anchor(self, client, db_session, monkeypatch):
+    def test_scene_graph_aliases_disconnected_place_name_to_connected_anchor(
+        self, client, db_session, monkeypatch
+    ):
         from src.services import world_memory as world_memory_module
         from src.services.world_memory import seed_location_graph
 
@@ -428,7 +479,9 @@ class TestRosterDirectoryEndpoint:
         payload = response.json()
         nodes = payload["location_graph"]["nodes"]
         edges = payload["location_graph"]["edges"]
-        anchor_node = next(node for node in nodes if node["name"] == "Anchor Neighborhood")
+        anchor_node = next(
+            node for node in nodes if node["name"] == "Anchor Neighborhood"
+        )
         quiet_node = next(node for node in nodes if node["name"] == "Quiet Park")
 
         assert anchor_node["key"].startswith("location:")
@@ -436,7 +489,9 @@ class TestRosterDirectoryEndpoint:
         assert {"from": quiet_node["key"], "to": anchor_node["key"]} in edges
         assert {"from": anchor_node["key"], "to": quiet_node["key"]} in edges
 
-    def test_new_events_reads_location_from_session_vars_without_state_manager(self, client, db_session, monkeypatch):
+    def test_new_events_reads_location_from_session_vars_without_state_manager(
+        self, client, db_session, monkeypatch
+    ):
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         db_session.add(
             SessionVars(
@@ -466,7 +521,9 @@ class TestRosterDirectoryEndpoint:
         db_session.commit()
 
         def _fail(*args, **kwargs):
-            raise AssertionError("get_state_manager should not be used by new-events endpoint")
+            raise AssertionError(
+                "get_state_manager should not be used by new-events endpoint"
+            )
 
         monkeypatch.setattr("src.services.session_service.get_state_manager", _fail)
 
@@ -489,7 +546,10 @@ class TestWorldRestMetricsEndpoint:
     def test_private_rest_metrics_are_not_public(self, seeded_client):
         response = seeded_client.get("/api/world/rest-metrics")
         assert response.status_code == 404
-        assert "/api/world/rest-metrics" not in seeded_client.get("/openapi.json").json()["paths"]
+        assert (
+            "/api/world/rest-metrics"
+            not in seeded_client.get("/openapi.json").json()["paths"]
+        )
 
 
 class TestNeighborhoodVitalityEndpoint:
@@ -504,7 +564,10 @@ class TestNeighborhoodVitalityEndpoint:
                 ),
                 SessionVars(
                     session_id="levi-vitality",
-                    vars={"location": "Chinatown", "player_role": "Levi — vitality test"},
+                    vars={
+                        "location": "Chinatown",
+                        "player_role": "Levi — vitality test",
+                    },
                     updated_at=now,
                 ),
                 LocationChat(
@@ -570,7 +633,9 @@ class TestNeighborhoodVitalityEndpoint:
 
 
 class TestWorldMapQueryEndpoint:
-    def test_alderbank_serves_a_small_generated_map_descriptor_and_verified_svg(self, client, monkeypatch):
+    def test_alderbank_serves_a_small_generated_map_descriptor_and_verified_svg(
+        self, client, monkeypatch
+    ):
         from src.config import settings
         from src.services import city_pack_service
 
@@ -588,10 +653,15 @@ class TestWorldMapQueryEndpoint:
         svg_response = client.get("/api/world/map/generated.svg")
         assert svg_response.status_code == 200
         assert svg_response.headers["content-type"].startswith("image/svg+xml")
-        assert svg_response.headers["etag"].strip('"') == descriptor["artifact"]["svg"]["sha256"]
+        assert (
+            svg_response.headers["etag"].strip('"')
+            == descriptor["artifact"]["svg"]["sha256"]
+        )
         assert svg_response.text.startswith('<?xml version="1.0"')
 
-    def test_world_map_query_returns_occupied_landmark_with_parent_edge(self, client, db_session):
+    def test_world_map_query_returns_occupied_landmark_with_parent_edge(
+        self, client, db_session
+    ):
         from src.services.world_memory import seed_location_graph
         from src.services import world_memory as world_memory_module
 
@@ -609,7 +679,12 @@ class TestWorldMapQueryEndpoint:
             ("Chinatown", 37.7941, -122.4078),
         ):
             node = db_session.query(WorldNode).filter(WorldNode.name == name).one()
-            node.metadata_json = {**(node.metadata_json or {}), "lat": lat, "lon": lon, "city_id": "san_francisco"}
+            node.metadata_json = {
+                **(node.metadata_json or {}),
+                "lat": lat,
+                "lon": lon,
+                "city_id": "san_francisco",
+            }
         db_session.add(
             WorldNode(
                 name="Clement Street",
@@ -639,18 +714,26 @@ class TestWorldMapQueryEndpoint:
         )
         db_session.commit()
 
-        response = client.get("/api/world/map/query?north=37.79&south=37.77&east=-122.40&west=-122.49&include_landmarks=true")
+        response = client.get(
+            "/api/world/map/query?north=37.79&south=37.77&east=-122.40&west=-122.49&include_landmarks=true"
+        )
         assert response.status_code == 200
         payload = response.json()
 
-        clement = next(node for node in payload["nodes"] if node["name"] == "Clement Street")
+        clement = next(
+            node for node in payload["nodes"] if node["name"] == "Clement Street"
+        )
         assert clement["present_count"] == 1
         assert clement["present_names"] == []
         assert clement["player_names"] == []
         assert clement["agent_names"] == []
-        parent_edge = next(edge for edge in payload["edges"] if edge["to"] == clement["key"])
+        parent_edge = next(
+            edge for edge in payload["edges"] if edge["to"] == clement["key"]
+        )
         assert parent_edge["kind"] == "contains"
-        parent = next(node for node in payload["nodes"] if node["key"] == parent_edge["from"])
+        parent = next(
+            node for node in payload["nodes"] if node["key"] == parent_edge["from"]
+        )
         assert parent["name"] == "Inner Richmond"
         assert all(edge["kind"] in {"path", "contains"} for edge in payload["edges"])
 
@@ -665,17 +748,23 @@ class TestWorldMapQueryEndpoint:
                 "session_id": "maya_chen-20260317-100000",
             },
         ).json()
-        identified_clement = next(node for node in identified["nodes"] if node["name"] == "Clement Street")
+        identified_clement = next(
+            node for node in identified["nodes"] if node["name"] == "Clement Street"
+        )
         assert identified_clement["present_names"] == ["Maya Chen"]
 
-        local_presence = client.get("/api/world/location/Clement Street/presence").json()
+        local_presence = client.get(
+            "/api/world/location/Clement Street/presence"
+        ).json()
         assert local_presence == {
             "location": "Clement Street",
             "present_count": 1,
             "present_names": ["Maya Chen"],
         }
 
-    def test_world_map_query_dedupes_actor_identity_to_freshest_location(self, client, db_session):
+    def test_world_map_query_dedupes_actor_identity_to_freshest_location(
+        self, client, db_session
+    ):
         from src.services.world_memory import seed_location_graph
         from src.services import world_memory as world_memory_module
 
@@ -693,7 +782,12 @@ class TestWorldMapQueryEndpoint:
             ("Chinatown", 37.7941, -122.4078),
         ):
             node = db_session.query(WorldNode).filter(WorldNode.name == name).one()
-            node.metadata_json = {**(node.metadata_json or {}), "lat": lat, "lon": lon, "city_id": "san_francisco"}
+            node.metadata_json = {
+                **(node.metadata_json or {}),
+                "lat": lat,
+                "lon": lon,
+                "city_id": "san_francisco",
+            }
 
         now = datetime.now(timezone.utc)
         db_session.add_all(
@@ -714,7 +808,9 @@ class TestWorldMapQueryEndpoint:
         )
         db_session.commit()
 
-        response = client.get("/api/world/map/query?north=37.80&south=37.77&east=-122.40&west=-122.49&include_landmarks=true&session_id=maya_chen-20260318-000120")
+        response = client.get(
+            "/api/world/map/query?north=37.80&south=37.77&east=-122.40&west=-122.49&include_landmarks=true&session_id=maya_chen-20260318-000120"
+        )
         assert response.status_code == 200
         payload = response.json()
 
@@ -723,7 +819,9 @@ class TestWorldMapQueryEndpoint:
         assert nodes["Inner Richmond"]["present_count"] == 1
         assert nodes["Chinatown"]["present_count"] == 0
 
-    def test_world_map_query_dedupes_agent_display_name_even_if_actor_ids_diverge(self, client, db_session):
+    def test_world_map_query_dedupes_agent_display_name_even_if_actor_ids_diverge(
+        self, client, db_session
+    ):
         from src.services.world_memory import seed_location_graph
         from src.services import world_memory as world_memory_module
 
@@ -741,7 +839,12 @@ class TestWorldMapQueryEndpoint:
             ("Chinatown", 37.7941, -122.4078),
         ):
             node = db_session.query(WorldNode).filter(WorldNode.name == name).one()
-            node.metadata_json = {**(node.metadata_json or {}), "lat": lat, "lon": lon, "city_id": "san_francisco"}
+            node.metadata_json = {
+                **(node.metadata_json or {}),
+                "lat": lat,
+                "lon": lon,
+                "city_id": "san_francisco",
+            }
 
         now = datetime.now(timezone.utc)
         db_session.add_all(
@@ -762,7 +865,9 @@ class TestWorldMapQueryEndpoint:
         )
         db_session.commit()
 
-        response = client.get("/api/world/map/query?north=37.80&south=37.77&east=-122.40&west=-122.49&include_landmarks=true&session_id=maya_chen-20260318-000120")
+        response = client.get(
+            "/api/world/map/query?north=37.80&south=37.77&east=-122.40&west=-122.49&include_landmarks=true&session_id=maya_chen-20260318-000120"
+        )
         assert response.status_code == 200
         payload = response.json()
 
@@ -771,7 +876,9 @@ class TestWorldMapQueryEndpoint:
         assert nodes["Inner Richmond"]["present_count"] == 1
         assert nodes["Chinatown"]["present_count"] == 0
 
-    def test_world_map_query_search_prefers_corridor_match_without_flooding_view(self, client, db_session):
+    def test_world_map_query_search_prefers_corridor_match_without_flooding_view(
+        self, client, db_session
+    ):
         from src.services.world_memory import seed_location_graph
         from src.services import world_memory as world_memory_module
 
@@ -789,7 +896,12 @@ class TestWorldMapQueryEndpoint:
             ("Chinatown", 37.7941, -122.4078),
         ):
             node = db_session.query(WorldNode).filter(WorldNode.name == name).one()
-            node.metadata_json = {**(node.metadata_json or {}), "lat": lat, "lon": lon, "city_id": "san_francisco"}
+            node.metadata_json = {
+                **(node.metadata_json or {}),
+                "lat": lat,
+                "lon": lon,
+                "city_id": "san_francisco",
+            }
 
         db_session.add_all(
             [
@@ -841,7 +953,9 @@ class TestWorldMapQueryEndpoint:
         )
         db_session.commit()
 
-        response = client.get("/api/world/map/query?north=37.80&south=37.77&east=-122.40&west=-122.49&include_landmarks=true&query=Clement%20Street")
+        response = client.get(
+            "/api/world/map/query?north=37.80&south=37.77&east=-122.40&west=-122.49&include_landmarks=true&query=Clement%20Street"
+        )
         assert response.status_code == 200
         payload = response.json()
 
@@ -853,7 +967,9 @@ class TestWorldMapQueryEndpoint:
         assert "Dragon Gate" not in names
         assert len(payload["nodes"]) < 8
 
-    def test_world_map_query_exact_location_search_prefers_route_context_over_description_matches(self, client, db_session):
+    def test_world_map_query_exact_location_search_prefers_route_context_over_description_matches(
+        self, client, db_session
+    ):
         from src.services import world_memory as world_memory_module
 
         world_memory_module._LOCATION_GRAPH_CACHE.clear()
@@ -875,7 +991,10 @@ class TestWorldMapQueryEndpoint:
                     name="Alamo Square",
                     normalized_name="alamo square",
                     node_type="location",
-                    metadata_json={"description": "Between Western Addition and Hayes Valley", "city_id": "san_francisco"},
+                    metadata_json={
+                        "description": "Between Western Addition and Hayes Valley",
+                        "city_id": "san_francisco",
+                    },
                 ),
             ]
         )
@@ -893,7 +1012,9 @@ class TestWorldMapQueryEndpoint:
         )
         db_session.commit()
 
-        response = client.get("/api/world/map/query?north=37.90&south=37.60&east=-122.30&west=-122.60&session_id=levi-test&include_landmarks=true&query=Western%20Addition")
+        response = client.get(
+            "/api/world/map/query?north=37.90&south=37.60&east=-122.30&west=-122.60&session_id=levi-test&include_landmarks=true&query=Western%20Addition"
+        )
         assert response.status_code == 200
         payload = response.json()
         names = {node["name"] for node in payload["nodes"]}
@@ -904,7 +1025,9 @@ class TestWorldMapQueryEndpoint:
 
 
 class TestWorldEventLedgerEndpoints:
-    def test_map_move_records_structured_facts_and_public_projection(self, client, db_session):
+    def test_map_move_records_structured_facts_and_public_projection(
+        self, client, db_session
+    ):
         from src.services.world_memory import seed_location_graph
 
         seed_location_graph(
@@ -929,11 +1052,21 @@ class TestWorldEventLedgerEndpoints:
         assert move_response.status_code == 200
         assert move_response.json()["moved"] is True
 
-        movement_event = db_session.query(WorldEvent).filter(WorldEvent.session_id == "mover", WorldEvent.event_type == "movement").order_by(WorldEvent.id.desc()).first()
+        movement_event = (
+            db_session.query(WorldEvent)
+            .filter(
+                WorldEvent.session_id == "mover", WorldEvent.event_type == "movement"
+            )
+            .order_by(WorldEvent.id.desc())
+            .first()
+        )
         assert movement_event is not None
         assert movement_event.world_state_delta["origin"] == "Tea House"
         assert movement_event.world_state_delta["destination"] == "Market Street"
-        assert movement_event.world_state_delta["__world_facts__"]["facts"][0]["predicate"] == "location"
+        assert (
+            movement_event.world_state_delta["__world_facts__"]["facts"][0]["predicate"]
+            == "location"
+        )
 
         location_fact = (
             db_session.query(WorldFact)
@@ -948,11 +1081,21 @@ class TestWorldEventLedgerEndpoints:
         assert location_fact is not None
         assert location_fact.value == "Market Street"
 
-        destination_projection = db_session.query(WorldProjection).filter(WorldProjection.path == "locations.market_street.last_arrival_actor").one_or_none()
+        destination_projection = (
+            db_session.query(WorldProjection)
+            .filter(
+                WorldProjection.path == "locations.market_street.last_arrival_actor"
+            )
+            .one_or_none()
+        )
         assert destination_projection is not None
         assert destination_projection.value == "Levi"
 
-        departure_projection = db_session.query(WorldProjection).filter(WorldProjection.path == "locations.tea_house.last_departure_to").one_or_none()
+        departure_projection = (
+            db_session.query(WorldProjection)
+            .filter(WorldProjection.path == "locations.tea_house.last_departure_to")
+            .one_or_none()
+        )
         assert departure_projection is not None
         assert departure_projection.value == "Market Street"
 
@@ -1043,7 +1186,9 @@ class TestWorldEventLedgerEndpoints:
         assert entered.json()["to_location"] == "the duplex near Western Addition park"
 
         # The durable neighborhood graph stays untouched.
-        assert "the duplex near Western Addition park" not in {node["name"] for node in get_location_graph(db_session)["nodes"]}
+        assert "the duplex near Western Addition park" not in {
+            node["name"] for node in get_location_graph(db_session)["nodes"]
+        }
 
         scene = client.get("/api/world/scene/resident-one").json()
         scene_names = {node["name"] for node in scene["location_graph"]["nodes"]}
@@ -1101,7 +1246,9 @@ class TestWorldEventLedgerEndpoints:
         )
         assert rejected.status_code == 422
 
-    def test_map_move_can_leave_disconnected_duplicate_place_via_anchor(self, client, db_session, monkeypatch):
+    def test_map_move_can_leave_disconnected_duplicate_place_via_anchor(
+        self, client, db_session, monkeypatch
+    ):
         from src.services import world_memory as world_memory_module
         from src.services.world_memory import seed_location_graph
 
@@ -1178,7 +1325,9 @@ class TestWorldEventLedgerEndpoints:
         assert payload["to_location"] == "Elsewhere"
         assert payload["route"] == ["Quiet Park", "Elsewhere"]
 
-    def test_location_chat_records_low_noise_utterance_fact_and_public_projection(self, client, db_session):
+    def test_location_chat_records_low_noise_utterance_fact_and_public_projection(
+        self, client, db_session
+    ):
         db_session.add(
             SessionVars(
                 session_id="speaker-session",
@@ -1198,7 +1347,9 @@ class TestWorldEventLedgerEndpoints:
         assert response.status_code == 200
 
         # Identified readers still get speaker ids (agents filter their own utterances by these).
-        chat = client.get("/api/world/location/Cafe/chat", params={"session_id": "speaker-session"}).json()["messages"][-1]
+        chat = client.get(
+            "/api/world/location/Cafe/chat", params={"session_id": "speaker-session"}
+        ).json()["messages"][-1]
         assert chat["actor_id"] == "actor-speaker"
         assert chat["session_id"] == "speaker-session"
 
@@ -1210,27 +1361,52 @@ class TestWorldEventLedgerEndpoints:
         assert "actor_id" not in public_chat
 
         # A made-up query parameter is still a public read, not an identity claim.
-        untrusted_chat = client.get("/api/world/location/Cafe/chat", params={"session_id": "not-a-real-session"}).json()["messages"][-1]
+        untrusted_chat = client.get(
+            "/api/world/location/Cafe/chat", params={"session_id": "not-a-real-session"}
+        ).json()["messages"][-1]
         assert "session_id" not in untrusted_chat
         assert "actor_id" not in untrusted_chat
 
         remote_post = client.post(
             "/api/world/location/Elsewhere/chat",
-            json={"session_id": "speaker-session", "display_name": "Levi", "message": "Remote words."},
+            json={
+                "session_id": "speaker-session",
+                "display_name": "Levi",
+                "message": "Remote words.",
+            },
         )
         assert remote_post.status_code == 409
-        assert remote_post.json()["detail"] == "You can only speak where you are standing."
+        assert (
+            remote_post.json()["detail"] == "You can only speak where you are standing."
+        )
 
         missing_session_post = client.post(
             "/api/world/location/Cafe/chat",
-            json={"session_id": "missing-session", "display_name": "Levi", "message": "Ghost words."},
+            json={
+                "session_id": "missing-session",
+                "display_name": "Levi",
+                "message": "Ghost words.",
+            },
         )
         assert missing_session_post.status_code == 404
 
-        utterance_event = db_session.query(WorldEvent).filter(WorldEvent.session_id == "speaker-session", WorldEvent.event_type == "utterance").order_by(WorldEvent.id.desc()).first()
+        utterance_event = (
+            db_session.query(WorldEvent)
+            .filter(
+                WorldEvent.session_id == "speaker-session",
+                WorldEvent.event_type == "utterance",
+            )
+            .order_by(WorldEvent.id.desc())
+            .first()
+        )
         assert utterance_event is not None
         assert utterance_event.summary == "Levi said: Hello from the counter."
-        assert utterance_event.world_state_delta["__world_facts__"]["facts"][0]["predicate"] == "spoke_at"
+        assert (
+            utterance_event.world_state_delta["__world_facts__"]["facts"][0][
+                "predicate"
+            ]
+            == "spoke_at"
+        )
 
         utterance_fact = (
             db_session.query(WorldFact)
@@ -1245,25 +1421,45 @@ class TestWorldEventLedgerEndpoints:
         assert utterance_fact is not None
         assert utterance_fact.value == "Cafe"
 
-        utterance_projection = db_session.query(WorldProjection).filter(WorldProjection.path == "locations.cafe.last_public_utterance").one_or_none()
+        utterance_projection = (
+            db_session.query(WorldProjection)
+            .filter(WorldProjection.path == "locations.cafe.last_public_utterance")
+            .one_or_none()
+        )
         assert utterance_projection is not None
         assert utterance_projection.value == "Hello from the counter."
 
-        speaker_projection = db_session.query(WorldProjection).filter(WorldProjection.path == "locations.cafe.last_public_speaker").one_or_none()
+        speaker_projection = (
+            db_session.query(WorldProjection)
+            .filter(WorldProjection.path == "locations.cafe.last_public_speaker")
+            .one_or_none()
+        )
         assert speaker_projection is not None
         assert speaker_projection.value == "Levi"
 
         # The author stays identifiable to another authenticated resident after
         # the author goes home and their temporary city session is retired.
-        db_session.add(SessionVars(session_id="reader-session", actor_id="actor-reader", vars={"location": "Cafe"}))
+        db_session.add(
+            SessionVars(
+                session_id="reader-session",
+                actor_id="actor-reader",
+                vars={"location": "Cafe"},
+            )
+        )
         db_session.commit()
-        leave = client.post("/api/session/leave", json={"session_id": "speaker-session"})
+        leave = client.post(
+            "/api/session/leave", json={"session_id": "speaker-session"}
+        )
         assert leave.status_code == 200
-        retired_chat = client.get("/api/world/location/Cafe/chat", params={"session_id": "reader-session"}).json()["messages"][-1]
+        retired_chat = client.get(
+            "/api/world/location/Cafe/chat", params={"session_id": "reader-session"}
+        ).json()["messages"][-1]
         assert retired_chat["actor_id"] == "actor-speaker"
         assert retired_chat["session_id"] == "speaker-session"
 
-    def test_player_dm_stays_private_and_does_not_touch_public_ledger(self, client, db_session):
+    def test_player_dm_stays_private_and_does_not_touch_public_ledger(
+        self, client, db_session
+    ):
         response = client.post(
             "/api/world/dm",
             json={
@@ -1285,7 +1481,9 @@ class TestWorldEventLedgerEndpoints:
         assert db_session.query(WorldFact).count() == 0
         assert db_session.query(WorldProjection).count() == 0
 
-    def test_agent_dm_reply_stays_private_and_does_not_touch_public_ledger(self, client, db_session):
+    def test_agent_dm_reply_stays_private_and_does_not_touch_public_ledger(
+        self, client, db_session
+    ):
         response = client.post(
             "/api/world/dm/reply",
             json={
@@ -1305,7 +1503,9 @@ class TestWorldEventLedgerEndpoints:
         assert db_session.query(WorldFact).count() == 0
         assert db_session.query(WorldProjection).count() == 0
 
-    def test_player_dm_threads_include_sent_and_received_messages(self, client, db_session):
+    def test_player_dm_threads_include_sent_and_received_messages(
+        self, client, db_session
+    ):
         db_session.add_all(
             [
                 DirectMessage(
@@ -1364,7 +1564,9 @@ class TestWorldEventLedgerEndpoints:
         assert dm.from_name == "Levi"
         assert dm.from_session_id == "ww-private-player"
 
-    def test_player_dm_threads_label_human_counterpart_from_session_vars(self, client, db_session):
+    def test_player_dm_threads_label_human_counterpart_from_session_vars(
+        self, client, db_session
+    ):
         db_session.add(
             SessionVars(
                 session_id="ww-friend",
@@ -1387,7 +1589,9 @@ class TestWorldEventLedgerEndpoints:
         assert payload["count"] == 1
         assert payload["threads"][0]["counterpart"] == "Darnell"
 
-    def test_player_dm_thread_mark_read_marks_matching_inbound_messages(self, client, db_session):
+    def test_player_dm_thread_mark_read_marks_matching_inbound_messages(
+        self, client, db_session
+    ):
         inbound_one = DirectMessage(
             from_name="Test Resident",
             from_session_id=None,
@@ -1409,7 +1613,9 @@ class TestWorldEventLedgerEndpoints:
         db_session.add_all([inbound_one, inbound_two, other])
         db_session.commit()
 
-        response = client.post("/api/world/dm/my-threads/ww-private-player/read/test_resident")
+        response = client.post(
+            "/api/world/dm/my-threads/ww-private-player/read/test_resident"
+        )
         assert response.status_code == 200
         payload = response.json()
         assert payload["marked_read"] == 2
@@ -1422,8 +1628,12 @@ class TestWorldEventLedgerEndpoints:
 
 class TestPublicMapContext:
     def test_sessionless_context_alias_matches_session_path(self, client):
-        aliased = client.get("/api/world/map/context", params={"location": "Clement Street"})
-        legacy = client.get("/api/world/map/any-session/context", params={"location": "Clement Street"})
+        aliased = client.get(
+            "/api/world/map/context", params={"location": "Clement Street"}
+        )
+        legacy = client.get(
+            "/api/world/map/any-session/context", params={"location": "Clement Street"}
+        )
         assert aliased.status_code == 200
         assert legacy.status_code == 200
         assert aliased.json() == legacy.json()

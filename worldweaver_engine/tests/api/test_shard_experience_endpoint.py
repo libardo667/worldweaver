@@ -22,8 +22,15 @@ def test_public_experience_endpoint_discloses_ordinary_shard(client, monkeypatch
     assert payload["entry_disclosure"]["capabilities"] == []
 
 
-def test_public_experience_endpoint_discloses_configured_game_rules(client, monkeypatch):
-    example = Path(__file__).resolve().parents[2] / "data" / "rulesets" / "private_constructive_game.v1.example.json"
+def test_public_experience_endpoint_discloses_configured_game_rules(
+    client, monkeypatch
+):
+    example = (
+        Path(__file__).resolve().parents[2]
+        / "data"
+        / "rulesets"
+        / "private_constructive_game.v1.example.json"
+    )
     monkeypatch.setattr(settings, "shard_experience_path", str(example))
     monkeypatch.setattr(settings, "shard_id", "private-game-town")
     monkeypatch.setattr(settings, "shard_type", "city")
@@ -52,7 +59,9 @@ def test_public_experience_endpoint_has_no_private_runtime_fields(client, monkey
         assert private_name not in serialized
 
 
-def test_public_alderbank_preview_is_schematic_and_available_before_seed(client, monkeypatch):
+def test_public_alderbank_preview_is_schematic_and_available_before_seed(
+    client, monkeypatch
+):
     monkeypatch.setattr(settings, "city_id", "alderbank")
     city_pack_service._PACK_CACHE.pop("alderbank", None)
 
@@ -80,8 +89,15 @@ def test_public_alderbank_preview_is_schematic_and_available_before_seed(client,
     ]
 
 
-def test_alderbank_entry_uses_pack_and_rule_disclosure_not_generated_scenario_cards(client, monkeypatch):
-    example = Path(__file__).resolve().parents[2] / "data" / "rulesets" / "private_constructive_game.v1.example.json"
+def test_alderbank_entry_uses_pack_and_rule_disclosure_not_generated_scenario_cards(
+    client, monkeypatch
+):
+    example = (
+        Path(__file__).resolve().parents[2]
+        / "data"
+        / "rulesets"
+        / "private_constructive_game.v1.example.json"
+    )
     monkeypatch.setattr(settings, "shard_experience_path", str(example))
     monkeypatch.setattr(settings, "city_id", "alderbank")
     city_pack_service._PACK_CACHE.pop("alderbank", None)
@@ -93,12 +109,16 @@ def test_alderbank_entry_uses_pack_and_rule_disclosure_not_generated_scenario_ca
     assert payload["cards"] == []
     assert payload["fictional"] is True
     assert payload["map_style"] == "schematic"
-    assert payload["snapshot"].startswith("Alderbank. This is an explicitly game-shaped WorldWeaver shard.")
+    assert payload["snapshot"].startswith(
+        "Alderbank. This is an explicitly game-shaped WorldWeaver shard."
+    )
     assert "machinery" not in payload["snapshot"].lower()
     assert "engineer" not in str(payload).lower()
 
 
-def test_alderbank_grounding_uses_authored_conditions_not_san_francisco_weather(client, monkeypatch):
+def test_alderbank_grounding_uses_authored_conditions_not_san_francisco_weather(
+    client, monkeypatch
+):
     monkeypatch.setattr(settings, "city_id", "alderbank")
     city_pack_service._PACK_CACHE.pop("alderbank", None)
 
@@ -109,7 +129,10 @@ def test_alderbank_grounding_uses_authored_conditions_not_san_francisco_weather(
     assert payload["city"] == "Alderbank"
     assert payload["fictional"] is True
     assert payload["temperature_f"] is None
-    assert payload["weather_description"] == "Cool river air, broken cloud, and changeable mountain weather"
+    assert (
+        payload["weather_description"]
+        == "Cool river air, broken cloud, and changeable mountain weather"
+    )
 
 
 def test_non_sf_shard_does_not_import_san_francisco_headlines(client, monkeypatch):

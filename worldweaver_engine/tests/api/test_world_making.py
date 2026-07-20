@@ -8,7 +8,12 @@ from src.models import DurableObject, MaterialPool, SessionVars
 
 @pytest.fixture()
 def game_rules(monkeypatch):
-    example = Path(__file__).resolve().parents[2] / "data" / "rulesets" / "private_constructive_game.v1.example.json"
+    example = (
+        Path(__file__).resolve().parents[2]
+        / "data"
+        / "rulesets"
+        / "private_constructive_game.v1.example.json"
+    )
     monkeypatch.setattr(settings, "shard_experience_path", str(example))
     monkeypatch.setattr(settings, "shard_id", "test-game-shard")
 
@@ -24,7 +29,9 @@ def _session(db, location: str = "Alderbank Workshop") -> None:
     db.commit()
 
 
-def test_making_routes_are_local_structured_and_retry_safe(client, db_session, game_rules):
+def test_making_routes_are_local_structured_and_retry_safe(
+    client, db_session, game_rules
+):
     _session(db_session)
 
     catalog = client.get("/api/world/making", params={"session_id": "maker-session"})
@@ -46,7 +53,13 @@ def test_making_routes_are_local_structured_and_retry_safe(client, db_session, g
     assert retry.json()["replayed"] is True
     assert retry.json()["object"]["object_id"] == made.json()["object"]["object_id"]
     assert db_session.query(DurableObject).count() == 1
-    assert db_session.query(MaterialPool).filter(MaterialPool.material_id == "reclaimed_clay").one().available_units == 6
+    assert (
+        db_session.query(MaterialPool)
+        .filter(MaterialPool.material_id == "reclaimed_clay")
+        .one()
+        .available_units
+        == 6
+    )
 
 
 def test_making_route_rejects_recipe_at_wrong_location(client, db_session, game_rules):
@@ -77,9 +90,16 @@ def test_ordinary_shard_making_route_fails_closed(client, db_session, monkeypatc
     assert db_session.query(MaterialPool).count() == 0
 
 
-def test_development_reset_clears_game_materials_and_objects(client, db_session, game_rules):
+def test_development_reset_clears_game_materials_and_objects(
+    client, db_session, game_rules
+):
     _session(db_session)
-    assert client.get("/api/world/making", params={"session_id": "maker-session"}).status_code == 200
+    assert (
+        client.get(
+            "/api/world/making", params={"session_id": "maker-session"}
+        ).status_code
+        == 200
+    )
     assert (
         client.post(
             "/api/world/make",

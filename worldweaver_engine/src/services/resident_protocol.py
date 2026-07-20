@@ -115,7 +115,9 @@ def _certificate_unsigned_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
 def _clean_scopes(scopes: Iterable[str]) -> tuple[str, ...]:
     normalized = tuple(sorted(set(str(scope or "").strip() for scope in scopes)))
     if not normalized or len(normalized) > 32:
-        raise ResidentProtocolError("Certificate must contain between one and 32 scopes.")
+        raise ResidentProtocolError(
+            "Certificate must contain between one and 32 scopes."
+        )
     if any(not _SCOPE_RE.fullmatch(scope) for scope in normalized):
         raise ResidentProtocolError("Certificate contains an invalid scope.")
     return normalized
@@ -149,45 +151,84 @@ class ResidentIdentityDescriptor:
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> "ResidentIdentityDescriptor":
         if not isinstance(raw, Mapping) or set(raw) != _RESIDENT_IDENTITY_FIELDS:
-            raise ResidentProtocolError("Resident identity fields do not match version 1.")
-        if raw.get("schema") != RESIDENT_IDENTITY_SCHEMA or type(raw.get("schema_version")) is not int or raw.get("schema_version") != RESIDENT_IDENTITY_VERSION:
+            raise ResidentProtocolError(
+                "Resident identity fields do not match version 1."
+            )
+        if (
+            raw.get("schema") != RESIDENT_IDENTITY_SCHEMA
+            or type(raw.get("schema_version")) is not int
+            or raw.get("schema_version") != RESIDENT_IDENTITY_VERSION
+        ):
             raise ResidentProtocolError("Resident identity schema is unsupported.")
         actor_id = str(raw.get("actor_id") or "").strip()
         hearth_shard_id = str(raw.get("hearth_shard_id") or "").strip()
-        if not isinstance(raw.get("actor_id"), str) or raw.get("actor_id") != actor_id or not _TOKEN_RE.fullmatch(actor_id) or len(actor_id) > 36:
+        if (
+            not isinstance(raw.get("actor_id"), str)
+            or raw.get("actor_id") != actor_id
+            or not _TOKEN_RE.fullmatch(actor_id)
+            or len(actor_id) > 36
+        ):
             raise ResidentProtocolError("Resident identity actor ID is invalid.")
-        if not isinstance(raw.get("hearth_shard_id"), str) or raw.get("hearth_shard_id") != hearth_shard_id or not _TOKEN_RE.fullmatch(hearth_shard_id) or len(hearth_shard_id) > 80:
+        if (
+            not isinstance(raw.get("hearth_shard_id"), str)
+            or raw.get("hearth_shard_id") != hearth_shard_id
+            or not _TOKEN_RE.fullmatch(hearth_shard_id)
+            or len(hearth_shard_id) > 80
+        ):
             raise ResidentProtocolError("Resident identity hearth shard ID is invalid.")
         if hearth_shard_id != f"hearth:{actor_id}":
-            raise ResidentProtocolError("Resident identity hearth shard ID does not match the actor ID.")
+            raise ResidentProtocolError(
+                "Resident identity hearth shard ID does not match the actor ID."
+            )
         public_key = str(raw.get("identity_public_key") or "").strip()
-        if not isinstance(raw.get("identity_public_key"), str) or raw.get("identity_public_key") != public_key:
+        if (
+            not isinstance(raw.get("identity_public_key"), str)
+            or raw.get("identity_public_key") != public_key
+        ):
             raise ResidentProtocolError("Resident identity public key is invalid.")
         public_key_bytes = _decode(public_key)
         if len(public_key_bytes) != 32:
             raise ResidentProtocolError("Resident identity public key is invalid.")
         key_id = str(raw.get("identity_key_id") or "").strip()
-        if not isinstance(raw.get("identity_key_id"), str) or raw.get("identity_key_id") != key_id:
+        if (
+            not isinstance(raw.get("identity_key_id"), str)
+            or raw.get("identity_key_id") != key_id
+        ):
             raise ResidentProtocolError("Resident identity key ID is invalid.")
         if key_id != identity_key_id(public_key):
             raise ResidentProtocolError("Resident identity key ID does not match.")
         policy_version = raw.get("recovery_policy_version")
-        if isinstance(policy_version, bool) or not isinstance(policy_version, int) or policy_version < 1 or policy_version > (2**31) - 1:
-            raise ResidentProtocolError("Resident identity recovery policy version is invalid.")
+        if (
+            isinstance(policy_version, bool)
+            or not isinstance(policy_version, int)
+            or policy_version < 1
+            or policy_version > (2**31) - 1
+        ):
+            raise ResidentProtocolError(
+                "Resident identity recovery policy version is invalid."
+            )
         signature = str(raw.get("identity_signature") or "").strip()
-        if not isinstance(raw.get("identity_signature"), str) or raw.get("identity_signature") != signature:
+        if (
+            not isinstance(raw.get("identity_signature"), str)
+            or raw.get("identity_signature") != signature
+        ):
             raise ResidentProtocolError("Resident identity signature is invalid.")
         signature_bytes = _decode(signature)
         if len(signature_bytes) != 64:
             raise ResidentProtocolError("Resident identity signature is invalid.")
-        unsigned = {key: raw[key] for key in sorted(_RESIDENT_IDENTITY_FIELDS - {"identity_signature"})}
+        unsigned = {
+            key: raw[key]
+            for key in sorted(_RESIDENT_IDENTITY_FIELDS - {"identity_signature"})
+        }
         try:
             Ed25519PublicKey.from_public_bytes(public_key_bytes).verify(
                 signature_bytes,
                 _canonical_json(unsigned),
             )
         except (InvalidSignature, ValueError) as exc:
-            raise ResidentProtocolError("Resident identity signature is invalid.") from exc
+            raise ResidentProtocolError(
+                "Resident identity signature is invalid."
+            ) from exc
         return cls(
             actor_id=actor_id,
             hearth_shard_id=hearth_shard_id,
@@ -241,8 +282,13 @@ class ResidentRuntimeCertificate:
         unknown = set(raw) - _CERTIFICATE_FIELDS
         missing = _CERTIFICATE_FIELDS - set(raw)
         if unknown or missing:
-            raise ResidentProtocolError("Resident certificate fields do not match version 1.")
-        if raw.get("schema") != CERTIFICATE_SCHEMA or raw.get("schema_version") != CERTIFICATE_VERSION:
+            raise ResidentProtocolError(
+                "Resident certificate fields do not match version 1."
+            )
+        if (
+            raw.get("schema") != CERTIFICATE_SCHEMA
+            or raw.get("schema_version") != CERTIFICATE_VERSION
+        ):
             raise ResidentProtocolError("Resident certificate schema is unsupported.")
 
         certificate_id = str(raw.get("certificate_id") or "").strip()
@@ -267,25 +313,37 @@ class ResidentRuntimeCertificate:
         except ResidentProtocolError:
             raise
         if len(runtime_bytes) != 32 or len(signature_bytes) != 64:
-            raise ResidentProtocolError("Resident certificate key or signature is invalid.")
+            raise ResidentProtocolError(
+                "Resident certificate key or signature is invalid."
+            )
 
         generation = raw.get("runtime_generation")
         issued_at = raw.get("issued_at")
         expires_at = raw.get("expires_at")
-        if isinstance(generation, bool) or not isinstance(generation, int) or generation < 1 or generation > MAX_RUNTIME_GENERATION:
+        if (
+            isinstance(generation, bool)
+            or not isinstance(generation, int)
+            or generation < 1
+            or generation > MAX_RUNTIME_GENERATION
+        ):
             raise ResidentProtocolError("Resident certificate generation is invalid.")
         if isinstance(issued_at, bool) or not isinstance(issued_at, int):
             raise ResidentProtocolError("Resident certificate issued_at is invalid.")
         if isinstance(expires_at, bool) or not isinstance(expires_at, int):
             raise ResidentProtocolError("Resident certificate expires_at is invalid.")
-        if expires_at <= issued_at or expires_at - issued_at > MAX_CERTIFICATE_LIFETIME_SECONDS:
+        if (
+            expires_at <= issued_at
+            or expires_at - issued_at > MAX_CERTIFICATE_LIFETIME_SECONDS
+        ):
             raise ResidentProtocolError("Resident certificate lifetime is invalid.")
         scopes_raw = raw.get("scopes")
         if not isinstance(scopes_raw, list):
             raise ResidentProtocolError("Resident certificate scopes must be a list.")
         scopes = _clean_scopes(scopes_raw)
         if list(scopes_raw) != list(scopes):
-            raise ResidentProtocolError("Resident certificate scopes must be sorted and unique.")
+            raise ResidentProtocolError(
+                "Resident certificate scopes must be sorted and unique."
+            )
         return cls(
             certificate_id=certificate_id,
             actor_id=actor_id,
@@ -305,7 +363,9 @@ class ResidentRuntimeCertificate:
         try:
             raw = json.loads(_decode(value))
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-            raise ResidentProtocolError("Resident certificate header is invalid.") from exc
+            raise ResidentProtocolError(
+                "Resident certificate header is invalid."
+            ) from exc
         return cls.from_dict(raw)
 
 
@@ -342,7 +402,9 @@ def issue_runtime_certificate(
         "expires_at": expiry,
     }
     signature = _encode(identity_private_key.sign(_canonical_json(unsigned)))
-    return ResidentRuntimeCertificate.from_dict({**unsigned, "identity_signature": signature})
+    return ResidentRuntimeCertificate.from_dict(
+        {**unsigned, "identity_signature": signature}
+    )
 
 
 def verify_runtime_certificate(
@@ -379,7 +441,9 @@ def verify_runtime_certificate(
             _canonical_json(_certificate_unsigned_payload(certificate.to_dict())),
         )
     except (ValueError, InvalidSignature) as exc:
-        raise ResidentProtocolError("Resident certificate signature is invalid.") from exc
+        raise ResidentProtocolError(
+            "Resident certificate signature is invalid."
+        ) from exc
 
 
 def _canonical_request(
@@ -483,7 +547,9 @@ def verify_resident_request(
         raise ResidentProtocolError("Resident request timestamp is invalid.") from exc
     current_time = int(time.time()) if now is None else int(now)
     if abs(current_time - signed_at) > max_clock_skew_seconds:
-        raise ResidentProtocolError("Resident request timestamp is outside the allowed window.")
+        raise ResidentProtocolError(
+            "Resident request timestamp is outside the allowed window."
+        )
 
     certificate = ResidentRuntimeCertificate.decode_header(certificate_header)
     verify_runtime_certificate(
@@ -496,10 +562,17 @@ def verify_resident_request(
         now=current_time,
         max_clock_skew_seconds=max_clock_skew_seconds,
     )
-    if signed_at < certificate.issued_at - max_clock_skew_seconds or signed_at > certificate.expires_at:
-        raise ResidentProtocolError("Resident request falls outside its certificate lifetime.")
+    if (
+        signed_at < certificate.issued_at - max_clock_skew_seconds
+        or signed_at > certificate.expires_at
+    ):
+        raise ResidentProtocolError(
+            "Resident request falls outside its certificate lifetime."
+        )
     try:
-        Ed25519PublicKey.from_public_bytes(_decode(certificate.runtime_public_key)).verify(
+        Ed25519PublicKey.from_public_bytes(
+            _decode(certificate.runtime_public_key)
+        ).verify(
             _decode(signature),
             _canonical_request(
                 method=method,

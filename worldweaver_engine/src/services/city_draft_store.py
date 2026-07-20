@@ -44,7 +44,9 @@ class CityDraftStore:
 
     def _draft_path(self, draft_id: str) -> Path:
         if not _DRAFT_ID.fullmatch(draft_id):
-            raise ValueError("draft ID must use lowercase letters, numbers, hyphens, or underscores")
+            raise ValueError(
+                "draft ID must use lowercase letters, numbers, hyphens, or underscores"
+            )
         return self.root / draft_id
 
     def list(self) -> tuple[dict[str, Any], ...]:
@@ -52,7 +54,11 @@ class CityDraftStore:
             return ()
         result: list[dict[str, Any]] = []
         for path in sorted(self.root.iterdir()):
-            if path.is_symlink() or not path.is_dir() or not _DRAFT_ID.fullmatch(path.name):
+            if (
+                path.is_symlink()
+                or not path.is_dir()
+                or not _DRAFT_ID.fullmatch(path.name)
+            ):
                 continue
             metadata_path = path / "draft.json"
             if metadata_path.exists():
@@ -105,8 +111,14 @@ class CityDraftStore:
             raise ValueError(f"city draft metadata is invalid: {draft_id}")
         preview = assemble_city_pack(source, built_at=str(metadata["updated_at"]))
         self._assert_preview_matches(target, preview)
-        expected_artifact_hash = str((preview.files.get("generated_map.json") or {}).get("artifact_sha256", ""))
-        if metadata.get("valid") is not preview.validation.valid or metadata.get("pack_version") != preview.files["manifest.json"]["version"] or metadata.get("artifact_sha256") != expected_artifact_hash:
+        expected_artifact_hash = str(
+            (preview.files.get("generated_map.json") or {}).get("artifact_sha256", "")
+        )
+        if (
+            metadata.get("valid") is not preview.validation.valid
+            or metadata.get("pack_version") != preview.files["manifest.json"]["version"]
+            or metadata.get("artifact_sha256") != expected_artifact_hash
+        ):
             raise ValueError(f"city draft metadata is stale: {draft_id}")
         return CityDraft(
             draft_id=draft_id,
@@ -127,7 +139,10 @@ class CityDraftStore:
         current = self.get(draft_id)
         current_revision = int(current.metadata["draft_revision"])
         if expected_revision is not None and expected_revision != current_revision:
-            raise ValueError(f"city draft changed: expected revision {expected_revision}, " f"found {current_revision}")
+            raise ValueError(
+                f"city draft changed: expected revision {expected_revision}, "
+                f"found {current_revision}"
+            )
         source = edit_section(current.source, section_id=section_id, action=action)
         metadata = {
             **current.metadata,
@@ -148,7 +163,11 @@ class CityDraftStore:
             **metadata,
             "valid": preview.validation.valid,
             "pack_version": str(preview.files["manifest.json"]["version"]),
-            "artifact_sha256": str((preview.files.get("generated_map.json") or {}).get("artifact_sha256", "")),
+            "artifact_sha256": str(
+                (preview.files.get("generated_map.json") or {}).get(
+                    "artifact_sha256", ""
+                )
+            ),
         }
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.root.chmod(0o700)
@@ -161,7 +180,9 @@ class CityDraftStore:
             preview_dir.mkdir(mode=0o700)
             for filename, data in preview.files.items():
                 self._write_json(preview_dir / filename, data)
-            self._write_json(preview_dir / "validation.json", preview.validation.to_dict())
+            self._write_json(
+                preview_dir / "validation.json", preview.validation.to_dict()
+            )
             if preview.generated_map_svg is not None:
                 svg_path = preview_dir / "generated_map.svg"
                 svg_path.write_text(preview.generated_map_svg, encoding="utf-8")
@@ -206,7 +227,9 @@ class CityDraftStore:
 
     @staticmethod
     def _write_json(path: Path, value: Any) -> None:
-        path.write_text(json.dumps(value, indent=2, ensure_ascii=False), encoding="utf-8")
+        path.write_text(
+            json.dumps(value, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
         path.chmod(0o600)
 
     @staticmethod
@@ -218,11 +241,18 @@ class CityDraftStore:
                 raise ValueError(f"city draft preview is missing {filename}")
             saved = json.loads(saved_path.read_text(encoding="utf-8"))
             if saved != expected:
-                raise ValueError(f"city draft preview {filename} no longer matches its source")
+                raise ValueError(
+                    f"city draft preview {filename} no longer matches its source"
+                )
         if preview.generated_map_svg is not None:
             svg_path = preview_dir / "generated_map.svg"
-            if not svg_path.exists() or svg_path.read_text(encoding="utf-8") != preview.generated_map_svg:
-                raise ValueError("city draft preview generated_map.svg no longer matches its source")
+            if (
+                not svg_path.exists()
+                or svg_path.read_text(encoding="utf-8") != preview.generated_map_svg
+            ):
+                raise ValueError(
+                    "city draft preview generated_map.svg no longer matches its source"
+                )
 
 
 def default_city_draft_store() -> CityDraftStore:

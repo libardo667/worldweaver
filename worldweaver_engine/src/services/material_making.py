@@ -44,11 +44,17 @@ def _active_declaration(*capabilities: GameCapability) -> GameShardDeclaration:
     _require_capabilities(*capabilities)
     declaration = configured_game_declaration()
     if declaration is None:
-        raise ConsequenceDomainError("game_rules_unavailable", "No game ruleset is active on this shard.", status_code=403)
+        raise ConsequenceDomainError(
+            "game_rules_unavailable",
+            "No game ruleset is active on this shard.",
+            status_code=403,
+        )
     return declaration
 
 
-def _material_configuration(material: MaterialSourceDeclaration) -> dict[str, int | str]:
+def _material_configuration(
+    material: MaterialSourceDeclaration,
+) -> dict[str, int | str]:
     return {
         "title": material.title,
         "capacity_units": material.capacity_units,
@@ -58,7 +64,9 @@ def _material_configuration(material: MaterialSourceDeclaration) -> dict[str, in
     }
 
 
-def initialize_material_pools(db: Session, *, now: datetime | None = None) -> list[MaterialPool]:
+def initialize_material_pools(
+    db: Session, *, now: datetime | None = None
+) -> list[MaterialPool]:
     """Idempotently found the pools named by the active versioned ruleset."""
 
     declaration = _active_declaration(GameCapability.REPLENISHING_MATERIALS)
@@ -181,13 +189,20 @@ def _recipe_at_location(
     normalized = str(recipe_id or "").strip()
     recipe = next((item for item in declaration.recipes if item.id == normalized), None)
     if recipe is None:
-        raise ConsequenceDomainError("recipe_not_found", "Recipe not found.", status_code=404)
+        raise ConsequenceDomainError(
+            "recipe_not_found", "Recipe not found.", status_code=404
+        )
     if location not in recipe.available_at:
-        raise ConsequenceDomainError("recipe_not_available_here", "That recipe is not available at this exact location.")
+        raise ConsequenceDomainError(
+            "recipe_not_available_here",
+            "That recipe is not available at this exact location.",
+        )
     return recipe
 
 
-def making_catalog(db: Session, *, session_id: str, now: datetime | None = None) -> dict[str, Any]:
+def making_catalog(
+    db: Session, *, session_id: str, now: datetime | None = None
+) -> dict[str, Any]:
     """Return elective local recipes and current effective material availability."""
 
     declaration = _active_declaration(
@@ -201,14 +216,25 @@ def making_catalog(db: Session, *, session_id: str, now: datetime | None = None)
     checked_at = _utc_naive(now)
     material_by_id = {material.id: material for material in declaration.materials}
     pools = _ruleset_pools(db, declaration, location=context.location)
-    materials = [_material_payload(pool, material_by_id[material_id], now=checked_at) for material_id, pool in sorted(pools.items()) if material_id in material_by_id]
-    availability = {item["material_id"]: int(item["available_units"]) for item in materials}
+    materials = [
+        _material_payload(pool, material_by_id[material_id], now=checked_at)
+        for material_id, pool in sorted(pools.items())
+        if material_id in material_by_id
+    ]
+    availability = {
+        item["material_id"]: int(item["available_units"]) for item in materials
+    }
     recipes = []
     for recipe in declaration.recipes:
         if context.location not in recipe.available_at:
             continue
-        missing = {material_id: max(0, units - availability.get(material_id, 0)) for material_id, units in recipe.inputs.items()}
-        missing = {material_id: units for material_id, units in missing.items() if units > 0}
+        missing = {
+            material_id: max(0, units - availability.get(material_id, 0))
+            for material_id, units in recipe.inputs.items()
+        }
+        missing = {
+            material_id: units for material_id, units in missing.items() if units > 0
+        }
         recipes.append(
             {
                 "recipe_id": recipe.id,
@@ -254,7 +280,9 @@ def make_durable_object(
     )
     if existing is not None:
         return _result_from_receipt(existing, replayed=True)
-    recipe = _recipe_at_location(declaration, recipe_id=recipe_id, location=context.location)
+    recipe = _recipe_at_location(
+        declaration, recipe_id=recipe_id, location=context.location
+    )
     initialize_material_pools(db, now=now)
     made_at = _utc_naive(now)
 
@@ -273,7 +301,10 @@ def make_durable_object(
         for material_id, units in recipe.inputs.items():
             pool = pools.get(material_id)
             if pool is None:
-                raise ConsequenceDomainError("material_pool_missing", f"Material pool {material_id} is not initialized here.")
+                raise ConsequenceDomainError(
+                    "material_pool_missing",
+                    f"Material pool {material_id} is not initialized here.",
+                )
             effective, advanced_at = _effective_pool_state(pool, now=made_at)
             if effective < units:
                 raise ConsequenceDomainError(

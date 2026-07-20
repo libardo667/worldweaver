@@ -17,27 +17,39 @@ def _isolate_llm_key_env(monkeypatch):
 
 
 def test_platform_shared_policy_uses_platform_key(monkeypatch):
-    monkeypatch.setattr("src.services.llm_client.settings.openrouter_api_key", "sk-platform")
+    monkeypatch.setattr(
+        "src.services.llm_client.settings.openrouter_api_key", "sk-platform"
+    )
 
-    key, source = _resolve_api_key_for_policy(platform_shared_policy(owner_id="shared-op"))
+    key, source = _resolve_api_key_for_policy(
+        platform_shared_policy(owner_id="shared-op")
+    )
 
     assert key == "sk-platform"
     assert source == "platform"
 
 
 def test_agent_runtime_policy_uses_platform_key(monkeypatch):
-    monkeypatch.setattr("src.services.llm_client.settings.openrouter_api_key", "sk-platform")
+    monkeypatch.setattr(
+        "src.services.llm_client.settings.openrouter_api_key", "sk-platform"
+    )
 
-    key, source = _resolve_api_key_for_policy(agent_runtime_policy(owner_id="resident-123"))
+    key, source = _resolve_api_key_for_policy(
+        agent_runtime_policy(owner_id="resident-123")
+    )
 
     assert key == "sk-platform"
     assert source == "platform"
 
 
 def test_policy_can_explicitly_disable_platform_inference(monkeypatch):
-    monkeypatch.setattr("src.services.llm_client.settings.openrouter_api_key", "sk-platform")
+    monkeypatch.setattr(
+        "src.services.llm_client.settings.openrouter_api_key", "sk-platform"
+    )
 
-    key, source = _resolve_api_key_for_policy(InferencePolicy(owner_type="agent_runtime", allow_platform_fallback=False))
+    key, source = _resolve_api_key_for_policy(
+        InferencePolicy(owner_type="agent_runtime", allow_platform_fallback=False)
+    )
 
     assert key is None
     assert source == "none"

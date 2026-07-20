@@ -48,13 +48,19 @@ def build_welcome_email_payload(to_email: str, display_name: str) -> dict[str, o
     }
 
 
-def build_password_reset_email_payload(to_email: str, display_name: str, reset_token: str) -> dict[str, object]:
+def build_password_reset_email_payload(
+    to_email: str, display_name: str, reset_token: str
+) -> dict[str, object]:
     safe_name = escape(display_name.strip() or "traveler")
     raw_name = display_name.strip() or "traveler"
     # WW_PUBLIC_URL is the shard API. A reset link belongs on the human site
     # when the node advertises one; the API URL remains a compatibility fallback.
-    public_url = str(settings.client_url or settings.public_url or "").strip().rstrip("/")
-    reset_link = f"{public_url}/?reset_token={escape(reset_token)}" if public_url else ""
+    public_url = (
+        str(settings.client_url or settings.public_url or "").strip().rstrip("/")
+    )
+    reset_link = (
+        f"{public_url}/?reset_token={escape(reset_token)}" if public_url else ""
+    )
     text_lines = [
         f"Hello, {raw_name}.",
         "",
@@ -77,8 +83,12 @@ def build_password_reset_email_payload(to_email: str, display_name: str, reset_t
         "<p>This token expires in 30 minutes and can be used once.</p>",
     ]
     if reset_link:
-        html_parts.append(f'<p><a href="{escape(reset_link)}">Reset your password</a></p>')
-    html_parts.append("<p>If you did not request this, you can ignore this message.</p>")
+        html_parts.append(
+            f'<p><a href="{escape(reset_link)}">Reset your password</a></p>'
+        )
+    html_parts.append(
+        "<p>If you did not request this, you can ignore this message.</p>"
+    )
     return {
         "from": settings.resend_from_email,
         "to": [to_email],
@@ -88,9 +98,15 @@ def build_password_reset_email_payload(to_email: str, display_name: str, reset_t
     }
 
 
-def build_email_verification_payload(to_email: str, verification_token: str) -> dict[str, object]:
-    public_url = str(settings.client_url or settings.public_url or "").strip().rstrip("/")
-    verification_link = f"{public_url}/?verify_token={escape(verification_token)}" if public_url else ""
+def build_email_verification_payload(
+    to_email: str, verification_token: str
+) -> dict[str, object]:
+    public_url = (
+        str(settings.client_url or settings.public_url or "").strip().rstrip("/")
+    )
+    verification_link = (
+        f"{public_url}/?verify_token={escape(verification_token)}" if public_url else ""
+    )
     text_lines = [
         "Confirm your WorldWeaver email address.",
         "",
@@ -98,14 +114,18 @@ def build_email_verification_payload(to_email: str, verification_token: str) -> 
         "This token expires in 24 hours and can be used once.",
     ]
     if verification_link:
-        text_lines.extend(["", f"Open this link to verify your email: {verification_link}"])
+        text_lines.extend(
+            ["", f"Open this link to verify your email: {verification_link}"]
+        )
     html_parts = [
         "<p>Confirm your WorldWeaver email address.</p>",
         f"<p><strong>Verification token:</strong> <code>{escape(verification_token)}</code></p>",
         "<p>This token expires in 24 hours and can be used once.</p>",
     ]
     if verification_link:
-        html_parts.append(f'<p><a href="{escape(verification_link)}">Verify your email</a></p>')
+        html_parts.append(
+            f'<p><a href="{escape(verification_link)}">Verify your email</a></p>'
+        )
     return {
         "from": settings.resend_from_email,
         "to": [to_email],
@@ -130,16 +150,22 @@ def send_welcome_email(to_email: str, display_name: str) -> None:
         logger.warning("Failed to send welcome email to %s: %s", to_email, exc)
 
 
-def send_password_reset_email(to_email: str, display_name: str, reset_token: str) -> None:
+def send_password_reset_email(
+    to_email: str, display_name: str, reset_token: str
+) -> None:
     """Send a password reset email. Non-blocking — never raises."""
     if not settings.resend_api_key:
-        logger.debug("RESEND_API_KEY not set — skipping password reset email to %s", to_email)
+        logger.debug(
+            "RESEND_API_KEY not set — skipping password reset email to %s", to_email
+        )
         return
     try:
         import resend  # deferred so missing package doesn't break startup
 
         resend.api_key = settings.resend_api_key
-        resend.Emails.send(build_password_reset_email_payload(to_email, display_name, reset_token))
+        resend.Emails.send(
+            build_password_reset_email_payload(to_email, display_name, reset_token)
+        )
         logger.info("Password reset email sent to %s", to_email)
     except Exception as exc:
         logger.warning("Failed to send password reset email to %s: %s", to_email, exc)
@@ -148,13 +174,18 @@ def send_password_reset_email(to_email: str, display_name: str, reset_token: str
 def send_email_verification(to_email: str, verification_token: str) -> None:
     """Send one verification link. Never log or persist the plain token here."""
     if not settings.resend_api_key:
-        logger.debug("RESEND_API_KEY not set — skipping email verification delivery to %s", to_email)
+        logger.debug(
+            "RESEND_API_KEY not set — skipping email verification delivery to %s",
+            to_email,
+        )
         return
     try:
         import resend
 
         resend.api_key = settings.resend_api_key
-        resend.Emails.send(build_email_verification_payload(to_email, verification_token))
+        resend.Emails.send(
+            build_email_verification_payload(to_email, verification_token)
+        )
         logger.info("Email verification sent to %s", to_email)
     except Exception as exc:
         logger.warning("Failed to send email verification to %s: %s", to_email, exc)

@@ -7,7 +7,10 @@ import pytest
 
 from scripts.build_city_pack import build_pack
 from src.services import city_pack_service
-from src.services.city_pack_validation import require_valid_city_pack, validate_city_pack
+from src.services.city_pack_validation import (
+    require_valid_city_pack,
+    validate_city_pack,
+)
 
 
 def test_published_city_packs_have_valid_local_travel_hubs():
@@ -28,7 +31,9 @@ def test_published_city_packs_have_valid_local_travel_hubs():
 def test_travel_hub_entry_resolves_to_the_map_place_name():
     city_pack_service._PACK_CACHE.pop("portland", None)
 
-    hub = city_pack_service.resolve_travel_hub_entry("portland-union-station", "portland")
+    hub = city_pack_service.resolve_travel_hub_entry(
+        "portland-union-station", "portland"
+    )
 
     assert hub is not None
     assert hub["entry_location"] == "Pearl District"
@@ -37,7 +42,11 @@ def test_travel_hub_entry_resolves_to_the_map_place_name():
 def test_validation_returns_structured_broken_reference_errors():
     report = validate_city_pack(
         {
-            "manifest": {"city_id": "test_city", "schema_version": "1.1.0", "version": "0.1.0"},
+            "manifest": {
+                "city_id": "test_city",
+                "schema_version": "1.1.0",
+                "version": "0.1.0",
+            },
             "neighborhoods": [
                 {
                     "id": "center",
@@ -75,7 +84,10 @@ def test_validation_returns_structured_broken_reference_errors():
     }
     payload = report.to_dict()
     assert payload["valid"] is False
-    assert all(set(issue) == {"level", "code", "path", "message"} for issue in payload["errors"])
+    assert all(
+        set(issue) == {"level", "code", "path", "message"}
+        for issue in payload["errors"]
+    )
 
 
 def test_require_valid_city_pack_raises_with_human_readable_paths():
@@ -99,7 +111,9 @@ def test_offline_builder_uses_the_same_validator_and_writes_travel_hubs(tmp_path
     assert routes[1]["arrival_hub_id"] == "emeryville-sf-transfer"
 
 
-def test_fictional_builder_skips_osm_and_keeps_explicit_small_town_paths(tmp_path, monkeypatch):
+def test_fictional_builder_skips_osm_and_keeps_explicit_small_town_paths(
+    tmp_path, monkeypatch
+):
     engine_root = Path(__file__).resolve().parents[2]
     config = engine_root / "scripts" / "city_configs" / "alderbank.json"
     output = tmp_path / "alderbank"
@@ -111,10 +125,14 @@ def test_fictional_builder_skips_osm_and_keeps_explicit_small_town_paths(tmp_pat
     build_pack(config, output, offline=False)
 
     manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
-    neighborhoods = json.loads((output / "neighborhoods.json").read_text(encoding="utf-8"))
+    neighborhoods = json.loads(
+        (output / "neighborhoods.json").read_text(encoding="utf-8")
+    )
     landmarks = json.loads((output / "landmarks.json").read_text(encoding="utf-8"))
     stoops = json.loads((output / "stoops.json").read_text(encoding="utf-8"))
-    generated_map = json.loads((output / "generated_map.json").read_text(encoding="utf-8"))
+    generated_map = json.loads(
+        (output / "generated_map.json").read_text(encoding="utf-8")
+    )
     generated_svg = (output / "generated_map.svg").read_text(encoding="utf-8")
     by_id = {item["id"]: item for item in neighborhoods}
 
@@ -123,7 +141,9 @@ def test_fictional_builder_skips_osm_and_keeps_explicit_small_town_paths(tmp_pat
     assert manifest["version"] == "0.3.0"
     assert manifest["counts"]["stoops"] == 1
     assert manifest["counts"]["map_sections"] == 12
-    assert manifest["generated_map"]["artifact_sha256"] == generated_map["artifact_sha256"]
+    assert (
+        manifest["generated_map"]["artifact_sha256"] == generated_map["artifact_sha256"]
+    )
     assert generated_map["generator"]["id"] == "worldweaver.field-map"
     assert generated_map["generator"]["version"] == "0.3.0"
     assert len(generated_map["seams"]) == 17
@@ -136,7 +156,11 @@ def test_fictional_builder_skips_osm_and_keeps_explicit_small_town_paths(tmp_pat
     assert generated_map["svg"]["sha256"]
     assert generated_svg.startswith('<?xml version="1.0"')
     assert by_id["mill-reach"]["adjacent_to"] == ["commons-bank"]
-    assert by_id["commons-bank"]["adjacent_to"] == ["mill-reach", "orchard-row", "pineward-edge"]
+    assert by_id["commons-bank"]["adjacent_to"] == [
+        "mill-reach",
+        "orchard-row",
+        "pineward-edge",
+    ]
     assert {item["grounding"] for item in neighborhoods + landmarks} == {"fictional"}
     assert stoops == [
         {
@@ -160,8 +184,13 @@ def test_city_pack_validation_rejects_changed_generated_map_rows(tmp_path):
     output = tmp_path / "alderbank"
     build_pack(config, output, offline=True)
 
-    pack = {path.stem: json.loads(path.read_text(encoding="utf-8")) for path in output.glob("*.json")}
-    pack["generated_map"]["fields"]["elevation"]["rows"][0] = "00" + pack["generated_map"]["fields"]["elevation"]["rows"][0][2:]
+    pack = {
+        path.stem: json.loads(path.read_text(encoding="utf-8"))
+        for path in output.glob("*.json")
+    }
+    pack["generated_map"]["fields"]["elevation"]["rows"][0] = (
+        "00" + pack["generated_map"]["fields"]["elevation"]["rows"][0][2:]
+    )
 
     report = validate_city_pack(pack)
 
@@ -172,12 +201,17 @@ def test_city_pack_validation_rejects_changed_generated_map_rows(tmp_path):
     }
 
 
-def test_city_pack_validation_rejects_a_drawn_route_that_is_not_a_canonical_path(tmp_path):
+def test_city_pack_validation_rejects_a_drawn_route_that_is_not_a_canonical_path(
+    tmp_path,
+):
     engine_root = Path(__file__).resolve().parents[2]
     config = engine_root / "scripts" / "city_configs" / "alderbank.json"
     output = tmp_path / "alderbank"
     build_pack(config, output, offline=True)
-    pack = {path.stem: json.loads(path.read_text(encoding="utf-8")) for path in output.glob("*.json")}
+    pack = {
+        path.stem: json.loads(path.read_text(encoding="utf-8"))
+        for path in output.glob("*.json")
+    }
     pack["generated_map"]["routes"][0]["id"] = "path:commons-bank:invented-shortcut"
 
     report = validate_city_pack(pack)

@@ -11,7 +11,6 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
-
 # revision identifiers, used by Alembic.
 revision: str = "d9e3f1a2b4c5"
 down_revision: Union[str, None] = "a4d2b9c7e1f0"
@@ -27,7 +26,9 @@ def upgrade() -> None:
         sa.Column("session_id", sa.String(64), nullable=False),
         sa.Column("display_name", sa.String(200), nullable=True),
         sa.Column("message", sa.Text(), nullable=False),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=True),
+        sa.Column(
+            "created_at", sa.DateTime(), server_default=sa.func.now(), nullable=True
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_location_chat_location", "location_chat", ["location"])

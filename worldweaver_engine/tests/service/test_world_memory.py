@@ -50,7 +50,9 @@ class TestRecordEvent:
 
     def test_stores_delta(self, db_session):
         delta = {"bridge_status": "burned"}
-        event = record_event(db_session, "s1", "choice_made", "Burned the bridge", delta)
+        event = record_event(
+            db_session, "s1", "choice_made", "Burned the bridge", delta
+        )
         assert event.world_state_delta == delta
 
     def test_nullable_session(self, db_session):
@@ -67,7 +69,9 @@ class TestRecordEvent:
                 delta={"gold": 1},
             )
         assert event.event_type == EVENT_TYPE_SYSTEM
-        assert any("Unknown world event type" in record.message for record in caplog.records)
+        assert any(
+            "Unknown world event type" in record.message for record in caplog.records
+        )
 
     def test_normalizes_inbound_delta_keys(self, db_session):
         event = record_event(
@@ -110,7 +114,9 @@ class TestRecordEvent:
 
 
 class TestLocationGraphFallbacks:
-    def test_location_graph_hydrates_city_pack_metadata_and_synthetic_adjacency(self, db_session):
+    def test_location_graph_hydrates_city_pack_metadata_and_synthetic_adjacency(
+        self, db_session
+    ):
         from src.services import world_memory as world_memory_module
 
         world_memory_module._LOCATION_GRAPH_CACHE.clear()
@@ -124,7 +130,11 @@ class TestLocationGraphFallbacks:
             name="Hayes Valley",
             normalized_name="hayes valley",
             node_type="location",
-            metadata_json={"lat": 37.7758, "lon": -122.4244, "city_id": "san_francisco"},
+            metadata_json={
+                "lat": 37.7758,
+                "lon": -122.4244,
+                "city_id": "san_francisco",
+            },
         )
         db_session.add_all([western, hayes])
         db_session.commit()
@@ -134,9 +144,14 @@ class TestLocationGraphFallbacks:
 
         assert "Western Addition" in names
         assert names["Western Addition"]["lat"] is not None
-        assert any("western addition" in edge["from"] or "western addition" in edge["to"] for edge in graph["edges"])
+        assert any(
+            "western addition" in edge["from"] or "western addition" in edge["to"]
+            for edge in graph["edges"]
+        )
 
-    def test_find_route_uses_city_pack_adjacency_when_path_edges_are_missing(self, db_session):
+    def test_find_route_uses_city_pack_adjacency_when_path_edges_are_missing(
+        self, db_session
+    ):
         from src.services import world_memory as world_memory_module
 
         world_memory_module._LOCATION_GRAPH_CACHE.clear()
@@ -190,7 +205,11 @@ class TestLocationGraphFallbacks:
             "The bridge remains broken.",
             delta={"bridge_broken": True},
         )
-        bridge_nodes = db_session.query(WorldNode).filter(WorldNode.normalized_name == "bridge").all()
+        bridge_nodes = (
+            db_session.query(WorldNode)
+            .filter(WorldNode.normalized_name == "bridge")
+            .all()
+        )
         assert len(bridge_nodes) == 1
 
     def test_summary_only_event_extracts_entity_and_location_fact(self, db_session):
@@ -269,7 +288,9 @@ class TestLocationGraphFallbacks:
         assert len(active_status_facts) == 1
         assert active_status_facts[0].value == "damaged"
 
-    def test_record_event_persists_action_metadata_without_state_mutation(self, db_session):
+    def test_record_event_persists_action_metadata_without_state_mutation(
+        self, db_session
+    ):
         sm = AdvancedStateManager("meta-session")
         event = record_event(
             db_session,
@@ -278,7 +299,10 @@ class TestLocationGraphFallbacks:
             "Player action: I examine the rubble.",
             delta={"bridge_broken": True},
             state_manager=sm,
-            metadata={"rationale": "Grounded in existing bridge facts", "confidence": 0.8},
+            metadata={
+                "rationale": "Grounded in existing bridge facts",
+                "confidence": 0.8,
+            },
         )
         assert sm.get_variable("bridge_broken") is True
         persisted_delta = event.world_state_delta or {}
@@ -301,10 +325,18 @@ class TestLocationGraphFallbacks:
             delta={"spatial_nodes": {"a Blacksmith": {"status": "clumsy"}}},
         )
 
-        nodes = db_session.query(WorldNode).filter(WorldNode.normalized_name == "blacksmith").all()
+        nodes = (
+            db_session.query(WorldNode)
+            .filter(WorldNode.normalized_name == "blacksmith")
+            .all()
+        )
         assert len(nodes) == 1
 
-        facts = db_session.query(WorldFact).filter(WorldFact.subject_node_id == nodes[0].id).all()
+        facts = (
+            db_session.query(WorldFact)
+            .filter(WorldFact.subject_node_id == nodes[0].id)
+            .all()
+        )
         assert len(facts) >= 2
 
     def test_canonical_identity_merges_rank_prefixed_aliases(self, db_session):
@@ -323,7 +355,11 @@ class TestLocationGraphFallbacks:
             delta={"spatial_nodes": {"Warden Silas Vane": {"status": "blocked"}}},
         )
 
-        nodes = db_session.query(WorldNode).filter(WorldNode.normalized_name == "silas vane").all()
+        nodes = (
+            db_session.query(WorldNode)
+            .filter(WorldNode.normalized_name == "silas vane")
+            .all()
+        )
         assert len(nodes) == 1
 
         canonical = get_node_neighborhood(db_session, "silas vane", limit=10)
@@ -333,14 +369,33 @@ class TestLocationGraphFallbacks:
         assert canonical["node"].id == alias["node"].id
 
     def test_fact_string_values_auto_extract_edges(self, db_session):
-        record_event(db_session, "auto-edge-id", "system", "Create companion.", delta={"spatial_nodes": {"The Companion": {"status": "alive"}}})
+        record_event(
+            db_session,
+            "auto-edge-id",
+            "system",
+            "Create companion.",
+            delta={"spatial_nodes": {"The Companion": {"status": "alive"}}},
+        )
 
-        record_event(db_session, "auto-edge-id", "freeform_action", "Player forms a bond with the companion.", delta={"variables": {"player": "happy", "player.friendship": "a Companion"}})
+        record_event(
+            db_session,
+            "auto-edge-id",
+            "freeform_action",
+            "Player forms a bond with the companion.",
+            delta={
+                "variables": {"player": "happy", "player.friendship": "a Companion"}
+            },
+        )
 
         # Verify WorldEdge was auto-extracted between 'player' and 'companion'
         from src.services.world_memory import get_relationships
 
-        edges = get_relationships(db_session, subject_name="player", target_name="companion", edge_type="friendship")
+        edges = get_relationships(
+            db_session,
+            subject_name="player",
+            target_name="companion",
+            edge_type="friendship",
+        )
         assert len(edges) == 1
         assert edges[0].confidence == 0.8  # default confidence
 
@@ -487,7 +542,9 @@ class TestGraphQueries:
             "The bridge is broken.",
             delta={"bridge_broken": True},
         )
-        results = query_graph_facts(db_session, "bridge", session_id="graph-q1", limit=5)
+        results = query_graph_facts(
+            db_session, "bridge", session_id="graph-q1", limit=5
+        )
         assert len(results) >= 1
         assert isinstance(results[0], WorldFact)
 
@@ -553,12 +610,21 @@ class TestGraphQueries:
 
 class TestDeltaHooks:
     def test_infer_event_type_normalizes_existing_producer_values(self):
-        assert infer_event_type("FREEFORM_ACTION", {"gold": 1}) == EVENT_TYPE_FREEFORM_ACTION
+        assert (
+            infer_event_type("FREEFORM_ACTION", {"gold": 1})
+            == EVENT_TYPE_FREEFORM_ACTION
+        )
 
     def test_infer_event_type_promotes_permanent_change(self):
-        assert infer_event_type("freeform_action", {"bridge_broken": True}) == "permanent_change"
+        assert (
+            infer_event_type("freeform_action", {"bridge_broken": True})
+            == "permanent_change"
+        )
         assert infer_event_type("freeform_action", {"gold": 1}) == "freeform_action"
-        assert infer_event_type("freeform_action", {"location": "Tea House"}) == "freeform_action"
+        assert (
+            infer_event_type("freeform_action", {"location": "Tea House"})
+            == "freeform_action"
+        )
 
     def test_apply_event_delta_to_state_fallback(self):
         sm = AdvancedStateManager("s-fallback")
@@ -635,9 +701,13 @@ class TestWorldProjection:
             delta={"spatial_nodes": {"bridge": {"status": "repaired"}}},
         )
 
-        first_snapshot = {row.path: row.value for row in get_world_projection(db_session)}
+        first_snapshot = {
+            row.path: row.value for row in get_world_projection(db_session)
+        }
         stats = rebuild_world_projection(db_session, clear_existing=True)
-        second_snapshot = {row.path: row.value for row in get_world_projection(db_session)}
+        second_snapshot = {
+            row.path: row.value for row in get_world_projection(db_session)
+        }
 
         assert stats["events_processed"] == 2
         assert first_snapshot == second_snapshot
@@ -660,11 +730,21 @@ class TestWorldProjection:
         )
 
         rebuild_world_projection(db_session, clear_existing=True)
-        row_before = db_session.query(WorldProjection).filter(WorldProjection.path == "variables.warning").one()
+        row_before = (
+            db_session.query(WorldProjection)
+            .filter(WorldProjection.path == "variables.warning")
+            .one()
+        )
         assert row_before.value == "crimson"
 
-        event_a = db_session.query(WorldEvent).filter(WorldEvent.session_id == "proj-scope-a").one()
-        db_session.query(WorldProjection).filter(WorldProjection.source_event_id == event_a.id).delete(synchronize_session=False)
+        event_a = (
+            db_session.query(WorldEvent)
+            .filter(WorldEvent.session_id == "proj-scope-a")
+            .one()
+        )
+        db_session.query(WorldProjection).filter(
+            WorldProjection.source_event_id == event_a.id
+        ).delete(synchronize_session=False)
         db_session.commit()
 
         stats = rebuild_world_projection(
@@ -672,12 +752,18 @@ class TestWorldProjection:
             clear_existing=True,
             session_id="proj-scope-a",
         )
-        row_after = db_session.query(WorldProjection).filter(WorldProjection.path == "variables.warning").one()
+        row_after = (
+            db_session.query(WorldProjection)
+            .filter(WorldProjection.path == "variables.warning")
+            .one()
+        )
 
         assert stats["events_processed"] == 1
         assert row_after.value == "amber"
 
-    def test_projection_conflict_resolution_uses_timestamp_then_confidence(self, db_session):
+    def test_projection_conflict_resolution_uses_timestamp_then_confidence(
+        self, db_session
+    ):
         t = datetime(2026, 1, 1, 10, 0, 0, tzinfo=timezone.utc)
         newer = WorldEvent(
             session_id="proj-conflict",
@@ -703,7 +789,11 @@ class TestWorldProjection:
         apply_event_to_projection(db_session, older)
         db_session.commit()
 
-        row = db_session.query(WorldProjection).filter(WorldProjection.path == "variables.world_alert").one()
+        row = (
+            db_session.query(WorldProjection)
+            .filter(WorldProjection.path == "variables.world_alert")
+            .one()
+        )
         assert row.value == 5
 
         same_time_low_conf = WorldEvent(
@@ -711,7 +801,9 @@ class TestWorldProjection:
             event_type="freeform_action",
             summary="same time low confidence",
             embedding=None,
-            world_state_delta={"variables": {"world_alert": {"value": 9, "confidence": 0.1}}},
+            world_state_delta={
+                "variables": {"world_alert": {"value": 9, "confidence": 0.1}}
+            },
             created_at=t + timedelta(minutes=1),
         )
         db_session.add(same_time_low_conf)
@@ -719,7 +811,11 @@ class TestWorldProjection:
         apply_event_to_projection(db_session, same_time_low_conf)
         db_session.commit()
 
-        row_after = db_session.query(WorldProjection).filter(WorldProjection.path == "variables.world_alert").one()
+        row_after = (
+            db_session.query(WorldProjection)
+            .filter(WorldProjection.path == "variables.world_alert")
+            .one()
+        )
         assert row_after.value == 5
 
     def test_overlay_applies_projection_to_new_state_manager(self, db_session):
@@ -808,7 +904,16 @@ class TestWorldFactPayloadParsing:
     def test_invalid_confidence_clamped_or_raises(self):
         from pydantic import ValidationError
 
-        raw = {"facts": [{"subject": "gate", "predicate": "state", "value": "open", "confidence": 5.0}]}
+        raw = {
+            "facts": [
+                {
+                    "subject": "gate",
+                    "predicate": "state",
+                    "value": "open",
+                    "confidence": 5.0,
+                }
+            ]
+        }
         with pytest.raises(ValidationError):
             parse_world_fact_payload(raw, "summary")
 
@@ -827,7 +932,9 @@ class TestWorldFactPayloadParsing:
                 ]
             }
         }
-        record_event(db_session, "sf-1", "freeform_action", "The tower collapsed.", delta=delta)
+        record_event(
+            db_session, "sf-1", "freeform_action", "The tower collapsed.", delta=delta
+        )
         metrics = get_fact_parse_metrics()
         assert metrics["schema_parse_success"] >= 1
         assert metrics["fallback_invoked"] == 0
@@ -836,10 +943,18 @@ class TestWorldFactPayloadParsing:
         """Invalid __world_facts__ structure falls back to heuristic extraction."""
         reset_metrics()
         delta = {
-            WORLD_FACTS_DELTA_KEY: {"facts": [{"predicate": "status", "value": "ruined"}]},  # missing subject
+            WORLD_FACTS_DELTA_KEY: {
+                "facts": [{"predicate": "status", "value": "ruined"}]
+            },  # missing subject
             "variables": {"bridge": "destroyed"},
         }
-        record_event(db_session, "sf-2", "freeform_action", "The bridge was destroyed.", delta=delta)
+        record_event(
+            db_session,
+            "sf-2",
+            "freeform_action",
+            "The bridge was destroyed.",
+            delta=delta,
+        )
         metrics = get_fact_parse_metrics()
         assert metrics["schema_parse_failure"] >= 1
         assert metrics["fallback_invoked"] >= 1
@@ -920,14 +1035,20 @@ class TestAuditGraphFacts:
         # node_type+normalized_name is unique; use different types to create cross-type duplicates
         db_session.add_all(
             [
-                WorldNode(name="The Bridge", normalized_name="bridge", node_type="entity"),
-                WorldNode(name="Bridge", normalized_name="bridge", node_type="location"),
+                WorldNode(
+                    name="The Bridge", normalized_name="bridge", node_type="entity"
+                ),
+                WorldNode(
+                    name="Bridge", normalized_name="bridge", node_type="location"
+                ),
             ]
         )
         db_session.commit()
         report = audit_graph_facts(db_session)
         assert report["duplicate_entity_key_count"] >= 1
-        assert any(e["normalized_name"] == "bridge" for e in report["duplicate_entity_keys"])
+        assert any(
+            e["normalized_name"] == "bridge" for e in report["duplicate_entity_keys"]
+        )
 
     def test_reports_total_counts(self, db_session):
         record_event(db_session, "audit-1", "system", "Test event for audit.")

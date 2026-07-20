@@ -15,7 +15,10 @@ from pathlib import Path
 from typing import Mapping
 
 from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
+from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+    Ed25519PrivateKey,
+    Ed25519PublicKey,
+)
 
 NODE_ID_HEADER = "X-WW-Node-ID"
 NODE_TIMESTAMP_HEADER = "X-WW-Timestamp"
@@ -59,7 +62,9 @@ def _canonical_request(
     nonce: str,
 ) -> bytes:
     body_digest = hashlib.sha256(body).hexdigest()
-    return "\n".join((method.upper(), path, timestamp, nonce, body_digest)).encode("utf-8")
+    return "\n".join((method.upper(), path, timestamp, nonce, body_digest)).encode(
+        "utf-8"
+    )
 
 
 def generate_node_identity(
@@ -109,7 +114,9 @@ def write_public_descriptor(
     }
     if city_id:
         descriptor["city_id"] = city_id
-    descriptor_path.write_text(f"{json.dumps(descriptor, indent=2, sort_keys=True)}\n", encoding="utf-8")
+    descriptor_path.write_text(
+        f"{json.dumps(descriptor, indent=2, sort_keys=True)}\n", encoding="utf-8"
+    )
     return descriptor
 
 
@@ -119,7 +126,9 @@ def load_private_key(path: str | Path) -> Ed25519PrivateKey:
         private_bytes = _decode(key_path.read_text(encoding="utf-8"))
         return Ed25519PrivateKey.from_private_bytes(private_bytes)
     except (OSError, ValueError) as exc:
-        raise NodeSignatureError(f"Could not load node private key: {key_path}") from exc
+        raise NodeSignatureError(
+            f"Could not load node private key: {key_path}"
+        ) from exc
 
 
 def public_key_for_private_key(path: str | Path) -> str:
@@ -158,7 +167,9 @@ def signed_request_headers(
         NODE_SIGNATURE_HEADER: _encode(signature),
     }
     if include_public_key:
-        headers[NODE_PUBLIC_KEY_HEADER] = _encode(private_key.public_key().public_bytes_raw())
+        headers[NODE_PUBLIC_KEY_HEADER] = _encode(
+            private_key.public_key().public_bytes_raw()
+        )
     return headers
 
 
@@ -184,7 +195,9 @@ def verify_signed_request(
         raise NodeSignatureError("Signed request timestamp is invalid.") from exc
     current_time = int(time.time()) if now is None else int(now)
     if abs(current_time - signed_at) > max_clock_skew_seconds:
-        raise NodeSignatureError("Signed request timestamp is outside the allowed window.")
+        raise NodeSignatureError(
+            "Signed request timestamp is outside the allowed window."
+        )
     try:
         Ed25519PublicKey.from_public_bytes(_decode(public_key)).verify(
             _decode(signature),

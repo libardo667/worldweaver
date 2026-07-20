@@ -108,7 +108,17 @@ ACTION_IDEMPOTENCY_KEY = "idempotency_key"
 ACTION_IDEMPOTENCY_RESPONSE_KEY = "idempotency_response"
 WORLD_FACTS_DELTA_KEY = "__world_facts__"
 INTERNAL_DELTA_KEYS = {ACTION_METADATA_KEY}
-PROJECTION_HISTORY_ONLY_KEYS = frozenset({"origin", "destination", "in_transit", "speaker", "channel", "location", "sublocation"})
+PROJECTION_HISTORY_ONLY_KEYS = frozenset(
+    {
+        "origin",
+        "destination",
+        "in_transit",
+        "speaker",
+        "channel",
+        "location",
+        "sublocation",
+    }
+)
 RESERVED_DELTA_KEYS = {
     "variables",
     "environment",
@@ -153,11 +163,16 @@ SUMMARY_LOCATION_PATTERN = re.compile(
     flags=re.IGNORECASE,
 )
 SUMMARY_PASSIVE_STATUS_PATTERN = re.compile(
-    r"\b(?:the\s+)?(?P<subject>[a-z][a-z0-9 _-]{1,60})\s+" r"(?:is|was|remains|became|becomes)\s+" r"(?P<status>burned|destroyed|damaged|collapsed|sealed|flooded|ruined|blocked)\b",
+    r"\b(?:the\s+)?(?P<subject>[a-z][a-z0-9 _-]{1,60})\s+"
+    r"(?:is|was|remains|became|becomes)\s+"
+    r"(?P<status>burned|destroyed|damaged|collapsed|sealed|flooded|ruined|blocked)\b",
     flags=re.IGNORECASE,
 )
 SUMMARY_ACTION_OBJECT_PATTERN = re.compile(
-    r"\b(?:i|we|they|someone|the player)\s+" r"(?P<verb>burn|burned|destroy|destroyed|damage|damaged|collapse|collapsed|" r"seal|sealed|flood|flooded|ruin|ruined|block|blocked)\s+" r"(?:the\s+)?(?P<object>[a-z][a-z0-9 _-]{1,60})\b",
+    r"\b(?:i|we|they|someone|the player)\s+"
+    r"(?P<verb>burn|burned|destroy|destroyed|damage|damaged|collapse|collapsed|"
+    r"seal|sealed|flood|flooded|ruin|ruined|block|blocked)\s+"
+    r"(?:the\s+)?(?P<object>[a-z][a-z0-9 _-]{1,60})\b",
     flags=re.IGNORECASE,
 )
 SUMMARY_ACTION_PREFIX_PATTERN = re.compile(
@@ -306,7 +321,9 @@ def _sanitize_idempotent_response_value(value: Any, depth: int = 0) -> Any:
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
     if isinstance(value, list):
-        return [_sanitize_idempotent_response_value(item, depth + 1) for item in value[:80]]
+        return [
+            _sanitize_idempotent_response_value(item, depth + 1) for item in value[:80]
+        ]
     if isinstance(value, dict):
         sanitized: Dict[str, Any] = {}
         for key, item in list(value.items())[:180]:
@@ -362,7 +379,13 @@ def _find_event_by_idempotency_key(
     if not normalized_key:
         return None
 
-    events = db.query(WorldEvent).filter(WorldEvent.session_id == session_id).order_by(desc(WorldEvent.id)).limit(limit).all()
+    events = (
+        db.query(WorldEvent)
+        .filter(WorldEvent.session_id == session_id)
+        .order_by(desc(WorldEvent.id))
+        .limit(limit)
+        .all()
+    )
     for event in events:
         if _event_idempotency_key(event) == normalized_key:
             return event
@@ -399,7 +422,9 @@ def persist_action_idempotent_response(
     merged_delta = dict(delta)
     metadata = _extract_internal_metadata(merged_delta)
     metadata = dict(metadata)
-    metadata[ACTION_IDEMPOTENCY_RESPONSE_KEY] = _sanitize_idempotent_response_value(response_payload)
+    metadata[ACTION_IDEMPOTENCY_RESPONSE_KEY] = _sanitize_idempotent_response_value(
+        response_payload
+    )
     merged_delta[ACTION_METADATA_KEY] = metadata
     event.world_state_delta = merged_delta
     db.add(event)
@@ -421,7 +446,11 @@ def _is_permanent_delta(delta: Dict[str, Any]) -> bool:
             return True
         if any(token in key_lower for token in HIGH_IMPACT_DELTA_TOKENS):
             return True
-        if isinstance(value, bool) and value and any(token in key_lower for token in HIGH_IMPACT_DELTA_TOKENS):
+        if (
+            isinstance(value, bool)
+            and value
+            and any(token in key_lower for token in HIGH_IMPACT_DELTA_TOKENS)
+        ):
             return True
 
     return False
@@ -479,7 +508,9 @@ def _trim_summary_token(value: str) -> str:
     return cleaned
 
 
-def _normalize_fact_snippet(value: Any, max_len: int = ACTION_FACT_MAX_SNIPPET_CHARS) -> str:
+def _normalize_fact_snippet(
+    value: Any, max_len: int = ACTION_FACT_MAX_SNIPPET_CHARS
+) -> str:
     """Normalize and cap fact snippets used in action-grounding prompt context."""
     text = re.sub(r"\s+", " ", str(value or "").strip())
     if len(text) <= max_len:
@@ -571,7 +602,9 @@ def _session_filter_for_facts(query: Any, session_id: Optional[str]) -> Any:
     """Filter facts to session-local + global rows."""
     if not session_id:
         return query
-    return query.filter(or_(WorldFact.session_id == session_id, WorldFact.session_id.is_(None)))
+    return query.filter(
+        or_(WorldFact.session_id == session_id, WorldFact.session_id.is_(None))
+    )
 
 
 def infer_event_type(event_type: str, delta: Optional[Dict[str, Any]] = None) -> str:
@@ -585,10 +618,16 @@ def infer_event_type(event_type: str, delta: Optional[Dict[str, Any]] = None) ->
     return normalized_event_type
 
 
-def apply_event_delta_to_state(state_manager: Any, delta: Optional[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+def apply_event_delta_to_state(
+    state_manager: Any, delta: Optional[Dict[str, Any]]
+) -> Dict[str, Dict[str, Any]]:
     """Apply event deltas into the active state manager."""
     normalized_delta = _normalize_delta(delta)
-    normalized_delta = {key: value for key, value in normalized_delta.items() if key not in INTERNAL_DELTA_KEYS}
+    normalized_delta = {
+        key: value
+        for key, value in normalized_delta.items()
+        if key not in INTERNAL_DELTA_KEYS
+    }
     if not normalized_delta:
         return {"variables": {}, "environment": {}, "spatial_nodes": {}}
 
@@ -640,14 +679,18 @@ def _extract_projection_value(value: Any) -> tuple[Any, bool, float, Dict[str, A
     return value, value is None, confidence, metadata
 
 
-def _collect_projection_updates_from_delta(delta: Dict[str, Any]) -> List[ProjectionUpdate]:
+def _collect_projection_updates_from_delta(
+    delta: Dict[str, Any],
+) -> List[ProjectionUpdate]:
     """Convert an event delta into deterministic projection mutations."""
     updates: List[ProjectionUpdate] = []
 
     environment = delta.get(PROJECTION_ROOT_ENVIRONMENT)
     if isinstance(environment, dict):
         for key, raw_value in environment.items():
-            value, is_deleted, confidence, metadata = _extract_projection_value(raw_value)
+            value, is_deleted, confidence, metadata = _extract_projection_value(
+                raw_value
+            )
             updates.append(
                 ProjectionUpdate(
                     path=_join_projection_path(PROJECTION_ROOT_ENVIRONMENT, key),
@@ -664,7 +707,9 @@ def _collect_projection_updates_from_delta(delta: Dict[str, Any]) -> List[Projec
             location_key = _normalize_projection_segment(location)
             if isinstance(location_delta, dict):
                 for attr, raw_value in location_delta.items():
-                    value, is_deleted, confidence, metadata = _extract_projection_value(raw_value)
+                    value, is_deleted, confidence, metadata = _extract_projection_value(
+                        raw_value
+                    )
                     updates.append(
                         ProjectionUpdate(
                             path=_join_projection_path(
@@ -679,7 +724,9 @@ def _collect_projection_updates_from_delta(delta: Dict[str, Any]) -> List[Projec
                         )
                     )
             else:
-                value, is_deleted, confidence, metadata = _extract_projection_value(location_delta)
+                value, is_deleted, confidence, metadata = _extract_projection_value(
+                    location_delta
+                )
                 updates.append(
                     ProjectionUpdate(
                         path=_join_projection_path(
@@ -697,7 +744,9 @@ def _collect_projection_updates_from_delta(delta: Dict[str, Any]) -> List[Projec
     variables = delta.get(PROJECTION_ROOT_VARIABLES)
     if isinstance(variables, dict):
         for key, raw_value in variables.items():
-            value, is_deleted, confidence, metadata = _extract_projection_value(raw_value)
+            value, is_deleted, confidence, metadata = _extract_projection_value(
+                raw_value
+            )
             updates.append(
                 ProjectionUpdate(
                     path=_join_projection_path(PROJECTION_ROOT_VARIABLES, key),
@@ -758,7 +807,11 @@ def apply_event_to_projection(db: Session, event: WorldEvent) -> int:
         return event_cache[event_id]
 
     for update in updates:
-        row = db.query(WorldProjection).filter(WorldProjection.path == update.path).one_or_none()
+        row = (
+            db.query(WorldProjection)
+            .filter(WorldProjection.path == update.path)
+            .one_or_none()
+        )
         if row is None:
             row = WorldProjection(
                 path=update.path,
@@ -782,9 +835,16 @@ def apply_event_to_projection(db: Session, event: WorldEvent) -> int:
         existing_time = _event_time_key(existing_event)
         if existing_time > incoming_time:
             continue
-        if existing_time == incoming_time and float(row.confidence or 0.0) > update.confidence:
+        if (
+            existing_time == incoming_time
+            and float(row.confidence or 0.0) > update.confidence
+        ):
             continue
-        if existing_time == incoming_time and float(row.confidence or 0.0) == update.confidence and existing_event_id > int(event.id or 0):
+        if (
+            existing_time == incoming_time
+            and float(row.confidence or 0.0) == update.confidence
+            and existing_event_id > int(event.id or 0)
+        ):
             continue
 
         row.value = update.value
@@ -814,7 +874,11 @@ def get_world_projection(
         query = query.filter(WorldProjection.path.like(f"{normalized}%"))
     if not include_deleted:
         query = query.filter(WorldProjection.is_deleted.is_(False))
-    return query.order_by(WorldProjection.path.asc(), desc(WorldProjection.id)).limit(limit).all()
+    return (
+        query.order_by(WorldProjection.path.asc(), desc(WorldProjection.id))
+        .limit(limit)
+        .all()
+    )
 
 
 def rebuild_world_projection(
@@ -830,9 +894,18 @@ def rebuild_world_projection(
 
     if clear_existing:
         if session_id:
-            touched_paths = {update.path for event in events for update in _collect_projection_updates_from_delta(_normalize_delta(event.world_state_delta)) if update.path}
+            touched_paths = {
+                update.path
+                for event in events
+                for update in _collect_projection_updates_from_delta(
+                    _normalize_delta(event.world_state_delta)
+                )
+                if update.path
+            }
             if touched_paths:
-                db.query(WorldProjection).filter(WorldProjection.path.in_(sorted(touched_paths))).delete(synchronize_session=False)
+                db.query(WorldProjection).filter(
+                    WorldProjection.path.in_(sorted(touched_paths))
+                ).delete(synchronize_session=False)
         else:
             db.query(WorldProjection).delete()
         db.flush()
@@ -892,14 +965,20 @@ def apply_projection_overlay_to_state_manager(
 
         if root == PROJECTION_ROOT_VARIABLES and len(segments) >= 2:
             key = ".".join(segments[1:])
-            is_player_scoped = key in player_keys or key.startswith(PLAYER_SCOPED_PREFIXES)
+            is_player_scoped = key in player_keys or key.startswith(
+                PLAYER_SCOPED_PREFIXES
+            )
             if bool(row.is_deleted):
                 if preserve_existing_player_values and is_player_scoped:
                     continue
                 if key in state_manager.variables:
                     state_manager.variables.pop(key, None)
                 continue
-            if preserve_existing_player_values and is_player_scoped and key in state_manager.variables:
+            if (
+                preserve_existing_player_values
+                and is_player_scoped
+                and key in state_manager.variables
+            ):
                 continue
             if state_manager.get_variable(key) != row.value:
                 state_manager.set_variable(key, row.value)
@@ -1239,7 +1318,9 @@ def _extract_fact_drafts(delta: Dict[str, Any], summary: str) -> List[FactDraft]
             drafts.append(
                 FactDraft(
                     subject_name=subject,
-                    subject_type=NODE_TYPE_ENTITY if subject != "world" else NODE_TYPE_CONCEPT,
+                    subject_type=(
+                        NODE_TYPE_ENTITY if subject != "world" else NODE_TYPE_CONCEPT
+                    ),
                     predicate=predicate,
                     value=value,
                     summary=summary,
@@ -1253,7 +1334,9 @@ def _extract_fact_drafts(delta: Dict[str, Any], summary: str) -> List[FactDraft]
         drafts.append(
             FactDraft(
                 subject_name=subject,
-                subject_type=NODE_TYPE_ENTITY if subject != "world" else NODE_TYPE_CONCEPT,
+                subject_type=(
+                    NODE_TYPE_ENTITY if subject != "world" else NODE_TYPE_CONCEPT
+                ),
                 predicate=predicate,
                 value=value,
                 summary=summary,
@@ -1364,7 +1447,12 @@ def _record_graph_assertions(db: Session, event: WorldEvent) -> Dict[str, int]:
         if isinstance(draft.value, str):
             normalized_target = _normalize_node_name(draft.value)
             if normalized_target and normalized_target != subject_node.normalized_name:
-                target_node = db.query(WorldNode).filter(WorldNode.normalized_name == normalized_target).order_by(desc(WorldNode.id)).first()
+                target_node = (
+                    db.query(WorldNode)
+                    .filter(WorldNode.normalized_name == normalized_target)
+                    .order_by(desc(WorldNode.id))
+                    .first()
+                )
                 if target_node:
                     _upsert_world_edge(
                         db=db,
@@ -1421,7 +1509,11 @@ def record_event(
     if normalized_idempotency_key:
         merged_metadata[ACTION_IDEMPOTENCY_KEY] = normalized_idempotency_key
     persisted_delta = _attach_internal_metadata(normalized_delta, merged_metadata)
-    resolved_event_type = normalize_event_type(event_type) if preserve_event_type else infer_event_type(event_type, normalized_delta)
+    resolved_event_type = (
+        normalize_event_type(event_type)
+        if preserve_event_type
+        else infer_event_type(event_type, normalized_delta)
+    )
     if state_manager is not None and normalized_delta:
         applied = apply_event_delta_to_state(state_manager, normalized_delta)
         logger.debug("Applied world delta to state: %s", applied)
@@ -1447,7 +1539,9 @@ def record_event(
             logger.debug("World projection updated rows: %s", projection_updates)
         except Exception as e:
             db.rollback()
-            logger.warning("Failed to update world projection for event %s: %s", event.id, e)
+            logger.warning(
+                "Failed to update world projection for event %s: %s", event.id, e
+            )
 
     if commit and settings.enable_world_graph_extraction and not skip_graph_extraction:
         try:
@@ -1456,7 +1550,9 @@ def record_event(
             logger.debug("Graph assertions updated: %s", counts)
         except Exception as e:
             db.rollback()
-            logger.warning("Failed to extract graph assertions for event %s: %s", event.id, e)
+            logger.warning(
+                "Failed to extract graph assertions for event %s: %s", event.id, e
+            )
 
     logger.info("Recorded world event: [%s] %s", resolved_event_type, summary[:80])
     return event
@@ -1516,7 +1612,13 @@ def reembed_world_events(
     last_id = 0
 
     while True:
-        rows = db.query(WorldEvent).filter(WorldEvent.id > last_id).order_by(WorldEvent.id.asc()).limit(safe_batch_size).all()
+        rows = (
+            db.query(WorldEvent)
+            .filter(WorldEvent.id > last_id)
+            .order_by(WorldEvent.id.asc())
+            .limit(safe_batch_size)
+            .all()
+        )
         if not rows:
             break
 
@@ -1559,9 +1661,13 @@ def get_world_context_vector(
     for event in events:
         if not event.embedding:
             continue
-        event_delta = event.world_state_delta if isinstance(event.world_state_delta, dict) else {}
+        event_delta = (
+            event.world_state_delta if isinstance(event.world_state_delta, dict) else {}
+        )
         resolved_type = infer_event_type(event.event_type, event_delta)
-        weight = PERMANENT_EVENT_WEIGHT if resolved_type == PERMANENT_EVENT_TYPE else 1.0
+        weight = (
+            PERMANENT_EVENT_WEIGHT if resolved_type == PERMANENT_EVENT_TYPE else 1.0
+        )
         weighted_vectors.append((event.embedding, weight))
         weight_total += weight
 
@@ -1614,7 +1720,11 @@ def query_graph_facts(
     if not query.strip():
         base = db.query(WorldFact).filter(WorldFact.is_active.is_(True))
         base = _session_filter_for_facts(base, session_id)
-        return base.order_by(desc(WorldFact.updated_at), desc(WorldFact.id)).limit(limit).all()
+        return (
+            base.order_by(desc(WorldFact.updated_at), desc(WorldFact.id))
+            .limit(limit)
+            .all()
+        )
 
     query_vector = embed_text(query)
     base = db.query(WorldFact).filter(WorldFact.is_active.is_(True))
@@ -1689,7 +1799,9 @@ def get_relevant_action_facts(
     except Exception as e:
         logger.debug("Unable to fetch graph facts for action grounding: %s", e)
     finally:
-        timings_ms["graph_facts"] = round((time.perf_counter() - graph_started) * 1000.0, 3)
+        timings_ms["graph_facts"] = round(
+            (time.perf_counter() - graph_started) * 1000.0, 3
+        )
 
     location_started = time.perf_counter()
     if location:
@@ -1706,7 +1818,9 @@ def get_relevant_action_facts(
                     snippets.append(summary)
         except Exception as e:
             logger.debug("Unable to fetch location facts for action grounding: %s", e)
-    timings_ms["location_facts"] = round((time.perf_counter() - location_started) * 1000.0, 3)
+    timings_ms["location_facts"] = round(
+        (time.perf_counter() - location_started) * 1000.0, 3
+    )
 
     projection_started = time.perf_counter()
     try:
@@ -1724,7 +1838,9 @@ def get_relevant_action_facts(
     except Exception as e:
         logger.debug("Unable to fetch projection facts for action grounding: %s", e)
     finally:
-        timings_ms["projection_overlay"] = round((time.perf_counter() - projection_started) * 1000.0, 3)
+        timings_ms["projection_overlay"] = round(
+            (time.perf_counter() - projection_started) * 1000.0, 3
+        )
 
     deduped: List[str] = []
     seen: set[str] = set()
@@ -1838,7 +1954,12 @@ def get_relationships(
 
     if subject_name:
         normalized_subject = _normalize_node_name(subject_name)
-        subject_node = db.query(WorldNode).filter(WorldNode.normalized_name == normalized_subject).order_by(desc(WorldNode.id)).first()
+        subject_node = (
+            db.query(WorldNode)
+            .filter(WorldNode.normalized_name == normalized_subject)
+            .order_by(desc(WorldNode.id))
+            .first()
+        )
         if subject_node:
             query = query.filter(WorldEdge.source_node_id == subject_node.id)
         else:
@@ -1846,7 +1967,12 @@ def get_relationships(
 
     if target_name:
         normalized_target = _normalize_node_name(target_name)
-        target_node = db.query(WorldNode).filter(WorldNode.normalized_name == normalized_target).order_by(desc(WorldNode.id)).first()
+        target_node = (
+            db.query(WorldNode)
+            .filter(WorldNode.normalized_name == normalized_target)
+            .order_by(desc(WorldNode.id))
+            .first()
+        )
         if target_node:
             query = query.filter(WorldEdge.target_node_id == target_node.id)
         else:
@@ -1867,13 +1993,22 @@ def get_node_facts(
 ) -> List[WorldFact]:
     """Retrieve active facts exactly matching a canonical subject identity."""
     normalized = _normalize_node_name(node_name)
-    subject_node = db.query(WorldNode).filter(WorldNode.normalized_name == normalized).order_by(desc(WorldNode.id)).first()
+    subject_node = (
+        db.query(WorldNode)
+        .filter(WorldNode.normalized_name == normalized)
+        .order_by(desc(WorldNode.id))
+        .first()
+    )
     if not subject_node:
         return []
 
-    query = db.query(WorldFact).filter(WorldFact.subject_node_id == subject_node.id, WorldFact.is_active.is_(True))
+    query = db.query(WorldFact).filter(
+        WorldFact.subject_node_id == subject_node.id, WorldFact.is_active.is_(True)
+    )
     if session_id:
-        query = query.filter(or_(WorldFact.session_id == session_id, WorldFact.session_id.is_(None)))
+        query = query.filter(
+            or_(WorldFact.session_id == session_id, WorldFact.session_id.is_(None))
+        )
     if predicate:
         query = query.filter(WorldFact.predicate == predicate)
 
@@ -1898,7 +2033,12 @@ def get_location_facts(
         .first()
     )
     if location_node is None:
-        location_node = db.query(WorldNode).filter(WorldNode.normalized_name == normalized).order_by(desc(WorldNode.id)).first()
+        location_node = (
+            db.query(WorldNode)
+            .filter(WorldNode.normalized_name == normalized)
+            .order_by(desc(WorldNode.id))
+            .first()
+        )
     if location_node is None:
         return []
 
@@ -1910,7 +2050,11 @@ def get_location_facts(
         ),
     )
     query = _session_filter_for_facts(query, session_id)
-    return query.order_by(desc(WorldFact.updated_at), desc(WorldFact.id)).limit(limit).all()
+    return (
+        query.order_by(desc(WorldFact.updated_at), desc(WorldFact.id))
+        .limit(limit)
+        .all()
+    )
 
 
 _ARTICLE_STRIP_RE = re.compile(r"\b(the|a|an)\s+", re.IGNORECASE)
@@ -1946,15 +2090,27 @@ def extract_location_mentions(
         return {"matched": 0, "promoted": 0, "pending": 0, "edges": 0}
 
     try:
-        existing_nodes = db.query(WorldNode).filter(WorldNode.node_type.in_([NODE_TYPE_LOCATION, NODE_TYPE_LOCATION_PENDING])).all()
+        existing_nodes = (
+            db.query(WorldNode)
+            .filter(
+                WorldNode.node_type.in_(
+                    [NODE_TYPE_LOCATION, NODE_TYPE_LOCATION_PENDING]
+                )
+            )
+            .all()
+        )
 
         current_node = _upsert_world_node(db, current_location, NODE_TYPE_LOCATION)
         db.flush()
 
         norm_narrative = _strip_articles(narrative_text.lower())
 
-        confirmed_nodes = [n for n in existing_nodes if n.node_type == NODE_TYPE_LOCATION]
-        pending_nodes = [n for n in existing_nodes if n.node_type == NODE_TYPE_LOCATION_PENDING]
+        confirmed_nodes = [
+            n for n in existing_nodes if n.node_type == NODE_TYPE_LOCATION
+        ]
+        pending_nodes = [
+            n for n in existing_nodes if n.node_type == NODE_TYPE_LOCATION_PENDING
+        ]
         existing_normalized = {_strip_articles(n.name.lower()) for n in existing_nodes}
 
         matched = 0
@@ -1968,17 +2124,29 @@ def extract_location_mentions(
                 continue
             if _strip_articles(node.name.lower()) in norm_narrative:
                 matched += 1
-                _upsert_world_edge(db, current_node.id, node.id, "path", None, confidence=1.0)
-                _upsert_world_edge(db, node.id, current_node.id, "path", None, confidence=1.0)
+                _upsert_world_edge(
+                    db, current_node.id, node.id, "path", None, confidence=1.0
+                )
+                _upsert_world_edge(
+                    db, node.id, current_node.id, "path", None, confidence=1.0
+                )
                 edges_added += 1
 
         # --- Step 2: extract new candidates ---
         # Skip entirely if this is a city-pack world — the canonical graph is already
         # complete and narratives must not spawn new location nodes from prose.
-        city_pack_exists = any((n.metadata_json or {}).get("source") == "city_pack" for n in confirmed_nodes[:20])
+        city_pack_exists = any(
+            (n.metadata_json or {}).get("source") == "city_pack"
+            for n in confirmed_nodes[:20]
+        )
         if city_pack_exists:
             db.commit()
-            return {"matched": matched, "promoted": 0, "pending": 0, "edges": edges_added}
+            return {
+                "matched": matched,
+                "promoted": 0,
+                "pending": 0,
+                "edges": edges_added,
+            }
 
         candidates = {m.group(1) for m in _CANDIDATE_RE.finditer(narrative_text)}
         pending_by_norm = {_strip_articles(n.name.lower()): n for n in pending_nodes}
@@ -1990,7 +2158,11 @@ def extract_location_mentions(
             if cand_norm in existing_normalized:
                 continue  # already a known node — handled above
             # fuzzy: skip if any existing node is a substring match (avoids "Grate" vs "Sump Grate")
-            if any(cand_norm in ex or ex in cand_norm for ex in existing_normalized if len(ex) > 3):
+            if any(
+                cand_norm in ex or ex in cand_norm
+                for ex in existing_normalized
+                if len(ex) > 3
+            ):
                 continue
 
             if cand_norm in pending_by_norm:
@@ -2002,8 +2174,12 @@ def extract_location_mentions(
                 pnode.metadata_json = meta
                 if count >= _PROMOTE_THRESHOLD:
                     pnode.node_type = NODE_TYPE_LOCATION
-                    _upsert_world_edge(db, current_node.id, pnode.id, "path", None, confidence=0.7)
-                    _upsert_world_edge(db, pnode.id, current_node.id, "path", None, confidence=0.7)
+                    _upsert_world_edge(
+                        db, current_node.id, pnode.id, "path", None, confidence=0.7
+                    )
+                    _upsert_world_edge(
+                        db, pnode.id, current_node.id, "path", None, confidence=0.7
+                    )
                     promoted += 1
             else:
                 # First mention: create pending node (no embedding yet — save cost)
@@ -2012,14 +2188,22 @@ def extract_location_mentions(
                     name=candidate,
                     normalized_name=_normalize_node_name(candidate),
                     embedding=None,
-                    metadata_json={"mention_count": 1, "first_seen_at": current_location},
+                    metadata_json={
+                        "mention_count": 1,
+                        "first_seen_at": current_location,
+                    },
                 )
                 db.add(pnode)
                 pending_count += 1
 
         db.flush()
         db.commit()
-        return {"matched": matched, "promoted": promoted, "pending": pending_count, "edges": edges_added}
+        return {
+            "matched": matched,
+            "promoted": promoted,
+            "pending": pending_count,
+            "edges": edges_added,
+        }
 
     except Exception:
         try:
@@ -2031,7 +2215,9 @@ def extract_location_mentions(
 
 def ensure_location_node(db: Session, name: str) -> None:
     """Ensure a named location exists as a confirmed WorldNode. Creates it if absent."""
-    _upsert_world_node(db, name, NODE_TYPE_LOCATION, metadata={"source": "player_travel"})
+    _upsert_world_node(
+        db, name, NODE_TYPE_LOCATION, metadata={"source": "player_travel"}
+    )
     db.flush()
 
 
@@ -2105,8 +2291,17 @@ def get_location_graph(
     from .city_pack_service import get_pack
 
     city_pack = get_pack(_city)
-    neighborhoods_by_name: Dict[str, Dict[str, Any]] = {str(item.get("name") or "").strip(): item for item in (city_pack or {}).get("neighborhoods", []) if str(item.get("name") or "").strip()}
-    raw_nodes = db.query(WorldNode).filter(WorldNode.node_type == NODE_TYPE_LOCATION).order_by(WorldNode.id).all()
+    neighborhoods_by_name: Dict[str, Dict[str, Any]] = {
+        str(item.get("name") or "").strip(): item
+        for item in (city_pack or {}).get("neighborhoods", [])
+        if str(item.get("name") or "").strip()
+    }
+    raw_nodes = (
+        db.query(WorldNode)
+        .filter(WorldNode.node_type == NODE_TYPE_LOCATION)
+        .order_by(WorldNode.id)
+        .all()
+    )
     nodes: List[WorldNode] = []
     for node in raw_nodes:
         metadata = dict(node.metadata_json or {})
@@ -2131,7 +2326,9 @@ def get_location_graph(
         .all()
     )
 
-    name_to_id: Dict[str, int] = {str(node.name or ""): node.id for node in nodes if str(node.name or "")}
+    name_to_id: Dict[str, int] = {
+        str(node.name or ""): node.id for node in nodes if str(node.name or "")
+    }
 
     def _node_metadata(node: WorldNode) -> Dict[str, Any]:
         metadata = dict(node.metadata_json or {})
@@ -2147,7 +2344,11 @@ def get_location_graph(
                 metadata["city_id"] = _city
         return metadata
 
-    edge_pairs: set[tuple[int, int]] = {(e.source_node_id, e.target_node_id) for e in edges if e.source_node_id in node_map and e.target_node_id in node_map}
+    edge_pairs: set[tuple[int, int]] = {
+        (e.source_node_id, e.target_node_id)
+        for e in edges
+        if e.source_node_id in node_map and e.target_node_id in node_map
+    }
 
     if city_pack:
         for neighborhood in city_pack.get("neighborhoods", []):
@@ -2157,7 +2358,12 @@ def get_location_graph(
                 continue
             for adjacent_id in neighborhood.get("adjacent_to", []):
                 target_record = next(
-                    (item for item in city_pack.get("neighborhoods", []) if str(item.get("id") or "").strip() == str(adjacent_id or "").strip()),
+                    (
+                        item
+                        for item in city_pack.get("neighborhoods", [])
+                        if str(item.get("id") or "").strip()
+                        == str(adjacent_id or "").strip()
+                    ),
                     None,
                 )
                 target_name = str((target_record or {}).get("name") or "").strip()
@@ -2213,7 +2419,11 @@ def find_route(
     """
     from collections import deque
 
-    nodes = db.query(WorldNode).filter(WorldNode.node_type.in_([NODE_TYPE_LOCATION, "landmark"])).all()
+    nodes = (
+        db.query(WorldNode)
+        .filter(WorldNode.node_type.in_([NODE_TYPE_LOCATION, "landmark"]))
+        .all()
+    )
 
     # Sort so city_pack nodes are iterated last (overwrite player_travel duplicates)
     def _node_priority(n: WorldNode) -> int:
@@ -2281,8 +2491,16 @@ def find_route(
 
     city_pack = get_pack(settings.city_id)
     if city_pack:
-        neighborhoods_by_id = {str(item.get("id") or "").strip(): item for item in city_pack.get("neighborhoods", []) if str(item.get("id") or "").strip()}
-        name_to_location_id = {str(node.name or ""): node.id for node in nodes_sorted if str(node.node_type or "") == NODE_TYPE_LOCATION and str(node.name or "")}
+        neighborhoods_by_id = {
+            str(item.get("id") or "").strip(): item
+            for item in city_pack.get("neighborhoods", [])
+            if str(item.get("id") or "").strip()
+        }
+        name_to_location_id = {
+            str(node.name or ""): node.id
+            for node in nodes_sorted
+            if str(node.node_type or "") == NODE_TYPE_LOCATION and str(node.name or "")
+        }
         for neighborhood in city_pack.get("neighborhoods", []):
             source_name = str(neighborhood.get("name") or "").strip()
             source_id = name_to_location_id.get(source_name)
@@ -2328,16 +2546,34 @@ def audit_graph_facts(db: Session) -> Dict[str, Any]:
     # Duplicate normalized_name entries (same canonical key → multiple nodes)
     all_nodes = db.query(WorldNode).all()
     name_counts: Counter[str] = Counter(n.normalized_name for n in all_nodes)
-    duplicate_entity_keys = [{"normalized_name": name, "count": count} for name, count in name_counts.items() if count > 1]
+    duplicate_entity_keys = [
+        {"normalized_name": name, "count": count}
+        for name, count in name_counts.items()
+        if count > 1
+    ]
 
     # Duplicate active facts: same (session_id, subject_node_id, predicate) with different values
     active_facts = db.query(WorldFact).filter(WorldFact.is_active.is_(True)).all()
-    fact_key_counts: Counter[tuple] = Counter((f.session_id, f.subject_node_id, f.predicate) for f in active_facts)
-    duplicate_active_facts = [{"session_id": k[0], "subject_node_id": k[1], "predicate": k[2], "count": v} for k, v in fact_key_counts.items() if v > 1]
+    fact_key_counts: Counter[tuple] = Counter(
+        (f.session_id, f.subject_node_id, f.predicate) for f in active_facts
+    )
+    duplicate_active_facts = [
+        {"session_id": k[0], "subject_node_id": k[1], "predicate": k[2], "count": v}
+        for k, v in fact_key_counts.items()
+        if v > 1
+    ]
 
     # Orphan fact links: facts whose subject_node_id has no matching WorldNode
     node_ids = {n.id for n in all_nodes}
-    orphan_facts = [{"fact_id": f.id, "subject_node_id": f.subject_node_id, "predicate": f.predicate} for f in active_facts if f.subject_node_id not in node_ids]
+    orphan_facts = [
+        {
+            "fact_id": f.id,
+            "subject_node_id": f.subject_node_id,
+            "predicate": f.predicate,
+        }
+        for f in active_facts
+        if f.subject_node_id not in node_ids
+    ]
 
     return {
         "duplicate_entity_keys": duplicate_entity_keys,

@@ -81,7 +81,11 @@ def get_pack(city_id: str = "san_francisco") -> dict | None:
             counts = pack.get("manifest", {}).get("counts", {})
             logger.info("city_pack: loaded '%s' — %s", city_id, counts)
         else:
-            logger.info("city_pack: no pack found for '%s' at %s", city_id, _CITIES_DIR / city_id)
+            logger.info(
+                "city_pack: no pack found for '%s' at %s",
+                city_id,
+                _CITIES_DIR / city_id,
+            )
             return None
     return _PACK_CACHE.get(city_id)
 
@@ -118,7 +122,11 @@ def list_available() -> list[str]:
     """Return city IDs with a pack on disk."""
     if not _CITIES_DIR.exists():
         return []
-    return [d.name for d in _CITIES_DIR.iterdir() if d.is_dir() and (d / "manifest.json").exists()]
+    return [
+        d.name
+        for d in _CITIES_DIR.iterdir()
+        if d.is_dir() and (d / "manifest.json").exists()
+    ]
 
 
 def get_city_pack_preview(city_id: str) -> dict[str, Any]:
@@ -132,9 +140,17 @@ def get_city_pack_preview(city_id: str) -> dict[str, Any]:
 
     manifest = dict(pack.get("manifest") or {})
     fictional = bool(manifest.get("fictional", False))
-    neighborhoods = [dict(item) for item in pack.get("neighborhoods", []) if isinstance(item, dict)]
-    landmarks = [dict(item) for item in pack.get("landmarks", []) if isinstance(item, dict)]
-    keys_by_neighborhood_id = {str(item.get("id") or ""): f"neighborhood:{item.get('id')}" for item in neighborhoods if str(item.get("id") or "").strip()}
+    neighborhoods = [
+        dict(item) for item in pack.get("neighborhoods", []) if isinstance(item, dict)
+    ]
+    landmarks = [
+        dict(item) for item in pack.get("landmarks", []) if isinstance(item, dict)
+    ]
+    keys_by_neighborhood_id = {
+        str(item.get("id") or ""): f"neighborhood:{item.get('id')}"
+        for item in neighborhoods
+        if str(item.get("id") or "").strip()
+    }
     nodes = [
         {
             "key": keys_by_neighborhood_id[str(item["id"])],
@@ -155,7 +171,9 @@ def get_city_pack_preview(city_id: str) -> dict[str, Any]:
             "id": str(item.get("id") or ""),
             "name": str(item.get("name") or item.get("id") or ""),
             "kind": str(item.get("type") or "landmark"),
-            "parent_key": keys_by_neighborhood_id.get(str(item.get("neighborhood") or "")),
+            "parent_key": keys_by_neighborhood_id.get(
+                str(item.get("neighborhood") or "")
+            ),
             "lat": item.get("lat"),
             "lon": item.get("lon"),
             "description": str(item.get("description") or ""),
@@ -180,7 +198,9 @@ def get_city_pack_preview(city_id: str) -> dict[str, Any]:
     for node in nodes:
         parent_key = node.get("parent_key")
         if parent_key:
-            edges.append({"from": str(parent_key), "to": str(node["key"]), "kind": "contains"})
+            edges.append(
+                {"from": str(parent_key), "to": str(node["key"]), "kind": "contains"}
+            )
 
     report = validate_city_pack(pack)
     return {
@@ -197,11 +217,21 @@ def get_city_pack_preview(city_id: str) -> dict[str, Any]:
             "counts": dict(manifest.get("counts") or {}),
         },
         "map_style": "schematic" if fictional else "geographic",
-        "generated_map": dict(pack.get("generated_map") or {}) if isinstance(pack.get("generated_map"), dict) else None,
+        "generated_map": (
+            dict(pack.get("generated_map") or {})
+            if isinstance(pack.get("generated_map"), dict)
+            else None
+        ),
         "nodes": nodes,
         "edges": edges,
-        "corridors": [dict(item) for item in pack.get("street_corridors", []) if isinstance(item, dict)],
-        "travel_hubs": [dict(item) for item in pack.get("travel_hubs", []) if isinstance(item, dict)],
+        "corridors": [
+            dict(item)
+            for item in pack.get("street_corridors", [])
+            if isinstance(item, dict)
+        ],
+        "travel_hubs": [
+            dict(item) for item in pack.get("travel_hubs", []) if isinstance(item, dict)
+        ],
         "stoops": [
             {
                 "stoop_id": str(item.get("stoop_id") or ""),
@@ -225,7 +255,12 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     r = 6371.0
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(math.radians(lat1))
+        * math.cos(math.radians(lat2))
+        * math.sin(dlon / 2) ** 2
+    )
     return r * 2 * math.asin(math.sqrt(a))
 
 
@@ -252,7 +287,9 @@ def find_neighborhood_by_name(name: str, city_id: str = "san_francisco") -> dict
     return None
 
 
-def find_nearest_neighborhood(lat: float, lon: float, city_id: str = "san_francisco") -> dict | None:
+def find_nearest_neighborhood(
+    lat: float, lon: float, city_id: str = "san_francisco"
+) -> dict | None:
     """Return the neighborhood whose centroid is nearest to lat/lon."""
     pack = get_pack(city_id)
     if not pack:
@@ -266,7 +303,9 @@ def find_nearest_neighborhood(lat: float, lon: float, city_id: str = "san_franci
     return best
 
 
-def get_nearby_transit(lat: float, lon: float, radius_km: float = 1.5, city_id: str = "san_francisco") -> list[dict]:
+def get_nearby_transit(
+    lat: float, lon: float, radius_km: float = 1.5, city_id: str = "san_francisco"
+) -> list[dict]:
     """Return transit stations within radius_km of a point."""
     pack = get_pack(city_id)
     if not pack:
@@ -279,12 +318,20 @@ def get_nearby_transit(lat: float, lon: float, radius_km: float = 1.5, city_id: 
             if station.get("lat") and station.get("lon"):
                 d = _haversine_km(lat, lon, station["lat"], station["lon"])
                 if d <= radius_km:
-                    results.append({**station, "_system": system_key, "_distance_km": round(d, 2)})
+                    results.append(
+                        {**station, "_system": system_key, "_distance_km": round(d, 2)}
+                    )
     results.sort(key=lambda s: s["_distance_km"])
     return results
 
 
-def get_nearby_landmarks(lat: float, lon: float, radius_km: float = 1.0, city_id: str = "san_francisco", limit: int = 8) -> list[dict]:
+def get_nearby_landmarks(
+    lat: float,
+    lon: float,
+    radius_km: float = 1.0,
+    city_id: str = "san_francisco",
+    limit: int = 8,
+) -> list[dict]:
     """Return landmarks within radius_km of a point."""
     pack = get_pack(city_id)
     if not pack:
@@ -299,15 +346,23 @@ def get_nearby_landmarks(lat: float, lon: float, radius_km: float = 1.0, city_id
     return results[:limit]
 
 
-def get_corridors_in_neighborhood(neighborhood_id: str, city_id: str = "san_francisco") -> list[dict]:
+def get_corridors_in_neighborhood(
+    neighborhood_id: str, city_id: str = "san_francisco"
+) -> list[dict]:
     """Return street corridors that run through a neighborhood."""
     pack = get_pack(city_id)
     if not pack:
         return []
-    return [c for c in pack.get("street_corridors", []) if neighborhood_id in c.get("neighborhoods", [])]
+    return [
+        c
+        for c in pack.get("street_corridors", [])
+        if neighborhood_id in c.get("neighborhoods", [])
+    ]
 
 
-def get_adjacent_neighborhoods(neighborhood_id: str, city_id: str = "san_francisco") -> list[dict]:
+def get_adjacent_neighborhoods(
+    neighborhood_id: str, city_id: str = "san_francisco"
+) -> list[dict]:
     """Return the adjacent neighborhood records for a given neighborhood ID."""
     pack = get_pack(city_id)
     if not pack:
@@ -316,7 +371,11 @@ def get_adjacent_neighborhoods(neighborhood_id: str, city_id: str = "san_francis
     source = neighborhoods_by_id.get(neighborhood_id)
     if not source:
         return []
-    return [neighborhoods_by_id[adj_id] for adj_id in source.get("adjacent_to", []) if adj_id in neighborhoods_by_id]
+    return [
+        neighborhoods_by_id[adj_id]
+        for adj_id in source.get("adjacent_to", [])
+        if adj_id in neighborhoods_by_id
+    ]
 
 
 def find_travel_hub(hub_id: str, city_id: str = "san_francisco") -> dict | None:
@@ -326,12 +385,18 @@ def find_travel_hub(hub_id: str, city_id: str = "san_francisco") -> dict | None:
     if not pack or not normalized:
         return None
     return next(
-        (hub for hub in pack.get("travel_hubs", []) if str(hub.get("id") or "").strip() == normalized),
+        (
+            hub
+            for hub in pack.get("travel_hubs", [])
+            if str(hub.get("id") or "").strip() == normalized
+        ),
         None,
     )
 
 
-def resolve_travel_hub_entry(hub_id: str, city_id: str = "san_francisco") -> dict | None:
+def resolve_travel_hub_entry(
+    hub_id: str, city_id: str = "san_francisco"
+) -> dict | None:
     """Return a hub with its entry point resolved to the map's place name."""
     pack = get_pack(city_id)
     hub = find_travel_hub(hub_id, city_id)
@@ -339,9 +404,20 @@ def resolve_travel_hub_entry(hub_id: str, city_id: str = "san_francisco") -> dic
         return None
 
     raw_entry = str(hub.get("entry_location") or "").strip()
-    neighborhoods = [item for item in pack.get("neighborhoods", []) if isinstance(item, dict)]
+    neighborhoods = [
+        item for item in pack.get("neighborhoods", []) if isinstance(item, dict)
+    ]
     place_name = next(
-        (str(item.get("name") or "").strip() for item in neighborhoods if raw_entry and (str(item.get("id") or "").strip().casefold() == raw_entry.casefold() or str(item.get("name") or "").strip().casefold() == raw_entry.casefold())),
+        (
+            str(item.get("name") or "").strip()
+            for item in neighborhoods
+            if raw_entry
+            and (
+                str(item.get("id") or "").strip().casefold() == raw_entry.casefold()
+                or str(item.get("name") or "").strip().casefold()
+                == raw_entry.casefold()
+            )
+        ),
         "",
     )
     if not place_name:
@@ -393,7 +469,9 @@ def build_location_map_context(
 
     # Nearby transit
     if neighborhood.get("lat") and neighborhood.get("lon"):
-        transit = get_nearby_transit(neighborhood["lat"], neighborhood["lon"], radius_km=1.2, city_id=city_id)
+        transit = get_nearby_transit(
+            neighborhood["lat"], neighborhood["lon"], radius_km=1.2, city_id=city_id
+        )
         if transit:
             transit_lines = []
             for t in transit[:4]:
@@ -403,7 +481,13 @@ def build_location_map_context(
             parts.append("Nearby transit: " + ", ".join(transit_lines))
 
         # Nearby landmarks
-        landmarks = get_nearby_landmarks(neighborhood["lat"], neighborhood["lon"], radius_km=0.8, city_id=city_id, limit=4)
+        landmarks = get_nearby_landmarks(
+            neighborhood["lat"],
+            neighborhood["lon"],
+            radius_km=0.8,
+            city_id=city_id,
+            limit=4,
+        )
         if landmarks:
             lm_names = ", ".join(lm["name"] for lm in landmarks)
             parts.append(f"Nearby: {lm_names}")
@@ -434,7 +518,10 @@ def _infer_neighborhood_from_location(location: str, pack: dict) -> dict | None:
     transit = pack.get("transit_graph", {})
     for system_key in ("bart", "muni_metro"):
         for station in transit.get(system_key, {}).get("stations", []):
-            if loc_lower in station["name"].lower() or station["name"].lower() in loc_lower:
+            if (
+                loc_lower in station["name"].lower()
+                or station["name"].lower() in loc_lower
+            ):
                 n_id = station.get("neighborhood")
                 if n_id and n_id in neighborhoods_by_id:
                     return neighborhoods_by_id[n_id]
@@ -460,7 +547,9 @@ def _infer_neighborhood_from_location(location: str, pack: dict) -> dict | None:
     return None
 
 
-def find_neighborhood_record_for_location(location: str, city_id: str = "san_francisco") -> dict | None:
+def find_neighborhood_record_for_location(
+    location: str, city_id: str = "san_francisco"
+) -> dict | None:
     """Resolve a location string to its neighborhood record when possible.
 
     Matches exact neighborhood names first, then falls back to landmark/transit

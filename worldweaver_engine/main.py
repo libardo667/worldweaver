@@ -44,7 +44,9 @@ def _validate_runtime_settings() -> None:
         if not str(settings.public_url or "").strip():
             missing.append("WW_PUBLIC_URL")
     if missing:
-        logger.error("Runtime configuration incomplete: %s", ", ".join(sorted(set(missing))))
+        logger.error(
+            "Runtime configuration incomplete: %s", ", ".join(sorted(set(missing)))
+        )
 
 
 def _run_migrations() -> None:
@@ -96,8 +98,12 @@ async def lifespan(app: FastAPI):
     if settings.shard_type == "city" and settings.federation_url:
         from src.services.federation_pulse import run_pulse_loop
 
-        _pulse_task = asyncio.create_task(run_pulse_loop(SessionLocal, settings.federation_pulse_interval))
-        logging.getLogger(__name__).info("Federation pulse loop started → %s", settings.federation_url)
+        _pulse_task = asyncio.create_task(
+            run_pulse_loop(SessionLocal, settings.federation_pulse_interval)
+        )
+        logging.getLogger(__name__).info(
+            "Federation pulse loop started → %s", settings.federation_url
+        )
 
     yield
 
@@ -157,7 +163,11 @@ if settings.shard_type == "world":
 @app.middleware("http")
 async def correlation_middleware(request: Request, call_next):
     """Bind a correlation id for each request and emit lifecycle logs."""
-    incoming = request.headers.get("X-WW-Trace-Id") or request.headers.get("X-Correlation-Id") or request.headers.get("X-Request-Id")
+    incoming = (
+        request.headers.get("X-WW-Trace-Id")
+        or request.headers.get("X-Correlation-Id")
+        or request.headers.get("X-Request-Id")
+    )
     trace_id = str(incoming or "").strip() or uuid.uuid4().hex
     route = str(request.url.path or "")
     request.state.trace_id = trace_id

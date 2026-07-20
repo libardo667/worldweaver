@@ -29,7 +29,9 @@ class FixedWindowRateLimiter:
         self._window = -1
         self._lock = Lock()
 
-    def allow(self, key: str, *, limit: int, now: float | None = None) -> tuple[bool, int]:
+    def allow(
+        self, key: str, *, limit: int, now: float | None = None
+    ) -> tuple[bool, int]:
         if limit <= 0:
             return True, 0
         current = time.time() if now is None else now

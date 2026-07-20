@@ -8,8 +8,12 @@ from src.services.auth_service import ALGORITHM
 from src.services.request_limits import FixedWindowRateLimiter
 
 
-def test_register_creates_actor_identity_and_local_projection(client, db_session, monkeypatch):
-    monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
+def test_register_creates_actor_identity_and_local_projection(
+    client, db_session, monkeypatch
+):
+    monkeypatch.setattr(
+        "src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None
+    )
 
     response = client.post(
         "/api/auth/register",
@@ -27,7 +31,9 @@ def test_register_creates_actor_identity_and_local_projection(client, db_session
     assert payload["actor_id"]
     assert payload["player_id"]
 
-    player = db_session.query(Player).filter(Player.actor_id == payload["actor_id"]).first()
+    player = (
+        db_session.query(Player).filter(Player.actor_id == payload["actor_id"]).first()
+    )
     actor = db_session.get(FederationActor, payload["actor_id"])
     auth = db_session.get(FederationActorAuth, payload["actor_id"])
 
@@ -42,9 +48,14 @@ def test_register_creates_actor_identity_and_local_projection(client, db_session
     assert player.pass_expires_at is None
 
 
-def test_email_first_registration_requires_matching_confirmation_and_name_before_entry(client, db_session, monkeypatch):
+def test_email_first_registration_requires_matching_confirmation_and_name_before_entry(
+    client, db_session, monkeypatch
+):
     welcomes: list[tuple[str, str]] = []
-    monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda email, name: welcomes.append((email, name)))
+    monkeypatch.setattr(
+        "src.api.auth.routes.send_welcome_email",
+        lambda email, name: welcomes.append((email, name)),
+    )
 
     mismatch = client.post(
         "/api/auth/register",
@@ -56,7 +67,12 @@ def test_email_first_registration_requires_matching_confirmation_and_name_before
         },
     )
     assert mismatch.status_code == 422
-    assert db_session.query(FederationActorAuth).filter(FederationActorAuth.email == "mismatch@example.com").first() is None
+    assert (
+        db_session.query(FederationActorAuth)
+        .filter(FederationActorAuth.email == "mismatch@example.com")
+        .first()
+        is None
+    )
 
     registered = client.post(
         "/api/auth/register",
@@ -100,7 +116,9 @@ def test_email_first_registration_requires_matching_confirmation_and_name_before
     assert auth.profile_completed_at is not None
 
 
-def test_required_email_verification_precedes_public_name_and_city_entry(client, db_session, monkeypatch):
+def test_required_email_verification_precedes_public_name_and_city_entry(
+    client, db_session, monkeypatch
+):
     delivered: list[tuple[str, str]] = []
     monkeypatch.setattr(settings, "require_email_verification", True)
     monkeypatch.setattr(settings, "resend_api_key", "test-resend-key")
@@ -109,7 +127,9 @@ def test_required_email_verification_precedes_public_name_and_city_entry(client,
         "src.api.auth.routes.send_email_verification",
         lambda email, token: delivered.append((email, token)),
     )
-    monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None
+    )
 
     registered = client.post(
         "/api/auth/register",
@@ -162,7 +182,9 @@ def test_required_email_verification_precedes_public_name_and_city_entry(client,
     assert blocked_entry.status_code == 409
     assert blocked_entry.json()["detail"] == "email_unverified"
 
-    rejected = client.post("/api/auth/verify-email", json={"token": "not-the-right-token"})
+    rejected = client.post(
+        "/api/auth/verify-email", json={"token": "not-the-right-token"}
+    )
     assert rejected.status_code == 401
     verified = client.post("/api/auth/verify-email", json={"token": verification_token})
     assert verified.status_code == 200
@@ -183,7 +205,9 @@ def test_required_email_verification_precedes_public_name_and_city_entry(client,
     assert completed.json()["profile_complete"] is True
 
 
-def test_required_email_verification_refuses_registration_without_delivery(client, db_session, monkeypatch):
+def test_required_email_verification_refuses_registration_without_delivery(
+    client, db_session, monkeypatch
+):
     monkeypatch.setattr(settings, "require_email_verification", True)
     monkeypatch.setattr(settings, "resend_api_key", "")
     monkeypatch.setattr(settings, "resend_from_email", "")
@@ -200,11 +224,18 @@ def test_required_email_verification_refuses_registration_without_delivery(clien
 
     assert response.status_code == 503
     assert response.json()["detail"] == "email_verification_delivery_unavailable"
-    assert db_session.query(FederationActorAuth).filter(FederationActorAuth.email == "stranded@example.com").first() is None
+    assert (
+        db_session.query(FederationActorAuth)
+        .filter(FederationActorAuth.email == "stranded@example.com")
+        .first()
+        is None
+    )
 
 
 def test_auth_me_rejects_legacy_player_token(client, monkeypatch):
-    monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None
+    )
     register = client.post(
         "/api/auth/register",
         json={
@@ -218,7 +249,9 @@ def test_auth_me_rejects_legacy_player_token(client, monkeypatch):
     )
     assert register.status_code == 200
     player_id = register.json()["player_id"]
-    legacy_token = jwt.encode({"sub": player_id}, settings.jwt_secret, algorithm=ALGORITHM)
+    legacy_token = jwt.encode(
+        {"sub": player_id}, settings.jwt_secret, algorithm=ALGORITHM
+    )
 
     response = client.get(
         "/api/auth/me",
@@ -230,7 +263,9 @@ def test_auth_me_rejects_legacy_player_token(client, monkeypatch):
 
 
 def test_session_bootstrap_rejects_legacy_player_token(client, monkeypatch):
-    monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None
+    )
     register = client.post(
         "/api/auth/register",
         json={
@@ -244,7 +279,9 @@ def test_session_bootstrap_rejects_legacy_player_token(client, monkeypatch):
     )
     assert register.status_code == 200
     player_id = register.json()["player_id"]
-    legacy_token = jwt.encode({"sub": player_id}, settings.jwt_secret, algorithm=ALGORITHM)
+    legacy_token = jwt.encode(
+        {"sub": player_id}, settings.jwt_secret, algorithm=ALGORITHM
+    )
 
     response = client.post(
         "/api/session/bootstrap",
@@ -262,7 +299,9 @@ def test_session_bootstrap_rejects_legacy_player_token(client, monkeypatch):
 
 
 def test_login_accepts_email_or_username(client, db_session, monkeypatch):
-    monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None
+    )
     register = client.post(
         "/api/auth/register",
         json={
@@ -290,8 +329,12 @@ def test_login_accepts_email_or_username(client, db_session, monkeypatch):
     assert login_by_email.json()["actor_id"] == register.json()["actor_id"]
 
 
-def test_authenticated_human_can_correct_public_display_name(client, db_session, monkeypatch):
-    monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
+def test_authenticated_human_can_correct_public_display_name(
+    client, db_session, monkeypatch
+):
+    monkeypatch.setattr(
+        "src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None
+    )
     register = client.post(
         "/api/auth/register",
         json={
@@ -328,15 +371,22 @@ def test_authenticated_human_can_correct_public_display_name(client, db_session,
     assert updated.json()["actor_id"] == actor_id
     assert updated.json()["display_name"] == "Right Name"
     assert db_session.get(FederationActor, actor_id).display_name == "Right Name"
-    assert db_session.query(Player).filter(Player.actor_id == actor_id).one().display_name == "Right Name"
+    assert (
+        db_session.query(Player).filter(Player.actor_id == actor_id).one().display_name
+        == "Right Name"
+    )
     db_session.refresh(session)
     assert session.vars["name"] == "Right Name"
     assert session.vars["player_role"] == "Right Name"
     assert session.vars["character_profile"] == "Right Name"
 
 
-def test_login_does_not_move_the_actor_to_the_authenticating_shard(client, db_session, monkeypatch):
-    monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
+def test_login_does_not_move_the_actor_to_the_authenticating_shard(
+    client, db_session, monkeypatch
+):
+    monkeypatch.setattr(
+        "src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None
+    )
     register = client.post(
         "/api/auth/register",
         json={
@@ -368,7 +418,9 @@ def test_ordinary_bootstrap_rejects_an_actor_attached_to_another_city(
     db_session,
     monkeypatch,
 ):
-    monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None
+    )
     register = seeded_client.post(
         "/api/auth/register",
         json={
@@ -406,7 +458,9 @@ def test_ordinary_bootstrap_rejects_a_second_local_session_for_one_actor(
     db_session,
     monkeypatch,
 ):
-    monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None
+    )
     register = seeded_client.post(
         "/api/auth/register",
         json={
@@ -448,7 +502,9 @@ def test_ordinary_bootstrap_rejects_a_second_local_session_for_one_actor(
 
 
 def test_login_normalizes_legacy_visitor_passes(client, db_session, monkeypatch):
-    monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None
+    )
     register = client.post(
         "/api/auth/register",
         json={
@@ -494,7 +550,9 @@ def test_login_normalizes_legacy_visitor_passes(client, db_session, monkeypatch)
     assert player.pass_expires_at is None
 
 
-def test_password_reset_updates_federation_auth_and_allows_login(client, db_session, monkeypatch):
+def test_password_reset_updates_federation_auth_and_allows_login(
+    client, db_session, monkeypatch
+):
     sent = {}
 
     def _fake_send_reset(to_email: str, display_name: str, reset_token: str) -> None:
@@ -502,8 +560,12 @@ def test_password_reset_updates_federation_auth_and_allows_login(client, db_sess
         sent["display_name"] = display_name
         sent["reset_token"] = reset_token
 
-    monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("src.api.auth.routes.send_password_reset_email", _fake_send_reset)
+    monkeypatch.setattr(
+        "src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(
+        "src.api.auth.routes.send_password_reset_email", _fake_send_reset
+    )
 
     register = client.post(
         "/api/auth/register",
@@ -559,9 +621,15 @@ def test_account_entry_rate_limit_returns_retry_after(client, monkeypatch):
     monkeypatch.setattr("main.settings.auth_rate_limit_per_minute", 2)
     monkeypatch.setattr("main._auth_rate_limiter", FixedWindowRateLimiter())
 
-    first = client.post("/api/auth/login", json={"identifier": "missing", "password": "incorrect"})
-    second = client.post("/api/auth/login", json={"identifier": "missing", "password": "incorrect"})
-    limited = client.post("/api/auth/login", json={"identifier": "missing", "password": "incorrect"})
+    first = client.post(
+        "/api/auth/login", json={"identifier": "missing", "password": "incorrect"}
+    )
+    second = client.post(
+        "/api/auth/login", json={"identifier": "missing", "password": "incorrect"}
+    )
+    limited = client.post(
+        "/api/auth/login", json={"identifier": "missing", "password": "incorrect"}
+    )
 
     assert first.status_code == 401
     assert second.status_code == 401

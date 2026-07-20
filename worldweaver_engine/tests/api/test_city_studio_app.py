@@ -57,7 +57,9 @@ def test_city_studio_creates_and_edits_only_a_private_draft(tmp_path):
     map_response = client.get("/api/drafts/alderbank/map.svg", headers=_headers())
     assert map_response.status_code == 200
     assert map_response.headers["content-type"].startswith("image/svg+xml")
-    section_response = client.get("/api/drafts/alderbank/sections/section-0-0.svg", headers=_headers())
+    section_response = client.get(
+        "/api/drafts/alderbank/sections/section-0-0.svg", headers=_headers()
+    )
     assert 'viewBox="0 0 18 18"' in section_response.text
 
     unlocked = client.post(
@@ -67,7 +69,11 @@ def test_city_studio_creates_and_edits_only_a_private_draft(tmp_path):
     )
     assert unlocked.status_code == 200
     assert unlocked.json()["metadata"]["draft_revision"] == 1
-    selected = next(section for section in unlocked.json()["sections"] if section["id"] == "section-0-0")
+    selected = next(
+        section
+        for section in unlocked.json()["sections"]
+        if section["id"] == "section-0-0"
+    )
     assert selected["locked"] is False
 
     stale = client.post(
@@ -83,8 +89,12 @@ def test_city_studio_creates_and_edits_only_a_private_draft(tmp_path):
 def test_city_studio_rejects_unknown_or_escaped_configuration_names(tmp_path):
     client, _ = _client(tmp_path)
 
-    unknown = client.post("/api/drafts", headers=_headers(), json={"city": "not-a-city"})
-    escaped = client.post("/api/drafts", headers=_headers(), json={"city": "../alderbank"})
+    unknown = client.post(
+        "/api/drafts", headers=_headers(), json={"city": "not-a-city"}
+    )
+    escaped = client.post(
+        "/api/drafts", headers=_headers(), json={"city": "../alderbank"}
+    )
 
     assert unknown.status_code == 404
     assert escaped.status_code == 404
@@ -100,7 +110,10 @@ def test_city_studio_keeps_real_city_drafts_valid_without_claiming_a_generated_m
     assert created.status_code == 201
     assert created.json()["validation"]["valid"] is True
     assert created.json()["map_available"] is False
-    assert client.get("/api/drafts/portland/map.svg", headers=_headers()).status_code == 404
+    assert (
+        client.get("/api/drafts/portland/map.svg", headers=_headers()).status_code
+        == 404
+    )
 
 
 def test_city_studio_rejects_untrusted_host_headers(tmp_path):

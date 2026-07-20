@@ -21,7 +21,9 @@ def test_city_pack_entry_uses_its_travel_hub_or_first_canonical_place():
     assert _pack_entry_location({}, neighborhoods) == "Commons Bank"
 
 
-def test_world_seed_defaults_to_deterministic_city_pack(client, db_session, monkeypatch):
+def test_world_seed_defaults_to_deterministic_city_pack(
+    client, db_session, monkeypatch
+):
     pack = {
         "neighborhoods": [
             {
@@ -63,7 +65,9 @@ def test_world_seed_defaults_to_deterministic_city_pack(client, db_session, monk
     assert body["nodes_seeded"] == 1
 
 
-def test_world_seed_city_pack_fast_mode_skips_llm_and_writes_graph(client, db_session, monkeypatch):
+def test_world_seed_city_pack_fast_mode_skips_llm_and_writes_graph(
+    client, db_session, monkeypatch
+):
     pack = {
         "neighborhoods": [
             {
@@ -151,16 +155,31 @@ def test_world_seed_city_pack_fast_mode_skips_llm_and_writes_graph(client, db_se
 
     nodes = db_session.query(WorldNode).all()
     assert len(nodes) == 5
-    assert any((node.metadata_json or {}).get("description") == pack["neighborhoods"][0]["vibe"] for node in nodes)
-    assert any((node.metadata_json or {}).get("description") == pack["landmarks"][0]["description"] for node in nodes)
+    assert any(
+        (node.metadata_json or {}).get("description")
+        == pack["neighborhoods"][0]["vibe"]
+        for node in nodes
+    )
+    assert any(
+        (node.metadata_json or {}).get("description")
+        == pack["landmarks"][0]["description"]
+        for node in nodes
+    )
 
     edges = db_session.query(WorldEdge).all()
     assert edges
     assert any(edge.edge_type == "path" for edge in edges)
 
 
-def test_opted_in_game_pack_founds_validated_stoop_fixture(client, db_session, monkeypatch):
-    rules = Path(__file__).resolve().parents[2] / "data" / "rulesets" / "private_constructive_game.v1.example.json"
+def test_opted_in_game_pack_founds_validated_stoop_fixture(
+    client, db_session, monkeypatch
+):
+    rules = (
+        Path(__file__).resolve().parents[2]
+        / "data"
+        / "rulesets"
+        / "private_constructive_game.v1.example.json"
+    )
     monkeypatch.setattr(settings, "shard_experience_path", str(rules))
     monkeypatch.setattr(settings, "shard_id", "test-game-shard")
     pack = {
@@ -219,4 +238,6 @@ def test_opted_in_game_pack_founds_validated_stoop_fixture(client, db_session, m
     assert stoop.location == "Alderbank Commons"
     assert stoop.capacity == 8
     assert db_session.query(MaterialPool).count() == 2
-    assert {row.location for row in db_session.query(MaterialPool).all()} == {"Alderbank Workshop"}
+    assert {row.location for row in db_session.query(MaterialPool).all()} == {
+        "Alderbank Workshop"
+    }

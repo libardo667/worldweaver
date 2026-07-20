@@ -34,12 +34,17 @@ def _build_postgres_url_from_parts() -> Optional[str]:
     user = str(os.environ.get("WW_DB_USER") or "postgres").strip() or "postgres"
     password = str(os.environ.get("WW_DB_PASSWORD") or "postgres")
     port = str(os.environ.get("WW_DB_PORT") or "5432").strip() or "5432"
-    return "postgresql+psycopg://" f"{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{quote_plus(name)}"
+    return (
+        "postgresql+psycopg://"
+        f"{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{quote_plus(name)}"
+    )
 
 
 def resolve_database_url() -> tuple[str, Optional[str]]:
     """Resolve the SQLAlchemy URL and legacy sqlite db file, if any."""
-    explicit_url = (os.environ.get("WW_DATABASE_URL") or os.environ.get("DATABASE_URL") or "").strip()
+    explicit_url = (
+        os.environ.get("WW_DATABASE_URL") or os.environ.get("DATABASE_URL") or ""
+    ).strip()
     if explicit_url:
         return _normalize_database_url(explicit_url), None
 
@@ -50,7 +55,11 @@ def resolve_database_url() -> tuple[str, Optional[str]]:
     db_file = os.environ.get("WW_DB_PATH")
     if not db_file:
         # If running under pytest, prefer the test DB by default.
-        db_file = "test_database.db" if os.environ.get("PYTEST_CURRENT_TEST") else "db/worldweaver.db"
+        db_file = (
+            "test_database.db"
+            if os.environ.get("PYTEST_CURRENT_TEST")
+            else "db/worldweaver.db"
+        )
     return f"sqlite:///{db_file}", db_file
 
 
@@ -70,8 +79,14 @@ def _postgres_engine_kwargs() -> dict:
         "max_overflow": max(0, _env_int("WW_DB_MAX_OVERFLOW", 24)),
         "pool_timeout": max(5, _env_int("WW_DB_POOL_TIMEOUT", 30)),
         "pool_recycle": max(60, _env_int("WW_DB_POOL_RECYCLE", 1800)),
-        "pool_pre_ping": str(os.environ.get("WW_DB_POOL_PRE_PING") or "true").strip().lower() not in {"0", "false", "no"},
-        "pool_use_lifo": str(os.environ.get("WW_DB_POOL_USE_LIFO") or "true").strip().lower() not in {"0", "false", "no"},
+        "pool_pre_ping": str(os.environ.get("WW_DB_POOL_PRE_PING") or "true")
+        .strip()
+        .lower()
+        not in {"0", "false", "no"},
+        "pool_use_lifo": str(os.environ.get("WW_DB_POOL_USE_LIFO") or "true")
+        .strip()
+        .lower()
+        not in {"0", "false", "no"},
     }
 
 

@@ -61,7 +61,11 @@ def evaluate_requirement_value(
                 return False
         return True
 
-    if numeric_fallback_gte and isinstance(requirement, (int, float)) and isinstance(value, (int, float)):
+    if (
+        numeric_fallback_gte
+        and isinstance(requirement, (int, float))
+        and isinstance(value, (int, float))
+    ):
         return value >= requirement
 
     return value == requirement
@@ -77,7 +81,12 @@ def evaluate_requirements(
     """Evaluate a requirements dictionary against current variables."""
     normalized_requires = _normalize_requires_payload(requires)
     for key, requirement in normalized_requires.items():
-        if allow_flexible_location and key == "location" and isinstance(requirement, str) and requirement in _FLEXIBLE_LOCATION_VALUES:
+        if (
+            allow_flexible_location
+            and key == "location"
+            and isinstance(requirement, str)
+            and requirement in _FLEXIBLE_LOCATION_VALUES
+        ):
             continue
 
         if key not in vars:
@@ -85,7 +94,13 @@ def evaluate_requirements(
 
         value = vars.get(key)
 
-        if allow_flexible_location and key == "location" and requirement == "in_vessel" and isinstance(value, str) and value in _VESSEL_LOCATIONS:
+        if (
+            allow_flexible_location
+            and key == "location"
+            and requirement == "in_vessel"
+            and isinstance(value, str)
+            and value in _VESSEL_LOCATIONS
+        ):
             continue
 
         if not evaluate_requirement_value(

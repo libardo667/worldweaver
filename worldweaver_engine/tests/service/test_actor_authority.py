@@ -146,7 +146,9 @@ def test_human_cannot_claim_another_session_and_anonymous_has_no_actor(db_sessio
         password_hash="unused",
     )
     db_session.add(player)
-    db_session.add(SessionVars(session_id="other-session", actor_id="actor-other", vars={}))
+    db_session.add(
+        SessionVars(session_id="other-session", actor_id="actor-other", vars={})
+    )
     db_session.commit()
 
     with pytest.raises(ActorAuthorizationError) as mismatch:
@@ -252,7 +254,9 @@ def test_request_dependency_rejects_mixed_human_and_resident_credentials():
         return {"proof": credentials.player is not None}
 
     with TestClient(app) as client:
-        response = client.post("/probe", headers={RESIDENT_NONCE_HEADER: "partial-proof"})
+        response = client.post(
+            "/probe", headers={RESIDENT_NONCE_HEADER: "partial-proof"}
+        )
 
     assert response.status_code == 400
     assert response.json()["detail"]["code"] == "ambiguous_actor_proof"

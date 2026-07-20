@@ -21,8 +21,16 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     with op.batch_alter_table("federation_travelers") as batch_op:
         batch_op.add_column(sa.Column("travel_id", sa.String(64), nullable=True))
-        batch_op.add_column(sa.Column("actor_type", sa.String(20), nullable=False, server_default="agent"))
-        batch_op.add_column(sa.Column("status", sa.String(20), nullable=False, server_default="departing"))
+        batch_op.add_column(
+            sa.Column(
+                "actor_type", sa.String(20), nullable=False, server_default="agent"
+            )
+        )
+        batch_op.add_column(
+            sa.Column(
+                "status", sa.String(20), nullable=False, server_default="departing"
+            )
+        )
         batch_op.add_column(sa.Column("departure_hub", sa.String(200), nullable=True))
         batch_op.add_column(sa.Column("arrival_hub", sa.String(200), nullable=True))
         batch_op.add_column(sa.Column("reason", sa.String(255), nullable=True))
@@ -41,8 +49,14 @@ def upgrade() -> None:
     )
     connection = op.get_bind()
     now = datetime.now(timezone.utc)
-    for row in connection.execute(sa.select(travelers.c.id, travelers.c.departed_ts, travelers.c.arrived_ts)):
-        status = "arrived" if row.arrived_ts is not None else "traveling" if row.departed_ts is not None else "departing"
+    for row in connection.execute(
+        sa.select(travelers.c.id, travelers.c.departed_ts, travelers.c.arrived_ts)
+    ):
+        status = (
+            "arrived"
+            if row.arrived_ts is not None
+            else "traveling" if row.departed_ts is not None else "departing"
+        )
         requested_at = row.departed_ts or now
         connection.execute(
             travelers.update()
@@ -57,9 +71,21 @@ def upgrade() -> None:
 
     with op.batch_alter_table("federation_travelers") as batch_op:
         batch_op.alter_column("travel_id", existing_type=sa.String(64), nullable=False)
-        batch_op.alter_column("requested_ts", existing_type=sa.DateTime(), nullable=False, server_default=sa.func.now())
-        batch_op.alter_column("updated_at", existing_type=sa.DateTime(), nullable=True, server_default=sa.func.now())
-        batch_op.create_index("ix_federation_travelers_travel_id", ["travel_id"], unique=True)
+        batch_op.alter_column(
+            "requested_ts",
+            existing_type=sa.DateTime(),
+            nullable=False,
+            server_default=sa.func.now(),
+        )
+        batch_op.alter_column(
+            "updated_at",
+            existing_type=sa.DateTime(),
+            nullable=True,
+            server_default=sa.func.now(),
+        )
+        batch_op.create_index(
+            "ix_federation_travelers_travel_id", ["travel_id"], unique=True
+        )
 
 
 def downgrade() -> None:

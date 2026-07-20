@@ -35,13 +35,18 @@ def test_draft_store_saves_valid_preview_away_from_published_packs(tmp_path):
     assert (drafts / "alderbank" / "source.json").exists()
     assert (drafts / "alderbank" / "preview" / "generated_map.json").exists()
     assert (drafts / "alderbank" / "preview" / "generated_map.svg").exists()
-    section_preview = (drafts / "alderbank" / "preview" / "sections" / "section-0-0.svg").read_text(encoding="utf-8")
+    section_preview = (
+        drafts / "alderbank" / "preview" / "sections" / "section-0-0.svg"
+    ).read_text(encoding="utf-8")
     assert 'viewBox="0 0 18 18"' in section_preview
     assert store.list() == (draft.metadata,)
 
     loaded = store.get("alderbank")
     assert loaded.metadata == draft.metadata
-    assert loaded.preview.files["generated_map.json"]["artifact_sha256"] == draft.metadata["artifact_sha256"]
+    assert (
+        loaded.preview.files["generated_map.json"]["artifact_sha256"]
+        == draft.metadata["artifact_sha256"]
+    )
 
 
 def test_section_edits_rebuild_only_the_draft(tmp_path):
@@ -64,10 +69,19 @@ def test_section_edits_rebuild_only_the_draft(tmp_path):
     assert original.metadata["draft_revision"] == 0
     assert unlocked.metadata["draft_revision"] == 1
     assert rerolled.metadata["draft_revision"] == 2
-    original_sections = {section["id"]: section for section in original.preview.files["generated_map.json"]["sections"]}
-    rerolled_sections = {section["id"]: section for section in rerolled.preview.files["generated_map.json"]["sections"]}
+    original_sections = {
+        section["id"]: section
+        for section in original.preview.files["generated_map.json"]["sections"]
+    }
+    rerolled_sections = {
+        section["id"]: section
+        for section in rerolled.preview.files["generated_map.json"]["sections"]
+    }
     assert rerolled_sections["section-0-0"]["revision"] == 1
-    assert rerolled_sections["section-0-0"]["detail"]["sha256"] != original_sections["section-0-0"]["detail"]["sha256"]
+    assert (
+        rerolled_sections["section-0-0"]["detail"]["sha256"]
+        != original_sections["section-0-0"]["detail"]["sha256"]
+    )
     for section_id in original_sections.keys() - {"section-0-0"}:
         assert rerolled_sections[section_id] == original_sections[section_id]
 

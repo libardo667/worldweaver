@@ -26,7 +26,9 @@ class EventSubmissionError(ValueError):
 def structural_event_idempotency_key(namespace: str, caller_key: str) -> str:
     """Keep structural retry keys from colliding with unrelated event commands."""
 
-    safe_namespace = "".join(char for char in str(namespace or "").lower() if char.isalnum() or char in "._-")[:48]
+    safe_namespace = "".join(
+        char for char in str(namespace or "").lower() if char.isalnum() or char in "._-"
+    )[:48]
     if not safe_namespace:
         raise EventSubmissionError("structural event namespace must not be blank")
     digest = hashlib.sha256(str(caller_key or "").encode("utf-8")).hexdigest()[:32]
@@ -85,7 +87,9 @@ def _validate_command(command: WorldEventCommand) -> None:
     if not str(command.summary or "").strip():
         raise EventSubmissionError("summary must not be blank")
     if command.session_id is not None and len(str(command.session_id)) > 64:
-        raise EventSubmissionError("session_id exceeds the 64-character storage contract")
+        raise EventSubmissionError(
+            "session_id exceeds the 64-character storage contract"
+        )
     if not isinstance(command.delta, Mapping):
         raise EventSubmissionError("delta must be a mapping")
     if not isinstance(command.metadata, Mapping):
@@ -93,11 +97,17 @@ def _validate_command(command: WorldEventCommand) -> None:
     if command.intent is not None and command.state_manager is None:
         raise EventSubmissionError("state_manager is required when intent is provided")
     if command.intent is None and command.state_manager is not None:
-        raise EventSubmissionError("state_manager mutations require an explicit reducer intent")
+        raise EventSubmissionError(
+            "state_manager mutations require an explicit reducer intent"
+        )
     if command.idempotency_key and not command.session_id:
         raise EventSubmissionError("idempotency_key requires session_id")
-    if command.defer_commit and (not command.skip_graph_extraction or not command.skip_projection):
-        raise EventSubmissionError("deferred commit requires graph extraction and projection to be skipped")
+    if command.defer_commit and (
+        not command.skip_graph_extraction or not command.skip_projection
+    ):
+        raise EventSubmissionError(
+            "deferred commit requires graph extraction and projection to be skipped"
+        )
 
 
 def _record_command(
@@ -107,14 +117,18 @@ def _record_command(
 ) -> WorldEventReceipt:
     reducer_receipt = prepared.reducer_receipt if prepared is not None else None
     try:
-        persisted_delta = dict(reducer_receipt.applied_changes) if reducer_receipt is not None else {}
+        persisted_delta = (
+            dict(reducer_receipt.applied_changes) if reducer_receipt is not None else {}
+        )
         # Explicit event payload is the final validated representation and may
         # intentionally refine a raw reducer key (for example, location →
         # sublocation after graph validation).
         persisted_delta.update(command.delta)
         persisted_metadata = dict(command.metadata)
         if reducer_receipt is not None:
-            persisted_metadata.setdefault("reducer_receipt", reducer_receipt.model_dump())
+            persisted_metadata.setdefault(
+                "reducer_receipt", reducer_receipt.model_dump()
+            )
 
         event = record_event(
             db=db,
@@ -138,7 +152,13 @@ def _record_command(
 
     projection_paths: tuple[str, ...] = ()
     if event.id is not None and not command.skip_projection:
-        projection_paths = tuple(row[0] for row in db.query(WorldProjection.path).filter(WorldProjection.source_event_id == int(event.id)).order_by(WorldProjection.path.asc()).all())
+        projection_paths = tuple(
+            row[0]
+            for row in db.query(WorldProjection.path)
+            .filter(WorldProjection.source_event_id == int(event.id))
+            .order_by(WorldProjection.path.asc())
+            .all()
+        )
 
     return WorldEventReceipt(
         event=event,
@@ -187,7 +207,9 @@ def submit_prepared_world_event(
     try:
         _validate_command(command)
         if command.intent is not None or command.state_manager is not None:
-            raise EventSubmissionError("prepared submission must not provide a second intent or state_manager")
+            raise EventSubmissionError(
+                "prepared submission must not provide a second intent or state_manager"
+            )
     except Exception:
         cancel_prepared_world_event(db, prepared)
         raise

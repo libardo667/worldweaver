@@ -12,7 +12,13 @@ from typing import Any
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..models import DurableObject, StoopObjectEntry, StoopReceipt, WorldNode, WorldStoop
+from ..models import (
+    DurableObject,
+    StoopObjectEntry,
+    StoopReceipt,
+    WorldNode,
+    WorldStoop,
+)
 from .consequence_objects import (
     ActorContext,
     ConsequenceDomainError,
@@ -21,7 +27,11 @@ from .consequence_objects import (
     durable_object_payload,
     require_consequence_capabilities,
 )
-from .event_submission import WorldEventCommand, structural_event_idempotency_key, submit_world_event
+from .event_submission import (
+    WorldEventCommand,
+    structural_event_idempotency_key,
+    submit_world_event,
+)
 from .shard_experience import GameCapability
 
 _STOOP_ID_RE = re.compile(r"^[a-z0-9]+(?:[._-][a-z0-9]+)*$")
@@ -69,21 +79,52 @@ def found_world_stoop(
     safe_prompt = str(prompt or "").strip()
     safe_location = str(location or "").strip()
     if not _STOOP_ID_RE.fullmatch(safe_id) or len(safe_id) > 80:
-        raise ConsequenceDomainError("invalid_stoop_id", "Stoop ID must be a bounded lowercase identifier.", status_code=422)
+        raise ConsequenceDomainError(
+            "invalid_stoop_id",
+            "Stoop ID must be a bounded lowercase identifier.",
+            status_code=422,
+        )
     if not safe_title or len(safe_title) > 120:
-        raise ConsequenceDomainError("invalid_stoop_title", "Stoop title must contain 1 to 120 characters.", status_code=422)
+        raise ConsequenceDomainError(
+            "invalid_stoop_title",
+            "Stoop title must contain 1 to 120 characters.",
+            status_code=422,
+        )
     if len(safe_prompt) > 500:
-        raise ConsequenceDomainError("invalid_stoop_prompt", "Stoop prompt cannot exceed 500 characters.", status_code=422)
-    if not safe_location or len(safe_location) > 200 or not _known_exact_place(db, safe_location):
-        raise ConsequenceDomainError("stoop_location_not_found", "The stoop's exact place does not exist.", status_code=404)
+        raise ConsequenceDomainError(
+            "invalid_stoop_prompt",
+            "Stoop prompt cannot exceed 500 characters.",
+            status_code=422,
+        )
+    if (
+        not safe_location
+        or len(safe_location) > 200
+        or not _known_exact_place(db, safe_location)
+    ):
+        raise ConsequenceDomainError(
+            "stoop_location_not_found",
+            "The stoop's exact place does not exist.",
+            status_code=404,
+        )
     if not 1 <= int(capacity) <= 50:
-        raise ConsequenceDomainError("invalid_stoop_capacity", "Stoop capacity must be between 1 and 50.", status_code=422)
+        raise ConsequenceDomainError(
+            "invalid_stoop_capacity",
+            "Stoop capacity must be between 1 and 50.",
+            status_code=422,
+        )
     existing = db.get(WorldStoop, safe_id)
     if existing is not None:
         expected = (safe_title, safe_prompt, safe_location, int(capacity))
-        current = (str(existing.title), str(existing.prompt or ""), str(existing.location), int(existing.capacity))
+        current = (
+            str(existing.title),
+            str(existing.prompt or ""),
+            str(existing.location),
+            int(existing.capacity),
+        )
         if current != expected:
-            raise ConsequenceDomainError("stoop_already_exists", "That stoop ID already names different setup.")
+            raise ConsequenceDomainError(
+                "stoop_already_exists", "That stoop ID already names different setup."
+            )
         return existing
     row = WorldStoop(
         stoop_id=safe_id,
@@ -105,7 +146,9 @@ def _stoop(db: Session, stoop_id: str, *, lock: bool = False) -> WorldStoop:
         query = query.with_for_update()
     row = query.one_or_none()
     if row is None:
-        raise ConsequenceDomainError("stoop_not_found", "World stoop not found.", status_code=404)
+        raise ConsequenceDomainError(
+            "stoop_not_found", "World stoop not found.", status_code=404
+        )
     return row
 
 
@@ -116,7 +159,9 @@ def _entry(db: Session, entry_id: str, *, lock: bool = False) -> StoopObjectEntr
         query = query.with_for_update()
     row = query.one_or_none()
     if row is None:
-        raise ConsequenceDomainError("stoop_entry_not_found", "Stoop entry not found.", status_code=404)
+        raise ConsequenceDomainError(
+            "stoop_entry_not_found", "Stoop entry not found.", status_code=404
+        )
     return row
 
 
@@ -129,7 +174,9 @@ def _object(db: Session, object_id: str, *, lock: bool = False) -> DurableObject
         query = query.with_for_update()
     row = query.one_or_none()
     if row is None:
-        raise ConsequenceDomainError("object_not_found", "Durable object not found.", status_code=404)
+        raise ConsequenceDomainError(
+            "object_not_found", "Durable object not found.", status_code=404
+        )
     return row
 
 
@@ -191,15 +238,29 @@ def _entry_payload(
 
 
 def _stoops_at_location(db: Session, location: str) -> dict[str, Any]:
-    rows = db.query(WorldStoop).filter(WorldStoop.location == location).order_by(WorldStoop.title.asc()).all()
-    stoops = [_stoop_payload(row, active_count=_active_count(db, str(row.stoop_id))) for row in rows]
+    rows = (
+        db.query(WorldStoop)
+        .filter(WorldStoop.location == location)
+        .order_by(WorldStoop.title.asc())
+        .all()
+    )
+    stoops = [
+        _stoop_payload(row, active_count=_active_count(db, str(row.stoop_id)))
+        for row in rows
+    ]
     return {"location": location, "stoops": stoops, "count": len(stoops)}
 
 
-def _browse_stoop_at_location(db: Session, stoop_id: str, location: str, viewer_actor_id: str | None) -> dict[str, Any]:
+def _browse_stoop_at_location(
+    db: Session, stoop_id: str, location: str, viewer_actor_id: str | None
+) -> dict[str, Any]:
     stoop = _stoop(db, stoop_id)
     if stoop.location != location:
-        raise ConsequenceDomainError("stoop_not_here", "You must be at the stoop's exact place to browse it.", status_code=403)
+        raise ConsequenceDomainError(
+            "stoop_not_here",
+            "You must be at the stoop's exact place to browse it.",
+            status_code=403,
+        )
     rows = (
         db.query(StoopObjectEntry)
         .filter(
@@ -239,11 +300,17 @@ def local_stoops_at(db: Session, *, location: str) -> dict[str, Any]:
     _require_stoop_capabilities()
     safe_location = str(location or "").strip()
     if not safe_location:
-        raise ConsequenceDomainError("location_required", "A location is required to look at stoops.", status_code=400)
+        raise ConsequenceDomainError(
+            "location_required",
+            "A location is required to look at stoops.",
+            status_code=400,
+        )
     return _stoops_at_location(db, safe_location)
 
 
-def browse_world_stoop(db: Session, *, session_id: str, stoop_id: str) -> dict[str, Any]:
+def browse_world_stoop(
+    db: Session, *, session_id: str, stoop_id: str
+) -> dict[str, Any]:
     """Electively browse one stoop only while physically at its exact place."""
 
     _require_stoop_capabilities()
@@ -251,7 +318,9 @@ def browse_world_stoop(db: Session, *, session_id: str, stoop_id: str) -> dict[s
     return _browse_stoop_at_location(db, stoop_id, context.location, context.actor_id)
 
 
-def browse_world_stoop_at(db: Session, *, location: str, stoop_id: str) -> dict[str, Any]:
+def browse_world_stoop_at(
+    db: Session, *, location: str, stoop_id: str
+) -> dict[str, Any]:
     """Electively browse one stoop as a sessionless onlooker viewing its place.
 
     Entries carry no take/withdraw affordances — looking is not holding.
@@ -260,7 +329,11 @@ def browse_world_stoop_at(db: Session, *, location: str, stoop_id: str) -> dict[
     _require_stoop_capabilities()
     safe_location = str(location or "").strip()
     if not safe_location:
-        raise ConsequenceDomainError("location_required", "A location is required to browse a stoop.", status_code=400)
+        raise ConsequenceDomainError(
+            "location_required",
+            "A location is required to browse a stoop.",
+            status_code=400,
+        )
     return _browse_stoop_at_location(db, stoop_id, safe_location, None)
 
 
@@ -282,8 +355,13 @@ def _existing_receipt(
     )
     if row is None:
         return None
-    if row.operation != operation or (entry_id is not None and row.entry_id != entry_id):
-        raise ConsequenceDomainError("idempotency_conflict", "That retry key was already used for a different stoop command.")
+    if row.operation != operation or (
+        entry_id is not None and row.entry_id != entry_id
+    ):
+        raise ConsequenceDomainError(
+            "idempotency_conflict",
+            "That retry key was already used for a different stoop command.",
+        )
     return row
 
 
@@ -362,7 +440,9 @@ def _recover_duplicate(
         entry_id=entry_id,
     )
     if row is None:
-        raise ConsequenceDomainError("transaction_conflict", "The stoop command conflicted and was not applied.")
+        raise ConsequenceDomainError(
+            "transaction_conflict", "The stoop command conflicted and was not applied."
+        )
     return _receipt_payload(row, replayed=True)
 
 
@@ -390,7 +470,11 @@ def leave_object_on_stoop(
     try:
         stoop = _stoop(db, stoop_id, lock=True)
         if stoop.location != context.location:
-            raise ConsequenceDomainError("stoop_not_here", "You must be at the stoop's exact place to leave an object.", status_code=403)
+            raise ConsequenceDomainError(
+                "stoop_not_here",
+                "You must be at the stoop's exact place to leave an object.",
+                status_code=403,
+            )
         active_count = _active_count(db, str(stoop.stoop_id))
         if active_count >= int(stoop.capacity):
             raise ConsequenceDomainError(
@@ -399,7 +483,11 @@ def leave_object_on_stoop(
             )
         object_row = _object(db, object_id, lock=True)
         if object_row.custodian_actor_id != context.actor_id:
-            raise ConsequenceDomainError("not_custodian", "Only the current custodian can leave this object.", status_code=403)
+            raise ConsequenceDomainError(
+                "not_custodian",
+                "Only the current custodian can leave this object.",
+                status_code=403,
+            )
         active_entry = (
             db.query(StoopObjectEntry)
             .filter(
@@ -409,7 +497,9 @@ def leave_object_on_stoop(
             .one_or_none()
         )
         if active_entry is not None:
-            raise ConsequenceDomainError("object_already_on_stoop", "That object is already active on a stoop.")
+            raise ConsequenceDomainError(
+                "object_already_on_stoop", "That object is already active on a stoop."
+            )
         object_row.custodian_actor_id = None
         object_row.location = str(stoop.location)
         object_row.placed_by_actor_id = None
@@ -424,7 +514,9 @@ def leave_object_on_stoop(
         db.add(entry)
         db.flush()
         stoop_payload = _stoop_payload(stoop, active_count=active_count + 1)
-        entry_payload = _entry_payload(entry, object_row=object_row, viewer_actor_id=context.actor_id)
+        entry_payload = _entry_payload(
+            entry, object_row=object_row, viewer_actor_id=context.actor_id
+        )
         return _finish(
             db,
             context=context,
@@ -459,7 +551,9 @@ def _resolve_stoop_entry(
     context = consequence_actor_context(db, session_id)
     key = consequence_idempotency_key(idempotency_key)
     safe_entry_id = str(entry_id or "").strip()
-    operation = "stoop_object_taken" if resolution == "taken" else "stoop_object_withdrawn"
+    operation = (
+        "stoop_object_taken" if resolution == "taken" else "stoop_object_withdrawn"
+    )
     existing = _existing_receipt(
         db,
         actor_id=context.actor_id,
@@ -472,17 +566,37 @@ def _resolve_stoop_entry(
     try:
         entry = _entry(db, safe_entry_id, lock=True)
         if entry.status != "active":
-            raise ConsequenceDomainError("stoop_entry_not_active", "That stoop entry is no longer available.")
+            raise ConsequenceDomainError(
+                "stoop_entry_not_active", "That stoop entry is no longer available."
+            )
         stoop = _stoop(db, str(entry.stoop_id), lock=True)
         if stoop.location != context.location:
-            raise ConsequenceDomainError("stoop_not_here", "You must be at the stoop's exact place to move this object.", status_code=403)
+            raise ConsequenceDomainError(
+                "stoop_not_here",
+                "You must be at the stoop's exact place to move this object.",
+                status_code=403,
+            )
         if resolution == "taken" and entry.left_by_actor_id == context.actor_id:
-            raise ConsequenceDomainError("use_stoop_withdraw", "The depositor should withdraw their own object instead of taking it.", status_code=422)
+            raise ConsequenceDomainError(
+                "use_stoop_withdraw",
+                "The depositor should withdraw their own object instead of taking it.",
+                status_code=422,
+            )
         if resolution == "withdrawn" and entry.left_by_actor_id != context.actor_id:
-            raise ConsequenceDomainError("not_stoop_depositor", "Only the depositor can withdraw this object.", status_code=403)
+            raise ConsequenceDomainError(
+                "not_stoop_depositor",
+                "Only the depositor can withdraw this object.",
+                status_code=403,
+            )
         object_row = _object(db, str(entry.object_id), lock=True)
-        if object_row.custodian_actor_id is not None or object_row.location != stoop.location:
-            raise ConsequenceDomainError("stoop_object_mismatch", "The stoop entry and object attachment no longer agree.")
+        if (
+            object_row.custodian_actor_id is not None
+            or object_row.location != stoop.location
+        ):
+            raise ConsequenceDomainError(
+                "stoop_object_mismatch",
+                "The stoop entry and object attachment no longer agree.",
+            )
         object_row.custodian_actor_id = context.actor_id
         object_row.location = None
         object_row.placed_by_actor_id = None
@@ -493,7 +607,9 @@ def _resolve_stoop_entry(
         db.flush()
         active_count = _active_count(db, str(stoop.stoop_id))
         stoop_payload = _stoop_payload(stoop, active_count=active_count)
-        entry_payload = _entry_payload(entry, object_row=object_row, viewer_actor_id=context.actor_id)
+        entry_payload = _entry_payload(
+            entry, object_row=object_row, viewer_actor_id=context.actor_id
+        )
         verb = "taken from" if resolution == "taken" else "withdrawn from"
         return _finish(
             db,

@@ -63,7 +63,9 @@ def test_reduces_intent_and_persists_reducer_receipt(db_session):
     assert receipt.reducer_receipt is not None
     assert receipt.reducer_receipt.applied_changes == {"trust": 17}
     assert receipt.event.world_state_delta["trust"] == 17
-    assert receipt.event.world_state_delta[ACTION_METADATA_KEY]["reducer_receipt"]["applied_changes"] == {"trust": 17}
+    assert receipt.event.world_state_delta[ACTION_METADATA_KEY]["reducer_receipt"][
+        "applied_changes"
+    ] == {"trust": 17}
 
 
 @pytest.mark.parametrize(

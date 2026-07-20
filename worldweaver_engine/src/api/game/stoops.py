@@ -26,7 +26,9 @@ router = APIRouter(prefix="/world/stoops", tags=["world stoops"])
 
 class StoopCommandRequest(BaseModel):
     session_id: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
-    idempotency_key: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:-]+$")
+    idempotency_key: str = Field(
+        min_length=1, max_length=128, pattern=r"^[A-Za-z0-9._:-]+$"
+    )
 
 
 class LeaveStoopObjectRequest(StoopCommandRequest):
@@ -42,7 +44,9 @@ def _raise_http(exc: ConsequenceDomainError) -> None:
 
 @router.get("")
 def get_local_stoops(
-    session_id: str | None = Query(default=None, min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"),
+    session_id: str | None = Query(
+        default=None, min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"
+    ),
     location: str | None = Query(default=None, min_length=1, max_length=200),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
@@ -65,7 +69,9 @@ def get_local_stoops(
 @router.get("/{stoop_id}")
 def get_world_stoop(
     stoop_id: str,
-    session_id: str | None = Query(default=None, min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"),
+    session_id: str | None = Query(
+        default=None, min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"
+    ),
     location: str | None = Query(default=None, min_length=1, max_length=200),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:

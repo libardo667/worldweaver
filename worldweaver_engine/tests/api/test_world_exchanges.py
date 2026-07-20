@@ -9,7 +9,12 @@ from src.services.consequence_objects import found_durable_object
 
 @pytest.fixture()
 def game_rules(monkeypatch):
-    example = Path(__file__).resolve().parents[2] / "data" / "rulesets" / "private_constructive_game.v1.example.json"
+    example = (
+        Path(__file__).resolve().parents[2]
+        / "data"
+        / "rulesets"
+        / "private_constructive_game.v1.example.json"
+    )
     monkeypatch.setattr(settings, "shard_experience_path", str(example))
     monkeypatch.setattr(settings, "shard_id", "test-game-shard")
 
@@ -37,7 +42,9 @@ def _object(db, session_id: str, key: str, name: str) -> str:
     ).object["object_id"]
 
 
-def test_exchange_routes_offer_list_and_atomically_accept(client, db_session, game_rules):
+def test_exchange_routes_offer_list_and_atomically_accept(
+    client, db_session, game_rules
+):
     _session(db_session, "proposer", "actor-proposer")
     _session(db_session, "recipient", "actor-recipient")
     cup_id = _object(db_session, "proposer", "api-cup", "Blue cup")
@@ -60,7 +67,9 @@ def test_exchange_routes_offer_list_and_atomically_accept(client, db_session, ga
     assert listed.status_code == 200
     assert listed.json()["exchanges"][0]["can_accept"] is True
     assert listed.json()["offer_options"][0]["recipient_session_id"] == "proposer"
-    assert listed.json()["offer_options"][0]["requested_objects"][0]["object_id"] == cup_id
+    assert (
+        listed.json()["offer_options"][0]["requested_objects"][0]["object_id"] == cup_id
+    )
 
     payload = {"session_id": "recipient", "idempotency_key": "api-accept"}
     accepted = client.post(f"/api/world/exchanges/{exchange_id}/accept", json=payload)
@@ -71,7 +80,9 @@ def test_exchange_routes_offer_list_and_atomically_accept(client, db_session, ga
     assert replay.status_code == 200
     assert replay.json()["replayed"] is True
     assert db_session.get(DurableObject, cup_id).custodian_actor_id == "actor-recipient"
-    assert db_session.get(DurableObject, token_id).custodian_actor_id == "actor-proposer"
+    assert (
+        db_session.get(DurableObject, token_id).custodian_actor_id == "actor-proposer"
+    )
     assert db_session.query(ExchangeReceipt).count() == 2
 
 

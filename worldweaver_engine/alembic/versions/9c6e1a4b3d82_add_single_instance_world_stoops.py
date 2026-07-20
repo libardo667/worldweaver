@@ -28,8 +28,12 @@ def upgrade() -> None:
         sa.Column("prompt", sa.String(length=500), nullable=False),
         sa.Column("location", sa.String(length=200), nullable=False),
         sa.Column("capacity", sa.Integer(), nullable=False),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(), server_default=sa.func.now(), nullable=False
+        ),
         sa.CheckConstraint(
             "capacity > 0 AND capacity <= 50",
             name="ck_world_stoops_bounded_capacity",
@@ -47,7 +51,9 @@ def upgrade() -> None:
         sa.Column("taken_by_actor_id", sa.String(length=36), nullable=True),
         sa.Column("status", sa.String(length=20), nullable=False),
         sa.Column("object_revision_at_leave", sa.Integer(), nullable=False),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False
+        ),
         sa.Column("resolved_at", sa.DateTime(), nullable=True),
         sa.CheckConstraint(
             "status IN ('active', 'taken', 'withdrawn')",
@@ -87,7 +93,9 @@ def upgrade() -> None:
         sa.Column("entry_id", sa.String(length=36), nullable=False),
         sa.Column("world_event_id", sa.Integer(), nullable=False),
         sa.Column("payload_json", sa.JSON(), nullable=False),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False
+        ),
         sa.ForeignKeyConstraint(
             ["entry_id"],
             ["stoop_object_entries.entry_id"],
@@ -119,8 +127,12 @@ def downgrade() -> None:
     op.drop_index("ix_stoop_receipts_entry_created", table_name="stoop_receipts")
     op.drop_index("ix_stoop_receipts_actor_id", table_name="stoop_receipts")
     op.drop_table("stoop_receipts")
-    op.drop_index("ix_stoop_object_entries_stoop_status", table_name="stoop_object_entries")
-    op.drop_index("ix_stoop_object_entries_object_status", table_name="stoop_object_entries")
+    op.drop_index(
+        "ix_stoop_object_entries_stoop_status", table_name="stoop_object_entries"
+    )
+    op.drop_index(
+        "ix_stoop_object_entries_object_status", table_name="stoop_object_entries"
+    )
     op.drop_table("stoop_object_entries")
     op.drop_index("ix_world_stoops_location", table_name="world_stoops")
     op.drop_table("world_stoops")

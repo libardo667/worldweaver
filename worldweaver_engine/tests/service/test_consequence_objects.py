@@ -17,7 +17,12 @@ from src.services.event_submission import WorldEventCommand, submit_world_event
 
 @pytest.fixture()
 def game_rules(monkeypatch):
-    example = Path(__file__).resolve().parents[2] / "data" / "rulesets" / "private_constructive_game.v1.example.json"
+    example = (
+        Path(__file__).resolve().parents[2]
+        / "data"
+        / "rulesets"
+        / "private_constructive_game.v1.example.json"
+    )
     monkeypatch.setattr(settings, "shard_experience_path", str(example))
     monkeypatch.setattr(settings, "shard_id", "test-game-shard")
 
@@ -46,7 +51,9 @@ def _found(db, *, session_id: str = "maker-session", key: str = "found-1"):
     )
 
 
-def test_founded_object_has_stable_identity_provenance_and_receipt(db_session, game_rules):
+def test_founded_object_has_stable_identity_provenance_and_receipt(
+    db_session, game_rules
+):
     _session(db_session, "maker-session", "actor-maker", "workshop-table")
 
     result = _found(db_session)
@@ -66,7 +73,9 @@ def test_founded_object_has_stable_identity_provenance_and_receipt(db_session, g
     assert event.event_type == "object_founded"
 
 
-def test_narrative_event_cannot_create_or_mutate_canonical_objects(db_session, game_rules):
+def test_narrative_event_cannot_create_or_mutate_canonical_objects(
+    db_session, game_rules
+):
     _session(db_session, "maker-session", "actor-maker", "workshop-table")
     founded = _found(db_session)
     object_id = founded.object["object_id"]
@@ -111,12 +120,23 @@ def test_placement_is_exact_restart_safe_and_evidence_backed(db_session, game_ru
     assert object_row.location == "quiet-window-seat"
     assert object_row.placed_by_actor_id == "actor-maker"
     assert object_row.revision == 2
-    assert placed.object["attachment"] == {"kind": "place", "location": "quiet-window-seat"}
-    assert [row.operation for row in db_session.query(ConsequenceReceipt).order_by(ConsequenceReceipt.id).all()] == [
+    assert placed.object["attachment"] == {
+        "kind": "place",
+        "location": "quiet-window-seat",
+    }
+    assert [
+        row.operation
+        for row in db_session.query(ConsequenceReceipt)
+        .order_by(ConsequenceReceipt.id)
+        .all()
+    ] == [
         "object_founded",
         "object_placed",
     ]
-    assert [row.event_type for row in db_session.query(WorldEvent).order_by(WorldEvent.id).all()] == [
+    assert [
+        row.event_type
+        for row in db_session.query(WorldEvent).order_by(WorldEvent.id).all()
+    ] == [
         "object_founded",
         "object_placed",
     ]
@@ -134,8 +154,18 @@ def test_only_the_placer_can_pick_an_ordinary_object_back_up(db_session, game_ru
         idempotency_key="place-for-pickup",
     )
 
-    assert visible_durable_objects(db_session, session_id="maker-session")[0]["can_pick_up"] is True
-    assert visible_durable_objects(db_session, session_id="neighbor-session")[0]["can_pick_up"] is False
+    assert (
+        visible_durable_objects(db_session, session_id="maker-session")[0][
+            "can_pick_up"
+        ]
+        is True
+    )
+    assert (
+        visible_durable_objects(db_session, session_id="neighbor-session")[0][
+            "can_pick_up"
+        ]
+        is False
+    )
     with pytest.raises(ConsequenceDomainError, match="actor who placed"):
         pick_up_durable_object(
             db_session,
@@ -161,9 +191,15 @@ def test_only_the_placer_can_pick_an_ordinary_object_back_up(db_session, game_ru
     assert object_row.custodian_actor_id == "actor-maker"
     assert object_row.location is None
     assert object_row.placed_by_actor_id is None
-    assert picked_up.object["attachment"] == {"kind": "custody", "actor_id": "actor-maker"}
+    assert picked_up.object["attachment"] == {
+        "kind": "custody",
+        "actor_id": "actor-maker",
+    }
     assert replay.replayed is True
-    assert [row.event_type for row in db_session.query(WorldEvent).order_by(WorldEvent.id).all()] == [
+    assert [
+        row.event_type
+        for row in db_session.query(WorldEvent).order_by(WorldEvent.id).all()
+    ] == [
         "object_founded",
         "object_placed",
         "object_picked_up",
@@ -183,9 +219,17 @@ def test_giving_requires_current_custody_and_exact_colocation(db_session, game_r
         idempotency_key="give-1",
     )
 
-    assert given.object["attachment"] == {"kind": "custody", "actor_id": "actor-neighbor"}
+    assert given.object["attachment"] == {
+        "kind": "custody",
+        "actor_id": "actor-neighbor",
+    }
     assert visible_durable_objects(db_session, session_id="maker-session") == []
-    assert visible_durable_objects(db_session, session_id="neighbor-session")[0]["relation"] == "carried"
+    assert (
+        visible_durable_objects(db_session, session_id="neighbor-session")[0][
+            "relation"
+        ]
+        == "carried"
+    )
 
     with pytest.raises(ConsequenceDomainError, match="current custodian"):
         give_durable_object(
@@ -222,7 +266,9 @@ def test_failed_give_changes_nothing(db_session, game_rules):
     assert db_session.query(WorldEvent).count() == 1
 
 
-def test_event_failure_rolls_back_custody_and_receipt(db_session, game_rules, monkeypatch):
+def test_event_failure_rolls_back_custody_and_receipt(
+    db_session, game_rules, monkeypatch
+):
     _session(db_session, "maker-session", "actor-maker", "maker-bench")
     _session(db_session, "neighbor-session", "actor-neighbor", "maker-bench")
     founded = _found(db_session)
@@ -230,7 +276,9 @@ def test_event_failure_rolls_back_custody_and_receipt(db_session, game_rules, mo
     def fail_event(*_args, **_kwargs):
         raise RuntimeError("event store unavailable")
 
-    monkeypatch.setattr("src.services.consequence_objects.submit_world_event", fail_event)
+    monkeypatch.setattr(
+        "src.services.consequence_objects.submit_world_event", fail_event
+    )
 
     with pytest.raises(RuntimeError, match="event store unavailable"):
         give_durable_object(

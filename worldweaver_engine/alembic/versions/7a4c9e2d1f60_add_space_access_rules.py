@@ -28,8 +28,12 @@ def upgrade() -> None:
         sa.Column("controller_actor_id", sa.String(length=36), nullable=False),
         sa.Column("note", sa.String(length=500), nullable=False),
         sa.Column("revision", sa.Integer(), nullable=False),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(), server_default=sa.func.now(), nullable=False
+        ),
         sa.CheckConstraint(
             "mode IN ('public', 'requestable', 'private', 'closed')",
             name="ck_space_access_policies_known_mode",
@@ -50,11 +54,19 @@ def upgrade() -> None:
         sa.Column("active", sa.Boolean(), nullable=False),
         sa.Column("granted_by_actor_id", sa.String(length=36), nullable=False),
         sa.Column("revision", sa.Integer(), nullable=False),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
-        sa.Column("updated_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
-        sa.ForeignKeyConstraint(["location"], ["space_access_policies.location"], ondelete="RESTRICT"),
+        sa.Column(
+            "created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(), server_default=sa.func.now(), nullable=False
+        ),
+        sa.ForeignKeyConstraint(
+            ["location"], ["space_access_policies.location"], ondelete="RESTRICT"
+        ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("location", "actor_id", name="uq_space_access_grants_location_actor"),
+        sa.UniqueConstraint(
+            "location", "actor_id", name="uq_space_access_grants_location_actor"
+        ),
     )
     op.create_index(
         "ix_space_access_grants_actor_active",
@@ -71,13 +83,17 @@ def upgrade() -> None:
         sa.Column("note", sa.String(length=500), nullable=False),
         sa.Column("status", sa.String(length=20), nullable=False),
         sa.Column("resolved_by_actor_id", sa.String(length=36), nullable=True),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False
+        ),
         sa.Column("resolved_at", sa.DateTime(), nullable=True),
         sa.CheckConstraint(
             "status IN ('pending', 'admitted', 'denied', 'withdrawn')",
             name="ck_space_access_requests_known_status",
         ),
-        sa.ForeignKeyConstraint(["location"], ["space_access_policies.location"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["location"], ["space_access_policies.location"], ondelete="RESTRICT"
+        ),
         sa.PrimaryKeyConstraint("request_id"),
     )
     op.create_index(
@@ -102,8 +118,12 @@ def upgrade() -> None:
         sa.Column("location", sa.String(length=200), nullable=False),
         sa.Column("world_event_id", sa.Integer(), nullable=True),
         sa.Column("payload_json", sa.JSON(), nullable=False),
-        sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
-        sa.ForeignKeyConstraint(["world_event_id"], ["world_events.id"], ondelete="RESTRICT"),
+        sa.Column(
+            "created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False
+        ),
+        sa.ForeignKeyConstraint(
+            ["world_event_id"], ["world_events.id"], ondelete="RESTRICT"
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("receipt_id"),
         sa.UniqueConstraint("world_event_id"),
@@ -126,13 +146,27 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_space_access_receipts_location_created", table_name="space_access_receipts")
-    op.drop_index("ix_space_access_receipts_actor_id", table_name="space_access_receipts")
+    op.drop_index(
+        "ix_space_access_receipts_location_created", table_name="space_access_receipts"
+    )
+    op.drop_index(
+        "ix_space_access_receipts_actor_id", table_name="space_access_receipts"
+    )
     op.drop_table("space_access_receipts")
-    op.drop_index("ix_space_access_requests_requester_actor_id", table_name="space_access_requests")
-    op.drop_index("ix_space_access_requests_location_status", table_name="space_access_requests")
+    op.drop_index(
+        "ix_space_access_requests_requester_actor_id",
+        table_name="space_access_requests",
+    )
+    op.drop_index(
+        "ix_space_access_requests_location_status", table_name="space_access_requests"
+    )
     op.drop_table("space_access_requests")
-    op.drop_index("ix_space_access_grants_actor_active", table_name="space_access_grants")
+    op.drop_index(
+        "ix_space_access_grants_actor_active", table_name="space_access_grants"
+    )
     op.drop_table("space_access_grants")
-    op.drop_index("ix_space_access_policies_controller_actor_id", table_name="space_access_policies")
+    op.drop_index(
+        "ix_space_access_policies_controller_actor_id",
+        table_name="space_access_policies",
+    )
     op.drop_table("space_access_policies")
