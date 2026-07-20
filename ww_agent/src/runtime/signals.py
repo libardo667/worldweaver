@@ -14,13 +14,26 @@ from src.runtime.ledger import (
     append_runtime_event,
     derive_intents,
     derive_packets,
-    derive_research_queue,
+    load_current_runtime_state,
     sync_runtime_compatibility_projections,
 )
 
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _as_utc(value: datetime | str) -> datetime:
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        try:
+            parsed = datetime.fromisoformat(str(value))
+        except ValueError as exc:
+            raise ValueError(f"invalid lifecycle timestamp: {value!r}") from exc
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _normalize_status(value: str, *, allowed: set[str], default: str) -> str:
@@ -31,9 +44,10 @@ def _normalize_status(value: str, *, allowed: set[str], default: str) -> str:
 
 
 def write_runtime_snapshot(memory_dir: Path) -> None:
-    packets = [StimulusPacket.from_dict(item) for item in derive_packets(memory_dir)]
-    intents = [IntentQueueEntry.from_dict(item) for item in derive_intents(memory_dir)]
-    research_items = derive_research_queue(memory_dir)
+    current = load_current_runtime_state(memory_dir)
+    packets = [StimulusPacket.from_dict(item) for item in current.packets]
+    intents = [IntentQueueEntry.from_dict(item) for item in current.intents]
+    research_items = current.research_queue
 
     packet_status_counts: dict[str, int] = {}
     packet_type_counts: dict[str, int] = {}
@@ -453,6 +467,35 @@ class StimulusPacketQueue:
             _write_runtime_snapshot(self._path.parent)
         return updated
 
+    def expire_due(self, *, as_of: datetime | str) -> list[StimulusPacket]:
+        """Close due packets at one caller-supplied logical time."""
+        effective_now = _as_utc(as_of)
+        expired: list[StimulusPacket] = []
+        for item in self._load():
+            expires_at = _as_utc(item.expires_at) if item.expires_at else None
+            if (
+                item.status not in {"pending", "processing"}
+                or expires_at is None
+                or expires_at > effective_now
+            ):
+                continue
+            closed = StimulusPacket.from_dict({**item.to_dict(), "status": "expired"})
+            append_runtime_event(
+                self._path.parent,
+                event_type="packet_status_changed",
+                payload={
+                    "packet_id": closed.packet_id,
+                    "packet_type": closed.packet_type,
+                    "status": closed.status,
+                    "source_loop": closed.source_loop,
+                },
+                ts=effective_now,
+            )
+            expired.append(closed)
+        if expired:
+            _write_runtime_snapshot(self._path.parent)
+        return expired
+
     def ensure_file(self) -> None:
         sync_runtime_compatibility_projections(self._path.parent)
         _write_runtime_snapshot(self._path.parent)
@@ -585,6 +628,36 @@ class IntentQueue:
             )
             _write_runtime_snapshot(self._path.parent)
         return updated
+
+    def expire_due(self, *, as_of: datetime | str) -> list[IntentQueueEntry]:
+        """Close due intents at one caller-supplied logical time."""
+        effective_now = _as_utc(as_of)
+        expired: list[IntentQueueEntry] = []
+        for item in self._load():
+            expires_at = _as_utc(item.expires_at) if item.expires_at else None
+            if (
+                item.status not in {"pending", "claimed"}
+                or expires_at is None
+                or expires_at > effective_now
+            ):
+                continue
+            closed = IntentQueueEntry.from_dict({**item.to_dict(), "status": "expired"})
+            append_runtime_event(
+                self._path.parent,
+                event_type="intent_status_changed",
+                payload={
+                    "intent_id": closed.intent_id,
+                    "intent_type": closed.intent_type,
+                    "status": closed.status,
+                    "target_loop": closed.target_loop,
+                    "validation_state": closed.validation_state,
+                },
+                ts=effective_now,
+            )
+            expired.append(closed)
+        if expired:
+            _write_runtime_snapshot(self._path.parent)
+        return expired
 
     def ensure_file(self) -> None:
         sync_runtime_compatibility_projections(self._path.parent)

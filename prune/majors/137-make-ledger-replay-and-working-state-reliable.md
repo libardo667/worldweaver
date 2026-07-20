@@ -70,8 +70,8 @@ semantics, converge readers, and only then delete dead shadows.
 - [x] A route, mail intent, research item, packet, and intent opened before more than 10,000 later events remain
       open until a named terminal event or enforced expiry.
 - [x] Newer terminal history cannot evict an older unresolved packet or intent.
-- [ ] Packet and intent expiry uses an injected clock and writes an explicit terminal event.
-- [ ] The same prior state, event sequence, and `as_of` produce byte-identical reduced state.
+- [x] Packet and intent expiry uses an injected clock and writes an explicit terminal event.
+- [x] The same prior state, event sequence, and `as_of` produce byte-identical reduced state.
 - [x] Every accepted event has a monotonic sequence, and the checkpoint records the exact sequence and byte
       offset it includes.
 - [x] A partial final record is detected and quarantined without losing the next valid append.
@@ -131,3 +131,15 @@ Packet and intent limits now reserve space for every unresolved item and trim on
 research limits reject an overloaded open queue instead of retaining only its newest members. This completes
 the named lifecycle boundary. Explicit expiry events, pure replay clocks, current-state readers, and removal of
 compatibility projection writes remain open.
+
+### 2026-07-20 — explicit clocks, expiry, and current-state reads
+
+Reducer format 3 removes wall-clock reads from full replay. Without an override, derived timestamps come from
+the newest input event; tests can also inject one `as_of` time. Event append accepts the same kind of explicit
+timestamp, so a virtual or runtime clock does not have to disagree with the event envelope.
+
+Packet and intent queues now close due open items by appending `expired` status events at a caller-supplied
+time. The resident core chooses one time at tick entry and uses it for both expiry passes and the rest of the
+tick. A new current-state API returns the valid checkpoint and falls back to cold replay only when necessary;
+packet, intent, route, mail, research, and operational snapshot reads now use that API. Remaining full-history
+readers need individual classification as either legitimate history consumers or current-state callers.

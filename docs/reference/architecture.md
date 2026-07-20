@@ -40,8 +40,9 @@ That checkpoint path is under active repair in Major 137. Unfinished routes, mai
 intents now advance from checkpoint state rather than being reconstructed from the newest 10,000 events.
 Completed queue history may be bounded, but it cannot evict older open work. New appends are serialized,
 numbered, flushed to disk, and checked for corruption; an incomplete final fragment is preserved separately
-before the next append. Several live readers still scan the complete ledger, and expiry and deterministic
-replay clocks remain unfinished.
+before the next append. Replay is deterministic at an explicit `as_of` time, and expired packet or intent work
+closes through a ledger event at the tick's chosen time. Several live readers and redundant derived files still
+need to move onto the checkpoint API.
 
 ## Information and action are separate
 

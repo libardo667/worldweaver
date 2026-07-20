@@ -170,6 +170,34 @@ def test_hot_reducer_window_matches_cold_history_on_frozen_ledger(tmp_path) -> N
     assert derive_afterimage(hot, now=now) == derive_afterimage(cold, now=now)
 
 
+def test_full_replay_uses_only_its_events_and_explicit_as_of(monkeypatch) -> None:
+    events = [
+        {
+            "event_id": "evt-1",
+            "sequence": 1,
+            "ts": "2026-07-17T12:00:00+00:00",
+            "event_type": "research_queued",
+            "payload": {"query": "river stones"},
+        }
+    ]
+    first = ledger.reduce_runtime_events(events)
+
+    def reject_wall_clock() -> str:
+        raise AssertionError("replay must not read the host wall clock")
+
+    monkeypatch.setattr(ledger, "_utc_now_iso", reject_wall_clock)
+    second = ledger.reduce_runtime_events(events)
+    later = ledger.reduce_runtime_events(events, as_of="2026-07-18T09:30:00+00:00")
+
+    assert first == second
+    assert first.runtime_projection["updated_at"] == events[-1]["ts"]
+    assert later.runtime_projection["updated_at"] == "2026-07-18T09:30:00+00:00"
+    assert later.subjective_projection["updated_at"] == "2026-07-18T09:30:00+00:00"
+    assert later.memory_projection["updated_at"] == "2026-07-18T09:30:00+00:00"
+    assert later.subjective_facts["updated_at"] == "2026-07-18T09:30:00+00:00"
+    assert later.cognitive_projection["updated_at"] == "2026-07-18T09:30:00+00:00"
+
+
 def test_rebuild_writes_versioned_current_checkpoint_atomically(tmp_path) -> None:
     event = ledger.append_runtime_event(
         tmp_path,
@@ -200,6 +228,19 @@ def test_new_events_have_monotonic_sequences(tmp_path) -> None:
     assert first["sequence"] == 1
     assert second["sequence"] == 2
     assert ledger.load_runtime_checkpoint(tmp_path)["ledger"]["last_sequence"] == 2
+
+
+def test_append_accepts_an_authoritative_runtime_timestamp(tmp_path) -> None:
+    appended = ledger.append_runtime_event(
+        tmp_path,
+        event_type="sample",
+        payload={},
+        ts="2026-07-17T08:15:00-04:00",
+    )
+
+    assert appended["ts"] == "2026-07-17T12:15:00+00:00"
+    checkpoint = ledger.load_runtime_checkpoint(tmp_path)
+    assert checkpoint["state"]["runtime_projection"]["updated_at"] == appended["ts"]
 
 
 def test_append_migrates_legacy_record_order_without_rewriting_history(
@@ -578,6 +619,35 @@ def test_projection_neutral_append_advances_checkpoint_without_loading_cold_hist
     assert state["memory_projection"] == oracle.memory_projection
     assert state["subjective_facts"] == oracle.subjective_facts
     assert state["cognitive_projection"] == oracle.cognitive_projection
+
+
+def test_current_state_and_queue_readers_use_the_checkpoint(
+    tmp_path, monkeypatch
+) -> None:
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="packet_emitted",
+        payload={
+            "packet_id": "packet-1",
+            "packet_type": "sample",
+            "created_at": "2026-07-17T12:00:00+00:00",
+            "status": "pending",
+        },
+        ts="2026-07-17T12:00:00+00:00",
+    )
+
+    def reject_cold_load(_memory_dir):
+        raise AssertionError("current-state reads must not load cold history")
+
+    monkeypatch.setattr(ledger, "_load_events", reject_cold_load)
+
+    current = ledger.load_current_runtime_state(tmp_path)
+    assert current.packets[0]["packet_id"] == "packet-1"
+    assert ledger.derive_packets(tmp_path) == current.packets
+    assert ledger.derive_intents(tmp_path) == []
+    assert ledger.derive_active_route(tmp_path) is None
+    assert ledger.derive_active_mail_intents(tmp_path) == []
+    assert ledger.derive_research_queue(tmp_path) == []
 
 
 def test_simple_queue_updates_advance_checkpoint_without_loading_cold_history(

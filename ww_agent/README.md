@@ -27,8 +27,8 @@ Every observation, decision, source read, and action receipt is appended to the 
 checkpoint is intended to provide current state without rereading the resident's full life. That path is under
 active repair in Major 137: new records now have serialized sequence numbers, durable writes, and explicit
 corruption handling, and unfinished lifecycle work now survives bounded semantic replay. Some normal readers
-still scan the complete ledger, expiry is not yet enforced, and derived clocks are not yet pure. Exact model
-requests are not retained during ordinary runs. A deliberately
+still scan the complete ledger, but queue expiry is now an explicit event at the tick's injected time and full
+replay is deterministic. Exact model requests are not retained during ordinary runs. A deliberately
 enabled diagnostic may write them to `memory/prompt_traces.jsonl`; those traces are private host evidence and
 are never cognitive input or portable resident state.
 

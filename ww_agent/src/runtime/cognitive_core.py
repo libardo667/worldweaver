@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -44,7 +45,7 @@ from src.runtime.prediction import tag_mattering
 from src.runtime.pulse_engine import LLMPulseProducer
 from src.runtime.relations import utterance_perceived_fields
 from src.runtime.salience import SELF_SENSES
-from src.runtime.signals import StimulusPacketQueue
+from src.runtime.signals import IntentQueue, StimulusPacketQueue
 from src.runtime.substrate import predict
 from src.runtime.workshop import Workshop
 from src.runtime.world import WorldWeaverClient
@@ -293,12 +294,19 @@ class CognitiveCore:
     ) -> dict[str, Any]:
         """Run one full perceive → integrate → (pulse → act) cycle."""
         self._memory_dir.mkdir(parents=True, exist_ok=True)
+        effective_now = now if now is not None else datetime.now(timezone.utc)
+        StimulusPacketQueue(self._memory_dir / "stimulus_packets.json").expire_due(
+            as_of=effective_now
+        )
+        IntentQueue(self._memory_dir / "intent_queue.json").expire_due(
+            as_of=effective_now
+        )
         await self._ensure_drive_vector()
         # Incubation keeps a new arrival from deliberately listening to or broadcasting
         # on the citywide channel until it has built some private history. Exact-place
         # perception remains available. CityWorld reads this flag before building tools.
         events = load_runtime_events(self._memory_dir)
-        incubating = self._incubation and is_incubating(events, now=now)
+        incubating = self._incubation and is_incubating(events, now=effective_now)
         self._effector.incubating = incubating
         setattr(self._ww, "incubating", incubating)
         brief = await perceive(
@@ -337,7 +345,7 @@ class CognitiveCore:
             ]
             anchors = extract_anchors(prose, structured=structured, top_k=8)
             brief["anchors"] = anchors
-            record_anchors(self._memory_dir, anchors, now=now, events=events)
+            record_anchors(self._memory_dir, anchors, now=effective_now, events=events)
             self._producer.latest_perception = brief
             # Sight: the images in view (the most-recent visual read), pulled off the world by its
             # duck-typed surface. A WorldClient without it (the city shard) simply offers none.
@@ -379,7 +387,7 @@ class CognitiveCore:
             pulse_producer=self._producer,
             effector=self._effector,
             information_access=self._information_access,
-            now=now,
+            now=effective_now,
             reactivity=reactivity,
             force_ignite=force_ignite,
             anchor_stimulus=anchor_stimulus,

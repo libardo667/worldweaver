@@ -271,6 +271,43 @@ def test_signal_queues_rehydrate_from_ledger_when_projection_files_are_missing(
     assert rehydrated_intents[0].status == "executed"
 
 
+def test_signal_expiry_writes_explicit_terminal_events_at_injected_time(tmp_path):
+    memory_dir = tmp_path / "resident" / "memory"
+    packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
+    intent_queue = IntentQueue(memory_dir / "intent_queue.json")
+    packet = packet_queue.emit(
+        packet_type="direct_address",
+        source_loop="perceive",
+        expires_at="2026-07-17T12:00:00+00:00",
+    )
+    intent = intent_queue.stage(
+        intent_type="inspect",
+        target_loop="core",
+        expires_at="2026-07-17T12:00:00+00:00",
+    )
+
+    assert packet_queue.expire_due(as_of="2026-07-17T11:59:59+00:00") == []
+    assert intent_queue.expire_due(as_of="2026-07-17T11:59:59+00:00") == []
+
+    expired_packets = packet_queue.expire_due(as_of="2026-07-17T12:00:00+00:00")
+    expired_intents = intent_queue.expire_due(as_of="2026-07-17T12:00:00+00:00")
+
+    assert [item.packet_id for item in expired_packets] == [packet.packet_id]
+    assert [item.intent_id for item in expired_intents] == [intent.intent_id]
+    assert packet_queue.all()[0].status == "expired"
+    assert intent_queue.all()[0].status == "expired"
+    terminal_events = [
+        event
+        for event in load_runtime_events(memory_dir)
+        if event["event_type"] in {"packet_status_changed", "intent_status_changed"}
+    ]
+    assert [event["payload"]["status"] for event in terminal_events] == [
+        "expired",
+        "expired",
+    ]
+    assert {event["ts"] for event in terminal_events} == {"2026-07-17T12:00:00+00:00"}
+
+
 def test_runtime_snapshot_rehydrates_research_queue_from_ledger(tmp_path):
     resident_dir = tmp_path / "sun_li"
     memory_dir = resident_dir / "memory"

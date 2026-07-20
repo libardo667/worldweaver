@@ -29,7 +29,7 @@ _CHECKPOINT_FILENAME = "runtime_checkpoint.json"
 _WRITER_LOCK_FILENAME = "runtime_ledger.lock"
 
 CHECKPOINT_FORMAT_VERSION = 2
-REDUCER_FORMAT_VERSION = 2
+REDUCER_FORMAT_VERSION = 3
 PROJECTION_FORMAT_VERSIONS = {
     "runtime": 1,
     "subjective": 1,
@@ -128,6 +128,22 @@ def _parse_iso_ts(value: str) -> datetime | None:
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
+
+
+def _replay_as_of_iso(
+    events: list[dict[str, Any]], *, as_of: datetime | str | None = None
+) -> str:
+    if as_of is not None:
+        candidate = as_of.isoformat() if isinstance(as_of, datetime) else str(as_of)
+        parsed = _parse_iso_ts(candidate)
+        if parsed is None:
+            raise ValueError(f"invalid replay as_of timestamp: {candidate!r}")
+        return parsed.isoformat()
+    for event in reversed(events):
+        parsed = _parse_iso_ts(str(event.get("ts") or ""))
+        if parsed is not None:
+            return parsed.isoformat()
+    return datetime(1970, 1, 1, tzinfo=timezone.utc).isoformat()
 
 
 def _ledger_path(memory_dir: Path) -> Path:
@@ -460,6 +476,27 @@ def load_runtime_events(memory_dir: Path) -> list[dict[str, Any]]:
     return _load_events(memory_dir)
 
 
+def load_current_runtime_state(memory_dir: Path) -> ResidentReducedState:
+    """Read current derived state, using cold history only when no checkpoint is valid."""
+    checkpoint = load_runtime_checkpoint(memory_dir)
+    if checkpoint is None:
+        return reduce_runtime_events(_load_events(memory_dir))
+    state = checkpoint["state"]
+    return ResidentReducedState(
+        events=[],
+        packets=deepcopy(list(state.get("packets") or [])),
+        intents=deepcopy(list(state.get("intents") or [])),
+        active_route=deepcopy(state.get("active_route")),
+        active_mail_intents=deepcopy(list(state.get("active_mail_intents") or [])),
+        research_queue=deepcopy(list(state.get("research_queue") or [])),
+        runtime_projection=deepcopy(dict(state.get("runtime_projection") or {})),
+        subjective_projection=deepcopy(dict(state.get("subjective_projection") or {})),
+        memory_projection=deepcopy(dict(state.get("memory_projection") or {})),
+        subjective_facts=deepcopy(dict(state.get("subjective_facts") or {})),
+        cognitive_projection=deepcopy(dict(state.get("cognitive_projection") or {})),
+    )
+
+
 def _iter_ledger_lines_reverse(path: Path, *, chunk_size: int = 64 * 1024):
     """Yield non-empty JSONL records newest-first without reading the whole file."""
     with path.open("rb") as handle:
@@ -671,7 +708,7 @@ def _derive_packets_from_events(events: list[dict[str, Any]]) -> list[dict[str, 
 
 
 def derive_packets(memory_dir: Path) -> list[dict[str, Any]]:
-    return _derive_packets_from_events(_load_events(memory_dir))
+    return load_current_runtime_state(memory_dir).packets
 
 
 def _derive_intents_from_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -710,7 +747,7 @@ def _derive_intents_from_events(events: list[dict[str, Any]]) -> list[dict[str, 
 
 
 def derive_intents(memory_dir: Path) -> list[dict[str, Any]]:
-    return _derive_intents_from_events(_load_events(memory_dir))
+    return load_current_runtime_state(memory_dir).intents
 
 
 def _derive_active_route_from_events(
@@ -736,7 +773,7 @@ def _derive_active_route_from_events(
 
 
 def derive_active_route(memory_dir: Path) -> dict[str, Any] | None:
-    return _derive_active_route_from_events(_load_events(memory_dir))
+    return load_current_runtime_state(memory_dir).active_route
 
 
 def _derive_active_mail_intents_from_events(
@@ -769,7 +806,7 @@ def _derive_active_mail_intents_from_events(
 
 
 def derive_active_mail_intents(memory_dir: Path) -> list[dict[str, Any]]:
-    return _derive_active_mail_intents_from_events(_load_events(memory_dir))
+    return load_current_runtime_state(memory_dir).active_mail_intents
 
 
 def _derive_research_queue_from_events(
@@ -815,13 +852,14 @@ def _derive_research_queue_from_events(
 
 
 def derive_research_queue(memory_dir: Path) -> list[dict[str, Any]]:
-    return _derive_research_queue_from_events(_load_events(memory_dir))
+    return load_current_runtime_state(memory_dir).research_queue
 
 
 def _build_runtime_projection(
     events: list[dict[str, Any]],
     *,
     research_queue: list[dict[str, Any]],
+    as_of: str,
 ) -> dict[str, Any]:
     event_counts: dict[str, int] = {}
     last_grounding: dict[str, Any] | None = None
@@ -876,7 +914,7 @@ def _build_runtime_projection(
             }
 
     return {
-        "updated_at": _utc_now_iso(),
+        "updated_at": as_of,
         "ledger_event_count": len(events),
         "event_counts": event_counts,
         "recent_events": [
@@ -901,6 +939,7 @@ def _build_subjective_projection(
     route: dict[str, Any] | None,
     mail_intents: list[dict[str, Any]],
     research_queue: list[dict[str, Any]],
+    as_of: str,
 ) -> dict[str, Any]:
     thread_state: dict[str, dict[str, Any]] = {}
     latest_direct: dict[str, Any] | None = None
@@ -1183,7 +1222,7 @@ def _build_subjective_projection(
             break
 
     return {
-        "updated_at": _utc_now_iso(),
+        "updated_at": as_of,
         "active_social_threads": active_social_threads,
         "dialogue_state": {
             "active_partner": str(
@@ -1222,6 +1261,7 @@ def _build_memory_projection(
     route: dict[str, Any] | None,
     research_queue: list[dict[str, Any]],
     mail_intents: list[dict[str, Any]],
+    as_of: str,
 ) -> dict[str, Any]:
     recent_experiences: list[dict[str, Any]] = []
     for event in reversed(events):
@@ -1286,7 +1326,7 @@ def _build_memory_projection(
             break
 
     return {
-        "updated_at": _utc_now_iso(),
+        "updated_at": as_of,
         "recent_experiences": recent_experiences,
         "active_route": route,
         "pending_research": [
@@ -1426,6 +1466,7 @@ def _build_subjective_facts(
     mail_intents: list[dict[str, Any]],
     research_queue: list[dict[str, Any]],
     relationship_projection: dict[str, Any],
+    as_of: str,
 ) -> dict[str, Any]:
     facts: list[dict[str, Any]] = []
     thread_counts: dict[str, int] = {}
@@ -1640,7 +1681,7 @@ def _build_subjective_facts(
         )
 
     return {
-        "updated_at": _utc_now_iso(),
+        "updated_at": as_of,
         "facts": facts,
     }
 
@@ -1653,6 +1694,7 @@ def _build_cognitive_projection(
     subjective_facts: dict[str, Any],
     route: dict[str, Any] | None,
     mail_intents: list[dict[str, Any]],
+    as_of: str,
 ) -> dict[str, Any]:
     state_pressure = subjective_projection.get("state_pressure") or {}
     pressure_signals = list(state_pressure.get("signals") or [])
@@ -2007,7 +2049,7 @@ def _build_cognitive_projection(
     ]
     facts = list(subjective_facts.get("facts") or [])
     return {
-        "updated_at": _utc_now_iso(),
+        "updated_at": as_of,
         "node_contract": {
             "version": "v1",
             "fields": [
@@ -2039,14 +2081,17 @@ def _build_cognitive_projection(
     }
 
 
-def reduce_runtime_events(events: list[dict[str, Any]]) -> ResidentReducedState:
+def reduce_runtime_events(
+    events: list[dict[str, Any]], *, as_of: datetime | str | None = None
+) -> ResidentReducedState:
+    replay_as_of = _replay_as_of_iso(events, as_of=as_of)
     packets = _derive_packets_from_events(events)
     intents = _derive_intents_from_events(events)
     active_route = _derive_active_route_from_events(events)
     active_mail_intents = _derive_active_mail_intents_from_events(events)
     research_queue = _derive_research_queue_from_events(events)
     runtime_projection = _build_runtime_projection(
-        events, research_queue=research_queue
+        events, research_queue=research_queue, as_of=replay_as_of
     )
     subjective_projection = _build_subjective_projection(
         events,
@@ -2054,12 +2099,14 @@ def reduce_runtime_events(events: list[dict[str, Any]]) -> ResidentReducedState:
         route=active_route,
         mail_intents=active_mail_intents,
         research_queue=research_queue,
+        as_of=replay_as_of,
     )
     memory_projection = _build_memory_projection(
         events,
         route=active_route,
         research_queue=research_queue,
         mail_intents=active_mail_intents,
+        as_of=replay_as_of,
     )
     relationship_projection = _build_relationship_projection(events)
     subjective_projection["relationship_projection"] = relationship_projection
@@ -2070,6 +2117,7 @@ def reduce_runtime_events(events: list[dict[str, Any]]) -> ResidentReducedState:
         mail_intents=active_mail_intents,
         research_queue=research_queue,
         relationship_projection=relationship_projection,
+        as_of=replay_as_of,
     )
     return ResidentReducedState(
         events=list(events),
@@ -2089,6 +2137,7 @@ def reduce_runtime_events(events: list[dict[str, Any]]) -> ResidentReducedState:
             subjective_facts=subjective_facts,
             route=active_route,
             mail_intents=active_mail_intents,
+            as_of=replay_as_of,
         ),
     )
 
@@ -2210,7 +2259,7 @@ def _advance_runtime_projection(
     )
     runtime_projection.update(
         {
-            "updated_at": _utc_now_iso(),
+            "updated_at": _replay_as_of_iso([event]),
             "ledger_event_count": int(runtime_projection.get("ledger_event_count") or 0)
             + 1,
             "event_counts": event_counts,
@@ -2401,7 +2450,7 @@ def _reduced_after_simple_checkpoint_event(
     subjective_projection = deepcopy(state["subjective_projection"])
     memory_projection = deepcopy(state["memory_projection"])
     subjective_facts = deepcopy(state["subjective_facts"])
-    updated_at = _utc_now_iso()
+    updated_at = _replay_as_of_iso([event])
     subjective_projection["updated_at"] = updated_at
     memory_projection["updated_at"] = updated_at
     subjective_facts["updated_at"] = updated_at
@@ -2423,6 +2472,7 @@ def _reduced_after_simple_checkpoint_event(
             subjective_facts=subjective_facts,
             route=active_route,
             mail_intents=active_mail_intents,
+            as_of=updated_at,
         ),
     )
 
@@ -2432,7 +2482,10 @@ def _reduced_after_bounded_replay(
     checkpoint: dict[str, Any],
     event: dict[str, Any],
 ) -> ResidentReducedState:
-    replayed = reduce_runtime_events(load_runtime_projection_events(memory_dir))
+    replay_as_of = _replay_as_of_iso([event])
+    replayed = reduce_runtime_events(
+        load_runtime_projection_events(memory_dir), as_of=replay_as_of
+    )
     runtime_projection = _advance_runtime_projection(
         checkpoint["state"]["runtime_projection"], event
     )
@@ -2449,12 +2502,14 @@ def _reduced_after_bounded_replay(
         route=active_route,
         mail_intents=active_mail_intents,
         research_queue=research_queue,
+        as_of=replay_as_of,
     )
     memory_projection = _build_memory_projection(
         replayed.events,
         route=active_route,
         research_queue=research_queue,
         mail_intents=active_mail_intents,
+        as_of=replay_as_of,
     )
     relationship_projection = _build_relationship_projection(replayed.events)
     subjective_projection["relationship_projection"] = relationship_projection
@@ -2465,6 +2520,7 @@ def _reduced_after_bounded_replay(
         mail_intents=active_mail_intents,
         research_queue=research_queue,
         relationship_projection=relationship_projection,
+        as_of=replay_as_of,
     )
     return ResidentReducedState(
         events=replayed.events,
@@ -2484,6 +2540,7 @@ def _reduced_after_bounded_replay(
             subjective_facts=subjective_facts,
             route=active_route,
             mail_intents=active_mail_intents,
+            as_of=replay_as_of,
         ),
     )
 
@@ -2598,6 +2655,7 @@ def append_runtime_event(
     *,
     event_type: str,
     payload: dict[str, Any] | None = None,
+    ts: datetime | str | None = None,
 ) -> dict[str, Any]:
     with _serialized_writer(memory_dir):
         checkpoint = load_runtime_checkpoint(memory_dir)
@@ -2610,7 +2668,9 @@ def append_runtime_event(
         event = {
             "event_id": f"evt-{uuid.uuid4().hex[:12]}",
             "sequence": next_sequence,
-            "ts": _utc_now_iso(),
+            "ts": (
+                _replay_as_of_iso([], as_of=ts) if ts is not None else _utc_now_iso()
+            ),
             "event_type": str(event_type).strip(),
             "payload": dict(payload or {}),
         }
