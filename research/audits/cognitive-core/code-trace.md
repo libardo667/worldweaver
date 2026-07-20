@@ -207,6 +207,27 @@ behavior policies authored by the project. They must not be reported as an emerg
 44. **The semantic constitution gate is not live.** `CognitiveCore` never passes the checker to pulse routing;
     its existing async method also does not match the synchronous callback contract. Cosine relevance would
     not by itself establish contradiction or earned change in any case.
+45. **Incoming letters are consumed but cannot be read.** The engine marks mail read on the perception GET;
+    the agent keeps a preview and prompt count, but no mail content enters the prompt and no inbox source is
+    registered.
+46. **Immediate reply edges are lost by event order.** The effector appends the outgoing reply before the core
+    appends `utterance_perceived`; the one-pass relationship reducer recognizes replies only in the opposite
+    order.
+47. **Recognized replies do not close live social pressure.** The actor-scoped relationship projection and
+    the name-scoped dialogue reducer disagree; the latter ignores packet status and reply evidence and controls
+    the live social node.
+48. **A direct address can be starved by ambient recency.** Prompt context selects the newest four pending
+    heard packets without prioritizing direct address, question, age, or salience.
+49. **Polling is social evidence in the live reducer.** All fetched chat packets create name-keyed threads and
+    subjective facts even though the newer relationship reducer correctly waits for prompt delivery.
+50. **Correspondence is routed by local directory slug.** Mail rows have no recipient actor ID or destination
+    shard; agent validity and inbox lookup depend on a mutable host filesystem name.
+51. **Name heuristics can invent or merge address.** First-name mentions are treated as direct local speech,
+    `@` detection admits prefix collisions, duplicate display names are not rejected, and live social threads
+    ignore actor IDs already present on packets.
+52. **Shard messaging lacks authorship and privacy enforcement.** Network callers can name existing sessions
+    or residents to read/acknowledge mail, submit messages, or post chat without proving control of the claimed
+    account, actor, or session.
 
 ## Questions for the next code pass
 
@@ -225,3 +246,5 @@ behavior policies authored by the project. They must not be reported as an emerg
   visible revision lifecycle?
 - Which kinds of memory should the system support without deciding in advance that facts and declared
   decisions are the only continuity worth keeping?
+- What single message lifecycle can distinguish transport, prompt delivery, resident response, world
+  acceptance, and acknowledgement without turning any stage into a social obligation?

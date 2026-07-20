@@ -60,6 +60,9 @@ variable represents lived experience.
 - [`memory-identity-and-authority.md`](memory-identity-and-authority.md) separates durable actor identity,
   prompt identity, host-authored facts, chosen growth, and selected memory; it also records path-derived
   behavior, ignored birth traits, stale ground truth, and duplicate memory authority.
+- [`social-contact-correspondence-and-reply.md`](social-contact-correspondence-and-reply.md) follows local
+  speech and letters through polling, prompt delivery, reply linking, pressure reduction, identity routing,
+  and network authorization.
 - [`repair-and-ablation-order.md`](repair-and-ablation-order.md) puts software truth repairs before neutral
   reference runs and one-variable mechanism tests.
 - [`claim-ledger.md`](claim-ledger.md) lists terms and implied claims that require a decision.

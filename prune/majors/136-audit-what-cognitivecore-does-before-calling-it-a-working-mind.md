@@ -133,6 +133,12 @@ side-file memory with no ledger provenance. It found that the doula's recorded c
 unchanging, and embedding availability silently changes both retrieval and memory-storage policy. The explicit
 proposal/inspection/adoption lifecycle for identity growth remains a strong boundary worth preserving.
 
+The social and correspondence pass found a more immediate blocker to resident testing: inbox polling marks
+letters read but provides no resident-facing way to read their contents. It also reproduced append-order loss
+of immediate reply edges, direct-address starvation behind four newer ambient lines, and a replied exchange
+that still drives maximum social pressure. Mail routing uses local folder slugs rather than actor IDs, and the
+current network endpoints do not enforce the claimed private/authenticated message boundary.
+
 Two bounded evidence reviews now cover prediction/ignition/arousal/quiet/social norms and
 action-feedback/embodiment/external supports. They support plainer names, reliable event and consequence
 delivery, quiet as a valid outcome, and direct software comparisons. They do not validate a grand theory of

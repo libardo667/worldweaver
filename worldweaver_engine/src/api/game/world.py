@@ -2449,10 +2449,11 @@ def _dm_counterpart_label(
 
 @router.post("/world/dm")
 def send_dm(payload: SendDMRequest, db: Session = Depends(get_db)):
-    """Send a DM from a player to an agent or another player.
+    """Store a DM claiming the supplied sender and recipient.
 
-    Stored in the DB. The agent will see it on their next mail-loop poll.
-    session_id is stored for reply routing.
+    The current route validates names and row existence but does not authenticate
+    control of ``session_id``. The agent poll also marks unread rows read before
+    resident prompt delivery; both are tracked as correspondence audit gaps.
     """
     recipient = str(payload.recipient or payload.to_agent or "").strip()
     recipient_type = str(payload.recipient_type or "agent").strip().lower()
@@ -2498,9 +2499,9 @@ def send_dm(payload: SendDMRequest, db: Session = Depends(get_db)):
 
 @router.post("/world/dm/reply")
 def agent_dm_reply(payload: AgentDMReplyRequest, db: Session = Depends(get_db)):
-    """Agent sends a DM reply to a player session.
+    """Store a DM reply claiming a locally valid agent name.
 
-    Called by agent mail loops. to_session_id comes from the original DM.
+    This compatibility route does not yet authenticate control of the agent.
     """
     agent = payload.from_agent.lower().strip()
     if not _valid_agent(agent):
@@ -2523,7 +2524,10 @@ def agent_dm_reply(payload: AgentDMReplyRequest, db: Session = Depends(get_db)):
 
 @router.get("/world/dm/inbox/{agent}")
 def get_agent_dm_inbox(agent: str, db: Session = Depends(get_db)):
-    """Return unread DMs for an agent and mark them as read."""
+    """Return unread DMs and mark them read during this unauthenticated poll.
+
+    This is legacy mail-loop behavior, not consume-on-prompt delivery.
+    """
     agent = agent.lower().strip()
     if not _valid_agent(agent):
         raise HTTPException(status_code=404, detail=f"No agent found for '{agent}'.")
@@ -2550,7 +2554,7 @@ def get_agent_dm_inbox(agent: str, db: Session = Depends(get_db)):
 
 @router.get("/world/dm/my-inbox/{session_id}")
 def get_player_dm_inbox(session_id: str, db: Session = Depends(get_db)):
-    """Return all DMs received by a player session."""
+    """Return all DMs for a named player session; caller ownership is not yet checked."""
     if not _SAFE_SESSION_RE.match(session_id):
         raise HTTPException(status_code=400, detail="Invalid session_id format.")
 
@@ -2568,7 +2572,7 @@ def get_player_dm_inbox(session_id: str, db: Session = Depends(get_db)):
 
 @router.get("/world/dm/my-threads/{session_id}")
 def get_player_dm_threads(session_id: str, db: Session = Depends(get_db)):
-    """Return player correspondence grouped into persistent threads."""
+    """Return threads for a named player session; caller ownership is not yet checked."""
     if not _SAFE_SESSION_RE.match(session_id):
         raise HTTPException(status_code=400, detail="Invalid session_id format.")
 
@@ -2620,7 +2624,7 @@ def get_player_dm_threads(session_id: str, db: Session = Depends(get_db)):
 
 @router.post("/world/dm/my-threads/{session_id}/read/{thread_key}")
 def mark_player_dm_thread_read(session_id: str, thread_key: str, db: Session = Depends(get_db)):
-    """Mark unread inbound messages in one player thread as read."""
+    """Mark a named session's thread read; caller ownership is not yet checked."""
     if not _SAFE_SESSION_RE.match(session_id):
         raise HTTPException(status_code=400, detail="Invalid session_id format.")
     normalized_thread_key = re.sub(r"[^a-z0-9]+", "_", str(thread_key or "").lower()).strip("_")
@@ -3011,8 +3015,9 @@ def get_location_chat(
 ):
     """Return recent chat messages at a location, optionally filtered by timestamp.
 
-    Speaker session/actor identifiers are included only for a caller presenting an
-    existing session_id; public readers get display names, text, and timestamps only.
+    Speaker session/actor identifiers are included when a caller names an existing
+    session_id. This route does not currently prove that the caller controls it;
+    public readers without one get display names, text, and timestamps only.
     """
     q = db.query(LocationChat).filter(LocationChat.location == location)
     if since:
@@ -3072,7 +3077,7 @@ def post_location_chat(
     payload: PostChatRequest,
     db: Session = Depends(get_db),
 ):
-    """Post a chat message at a location. Stored directly — no narration."""
+    """Post as a named session at its location. Caller control is not yet checked."""
     message = payload.message.strip()
     if not message:
         raise HTTPException(status_code=400, detail="Message cannot be empty.")

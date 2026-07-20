@@ -361,8 +361,9 @@ class CognitiveCore:
             # text. Rebuild the optional semantic drive on the next tick as well.
             self._producer.drive_vector = None
             self._drive_built = False
-        # A packet becomes observed only after it was actually assembled into the
-        # LLM prompt. Merely polling the HTTP feed is not cognitive delivery.
+        # A local chat/trace packet becomes observed only after it was actually
+        # assembled into the LLM prompt. This does not yet cover mail: the current
+        # engine inbox endpoint marks letters read during the HTTP poll itself.
         prompted_packet_ids = self._producer.take_prompted_packet_ids()
         if prompted_packet_ids:
             packet_queue = StimulusPacketQueue(self._memory_dir / "stimulus_packets.json")

@@ -41,6 +41,14 @@ from being interpretable.
    narrow absolutes to tested guarantees, and never forbid memory from correcting a stale briefing.
 16. **Remove silent identity and tuning surfaces.** Either wire each advertised field with a clear owner or
    classify it as migration-only and warn when an operator expects it to work.
+17. **Repair correspondence before social trials.** Make inbox polling non-destructive, expose private letter
+   content through a delivery lifecycle, and stop treating transport receipt as resident attention.
+18. **Unify reply and open-dialogue state.** Join stable utterance IDs without event-order dependence and let
+   replies, deferrals, declines, expiry, and new exchanges close or supersede the correct item.
+19. **Authenticate social authorship and privacy.** Require account/session or resident/node capabilities for
+   message reads, acknowledgements, sends, and chat posts before exposing a shard publicly.
+20. **Route people, not folders.** Move correspondence and relationship state to durable actor/account IDs
+   with explicit ambiguity handling and federated mailbox resolution.
 
 ## Second: establish a neutral reference runtime
 

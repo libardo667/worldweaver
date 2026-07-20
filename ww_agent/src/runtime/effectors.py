@@ -169,8 +169,9 @@ class WorldEffector:
         target_lower = target_name.lower()
         # Match co-presence / reply-edges on a separator-folded form so a pen addressing
         # "Ji Hoon Park" (space) reaches a co-present "Ji-Hoon Park" (hyphen) instead of
-        # mis-routing to the mail path. Folding is collision-safe: the homophone cluster
-        # (Ji-Hoon Park / Jihoon Cho / Jiahao Chen) stays three distinct normalized strings.
+        # mis-routing to the mail path. Folding preserves the known homophone cluster
+        # (Ji-Hoon Park / Jihoon Cho / Jiahao Chen), but it does not detect two actors
+        # with the same normalized display name.
         target_norm = normalize_reference(target_name)
         # Major 66 — the reply-edge: which overture (by stable id) this addressed speech
         # answers. READ-FROM the heard set (the most-recent thing the addressee actually

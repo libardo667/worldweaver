@@ -561,7 +561,11 @@ class DoulaPoll(Base):
 
 
 class DirectMessage(Base):
-    """Private async message between a player and an agent (or agent→agent)."""
+    """Async message intended for a player or agent.
+
+    Privacy and authorship depend on API authorization; the current compatibility
+    routes do not yet enforce that boundary.
+    """
 
     __tablename__ = "direct_messages"
 
