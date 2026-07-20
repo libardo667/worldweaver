@@ -27,7 +27,7 @@ def test_settings_readiness_reports_missing_shard_infrastructure(monkeypatch, cl
     assert data["shard"]["city_id"] == settings.city_id
 
 
-def test_missing_resident_inference_does_not_block_human_world_actions(
+def test_public_readiness_omits_resident_inference_and_private_federation_url(
     monkeypatch, client
 ):
     monkeypatch.setenv("OPENROUTER_API_KEY", "")
@@ -49,13 +49,11 @@ def test_missing_resident_inference_does_not_block_human_world_actions(
     assert data["missing"] == []
     checks = {check["code"]: check for check in data["checks"]}
     assert checks["email_delivery"]["severity"] == "info"
-    assert checks["agent_inference_key"]["ok"] is False
-    assert checks["agent_inference_model"]["ok"] is False
-    assert checks["agent_inference_key"]["severity"] == "info"
-    assert (
-        "Bounded resident runners verify their own key"
-        in checks["agent_inference_key"]["message"]
-    )
+    assert "agent_inference_key" not in checks
+    assert "agent_inference_model" not in checks
+    assert "federation_url" not in data["shard"]
+    assert "http://example.test" not in response.text
+    assert "http://shard.example.test" in data["shard"]["public_url"]
 
 
 def test_required_email_verification_blocks_readiness_without_delivery(

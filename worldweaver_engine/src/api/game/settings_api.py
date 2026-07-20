@@ -3,7 +3,6 @@
 
 """Read-only shard readiness for the public client and steward diagnostics."""
 
-import os
 from pathlib import Path
 from typing import Literal
 
@@ -29,7 +28,6 @@ class ShardReadinessSummary(BaseModel):
     city_id: str | None = None
     shard_type: str
     public_url: str | None = None
-    federation_url: str | None = None
 
 
 class SettingsReadinessResponse(BaseModel):
@@ -72,16 +70,6 @@ def get_settings_readiness():
     resend_ready = bool(str(settings.resend_api_key or "").strip()) and bool(
         str(settings.resend_from_email or "").strip()
     )
-    agent_inference_key_ready = bool(
-        str(os.environ.get("WW_INFERENCE_KEY") or "").strip()
-        or str(os.environ.get("OPENROUTER_API_KEY") or "").strip()
-        or str(settings.openrouter_api_key or "").strip()
-    )
-    agent_inference_model_ready = bool(
-        str(os.environ.get("WW_INFERENCE_MODEL") or "").strip()
-        or str(settings.llm_model or "").strip()
-    )
-
     runtime_missing: list[str] = []
     if not jwt_ready:
         runtime_missing.append("jwt_secret")
@@ -129,7 +117,7 @@ def get_settings_readiness():
                 "Not required on the world shard."
                 if settings.shard_type != "city"
                 else (
-                    f"Federation root set to {settings.federation_url}."
+                    "Federation root is configured."
                     if federation_url_ready
                     else "City shard has no federation root URL configured."
                 )
@@ -144,7 +132,7 @@ def get_settings_readiness():
                 "Not required on the world shard."
                 if settings.shard_type != "city"
                 else (
-                    f"Public shard URL set to {settings.public_url}."
+                    "Public shard URL is configured."
                     if public_url_ready
                     else "City shard has no public URL configured."
                 )
@@ -203,28 +191,6 @@ def get_settings_readiness():
                 )
             ),
         ),
-        ReadinessCheck(
-            code="agent_inference_key",
-            label="Resident inference key",
-            ok=agent_inference_key_ready,
-            severity="info",
-            message=(
-                "Resident inference key is configured in this backend process."
-                if agent_inference_key_ready
-                else "This backend process has no resident inference key. Bounded resident runners verify their own key before waking; human world actions do not need one."
-            ),
-        ),
-        ReadinessCheck(
-            code="agent_inference_model",
-            label="Resident inference model",
-            ok=agent_inference_model_ready,
-            severity="info",
-            message=(
-                "Resident inference model is configured in this backend process."
-                if agent_inference_model_ready
-                else "This backend process has no resident inference model. Bounded resident runners verify their own model before waking; human world actions do not need one."
-            ),
-        ),
     ]
     startup_ready = all(check.ok for check in checks if check.severity == "error")
 
@@ -239,6 +205,5 @@ def get_settings_readiness():
             city_id=settings.city_id,
             shard_type=settings.shard_type,
             public_url=settings.public_url,
-            federation_url=settings.federation_url,
         ),
     )

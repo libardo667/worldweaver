@@ -21,7 +21,6 @@ export function RuntimeDiagnosticsBanner({ readiness }: RuntimeDiagnosticsBanner
     "current shard";
   const hasErrors = blockingIssues.length > 0;
   const publicUrl = readiness.shard?.public_url;
-  const federationUrl = readiness.shard?.federation_url;
 
   return (
     <section className={`ww-runtime-banner${hasErrors ? " is-error" : " is-warn"}`} aria-live="polite">
@@ -35,7 +34,6 @@ export function RuntimeDiagnosticsBanner({ readiness }: RuntimeDiagnosticsBanner
         <p className="ww-runtime-banner-meta">
           {readiness.shard.shard_type} shard
           {publicUrl ? ` • node ${publicUrl}` : ""}
-          {federationUrl ? ` • federation ${federationUrl}` : ""}
         </p>
       </div>
       <div className="runtime-chip-row">

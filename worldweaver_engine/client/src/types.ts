@@ -28,7 +28,6 @@ export type ShardReadinessSummary = {
   city_id: string | null;
   shard_type: string;
   public_url?: string | null;
-  federation_url?: string | null;
 };
 
 export type SettingsReadinessResponse = {
