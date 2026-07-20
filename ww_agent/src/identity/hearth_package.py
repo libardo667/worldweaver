@@ -39,6 +39,7 @@ from src.identity.hearth_manifest import (
     inspect_hearth_manifest,
     load_hearth_manifest,
 )
+from src.identity.resident_key_seal import SEALED_RESIDENT_IDENTITY_FILENAME
 
 Disposition = Literal[
     "portable", "rebuildable", "host_specific", "city_local", "unknown"
@@ -74,6 +75,7 @@ _PORTABLE_IDENTITY_FILES = {
     "soul_notes.md",
     "tuning.json",
 }
+_HOST_SPECIFIC_IDENTITY_FILES = {SEALED_RESIDENT_IDENTITY_FILENAME}
 _CITY_LOCAL_IDENTITY_FILES = {"entry_location.txt"}
 _REBUILDABLE_MEMORY_FILES = {
     "active_route.json",
@@ -207,6 +209,8 @@ def classify_hearth_path(
             return "unknown", "nested identity material requires an explicit contract"
         if path.name in _PORTABLE_IDENTITY_FILES:
             return "portable", "resident identity or identity evidence"
+        if path.name in _HOST_SPECIFIC_IDENTITY_FILES:
+            return "host_specific", "identity key is sealed for the current hearth host"
         if path.name in _CITY_LOCAL_IDENTITY_FILES:
             return "city_local", "one-time city entry hint"
         return "unknown", "unrecognized identity file"

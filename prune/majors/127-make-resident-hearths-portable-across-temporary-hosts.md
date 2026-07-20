@@ -92,7 +92,12 @@ Build the private half in this order:
    NAME` exposes the safe import half and leaves the new home dormant. Package creation still uses injected
    synthetic resident keys because real resident key custody is unresolved.
 4. Only the encrypted format may carry the resident identity private key. Plain `.wwhearth` export must keep
-   excluding it and must fail if a future key-bearing hearth would otherwise leak it.
+   excluding it and must fail if a future key-bearing hearth would otherwise leak it. The agent now has a
+   synthetic-key-tested host seal for at-rest custody: it encrypts the long-term Ed25519 key for the current
+   hearth host's X25519 receiver, binds it to the self-signed public identity card, and rejects the wrong host,
+   wrong card, tampering, links, and replacement. `identity/resident_identity.sealed.json` is classified as
+   host-specific and never enters plaintext export. There is deliberately no creation command for real
+   residents yet and no claim that a host seal is a recovery policy.
 5. On an authorized host, decrypt the long-term key into memory only long enough to sign a fresh runtime
    public key for one city, generation, scope set, and expiry. Ordinary requests use the runtime key, not the
    long-term identity key.

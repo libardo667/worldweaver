@@ -121,6 +121,14 @@ host, private key, or automatic claim to admission. The file is portable residen
 self-signature catches corruption and proves possession at creation; it does not tell a steward whom to trust.
 The library currently accepts only an injected synthetic private key and does not generate or store one.
 
+`resident_key_seal.py` provides the first at-rest custody boundary for that private half. It encrypts an
+injected resident identity key for the current hearth host's separate X25519 receiver and binds the sealed
+bytes to the resident's verified public identity card. Opening checks the exact actor, hearth, identity key,
+and recipient host before returning the key in memory. The owner-only sealed file is host-specific and is
+excluded from plaintext hearth packages. This does not make the host the resident's owner, prevent an
+authorized malicious host from copying an in-memory key, or solve recovery. No real resident key is created
+or stored by an operator command yet.
+
 `hearth_package.py` provides the fail-closed, read-only inventory used before packaging. It hashes files
 that belong to the resident but does not copy them. Identity evidence, retained memory and ledgers,
 correspondence, decisions, and workshop artifacts are portable. Derived projections and process files are
