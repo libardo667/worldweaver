@@ -128,6 +128,8 @@ def bootstrap_local_demo(workspace_root: Path) -> bool:
         jwt_secret=secrets.token_urlsafe(48),
         data_encryption_key=_new_data_encryption_key(),
         db_password=secrets.token_urlsafe(32),
+        public_url="http://localhost:9100",
+        client_url="",
     ).replace(
         "WW_FEDERATION_ADMISSION_MODE=closed",
         "WW_FEDERATION_ADMISSION_MODE=open",
@@ -149,6 +151,8 @@ def bootstrap_local_demo(workspace_root: Path) -> bool:
         jwt_secret=secrets.token_urlsafe(48),
         data_encryption_key=_new_data_encryption_key(),
         db_password=secrets.token_urlsafe(32),
+        public_url="http://localhost:8004",
+        client_url="",
     )
 
     for shard_dir in (world_dir, city_dir):

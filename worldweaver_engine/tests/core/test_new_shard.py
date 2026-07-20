@@ -455,9 +455,9 @@ def test_folder_operator_verifies_generated_maps_before_publication(
     neighborhoods = json.loads(
         (changed_canonical_pack / "neighborhoods.json").read_text(encoding="utf-8")
     )
-    neighborhoods[0]["vibe"] = (
-        "A canonical city change that map-only publication must refuse."
-    )
+    neighborhoods[0][
+        "vibe"
+    ] = "A canonical city change that map-only publication must refuse."
     (changed_canonical_pack / "neighborhoods.json").write_text(
         json.dumps(neighborhoods, indent=2) + "\n", encoding="utf-8"
     )
