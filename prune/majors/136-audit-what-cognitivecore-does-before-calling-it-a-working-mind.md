@@ -234,6 +234,15 @@ narrow contracts. The five-node projection, mode policies, mixed pulse, recursiv
 and automatic creation machinery must each earn re-entry through explicit tests. After privacy and ledger
 repairs, the minimal kernel becomes the one production entrypoint and the superseded path is removed.
 
+The first kernel contract now exists beside, but is not yet selected by, the production host. One activation
+receives availability-labelled current-place facts and local public speech, may request one currently
+advertised information source, and then must make one final choice: attempt a typed action, continue a private
+activity, or wait. A read response cannot contain an action or another durable field. Failed continuation
+inference commits no provisional choice. Action receipts are reduced to confirmed, declined, or unknown, and
+tests prove that unavailable observation is not presented as an empty scene. The next slice must connect this
+kernel through the existing identity, hearth, travel, and effector adapters before changing the one production
+entrypoint.
+
 Three bounded evidence reviews now cover prediction/ignition/arousal/quiet/social norms,
 action-feedback/embodiment/external supports, and clock cadence/sleep/interoception/semantic policy. They
 support plainer names, reliable event and consequence delivery, quiet and repetition as valid outcomes, and

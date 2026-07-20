@@ -160,3 +160,24 @@ Mirrored protocol code in the engine and clients can drift. Publish canonical te
 one cross-process compatibility test that does not share implementation code. If the external path is unsafe
 or unstable, disable new external admissions while retaining the documented test vectors and the existing
 WorldWeaver adapter. Do not roll back the rule that shared consequences remain engine-owned.
+
+## Progress
+
+### 2026-07-20 — small activation contract
+
+`ww_agent/src/runtime/reference_core.py` now implements the first deliberately plain resident activation. It
+does not import salience, arousal, prediction, drive, incubation, or the mixed `Pulse` router. It observes the
+current exact place with explicit available/unavailable states, includes local public speech without making a
+reply mandatory, advertises named elective sources, permits one provisional read, and accepts only one final
+typed action, private continuation, or wait choice.
+
+Strict response shapes prevent a read request from also carrying a provisional action. A failed after-read
+call commits no action or private activity. The existing world effector remains the narrow adapter to shared
+rules, and the new loop records a content-blind confirmed, declined, or unknown result after that adapter
+returns. Focused synthetic tests cover direct local speech, unavailable scene/chat, read-then-act, continuation
+failure, quiet waiting, and all three action-outcome states.
+
+This is not the production resident entrypoint yet. Identity, hearth/city attachment, information access,
+travel, and the current effector still need to be wired into the host, followed by a clean synthetic resident
+run. The old core must remain only until that migration is proven; the goal is one entrypoint, not two lasting
+architectures.

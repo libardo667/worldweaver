@@ -52,6 +52,12 @@ The replacement sequence is:
    after paired tests show what each changes.
 8. Delete the superseded runtime once migration and recovery tests pass.
 
+Steps 3 and 4 now have a focused implementation and synthetic contract tests in
+`ww_agent/src/runtime/reference_core.py`. The module is not yet selected by the running resident host. That
+separation is temporary and exists only to prove the transaction boundary before step 5 connects the existing
+identity, attachment, information, travel, and consequence adapters and step 6 changes the sole production
+entrypoint.
+
 This direction is provisional only in the scientific sense: evidence may change which optional mechanisms
 return. The architectural boundary itself is now the working default. New fixes should make the reference
 kernel possible or repair a safety boundary, rather than deepen coupling to the current cognitive machinery.
