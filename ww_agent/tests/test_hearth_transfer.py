@@ -38,6 +38,10 @@ from src.identity.hearth_transfer import (
     HEARTH_TRANSFER_IDENTITY_KEY,
     build_hearth_transfer_payload,
 )
+from src.identity.host_witness import (
+    HostWitnessDescriptor,
+    host_witness_key_id,
+)
 from src.identity.resident_identity import (
     create_resident_identity_descriptor,
     write_resident_identity_descriptor,
@@ -108,11 +112,49 @@ def _write_host_files(tmp_path, name, private_key):
     return private_path, descriptor_path
 
 
+def _witness(name):
+    private_key = Ed25519PrivateKey.generate()
+    public_key = (
+        base64.urlsafe_b64encode(private_key.public_key().public_bytes_raw())
+        .decode("ascii")
+        .rstrip("=")
+    )
+    return (
+        HostWitnessDescriptor(
+            witness_id=name,
+            public_key=public_key,
+            key_id=host_witness_key_id(public_key),
+        ),
+        private_key,
+    )
+
+
+def _write_witness_file(tmp_path, name):
+    witness, private_key = _witness(name)
+    path = tmp_path / f"{name}.node.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schema": "worldweaver.node",
+                "schema_version": 1,
+                "node_id": witness.witness_id,
+                "shard_type": "city",
+                "city_id": name,
+                "public_key": witness.public_key,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return witness, private_key, path
+
+
 def test_transfer_reseals_identity_for_destination_and_keeps_home_dormant(tmp_path):
     home, identity_private, descriptor, source_host, source_seal = _sealed_home(
         tmp_path
     )
     destination_host = X25519PrivateKey.generate()
+    source_witness, _ = _witness("source-node")
+    destination_witness, _ = _witness("destination-node")
     package = tmp_path / "resident.wwhearth.transfer"
 
     export_report = export_encrypted_hearth_transfer(
@@ -120,6 +162,8 @@ def test_transfer_reseals_identity_for_destination_and_keeps_home_dormant(tmp_pa
         package,
         source_transport_private_key=source_host,
         recipient_transport_public_key=destination_host.public_key(),
+        source_witness=source_witness,
+        destination_witness=destination_witness,
     )
 
     encrypted = package.read_bytes()
@@ -170,6 +214,8 @@ def test_transfer_reseals_identity_for_destination_and_keeps_home_dormant(tmp_pa
 
 def test_transfer_export_requires_the_source_host_key(tmp_path):
     home, _identity, _descriptor, _source_host, _source_seal = _sealed_home(tmp_path)
+    source_witness, _ = _witness("source-node")
+    destination_witness, _ = _witness("destination-node")
 
     with pytest.raises(HearthPackageError, match="another hearth host"):
         export_encrypted_hearth_transfer(
@@ -177,6 +223,8 @@ def test_transfer_export_requires_the_source_host_key(tmp_path):
             tmp_path / "rejected.wwhearth.transfer",
             source_transport_private_key=X25519PrivateKey.generate(),
             recipient_transport_public_key=X25519PrivateKey.generate().public_key(),
+            source_witness=source_witness,
+            destination_witness=destination_witness,
         )
 
     assert not (tmp_path / "rejected.wwhearth.transfer").exists()
@@ -187,12 +235,16 @@ def test_transfer_import_rejects_wrong_host_card_and_tampering_without_a_home(
 ):
     home, _identity, descriptor, source_host, _source_seal = _sealed_home(tmp_path)
     destination_host = X25519PrivateKey.generate()
+    source_witness, _ = _witness("source-node")
+    destination_witness, _ = _witness("destination-node")
     package = tmp_path / "resident.wwhearth.transfer"
     export_encrypted_hearth_transfer(
         home,
         package,
         source_transport_private_key=source_host,
         recipient_transport_public_key=destination_host.public_key(),
+        source_witness=source_witness,
+        destination_witness=destination_witness,
     )
 
     wrong_host_target = tmp_path / "wrong-host"
@@ -245,6 +297,8 @@ def test_transfer_import_rejects_wrong_host_card_and_tampering_without_a_home(
 def test_transfer_rejects_a_signed_payload_with_the_wrong_inner_identity_key(tmp_path):
     home, identity, descriptor, source_host, _source_seal = _sealed_home(tmp_path)
     destination_host = X25519PrivateKey.generate()
+    source_witness, _ = _witness("source-node")
+    destination_witness, _ = _witness("destination-node")
     portable = tmp_path / "portable.wwhearth"
     export_hearth_package(home, portable)
     manifest = load_hearth_manifest(home)
@@ -254,6 +308,10 @@ def test_transfer_rejects_a_signed_payload_with_the_wrong_inner_identity_key(tmp
         identity_private_key=identity,
         source_transport_public_key=source_host.public_key(),
         destination_transport_public_key=destination_host.public_key(),
+        source_witness_id=source_witness.witness_id,
+        source_witness_public_key=source_witness.public_key_object,
+        destination_witness_id=destination_witness.witness_id,
+        destination_witness_public_key=destination_witness.public_key_object,
     )
     payload = build_hearth_transfer_payload(
         portable.read_bytes(),
@@ -304,6 +362,12 @@ def test_transfer_commands_load_host_keys_from_files(tmp_path):
     destination_key_path, destination_descriptor_path = _write_host_files(
         tmp_path, "destination-host", destination_host
     )
+    _source_witness, _source_witness_key, source_witness_path = _write_witness_file(
+        tmp_path, "source-node"
+    )
+    _destination_witness, _destination_witness_key, destination_witness_path = (
+        _write_witness_file(tmp_path, "destination-node")
+    )
     package = tmp_path / "resident.wwhearth.transfer"
     target = tmp_path / "received"
     identity_path = home / "identity" / "resident_identity.json"
@@ -318,6 +382,10 @@ def test_transfer_commands_load_host_keys_from_files(tmp_path):
             str(package),
             "--recipient-host",
             str(destination_descriptor_path),
+            "--source-witness",
+            str(source_witness_path),
+            "--recipient-witness",
+            str(destination_witness_path),
         ],
         env={
             **os.environ,
@@ -358,3 +426,5 @@ def test_transfer_commands_load_host_keys_from_files(tmp_path):
     assert opened.public_key().public_bytes_raw() == (
         _identity.public_key().public_bytes_raw()
     )
+    source_witness, _ = _witness("source-node")
+    destination_witness, _ = _witness("destination-node")

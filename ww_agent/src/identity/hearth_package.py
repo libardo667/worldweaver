@@ -52,6 +52,7 @@ from src.identity.hearth_transfer import (
     build_hearth_transfer_payload,
     open_hearth_transfer_payload,
 )
+from src.identity.host_witness import HostWitnessDescriptor
 from src.identity.resident_identity import (
     ResidentIdentityDescriptor,
     ResidentIdentityError,
@@ -456,6 +457,8 @@ def export_encrypted_hearth_transfer(
     *,
     source_transport_private_key: X25519PrivateKey,
     recipient_transport_public_key: X25519PublicKey,
+    source_witness: HostWitnessDescriptor,
+    destination_witness: HostWitnessDescriptor,
 ) -> dict[str, Any]:
     """Move a stopped hearth and sealed identity toward one reviewed host."""
 
@@ -483,6 +486,10 @@ def export_encrypted_hearth_transfer(
                 identity_private_key=identity_private_key,
                 source_transport_public_key=(source_transport_private_key.public_key()),
                 destination_transport_public_key=recipient_transport_public_key,
+                source_witness_id=source_witness.witness_id,
+                source_witness_public_key=source_witness.public_key_object,
+                destination_witness_id=destination_witness.witness_id,
+                destination_witness_public_key=(destination_witness.public_key_object),
             )
             transfer_payload = build_hearth_transfer_payload(
                 archive_bytes,

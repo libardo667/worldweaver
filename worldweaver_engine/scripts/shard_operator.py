@@ -688,6 +688,10 @@ def _send_encrypted_hearth(args: argparse.Namespace) -> int:
         args.recipient_host,
         label="Destination hearth-host descriptor",
     )
+    recipient_witness = _regular_input_path(
+        args.recipient_witness,
+        label="Destination node witness descriptor",
+    )
     resident_name = _resident_directory_name(args.resident)
     source = ROOT / "residents" / resident_name
     if not source.is_dir() or source.is_symlink():
@@ -706,6 +710,10 @@ def _send_encrypted_hearth(args: argparse.Namespace) -> int:
             "--volume",
             f"{recipient_host}:/transfer/destination-hearth-host.json:ro",
             "--volume",
+            f"{NODE_FILE.resolve()}:/transfer/source-node.json:ro",
+            "--volume",
+            f"{recipient_witness}:/transfer/destination-node.json:ro",
+            "--volume",
             f"{HEARTH_HOST_DIR.resolve()}:/hearth-host:ro",
             "--volume",
             f"{package.parent.resolve()}:/transfer-output",
@@ -719,6 +727,10 @@ def _send_encrypted_hearth(args: argparse.Namespace) -> int:
             f"/transfer-output/{package.name}",
             "--recipient-host",
             "/transfer/destination-hearth-host.json",
+            "--source-witness",
+            "/transfer/source-node.json",
+            "--recipient-witness",
+            "/transfer/destination-node.json",
         ]
     )
     try:
@@ -1498,6 +1510,10 @@ def build_parser() -> argparse.ArgumentParser:
     send_hearth.add_argument(
         "recipient_host",
         help="reviewed destination hearth-host.json",
+    )
+    send_hearth.add_argument(
+        "recipient_witness",
+        help="reviewed destination node.json witness identity",
     )
     send_hearth.add_argument("package", help="new encrypted transfer package")
     send_hearth.add_argument(

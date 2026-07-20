@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import binascii
 from dataclasses import dataclass
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -33,7 +34,7 @@ from src.identity.resident_identity import (
 )
 
 HEARTH_HANDOFF_SCHEMA = "worldweaver.hearth-handoff"
-HEARTH_HANDOFF_VERSION = 1
+HEARTH_HANDOFF_VERSION = 2
 HEARTH_HANDOFF_FILENAME = "hearth_handoff.json"
 _MAX_HANDOFF_BYTES = 64 * 1024
 _FIELDS = {
@@ -47,11 +48,16 @@ _FIELDS = {
     "destination_generation",
     "source_host_key_id",
     "destination_host_key_id",
+    "source_witness_id",
+    "source_witness_key_id",
+    "destination_witness_id",
+    "destination_witness_key_id",
     "resident_signature",
 }
 _UNSIGNED_FIELDS = tuple(sorted(_FIELDS - {"resident_signature"}))
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
 _KEY_ID_RE = re.compile(r"^x25519:[0-9a-f]{32}$")
+_WITNESS_KEY_ID_RE = re.compile(r"^ed25519:[0-9a-f]{32}$")
 _TRANSFER_ID_RE = re.compile(r"^[A-Za-z0-9_-]{32}$")
 _BASE64URL_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
@@ -100,6 +106,10 @@ class HearthHandoffAuthorization:
     destination_generation: int
     source_host_key_id: str
     destination_host_key_id: str
+    source_witness_id: str
+    source_witness_key_id: str
+    destination_witness_id: str
+    destination_witness_key_id: str
     resident_signature: str
     schema: str = HEARTH_HANDOFF_SCHEMA
     schema_version: int = HEARTH_HANDOFF_VERSION
@@ -116,6 +126,10 @@ class HearthHandoffAuthorization:
             "destination_generation": self.destination_generation,
             "source_host_key_id": self.source_host_key_id,
             "destination_host_key_id": self.destination_host_key_id,
+            "source_witness_id": self.source_witness_id,
+            "source_witness_key_id": self.source_witness_key_id,
+            "destination_witness_id": self.destination_witness_id,
+            "destination_witness_key_id": self.destination_witness_key_id,
             "resident_signature": self.resident_signature,
         }
 
@@ -128,7 +142,7 @@ class HearthHandoffAuthorization:
     ) -> "HearthHandoffAuthorization":
         descriptor = ResidentIdentityDescriptor.from_dict(identity_descriptor.to_dict())
         if not isinstance(raw, Mapping) or set(raw) != _FIELDS:
-            raise HearthHandoffError("Hearth handoff fields do not match version 1.")
+            raise HearthHandoffError("Hearth handoff fields do not match version 2.")
         if (
             raw.get("schema") != HEARTH_HANDOFF_SCHEMA
             or type(raw.get("schema_version")) is not int
@@ -141,6 +155,12 @@ class HearthHandoffAuthorization:
         identity_key_id = str(raw.get("identity_key_id") or "").strip()
         source_host = str(raw.get("source_host_key_id") or "").strip()
         destination_host = str(raw.get("destination_host_key_id") or "").strip()
+        source_witness_id = str(raw.get("source_witness_id") or "").strip()
+        source_witness_key_id = str(raw.get("source_witness_key_id") or "").strip()
+        destination_witness_id = str(raw.get("destination_witness_id") or "").strip()
+        destination_witness_key_id = str(
+            raw.get("destination_witness_key_id") or ""
+        ).strip()
         if raw.get("transfer_id") != transfer_id or not _TRANSFER_ID_RE.fullmatch(
             transfer_id
         ):
@@ -181,6 +201,19 @@ class HearthHandoffAuthorization:
             or source_host == destination_host
         ):
             raise HearthHandoffError("Hearth handoff host binding is invalid.")
+        if (
+            raw.get("source_witness_id") != source_witness_id
+            or raw.get("destination_witness_id") != destination_witness_id
+            or not _TOKEN_RE.fullmatch(source_witness_id)
+            or not _TOKEN_RE.fullmatch(destination_witness_id)
+            or source_witness_id == destination_witness_id
+            or raw.get("source_witness_key_id") != source_witness_key_id
+            or raw.get("destination_witness_key_id") != destination_witness_key_id
+            or not _WITNESS_KEY_ID_RE.fullmatch(source_witness_key_id)
+            or not _WITNESS_KEY_ID_RE.fullmatch(destination_witness_key_id)
+            or source_witness_key_id == destination_witness_key_id
+        ):
+            raise HearthHandoffError("Hearth handoff witness binding is invalid.")
         signature = str(raw.get("resident_signature") or "").strip()
         signature_bytes = _decode(signature, label="signature", expected_size=64)
         unsigned = {field: raw[field] for field in _UNSIGNED_FIELDS}
@@ -205,6 +238,10 @@ class HearthHandoffAuthorization:
             destination_generation=destination_generation,
             source_host_key_id=source_host,
             destination_host_key_id=destination_host,
+            source_witness_id=source_witness_id,
+            source_witness_key_id=source_witness_key_id,
+            destination_witness_id=destination_witness_id,
+            destination_witness_key_id=destination_witness_key_id,
             resident_signature=signature,
         )
 
@@ -216,6 +253,10 @@ def create_hearth_handoff_authorization(
     identity_private_key: Ed25519PrivateKey,
     source_transport_public_key: X25519PublicKey,
     destination_transport_public_key: X25519PublicKey,
+    source_witness_id: str,
+    source_witness_public_key: Ed25519PublicKey,
+    destination_witness_id: str,
+    destination_witness_public_key: Ed25519PublicKey,
 ) -> HearthHandoffAuthorization:
     """Sign one exact N-to-N+1 transition between reviewed host keys."""
 
@@ -245,6 +286,20 @@ def create_hearth_handoff_authorization(
         "destination_generation": manifest.runtime_generation + 1,
         "source_host_key_id": transport_key_id(source_transport_public_key),
         "destination_host_key_id": transport_key_id(destination_transport_public_key),
+        "source_witness_id": str(source_witness_id or "").strip(),
+        "source_witness_key_id": (
+            "ed25519:"
+            + hashlib.sha256(source_witness_public_key.public_bytes_raw()).hexdigest()[
+                :32
+            ]
+        ),
+        "destination_witness_id": str(destination_witness_id or "").strip(),
+        "destination_witness_key_id": (
+            "ed25519:"
+            + hashlib.sha256(
+                destination_witness_public_key.public_bytes_raw()
+            ).hexdigest()[:32]
+        ),
     }
     return HearthHandoffAuthorization.from_dict(
         {

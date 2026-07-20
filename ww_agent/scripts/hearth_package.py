@@ -30,6 +30,10 @@ from src.identity.hearth_envelope import (  # noqa: E402
     load_transport_private_key,
     load_transport_public_key,
 )
+from src.identity.host_witness import (  # noqa: E402
+    HostWitnessError,
+    load_host_witness_descriptor,
+)
 from src.identity.resident_identity import (  # noqa: E402
     ResidentIdentityError,
     load_resident_identity_descriptor_file,
@@ -92,6 +96,16 @@ def main(argv: list[str] | None = None) -> int:
         required=True,
         help="reviewed safe-to-share destination hearth-host descriptor",
     )
+    transfer_export_parser.add_argument(
+        "--source-witness",
+        required=True,
+        help="this host's safe-to-share node.json witness identity",
+    )
+    transfer_export_parser.add_argument(
+        "--recipient-witness",
+        required=True,
+        help="destination host's reviewed node.json witness identity",
+    )
 
     import_parser = subparsers.add_parser(
         "import", help="validate and install a package into a new home"
@@ -150,10 +164,21 @@ def main(argv: list[str] | None = None) -> int:
                     recipient_transport_public_key=load_transport_public_key(
                         Path(args.recipient_host).expanduser().resolve()
                     ),
+                    source_witness=load_host_witness_descriptor(
+                        Path(args.source_witness).expanduser().resolve()
+                    ),
+                    destination_witness=load_host_witness_descriptor(
+                        Path(args.recipient_witness).expanduser().resolve()
+                    ),
                 )
             else:
                 report = export_hearth_package(home, package)
-        except (HearthEnvelopeError, HearthPackageError, OSError) as exc:
+        except (
+            HearthEnvelopeError,
+            HearthPackageError,
+            HostWitnessError,
+            OSError,
+        ) as exc:
             _print_error(home, exc)
             return 2
         print(

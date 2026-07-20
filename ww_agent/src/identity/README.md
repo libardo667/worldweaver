@@ -181,10 +181,17 @@ custody material; they do not yet transfer permission to wake the resident.
 
 `hearth_handoff.py` is the resident-signed instruction for that later authority step. It names one random
 transfer ID, the resident and hearth, the current and next generations, and the exact source and destination
-host transport-key fingerprints. The encrypted transfer carries it, and receipt stores it as owner-only,
-host-specific evidence in `hearth_handoff.json`. Changing any named resident, host, generation, or signature
-is rejected. The record is intentionally clock-free so a reviewed offline transfer does not silently expire.
-It coordinates compliant software; it cannot prove that an authorized host destroyed a hidden copy.
+host transport-key fingerprints. It also binds the public Ed25519 node identities that must witness source
+retirement and destination activation. The encrypted transfer carries it, and receipt stores it as owner-only,
+host-specific evidence in `hearth_handoff.json`. Changing any named resident, host, witness, generation, or
+signature is rejected. The record is intentionally clock-free so a reviewed offline transfer does not silently
+expire. It coordinates compliant software; it cannot prove that an authorized host destroyed a hidden copy.
+
+`hearth_receipt.py` defines the two narrow witness statements. The source node may sign `source_retired` only
+for generation N; the destination node may sign `destination_activated` only for N+1. The resident authorized
+both witness-key fingerprints in advance. The node private keys remain outside the resident runtime. These
+receipts create an auditable two-sided chain, but neither receipt authorizes deletion. A later cleanup policy
+must separately require recovery evidence, retention rules, and an explicit destructive command.
 
 ## Open decisions that must remain explicit
 

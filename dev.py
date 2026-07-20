@@ -1033,6 +1033,10 @@ def _hearth_host(args: list[str]) -> int:
         "recipient_host",
         help="reviewed safe-to-share destination hearth-host descriptor",
     )
+    send.add_argument(
+        "recipient_witness",
+        help="reviewed safe-to-share destination node.json witness identity",
+    )
     send.add_argument("package", help="new encrypted transfer package")
     send.add_argument(
         "--resident",
@@ -1086,6 +1090,10 @@ def _hearth_host(args: list[str]) -> int:
                     str(Path(parsed.package).expanduser().resolve()),
                     "--recipient-host",
                     str(Path(parsed.recipient_host).expanduser().resolve()),
+                    "--source-witness",
+                    str(city_dir / "node.json"),
+                    "--recipient-witness",
+                    str(Path(parsed.recipient_witness).expanduser().resolve()),
                 ],
                 cwd=AGENT_DIR,
                 env=runtime_env,
@@ -1169,7 +1177,7 @@ def _help() -> None:
                                         create or verify its encrypted-package receiver
   python dev.py hearth-host --city CITY receive PACKAGE IDENTITY --resident NAME
                                         install a signed hearth, dormant, into a new home
-  python dev.py hearth-host --city CITY send HOST PACKAGE --resident NAME
+  python dev.py hearth-host --city CITY send HOST NODE PACKAGE --resident NAME
                                         encrypt a stopped hearth and identity for another host
   python dev.py hearth-host --city CITY receive-transfer PACKAGE IDENTITY --resident NAME
                                         verify, reseal, and install it dormant

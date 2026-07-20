@@ -108,6 +108,10 @@ Build the private half in this order:
    and destination host transport keys, and exact N-to-N+1 generation transition. Receipt stores that record as
    host-specific evidence beside the dormant destination. It is coordination for cooperating hosts, not proof
    that a malicious host erased an offline copy.
+   The handoff also binds the two shards' existing public node-signing identities as narrow witnesses. Separate
+   receipt formats now require the source witness to attest that N retired and the destination witness to attest
+   that N+1 activated. The destination key cannot sign the source receipt. The filesystem ceremony is next;
+   no receipt or current command authorizes deletion of a retired source.
 5. On an authorized host, decrypt the long-term key into memory only long enough to sign a fresh runtime
    public key for one city, generation, scope set, and expiry. Ordinary requests use the runtime key, not the
    long-term identity key.

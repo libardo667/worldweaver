@@ -29,12 +29,18 @@ def _handoff():
     )
     source_host = X25519PrivateKey.generate()
     destination_host = X25519PrivateKey.generate()
+    source_witness = Ed25519PrivateKey.generate()
+    destination_witness = Ed25519PrivateKey.generate()
     authorization = create_hearth_handoff_authorization(
         manifest,
         identity_descriptor=descriptor,
         identity_private_key=identity,
         source_transport_public_key=source_host.public_key(),
         destination_transport_public_key=destination_host.public_key(),
+        source_witness_id="source-node",
+        source_witness_public_key=source_witness.public_key(),
+        destination_witness_id="destination-node",
+        destination_witness_public_key=destination_witness.public_key(),
     )
     return authorization, descriptor, source_host, destination_host
 
@@ -100,6 +106,10 @@ def test_handoff_rejects_the_same_source_and_destination_host():
             identity_private_key=identity,
             source_transport_public_key=host.public_key(),
             destination_transport_public_key=host.public_key(),
+            source_witness_id="source-node",
+            source_witness_public_key=Ed25519PrivateKey.generate().public_key(),
+            destination_witness_id="destination-node",
+            destination_witness_public_key=(Ed25519PrivateKey.generate().public_key()),
         )
 
 
