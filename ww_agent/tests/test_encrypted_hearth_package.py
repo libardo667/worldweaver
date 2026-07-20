@@ -16,7 +16,10 @@ from src.identity.hearth_envelope import (
     encrypt_hearth_payload,
     load_transport_private_key,
 )
-from src.identity.hearth_manifest import initialize_hearth_manifest, load_hearth_manifest
+from src.identity.hearth_manifest import (
+    initialize_hearth_manifest,
+    load_hearth_manifest,
+)
 from src.identity.hearth_package import (
     HearthPackageError,
     export_encrypted_hearth_package,
@@ -35,9 +38,13 @@ def _home(tmp_path):
     (home / "identity" / "resident_id.txt").write_text("actor-123\n", encoding="utf-8")
     initialize_hearth_manifest(home)
     (home / "memory").mkdir()
-    (home / "memory" / "runtime_ledger.jsonl").write_text('{"event":"private resident evidence"}\n', encoding="utf-8")
+    (home / "memory" / "runtime_ledger.jsonl").write_text(
+        '{"event":"private resident evidence"}\n', encoding="utf-8"
+    )
     (home / "workshop").mkdir()
-    (home / "workshop" / "note.md").write_text("a private resident note\n", encoding="utf-8")
+    (home / "workshop" / "note.md").write_text(
+        "a private resident note\n", encoding="utf-8"
+    )
     return home
 
 
@@ -49,7 +56,8 @@ def test_host_transport_key_loader_accepts_only_a_regular_encoded_key(tmp_path):
     _identity, host = _keys()
     key_path = tmp_path / "transport.key"
     key_path.write_text(
-        base64.urlsafe_b64encode(host.private_bytes_raw()).decode("ascii").rstrip("=") + "\n",
+        base64.urlsafe_b64encode(host.private_bytes_raw()).decode("ascii").rstrip("=")
+        + "\n",
         encoding="utf-8",
     )
     loaded = load_transport_private_key(key_path)
@@ -83,13 +91,17 @@ def test_encrypted_export_import_restores_portable_state_without_plaintext_packa
         package,
         imported,
         recipient_transport_private_key=host,
-        expected_resident_identity_public_key=encoded_resident_identity_public_key(identity.public_key()),
+        expected_resident_identity_public_key=encoded_resident_identity_public_key(
+            identity.public_key()
+        ),
     )
 
     assert import_report == export_report
     assert (imported / "identity" / "resident_id.txt").read_text() == "actor-123\n"
     assert (imported / "memory" / "runtime_ledger.jsonl").is_file()
-    assert (imported / "workshop" / "note.md").read_text() == ("a private resident note\n")
+    assert (imported / "workshop" / "note.md").read_text() == (
+        "a private resident note\n"
+    )
 
 
 def test_encrypted_import_rejects_wrong_host_without_partial_home(tmp_path):
@@ -109,7 +121,9 @@ def test_encrypted_import_rejects_wrong_host_without_partial_home(tmp_path):
             package,
             target,
             recipient_transport_private_key=X25519PrivateKey.generate(),
-            expected_resident_identity_public_key=encoded_resident_identity_public_key(identity.public_key()),
+            expected_resident_identity_public_key=encoded_resident_identity_public_key(
+                identity.public_key()
+            ),
         )
 
     assert not target.exists()
@@ -132,7 +146,8 @@ def test_encrypted_import_command_uses_host_key_from_environment(tmp_path):
     )
     key_path = tmp_path / "transport.key"
     key_path.write_text(
-        base64.urlsafe_b64encode(host.private_bytes_raw()).decode("ascii").rstrip("=") + "\n",
+        base64.urlsafe_b64encode(host.private_bytes_raw()).decode("ascii").rstrip("=")
+        + "\n",
         encoding="utf-8",
     )
     target = tmp_path / "received"
@@ -159,7 +174,9 @@ def test_encrypted_import_command_uses_host_key_from_environment(tmp_path):
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert '"status": "imported-encrypted"' in result.stdout
-    assert (target / "identity" / "resident_id.txt").read_text(encoding="utf-8") == "actor-123\n"
+    assert (target / "identity" / "resident_id.txt").read_text(
+        encoding="utf-8"
+    ) == "actor-123\n"
     assert not list(tmp_path.glob(".rejected.import.*"))
 
 
@@ -171,7 +188,9 @@ def test_encrypted_import_command_uses_host_key_from_environment(tmp_path):
         ("actor-123", "hearth:actor-123", 2),
     ],
 )
-def test_encrypted_import_binds_outer_identity_and_generation_to_inner_manifest(tmp_path, actor_id, hearth_shard_id, runtime_generation):
+def test_encrypted_import_binds_outer_identity_and_generation_to_inner_manifest(
+    tmp_path, actor_id, hearth_shard_id, runtime_generation
+):
     home = _home(tmp_path)
     plaintext = tmp_path / "inner.wwhearth"
     export_hearth_package(home, plaintext)
@@ -193,7 +212,9 @@ def test_encrypted_import_binds_outer_identity_and_generation_to_inner_manifest(
             package,
             target,
             recipient_transport_private_key=host,
-            expected_resident_identity_public_key=encoded_resident_identity_public_key(identity.public_key()),
+            expected_resident_identity_public_key=encoded_resident_identity_public_key(
+                identity.public_key()
+            ),
         )
 
     assert not target.exists()
@@ -216,7 +237,9 @@ def test_encrypted_import_rejects_actor_not_bound_by_reviewed_identity(tmp_path)
             package,
             target,
             recipient_transport_private_key=host,
-            expected_resident_identity_public_key=encoded_resident_identity_public_key(identity.public_key()),
+            expected_resident_identity_public_key=encoded_resident_identity_public_key(
+                identity.public_key()
+            ),
             expected_actor_id="someone-else",
             expected_hearth_shard_id="hearth:someone-else",
         )

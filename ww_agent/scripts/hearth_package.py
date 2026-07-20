@@ -45,21 +45,33 @@ def _print_error(subject: Path, exc: Exception) -> None:
 def main(argv: list[str] | None = None) -> int:
     arguments = list(argv if argv is not None else sys.argv[1:])
     commands = {"inventory", "export", "import", "import-encrypted"}
-    if arguments and arguments[0] not in commands and arguments[0] not in {"-h", "--help"}:
+    if (
+        arguments
+        and arguments[0] not in commands
+        and arguments[0] not in {"-h", "--help"}
+    ):
         arguments.insert(0, "inventory")
 
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    inventory_parser = subparsers.add_parser("inventory", help="inspect without changing or copying the resident")
+    inventory_parser = subparsers.add_parser(
+        "inventory", help="inspect without changing or copying the resident"
+    )
     inventory_parser.add_argument("home", help="one resident home directory")
-    inventory_parser.add_argument("--summary", action="store_true", help="omit the per-file list")
+    inventory_parser.add_argument(
+        "--summary", action="store_true", help="omit the per-file list"
+    )
 
-    export_parser = subparsers.add_parser("export", help="write a deterministic portable package")
+    export_parser = subparsers.add_parser(
+        "export", help="write a deterministic portable package"
+    )
     export_parser.add_argument("home", help="one stopped resident home directory")
     export_parser.add_argument("package", help="new package path")
 
-    import_parser = subparsers.add_parser("import", help="validate and install a package into a new home")
+    import_parser = subparsers.add_parser(
+        "import", help="validate and install a package into a new home"
+    )
     import_parser.add_argument("package", help="existing package path")
     import_parser.add_argument("home", help="new resident home directory")
 
@@ -67,7 +79,9 @@ def main(argv: list[str] | None = None) -> int:
         "import-encrypted",
         help="verify and install a resident-signed package addressed to this host",
     )
-    encrypted_import_parser.add_argument("package", help="existing encrypted package path")
+    encrypted_import_parser.add_argument(
+        "package", help="existing encrypted package path"
+    )
     encrypted_import_parser.add_argument("home", help="new resident home directory")
     encrypted_import_parser.add_argument(
         "--resident-identity",
@@ -103,14 +117,22 @@ def main(argv: list[str] | None = None) -> int:
         package = Path(args.package).expanduser().resolve()
         try:
             if args.command == "import-encrypted":
-                key_path = str(os.environ.get("WW_HEARTH_TRANSPORT_PRIVATE_KEY") or "").strip()
+                key_path = str(
+                    os.environ.get("WW_HEARTH_TRANSPORT_PRIVATE_KEY") or ""
+                ).strip()
                 if not key_path:
-                    raise HearthPackageError("WW_HEARTH_TRANSPORT_PRIVATE_KEY is required for encrypted import")
-                identity = load_resident_identity_descriptor_file(Path(args.resident_identity).expanduser().resolve())
+                    raise HearthPackageError(
+                        "WW_HEARTH_TRANSPORT_PRIVATE_KEY is required for encrypted import"
+                    )
+                identity = load_resident_identity_descriptor_file(
+                    Path(args.resident_identity).expanduser().resolve()
+                )
                 report = import_encrypted_hearth_package(
                     package,
                     home,
-                    recipient_transport_private_key=load_transport_private_key(key_path),
+                    recipient_transport_private_key=load_transport_private_key(
+                        key_path
+                    ),
                     expected_resident_identity_public_key=identity.identity_public_key,
                     expected_actor_id=identity.actor_id,
                     expected_hearth_shard_id=identity.hearth_shard_id,
@@ -128,7 +150,11 @@ def main(argv: list[str] | None = None) -> int:
         print(
             json.dumps(
                 {
-                    "status": "imported-encrypted" if args.command == "import-encrypted" else "imported",
+                    "status": (
+                        "imported-encrypted"
+                        if args.command == "import-encrypted"
+                        else "imported"
+                    ),
                     "home": str(home),
                     "package": str(package),
                     "hearth_manifest": report["hearth_manifest"],

@@ -124,7 +124,11 @@ def encoded_resident_identity_public_key(key: Ed25519PublicKey) -> str:
 def transport_key_id(public_key: str | X25519PublicKey) -> str:
     """Return a short public fingerprint for a host transport key."""
 
-    encoded = encoded_transport_public_key(public_key) if isinstance(public_key, X25519PublicKey) else str(public_key or "").strip()
+    encoded = (
+        encoded_transport_public_key(public_key)
+        if isinstance(public_key, X25519PublicKey)
+        else str(public_key or "").strip()
+    )
     raw = _decode(encoded, label="recipient public key", expected_size=32)
     return f"x25519:{hashlib.sha256(raw).hexdigest()[:32]}"
 
@@ -134,7 +138,9 @@ def load_transport_private_key(path: str | Path) -> X25519PrivateKey:
 
     key_path = Path(path).expanduser()
     if not key_path.is_file() or key_path.is_symlink():
-        raise HearthEnvelopeError(f"Hearth transport private key is missing or unsafe: {key_path}")
+        raise HearthEnvelopeError(
+            f"Hearth transport private key is missing or unsafe: {key_path}"
+        )
     try:
         encoded = key_path.read_bytes()
         if len(encoded) > 256:
@@ -146,7 +152,9 @@ def load_transport_private_key(path: str | Path) -> X25519PrivateKey:
         )
         return X25519PrivateKey.from_private_bytes(raw)
     except (OSError, UnicodeDecodeError, ValueError) as exc:
-        raise HearthEnvelopeError(f"Could not load hearth transport private key: {key_path}") from exc
+        raise HearthEnvelopeError(
+            f"Could not load hearth transport private key: {key_path}"
+        ) from exc
 
 
 def _derive_content_key(
@@ -177,18 +185,27 @@ def encrypt_hearth_payload(
     actor = str(actor_id or "").strip()
     hearth = str(hearth_shard_id or "").strip()
     if len(content) > _MAX_PAYLOAD_BYTES:
-        raise HearthEnvelopeError("Stopped hearth payload exceeds the envelope size limit.")
+        raise HearthEnvelopeError(
+            "Stopped hearth payload exceeds the envelope size limit."
+        )
     if not _TOKEN_RE.fullmatch(actor):
         raise HearthEnvelopeError("Encrypted hearth actor ID is invalid.")
     if not _TOKEN_RE.fullmatch(hearth):
         raise HearthEnvelopeError("Encrypted hearth shard ID is invalid.")
-    if isinstance(runtime_generation, bool) or not isinstance(runtime_generation, int) or runtime_generation < 1 or runtime_generation > (2**63) - 1:
+    if (
+        isinstance(runtime_generation, bool)
+        or not isinstance(runtime_generation, int)
+        or runtime_generation < 1
+        or runtime_generation > (2**63) - 1
+    ):
         raise HearthEnvelopeError("Encrypted hearth runtime generation is invalid.")
 
     ephemeral_private = X25519PrivateKey.generate()
     ephemeral_public = ephemeral_private.public_key()
     nonce = secrets.token_bytes(12)
-    identity_public = encoded_resident_identity_public_key(resident_identity_private_key.public_key())
+    identity_public = encoded_resident_identity_public_key(
+        resident_identity_private_key.public_key()
+    )
     header: dict[str, Any] = {
         "schema": HEARTH_ENVELOPE_SCHEMA,
         "schema_version": HEARTH_ENVELOPE_VERSION,
@@ -219,10 +236,17 @@ def _parse_envelope(encoded_envelope: bytes) -> dict[str, Any]:
     try:
         raw = json.loads(bytes(encoded_envelope))
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise HearthEnvelopeError("Encrypted hearth envelope is not valid UTF-8 JSON.") from exc
+        raise HearthEnvelopeError(
+            "Encrypted hearth envelope is not valid UTF-8 JSON."
+        ) from exc
     if not isinstance(raw, dict) or set(raw) != _ENVELOPE_FIELDS:
-        raise HearthEnvelopeError("Encrypted hearth envelope fields do not match version 1.")
-    if raw.get("schema") != HEARTH_ENVELOPE_SCHEMA or raw.get("schema_version") != HEARTH_ENVELOPE_VERSION:
+        raise HearthEnvelopeError(
+            "Encrypted hearth envelope fields do not match version 1."
+        )
+    if (
+        raw.get("schema") != HEARTH_ENVELOPE_SCHEMA
+        or raw.get("schema_version") != HEARTH_ENVELOPE_VERSION
+    ):
         raise HearthEnvelopeError("Encrypted hearth envelope schema is unsupported.")
     if raw.get("cipher") != HEARTH_ENVELOPE_CIPHER:
         raise HearthEnvelopeError("Encrypted hearth cipher suite is unsupported.")
@@ -234,14 +258,21 @@ def _parse_envelope(encoded_envelope: bytes) -> dict[str, Any]:
     if not re.fullmatch(r"x25519:[0-9a-f]{32}", recipient):
         raise HearthEnvelopeError("Encrypted hearth recipient key ID is invalid.")
     generation = raw.get("runtime_generation")
-    if isinstance(generation, bool) or not isinstance(generation, int) or generation < 1 or generation > (2**63) - 1:
+    if (
+        isinstance(generation, bool)
+        or not isinstance(generation, int)
+        or generation < 1
+        or generation > (2**63) - 1
+    ):
         raise HearthEnvelopeError("Encrypted hearth runtime generation is invalid.")
     _decode(
         raw.get("resident_identity_public_key"),
         label="resident identity public key",
         expected_size=32,
     )
-    _decode(raw.get("ephemeral_public_key"), label="ephemeral public key", expected_size=32)
+    _decode(
+        raw.get("ephemeral_public_key"), label="ephemeral public key", expected_size=32
+    )
     _decode(raw.get("nonce"), label="nonce", expected_size=12)
     _decode(raw.get("ciphertext"), label="ciphertext")
     _decode(raw.get("resident_signature"), label="resident signature", expected_size=64)
@@ -264,7 +295,9 @@ def decrypt_hearth_payload(
         expected_size=32,
     )
     if raw["resident_identity_public_key"] != expected_identity:
-        raise HearthEnvelopeError("Encrypted hearth resident identity does not match the expected identity.")
+        raise HearthEnvelopeError(
+            "Encrypted hearth resident identity does not match the expected identity."
+        )
 
     signed = {key: raw[key] for key in (*_HEADER_FIELDS, "ciphertext")}
     try:
@@ -275,16 +308,26 @@ def decrypt_hearth_payload(
                 expected_size=32,
             )
         ).verify(
-            _decode(raw["resident_signature"], label="resident signature", expected_size=64),
+            _decode(
+                raw["resident_signature"], label="resident signature", expected_size=64
+            ),
             _canonical_json(signed),
         )
     except (InvalidSignature, ValueError) as exc:
-        raise HearthEnvelopeError("Encrypted hearth resident signature is invalid.") from exc
+        raise HearthEnvelopeError(
+            "Encrypted hearth resident signature is invalid."
+        ) from exc
 
     recipient_public = recipient_transport_private_key.public_key()
     if raw["recipient_key_id"] != transport_key_id(recipient_public):
-        raise HearthEnvelopeError("Encrypted hearth was prepared for another host transport key.")
-    ephemeral_public = X25519PublicKey.from_public_bytes(_decode(raw["ephemeral_public_key"], label="ephemeral public key", expected_size=32))
+        raise HearthEnvelopeError(
+            "Encrypted hearth was prepared for another host transport key."
+        )
+    ephemeral_public = X25519PublicKey.from_public_bytes(
+        _decode(
+            raw["ephemeral_public_key"], label="ephemeral public key", expected_size=32
+        )
+    )
     content_key = _derive_content_key(
         private_key=recipient_transport_private_key,
         public_key=ephemeral_public,
@@ -297,7 +340,9 @@ def decrypt_hearth_payload(
             _canonical_json(header),
         )
     except (InvalidTag, ValueError) as exc:
-        raise HearthEnvelopeError("Encrypted hearth ciphertext could not be authenticated.") from exc
+        raise HearthEnvelopeError(
+            "Encrypted hearth ciphertext could not be authenticated."
+        ) from exc
     digest = hashlib.sha256(payload).hexdigest()
     return DecryptedHearthEnvelope(
         payload=payload,

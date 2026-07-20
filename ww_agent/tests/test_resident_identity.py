@@ -34,7 +34,9 @@ def test_public_descriptor_round_trip_is_self_signed_and_portable(tmp_path):
 
     write_resident_identity_descriptor(home, descriptor)
     loaded = load_resident_identity_descriptor(home)
-    loaded_from_file = load_resident_identity_descriptor_file(home / "identity" / "resident_identity.json")
+    loaded_from_file = load_resident_identity_descriptor_file(
+        home / "identity" / "resident_identity.json"
+    )
 
     assert loaded == descriptor
     assert loaded_from_file == descriptor
@@ -102,7 +104,9 @@ def test_load_checks_manifest_and_write_refuses_replacement(tmp_path):
     )
     wrong_home = tmp_path / "other"
     (wrong_home / "identity").mkdir(parents=True)
-    (wrong_home / "identity" / "resident_id.txt").write_text("actor-456\n", encoding="utf-8")
+    (wrong_home / "identity" / "resident_id.txt").write_text(
+        "actor-456\n", encoding="utf-8"
+    )
     initialize_hearth_manifest(wrong_home)
 
     with pytest.raises(ResidentIdentityError, match="manifest"):

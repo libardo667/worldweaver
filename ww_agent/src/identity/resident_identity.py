@@ -86,7 +86,11 @@ def encoded_identity_public_key(key: Ed25519PublicKey) -> str:
 def resident_identity_key_id(public_key: str | Ed25519PublicKey) -> str:
     """Return the city-compatible fingerprint for a resident identity key."""
 
-    encoded = encoded_identity_public_key(public_key) if isinstance(public_key, Ed25519PublicKey) else str(public_key or "").strip()
+    encoded = (
+        encoded_identity_public_key(public_key)
+        if isinstance(public_key, Ed25519PublicKey)
+        else str(public_key or "").strip()
+    )
     key_bytes = _decode(
         encoded,
         label="identity public key",
@@ -121,19 +125,40 @@ class ResidentIdentityDescriptor:
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> "ResidentIdentityDescriptor":
         if not isinstance(raw, Mapping) or set(raw) != _FIELDS:
-            raise ResidentIdentityError("Resident identity fields do not match version 1.")
-        if raw.get("schema") != RESIDENT_IDENTITY_SCHEMA or type(raw.get("schema_version")) is not int or raw.get("schema_version") != RESIDENT_IDENTITY_VERSION:
+            raise ResidentIdentityError(
+                "Resident identity fields do not match version 1."
+            )
+        if (
+            raw.get("schema") != RESIDENT_IDENTITY_SCHEMA
+            or type(raw.get("schema_version")) is not int
+            or raw.get("schema_version") != RESIDENT_IDENTITY_VERSION
+        ):
             raise ResidentIdentityError("Resident identity schema is unsupported.")
         actor_id = str(raw.get("actor_id") or "").strip()
         hearth_shard_id = str(raw.get("hearth_shard_id") or "").strip()
-        if not isinstance(raw.get("actor_id"), str) or raw.get("actor_id") != actor_id or not _TOKEN_RE.fullmatch(actor_id) or len(actor_id) > 36:
+        if (
+            not isinstance(raw.get("actor_id"), str)
+            or raw.get("actor_id") != actor_id
+            or not _TOKEN_RE.fullmatch(actor_id)
+            or len(actor_id) > 36
+        ):
             raise ResidentIdentityError("Resident actor ID is invalid.")
-        if not isinstance(raw.get("hearth_shard_id"), str) or raw.get("hearth_shard_id") != hearth_shard_id or not _TOKEN_RE.fullmatch(hearth_shard_id) or len(hearth_shard_id) > 80:
+        if (
+            not isinstance(raw.get("hearth_shard_id"), str)
+            or raw.get("hearth_shard_id") != hearth_shard_id
+            or not _TOKEN_RE.fullmatch(hearth_shard_id)
+            or len(hearth_shard_id) > 80
+        ):
             raise ResidentIdentityError("Resident hearth shard ID is invalid.")
         if hearth_shard_id != f"hearth:{actor_id}":
-            raise ResidentIdentityError("Resident hearth shard ID does not match the actor ID.")
+            raise ResidentIdentityError(
+                "Resident hearth shard ID does not match the actor ID."
+            )
         public_key = str(raw.get("identity_public_key") or "").strip()
-        if not isinstance(raw.get("identity_public_key"), str) or raw.get("identity_public_key") != public_key:
+        if (
+            not isinstance(raw.get("identity_public_key"), str)
+            or raw.get("identity_public_key") != public_key
+        ):
             raise ResidentIdentityError("Resident identity public key is invalid.")
         public_key_bytes = _decode(
             public_key,
@@ -141,15 +166,26 @@ class ResidentIdentityDescriptor:
             expected_size=32,
         )
         key_id = str(raw.get("identity_key_id") or "").strip()
-        if not isinstance(raw.get("identity_key_id"), str) or raw.get("identity_key_id") != key_id:
+        if (
+            not isinstance(raw.get("identity_key_id"), str)
+            or raw.get("identity_key_id") != key_id
+        ):
             raise ResidentIdentityError("Resident identity key ID is invalid.")
         if key_id != resident_identity_key_id(public_key):
             raise ResidentIdentityError("Resident identity key ID does not match.")
         policy_version = raw.get("recovery_policy_version")
-        if isinstance(policy_version, bool) or not isinstance(policy_version, int) or policy_version < 1 or policy_version > (2**31) - 1:
+        if (
+            isinstance(policy_version, bool)
+            or not isinstance(policy_version, int)
+            or policy_version < 1
+            or policy_version > (2**31) - 1
+        ):
             raise ResidentIdentityError("Resident recovery policy version is invalid.")
         signature = str(raw.get("identity_signature") or "").strip()
-        if not isinstance(raw.get("identity_signature"), str) or raw.get("identity_signature") != signature:
+        if (
+            not isinstance(raw.get("identity_signature"), str)
+            or raw.get("identity_signature") != signature
+        ):
             raise ResidentIdentityError("Resident identity signature is invalid.")
         signature_bytes = _decode(
             signature,
@@ -163,7 +199,9 @@ class ResidentIdentityDescriptor:
                 _canonical_json(unsigned),
             )
         except (InvalidSignature, ValueError) as exc:
-            raise ResidentIdentityError("Resident identity signature is invalid.") from exc
+            raise ResidentIdentityError(
+                "Resident identity signature is invalid."
+            ) from exc
         return cls(
             actor_id=actor_id,
             hearth_shard_id=hearth_shard_id,
@@ -193,7 +231,9 @@ def create_resident_identity_descriptor(
         "recovery_policy_version": recovery_policy_version,
     }
     signature = _encode(identity_private_key.sign(_canonical_json(unsigned)))
-    return ResidentIdentityDescriptor.from_dict({**unsigned, "identity_signature": signature})
+    return ResidentIdentityDescriptor.from_dict(
+        {**unsigned, "identity_signature": signature}
+    )
 
 
 def resident_identity_path(resident_dir: Path) -> Path:
@@ -207,14 +247,18 @@ def load_resident_identity_descriptor_file(
 
     descriptor_path = Path(path).expanduser()
     if not descriptor_path.is_file() or descriptor_path.is_symlink():
-        raise ResidentIdentityError(f"Resident identity descriptor is missing or unsafe: {descriptor_path}")
+        raise ResidentIdentityError(
+            f"Resident identity descriptor is missing or unsafe: {descriptor_path}"
+        )
     try:
         encoded = descriptor_path.read_bytes()
         if len(encoded) > _MAX_DESCRIPTOR_BYTES:
             raise ResidentIdentityError("Resident identity descriptor is too large.")
         return ResidentIdentityDescriptor.from_dict(json.loads(encoded))
     except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise ResidentIdentityError("Resident identity descriptor is not valid UTF-8 JSON.") from exc
+        raise ResidentIdentityError(
+            "Resident identity descriptor is not valid UTF-8 JSON."
+        ) from exc
 
 
 def load_resident_identity_descriptor(
@@ -225,8 +269,13 @@ def load_resident_identity_descriptor(
     path = resident_identity_path(resident_dir)
     descriptor = load_resident_identity_descriptor_file(path)
     manifest = load_hearth_manifest(resident_dir)
-    if descriptor.actor_id != manifest.actor_id or descriptor.hearth_shard_id != manifest.hearth_shard_id:
-        raise ResidentIdentityError("Resident identity descriptor does not match the hearth manifest.")
+    if (
+        descriptor.actor_id != manifest.actor_id
+        or descriptor.hearth_shard_id != manifest.hearth_shard_id
+    ):
+        raise ResidentIdentityError(
+            "Resident identity descriptor does not match the hearth manifest."
+        )
     return descriptor
 
 
@@ -239,12 +288,21 @@ def write_resident_identity_descriptor(
     home = Path(resident_dir)
     verified = ResidentIdentityDescriptor.from_dict(descriptor.to_dict())
     manifest = load_hearth_manifest(home)
-    if verified.actor_id != manifest.actor_id or verified.hearth_shard_id != manifest.hearth_shard_id:
-        raise ResidentIdentityError("Resident identity descriptor does not match the hearth manifest.")
+    if (
+        verified.actor_id != manifest.actor_id
+        or verified.hearth_shard_id != manifest.hearth_shard_id
+    ):
+        raise ResidentIdentityError(
+            "Resident identity descriptor does not match the hearth manifest."
+        )
     path = resident_identity_path(home)
     if path.exists() or path.is_symlink():
-        raise ResidentIdentityError(f"refusing to replace identity/{RESIDENT_IDENTITY_FILENAME}")
-    encoded = (json.dumps(verified.to_dict(), indent=2, sort_keys=True) + "\n").encode("utf-8")
+        raise ResidentIdentityError(
+            f"refusing to replace identity/{RESIDENT_IDENTITY_FILENAME}"
+        )
+    encoded = (json.dumps(verified.to_dict(), indent=2, sort_keys=True) + "\n").encode(
+        "utf-8"
+    )
     temporary: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -259,7 +317,9 @@ def write_resident_identity_descriptor(
             os.fsync(handle.fileno())
         os.link(temporary, path)
     except OSError as exc:
-        raise ResidentIdentityError(f"Could not write resident identity descriptor: {exc}") from exc
+        raise ResidentIdentityError(
+            f"Could not write resident identity descriptor: {exc}"
+        ) from exc
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
