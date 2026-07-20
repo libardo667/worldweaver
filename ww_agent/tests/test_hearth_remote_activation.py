@@ -368,3 +368,40 @@ def test_destination_refuses_wrong_host_or_witness_before_advancing(tmp_path):
 
     assert load_hearth_manifest(destination).runtime_generation == 1
     assert not (destination / "hearth_activation.json").exists()
+
+
+def test_destination_refuses_an_already_active_source_generation_without_advancing(
+    tmp_path,
+):
+    (
+        source,
+        destination,
+        handoff,
+        source_transport,
+        destination_transport,
+        source_witness,
+        source_witness_key,
+        destination_witness,
+        destination_witness_key,
+    ) = _transferred_pair(tmp_path)
+    initialize_hearth_activation(destination)
+    retirement = retire_source_hearth(
+        source,
+        handoff,
+        source_transport_public_key=source_transport.public_key(),
+        source_witness=source_witness,
+        source_witness_private_key=source_witness_key,
+    )
+
+    with pytest.raises(RemoteHearthActivationError, match="must still be dormant"):
+        activate_destination_hearth(
+            destination,
+            retirement,
+            destination_transport_public_key=destination_transport.public_key(),
+            source_witness=source_witness,
+            destination_witness=destination_witness,
+            destination_witness_private_key=destination_witness_key,
+        )
+
+    assert load_hearth_manifest(destination).runtime_generation == 1
+    assert load_hearth_activation(destination).state == "active"

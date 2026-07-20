@@ -271,18 +271,23 @@ def activate_destination_hearth(
                 handoff=handoff,
                 witness=source_witness,
             )
+            existing_activation = None
+            if activation_path(home).exists() or activation_path(home).is_symlink():
+                existing_activation = load_hearth_activation(home)
+                if manifest.runtime_generation == handoff.source_generation:
+                    raise RemoteHearthActivationError(
+                        "destination source generation must still be dormant"
+                    )
+                if existing_activation.state != "active":
+                    raise RemoteHearthActivationError(
+                        "destination hearth activation is not active"
+                    )
             if manifest.runtime_generation == handoff.source_generation:
                 manifest = advance_hearth_manifest_generation(
                     home,
                     expected_generation=handoff.source_generation,
                 )
-            if activation_path(home).exists() or activation_path(home).is_symlink():
-                activation = load_hearth_activation(home)
-                if activation.state != "active":
-                    raise RemoteHearthActivationError(
-                        "destination hearth activation is not active"
-                    )
-            else:
+            if existing_activation is None:
                 write_hearth_activation_locked(
                     home,
                     HearthActivation(
