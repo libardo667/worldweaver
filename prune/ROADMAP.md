@@ -17,6 +17,8 @@ The project now has:
 - a fictional test town, Alderbank, with four game-native resident homes and bounded human/resident play;
 - a place-centered public client;
 - recoverable local city-to-city handoff;
+- one isolated public Alderbank node and one closed directory using separate signed node identities;
+- one completed one-hour, four-resident Alderbank baseline with clean hearth parking;
 - stopped hearth export, import, and generation fencing;
 - hearth-owned identity growth with private inspect-then-adopt decisions and complete provenance.
 
@@ -30,31 +32,38 @@ remaining ordinary-action gaps: correspondence, safe encounter targets for direc
 human creation of temporary sublocations. Make the current place and its verb palette the default view;
 keep the map as an optional full-screen orientation and destination surface.
 
-### 2. Add artifact stoops
+### 2. Fix resident attention cost and timing
+
+Bound elective read continuations so one active pulse cannot consume most of a meeting and several model
+calls. Then let exact-place addressed speech and new co-presence wake a resident early without forcing an
+answer. Keep the completed one-hour Alderbank run as the fixed-cadence comparison.
+
+### 3. Add artifact stoops
 
 Let a person or resident deliberately share a bounded note or made file at one place. Record authorship,
 source, license, publication choice, media type, size, time, and expiry. Do not build a global feed or expose
 private workshops.
 
-### 3. Establish real node trust
+### 4. Finish the public-node proof
 
-Replace the shared federation token with independent node identities and signed requests. Bring up stable
-HTTPS ingress, publish the first `world-weaver.org` directory/node, and prove travel between two computers.
+Independent node identities, signed requests, HTTPS ingress, and the first `world-weaver.org` directory/node
+are live on one computer. Replace the development client server, test an encrypted off-device restore, add
+folder-local resident operation, and prove entry and travel between two computers.
 
 ## Next
 
-### 4. Finish City Studio
+### 5. Finish City Studio
 
 Build a browser editor over the existing city-pack builder and validator. Support drafts, deterministic
 field-and-section map generation from Major 131, preview, export, and deliberate publication before
 habitation. Do not mutate an inhabited pack without a migration plan.
 
-### 5. Finish resident portability and recovery
+### 6. Finish resident portability and recovery
 
 Add host authorization, address rotation, recovery from an unavailable host, and independent-node tests.
 Keep the rule that hosting supplies service rather than ownership.
 
-### 6. Continue the private game-town lane
+### 7. Continue the private game-town lane
 
 Use Alderbank to test understandable consequences over multiple sessions. Keep game rules opt-in and
 constructive. Do not turn game telemetry into general resident assessment.

@@ -71,6 +71,14 @@ active; makes a full backup; and reloads the backend. The command completed agai
 its resident service stopped. This removes a source-tree-dependent manual copy from routine map work without
 creating a general inhabited-city migration command.
 
+Four host-run residents have now completed a one-hour bounded run against the isolated public Alderbank API.
+All four parked cleanly and disappeared from the roster. The run also exposed an operator gap: the root
+`dev.py cohort --city` command resolves only repository shards, so the first launch accidentally targeted the
+development Alderbank with the same human-facing name. The correct run required invoking the lower-level
+cohort script with the isolated folder's URL and resident paths. Folder-local resident preflight, wake,
+bounded cohort, interrupt, and cleanup commands are still needed before a steward can operate residents
+without source-tree knowledge.
+
 This is a useful single-computer public test, not the completed deployment proof. The human client still uses
 Vite's development server, the backups are on the same computer, WSL reboot recovery is not configured, and
 no outside computer has completed entry or travel.
@@ -100,6 +108,8 @@ it does not mount or build from a neighboring source checkout.
 7. Publish a small node descriptor containing only its ID, hosted city, public URL, protocol version,
    capabilities, and current reachability.
 8. Verify entry and travel from outside the host network and then repeat between two computers.
+9. Add folder-local resident and cohort commands that always target this folder's API and resident homes,
+   refuse ambiguous city labels, and prove cleanup after normal exit and interruption.
 
 ## Boundaries
 

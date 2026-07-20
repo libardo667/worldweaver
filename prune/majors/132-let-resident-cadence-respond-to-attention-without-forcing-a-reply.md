@@ -2,13 +2,20 @@
 
 ## Status
 
-The resident host currently checks the world on a fixed cadence. A normal city run waits 20 seconds between
-ticks. Local speech is classified as direct when it names or tags the resident, but a city resident cannot
-discover that speech until the next poll. Unlike a keeper whisper at the hearth, city speech also has no
-event signal that can wake a sleeping runner early.
+The fixed-cadence Alderbank baseline is complete. Four residents ran for one hour and crossed paths in 105
+of 716 five-second samples, but none of those meetings produced a public conversation. Two residents never
+spoke publicly. The run completed 546 ticks, 224 active pulses, and 1,362 model calls. The extra 1,138 calls
+were elective information-read continuations. See
+[`research/runs/2026-07-19-alderbank-four-resident-baseline/FINDINGS.md`](../../research/runs/2026-07-19-alderbank-four-resident-baseline/FINDINGS.md).
 
-Keep the current cadence for the larger Alderbank baseline. Test any cadence change separately so changes
-in conversation, movement, cost, and responsiveness can be compared with the same cohort shape.
+The resident host still checks the world on a fixed cadence. A normal city run waits 20 seconds between
+ticks, but inference and repeated reads lengthen the real interval. Local speech is classified as direct
+when it names or tags the resident, but a city resident cannot discover that speech until the next poll.
+Unlike a keeper whisper at the hearth, city speech also has no event signal that can wake a sleeping runner
+early.
+
+The next implementation should keep the completed fixed run as its control. Test cadence changes separately
+with the same residents, model, action-tendency setting, and duration.
 
 ## Problem
 
@@ -50,6 +57,8 @@ physical; it must not grow back into a narrator that summarizes the whole town a
    - repeated quiet checks: back off again.
 6. Put minimum and maximum intervals, cooldowns, and inference-cost guards in configuration. Do not derive
    urgency by reading or scoring the private prose of a message.
+   Major 134 owns the separate per-pulse read-continuation budget exposed by this baseline; responsive
+   cadence must use that budget rather than adding more calls on top of an unbounded reading chain.
 7. Record structural timing evidence: signal time, next observation time, whether attention ignited, whether
    any act followed, and the number and cost of extra checks. Do not record message bodies in the report.
 8. Run a matched Alderbank trial after the fixed-cadence baseline. Compare time-to-notice for addressed

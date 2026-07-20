@@ -12,6 +12,11 @@ issues a login token, and sends an optional welcome email. The isolated Alderban
 email-delivery provider configured, so a verification requirement cannot be switched on honestly until
 delivery and recovery are ready.
 
+The first safe migration slice is live. An authenticated existing account can now correct its public display
+name from the account panel. The update changes the canonical federation actor, local player projection, and
+current city session without changing actor ID or world state. The route, client panel, and immutable engine
+image were deployed to isolated Alderbank on 2026-07-19. Registration and verification are still unchanged.
+
 ## Problem
 
 People should not need both a username and an email address to enter this project. The extra username has
@@ -85,9 +90,9 @@ columns during migration, but they must not appear in the human form or become a
 - [ ] Registration creates a hashed, expiring, one-use verification token and sends a working link.
 - [ ] An unverified account cannot bootstrap a city session.
 - [ ] A verified account without a display name is taken to display-name setup rather than into the city.
-- [ ] Setting or changing a display name updates the canonical actor and local projection without changing
+- [x] Setting or changing a display name updates the canonical actor and local projection without changing
   actor ID or world state.
-- [ ] Existing accounts can log in and correct their public name.
+- [x] Existing accounts can log in and correct their public name.
 - [ ] The UI no longer exposes the legacy username or uses it as a login identifier.
 - [ ] Verification resend is rate-limited and does not reveal whether an unrelated email has an account.
 - [ ] A node configured to require verification fails readiness clearly when email delivery is unavailable.
