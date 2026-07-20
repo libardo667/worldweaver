@@ -59,7 +59,8 @@
   `identity/hearth_envelope.py` provides authenticated encryption for one reviewed host. The package module
   can wrap and import its deterministic archive using explicitly injected synthetic keys without writing a
   plaintext temporary ZIP; key storage, operator commands, host authorization, and activation remain later
-  steps.
+  steps. `identity/resident_identity.py` defines the portable, self-signed public identity card without
+  treating that card as city admission or host ownership.
 - `familiar/` — the private hearth adapter and its optional grants. `config.py` reads per-resident
   `hearth.json`; `file_scope.py` enforces read roots, ignore rules, secret denial, bounded pagination,
   path recovery, and bounded image/PDF reads; `visual.py` converts an explicitly requested visual file

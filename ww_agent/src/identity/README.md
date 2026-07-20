@@ -114,6 +114,13 @@ session, host, path, or credential. `scripts/hearth_manifest.py HOME` inspects w
 `--initialize` is the explicit one-time migration action. The generation is descriptive in this first
 slice and does not yet fence a running process.
 
+`resident_identity.py` defines the stable public identity card that can eventually be reviewed during city
+admission. It contains the actor and hearth IDs, Ed25519 public key and fingerprint, recovery-policy format
+version, and a self-signature over those exact fields. It contains no runtime generation, current world,
+host, private key, or automatic claim to admission. The file is portable resident identity evidence. Its
+self-signature catches corruption and proves possession at creation; it does not tell a steward whom to trust.
+The library currently accepts only an injected synthetic private key and does not generate or store one.
+
 `hearth_package.py` provides the fail-closed, read-only inventory used before packaging. It hashes files
 that belong to the resident but does not copy them. Identity evidence, retained memory and ledgers,
 correspondence, decisions, and workshop artifacts are portable. Derived projections and process files are

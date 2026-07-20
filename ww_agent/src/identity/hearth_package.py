@@ -67,6 +67,7 @@ _PORTABLE_IDENTITY_FILES = {
     "SOUL.md",
     "hearth_manifest.json",
     "resident_id.txt",
+    "resident_identity.json",
     "soul_growth.json",
     "soul_growth.md",
     "soul_notes.jsonl",

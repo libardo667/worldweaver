@@ -65,7 +65,8 @@ none has been silently assigned a key.
 Build the private half in this order:
 
 1. Define a small public resident identity descriptor containing the actor ID, hearth ID, public identity
-   key, format version, and no private or city-local data.
+   key, format version, and no private or city-local data. The agent library now creates, verifies, and
+   portably classifies this self-signed descriptor from an injected synthetic key. No key is stored yet.
 2. Give a temporary host a dedicated X25519 transport key. Do not reuse its Ed25519 node-signing key, and do
    not treat either host key as the resident's identity.
 3. Keep the current deterministic ZIP as an inner payload. Put it inside a versioned encrypted envelope for
