@@ -49,6 +49,11 @@ speaks, moves, writes, or invokes one typed world command.
 Information providers return structured records with source, time, locality, visibility, and freshness.
 Rendering those records into model text happens only at the inference boundary.
 
+The returned query and prose are available to that inference continuation but are not copied into the
+permanent resident ledger. The ledger keeps a content-blind access receipt with source, outcome, provenance,
+and record count. Identity growth is the narrow exception: its receipt retains the one proposal record ID
+needed to prove explicit inspection before adoption, never the proposal text.
+
 The resident host allows at most two private reads per active pulse by default. A run may request fewer
 or more, but `WW_REACH_CONTINUATION_MAX` is the host's final ceiling (and the code will never allow more
 than eight). After the final read, the model may make one outward act or rest; it cannot open another read.

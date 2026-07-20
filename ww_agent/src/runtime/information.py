@@ -42,24 +42,12 @@ PROVENANCE_WORLD_EGRESS = "world-egress"
 def provenance_guidance(provenance: str) -> str:
     """Phenomenological instruction for one result's actual source class."""
     return {
-        PROVENANCE_LOCAL_KNOWLEDGE: (
-            "What you received is knowledge you already carry; speak it as your own knowing, not as a lookup."
-        ),
-        PROVENANCE_SELF_MEMORY: (
-            "What you received came from your own remembered life; hold it as recall, not as a new outside fact."
-        ),
-        PROVENANCE_LOCAL_PERCEPTION: (
-            "What you received is first-hand perception of your present surroundings; keep that situated origin clear."
-        ),
-        PROVENANCE_LOCAL_COMPUTATION: (
-            "What you received is a result you calculated locally; keep clear that it was measured or calculated rather than remembered or looked up."
-        ),
-        PROVENANCE_SCOPED_READING: (
-            "What you received came from an authorized artifact you deliberately read; if you use it, keep clear that you read or consulted it rather than already knowing it."
-        ),
-        PROVENANCE_WORLD_EGRESS: (
-            "What you received came from reaching outside the world; name that lookup plainly if you use it."
-        ),
+        PROVENANCE_LOCAL_KNOWLEDGE: ("What you received is knowledge you already carry; speak it as your own knowing, not as a lookup."),
+        PROVENANCE_SELF_MEMORY: ("What you received came from your own remembered life; hold it as recall, not as a new outside fact."),
+        PROVENANCE_LOCAL_PERCEPTION: ("What you received is first-hand perception of your present surroundings; keep that situated origin clear."),
+        PROVENANCE_LOCAL_COMPUTATION: ("What you received is a result you calculated locally; keep clear that it was measured or calculated rather than remembered or looked up."),
+        PROVENANCE_SCOPED_READING: ("What you received came from an authorized artifact you deliberately read; if you use it, keep clear that you read or consulted it rather than already knowing it."),
+        PROVENANCE_WORLD_EGRESS: ("What you received came from reaching outside the world; name that lookup plainly if you use it."),
     }.get(
         str(provenance or "").strip(),
         "Keep the stated source of what you received explicit if you use it.",
@@ -132,12 +120,17 @@ def _measure_records(query: str) -> dict[str, Any]:
     try:
         result = _safe_measure(expression)
     except (SyntaxError, TypeError, ValueError, ZeroDivisionError, OverflowError) as exc:
-        reason = str(exc) if str(exc) in {
-            "query_required",
-            "expression_too_long",
-            "expression_too_complex",
-            "exponent_too_large",
-        } else "invalid_expression"
+        reason = (
+            str(exc)
+            if str(exc)
+            in {
+                "query_required",
+                "expression_too_long",
+                "expression_too_complex",
+                "exponent_too_large",
+            }
+            else "invalid_expression"
+        )
         return {"ok": False, "reason": reason, "records": []}
     rendered = str(result)
     return {
@@ -176,11 +169,7 @@ class InformationSourceRegistry:
     """Named private information providers shared by every resident embodiment."""
 
     def __init__(self, sources: list[InformationSource] | None = None) -> None:
-        self._sources: dict[str, InformationSource] = {
-            str(source.name or "").strip().lower(): source
-            for source in list(sources or [])
-            if str(source.name or "").strip()
-        }
+        self._sources: dict[str, InformationSource] = {str(source.name or "").strip().lower(): source for source in list(sources or []) if str(source.name or "").strip()}
 
     def list(self) -> list[InformationSource]:
         return list(self._sources.values())
@@ -226,9 +215,7 @@ class InformationSourceRegistry:
                         "freshness": str(raw.get("freshness") or source.freshness),
                         "locality": str(raw.get("locality") or source.locality),
                         "visibility": str(raw.get("visibility") or source.visibility),
-                        "selection_mode": str(
-                            raw.get("selection_mode") or payload.get("selection_mode") or source.selection_mode
-                        ),
+                        "selection_mode": str(raw.get("selection_mode") or payload.get("selection_mode") or source.selection_mode),
                     }
                 )
             ok = bool(payload.get("ok", True))
@@ -270,11 +257,7 @@ def _recall_records(memory_dir: Path, query: str) -> dict[str, Any]:
     """Read one resident's own selected memories and felt history."""
     kept = [str(item.get("note") or "").strip() for item in _read_jsonl(memory_dir / "kept_memory.jsonl")]
     kept = [item for item in kept if item]
-    feelings = [
-        str((event.get("payload") or {}).get("felt_sense") or "").strip()
-        for event in _read_jsonl(memory_dir / "runtime_ledger.jsonl")
-        if str(event.get("event_type") or "") == "felt_sense_logged"
-    ]
+    feelings = [str((event.get("payload") or {}).get("felt_sense") or "").strip() for event in _read_jsonl(memory_dir / "runtime_ledger.jsonl") if str(event.get("event_type") or "") == "felt_sense_logged"]
     feelings = [item for item in feelings if item]
     query_text = str(query or "").strip()
     if query_text:
@@ -409,11 +392,7 @@ class InformationAccess:
     async def __call__(self, request: Reach, *, now: Any = None) -> dict[str, Any]:
         key = self._cache_key(request)
         monotonic_now = time.monotonic()
-        expired = [
-            cached_key
-            for cached_key, (cached_at, _result) in self._recent.items()
-            if monotonic_now - cached_at > self._freshness_seconds
-        ]
+        expired = [cached_key for cached_key, (cached_at, _result) in self._recent.items() if monotonic_now - cached_at > self._freshness_seconds]
         for cached_key in expired:
             self._recent.pop(cached_key, None)
         cached = self._recent.get(key)
@@ -453,11 +432,7 @@ class InformationAccess:
                     "visibility": str(payload.get("visibility") or ""),
                     "selection_mode": str(payload.get("selection_mode") or ""),
                 }
-                records = [
-                    InformationRecord.from_dict(item, source=request.source, defaults=defaults)
-                    for item in list(payload.get("records") or [])
-                    if isinstance(item, dict)
-                ]
+                records = [InformationRecord.from_dict(item, source=request.source, defaults=defaults) for item in list(payload.get("records") or []) if isinstance(item, dict)]
                 legacy_detail = str(payload.get("result") or payload.get("detail") or "")
                 if not records and legacy_detail:
                     records = [
@@ -469,11 +444,7 @@ class InformationAccess:
                     ]
                 detail = render_information_records(records)
                 if not detail:
-                    detail = (
-                        f"The source returned no records ({str(payload.get('reason') or 'no_match')})."
-                        if not bool(payload.get("ok", True))
-                        else "The source returned no matching records."
-                    )
+                    detail = f"The source returned no records ({str(payload.get('reason') or 'no_match')})." if not bool(payload.get("ok", True)) else "The source returned no matching records."
                 result = {
                     "accessed": bool(payload.get("ok", True)),
                     "kind": "reach",
@@ -501,30 +472,25 @@ class InformationAccess:
         if bool(result.get("accessed")) and self._freshness_seconds > 0:
             self._recent[key] = (time.monotonic(), copy.deepcopy(result))
 
+        records = [record for record in list(result.get("records") or []) if isinstance(record, dict)]
+        receipt = {
+            "reach_kind": request.kind,
+            "source": request.source,
+            "query_present": bool(str(request.query or "").strip()),
+            "accessed": bool(result.get("accessed")),
+            "provenance": str(result.get("provenance") or ""),
+            "record_count": len(records),
+            "reason": str(result.get("reason") or ""),
+        }
+        # Growth adoption is deliberately two-step: the ledger must prove that the
+        # exact proposal record was returned before it may be adopted. Other source
+        # IDs can reveal file paths, gift names, people, or places and have no durable
+        # reader, so they do not enter resident history.
+        if request.source.strip().lower() == "growth":
+            receipt["record_refs"] = [{"record_id": str(record.get("record_id") or "")} for record in records if str(record.get("record_id") or "").strip()]
         append_runtime_event(
             self._memory_dir,
             event_type="information_accessed",
-            payload={
-                "reach_kind": request.kind,
-                "source": request.source,
-                "query": request.query,
-                "accessed": bool(result.get("accessed")),
-                "provenance": str(result.get("provenance") or ""),
-                "result_excerpt": str(result.get("detail") or "")[:500],
-                "record_refs": [
-                    {
-                        "record_id": str(record.get("record_id") or ""),
-                        "source": str(record.get("source") or ""),
-                        "provenance": str(record.get("provenance") or ""),
-                        "freshness": str(record.get("freshness") or ""),
-                        "locality": str(record.get("locality") or ""),
-                        "visibility": str(record.get("visibility") or ""),
-                        "selection_mode": str(record.get("selection_mode") or ""),
-                    }
-                    for record in list(result.get("records") or [])
-                    if isinstance(record, dict)
-                ],
-                "reason": str(result.get("reason") or ""),
-            },
+            payload=receipt,
         )
         return result

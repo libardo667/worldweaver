@@ -15,7 +15,9 @@
 - `runtime/prompt_context.py` — typed available/selected/withheld source envelope and final prose renderer.
 - `runtime/information.py` — private elective source access plus the structured provider-record contract;
   separate from outward effectors. It briefly reuses an equivalent successful read so repeated requests do
-  not reopen the same source or trigger another continuation model call.
+  not reopen the same source or trigger another continuation model call. Durable access receipts omit the
+  query, returned prose, and ordinary record IDs; identity growth retains only the proposal ID required for
+  explicit adoption.
 - `runtime/perception.py` — assigns source identity, emits encounters once, and renders still-pending
   speech and physical-trace encounters for prompts; `cognitive_core.py` marks prompt-included packets
   observed.

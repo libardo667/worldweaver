@@ -71,8 +71,9 @@ from being interpretable.
 
    **2026-07-20 checkpoint:** the mirror and generic state/growth/rest/cleanup/prune/reset routes are removed,
    old mirror fields are scrubbed by migration, development reset defaults off, and ordinary resident runs no
-   longer capture exact prompts. New and started hearths now enforce owner-only local permissions.
-   Actor-scoped resident authority, diagnostic expiry/purpose/purge, and the custody table remain.
+   longer capture exact prompts. New and started hearths now enforce owner-only local permissions, and elective
+   read receipts no longer retain the query, returned prose, or ordinary record IDs. Actor-scoped resident
+   authority, diagnostic expiry/purpose/purge, and the custody table remain.
 2. **Stop false prediction error.** Accept expectations only for sensed scopes, or represent an unobserved
    scope as unknown rather than zero.
 3. **Make time semantics true.** Remove poll-rate dependence from repeated evidence, give replays a virtual

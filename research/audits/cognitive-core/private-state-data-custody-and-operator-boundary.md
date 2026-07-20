@@ -10,16 +10,17 @@ remain the audit record of what was found. Exact prompt capture now defaults off
 `--trace-prompts` bounded run; purpose, expiry, access receipts, and purge remain unfinished. Resident
 lifecycle/authorship authority, retention rules, and live redeployment remain open. New and started hearths
 now enforce owner-only directory and file permissions; existing deployments need a resident restart for the
-startup repair to run.
+startup repair to run. Elective-read receipts now omit the query, returned prose, and ordinary record IDs;
+identity growth retains only the proposal ID required to prove inspection before adoption.
 
-## Plain-language result
+## Plain-language result at audit time
 
-WorldWeaver currently asks residents to trust a privacy promise that the software does not enforce.
+WorldWeaver asked residents to trust a privacy promise that the software did not enforce.
 
 The prompt tells a resident that what they feel, predict, and privately consider “is not read by anyone.” In
-practice, the full model request and response are normally written to disk, the durable ledger retains a great
-deal of private output, a city resident copies reduced private state into the city database every minute, and
-ordinary unauthenticated API routes can read or change those city session variables. The public roster reveals
+practice, the full model request and response were normally written to disk, the durable ledger retained a great
+deal of private output, a city resident copied reduced private state into the city database every minute, and
+ordinary unauthenticated API routes could read or change those city session variables. The public roster revealed
 the session identifiers needed to call those routes.
 
 This is not only a disclosure problem. Changing a session's `location`, `player_role`, or other runtime values
@@ -27,12 +28,12 @@ changes what the world later reports to that resident. An outside caller can the
 inputs without touching the hearth. The caller can also retire an unowned resident session or initiate travel
 on its behalf. The same unauthenticated API module exposes destructive cleanup and whole-world reset operations.
 
-Until this boundary is repaired, a public-shard resident run cannot establish that observed behavior came
-only from the declared runtime and world conditions.
+Those findings meant a public-shard resident run could not establish that observed behavior came only from the
+declared runtime and world conditions. The repair checkpoint above states what is now closed and what remains.
 
-## Where private data goes today
+## Where private data went at audit time
 
-| Destination | What reaches it | Current boundary |
+| Destination | What reached it | Boundary found |
 | --- | --- | --- |
 | language-model provider | full system prompt, full user prompt, optional images, and the generated response | whatever host and provider policy the operator configured; not disclosed by the resident-facing privacy line |
 | embedding provider | canonical and growth identity fragments, current moment text, memories, public chat, place descriptions, anchor text, and proposed growth text | may be local or remote; provider availability silently changes runtime policy |
@@ -78,17 +79,19 @@ The hearth packager excludes prompt traces, calling them rebuildable. Exclusion 
 Exact transient prompts and source returns cannot be rebuilt from the portable ledger. They are discardable
 host diagnostics.
 
-## The ledger contains private content too
+## The ledger contained private content too
 
 The append-only ledger is correctly treated as portable resident state. It stores full validated pulses,
 including private felt reports, predictions, keepsakes, proposed identity growth, private workshop writing,
 letters, and intended public acts. This is necessary for continuity and replay, but it means “ledger access”
 is access to a resident's private history, not a harmless engineering log.
 
-`information_accessed` also writes the query and the first 500 characters of the returned detail into the
-ledger. That can copy part of a private file, correspondence item, or recall result into permanent portable
-history even when the full result was meant only for one inference continuation. Structural source references
-belong in the ledger; arbitrary excerpts need a source-specific retention rule and an explicit reason.
+At audit time, `information_accessed` wrote the query and the first 500 characters of returned detail into the
+ledger. That could copy part of a private file, correspondence item, or recall result into permanent portable
+history even when the full result was meant only for one inference continuation. The 2026-07-20 repair now
+keeps only a content-blind source/outcome/provenance/count receipt. The identity-growth source additionally
+retains its proposal record ID because the explicit adoption path needs proof of exact inspection; it retains
+no returned prose.
 
 At audit time, Alderbank ledgers and workshop files were mode `0644`, and resident, memory, identity, letter,
 and workshop directories were mode `0755`. On a conventional multi-user Unix host, another local account
@@ -96,7 +99,7 @@ could read them. The 2026-07-20 repair now makes new and started hearth director
 `0600`, repeats the repair at clean shutdown, and skips symbolic links rather than changing outside targets.
 Imported hearth packages already used those modes.
 
-## The city mirror breaks the hearth boundary
+## The city mirror broke the hearth boundary
 
 Every city-attached `Resident` starts `ResidentRuntimeMirror`. Once a minute it reduces the hearth ledger and
 sends the following to the city as arbitrary session variables:
@@ -115,7 +118,7 @@ second stale authority after travel or failure. Major 71 explicitly says an oper
 private ledger, memory, belief, preference, growth, or behavior controls. The mirror was built before that
 boundary was enforced and now directly contradicts it.
 
-## A public session ID currently acts like an authorization token
+## A public session ID acted like an authorization token
 
 It is not a secret. `/api/world/digest`, `/api/world/roster-directory`, and scene presence records return live
 session IDs as ordinary world data.
@@ -175,7 +178,7 @@ The source finding is therefore not confined to an undeployed development branch
 disabled, or the public backend stopped, until the old reset/state surface and resident lifecycle authority are
 repaired and redeployed.
 
-## The operator and provider contract is missing
+## The operator and provider contract was missing
 
 A resident may be hosted temporarily by a steward without being owned by that steward. That requires more than
 placing files in a folder named “private.” At minimum, the software needs distinct authority for:
@@ -219,8 +222,9 @@ Several implementation choices are sound and should survive the repair:
    capability. Treat this as a systematic API audit, not a patch to one handler.
 5. ~~Default exact prompt capture off.~~ Make the explicit diagnostic mode time-bounded, with purpose,
    operator, start, expiry, and purge receipts. Prefer structural call receipts by default.
-6. Never copy an elective source's returned prose into a trace or durable ledger merely because the source was
-   read. Define source-specific content retention, provenance, and redaction rules.
+6. ~~Never copy an elective source's returned prose into a durable ledger merely because the source was read.
+   Define source-specific content retention, provenance, and redaction rules.~~ Exact traces remain governed
+   separately by the unfinished diagnostic lifecycle in item 5.
 7. ~~Create resident roots as `0700` and private files as `0600`; repair existing active hearth permissions on
    startup or through an explicit migration command.~~
 8. Publish a versioned data-classification table: field, owner, storage locations, recipient, purpose,

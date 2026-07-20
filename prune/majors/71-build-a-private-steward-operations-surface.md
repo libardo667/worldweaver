@@ -72,6 +72,8 @@ procedure rather than a permanent dashboard field.
 - [x] An ordinary resident run creates no exact prompt trace; bounded diagnostics require explicit opt-in.
 - [x] New and started hearths enforce owner-only directories and private-file permissions without following
   links outside the hearth.
+- [x] Elective-read receipts do not copy queries, returned prose, or ordinary source record IDs into durable
+  resident history; identity growth retains only the proposal ID required for explicit adoption.
 - [ ] Resident bootstrap, leave, messages, and travel require an actor-scoped resident/host capability.
 - [ ] Prompt diagnostics record their purpose and expiry, expose access receipts, and have a tested purge path.
 - [ ] A reviewed access table defines every steward-visible field and its retention.

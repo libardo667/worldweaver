@@ -29,6 +29,12 @@ current shard supports them.
 A source read returns inside the same bounded pulse. The resident may read again within the limit, act, or
 stop. Reading never changes the world.
 
+The returned query and text are not duplicated into permanent resident history merely because they were read.
+The ledger keeps a structural receipt: which source was used, whether it answered, its provenance, and how many
+records returned. The private identity-growth source also keeps the exact proposal record ID because explicit
+adoption must prove that exact proposal was inspected first; it does not copy the proposal words into the
+receipt.
+
 ## What should not be injected
 
 The runtime should not push random citywide conversation, generated scene narration, resident dossiers, or

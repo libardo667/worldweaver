@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
 from src.runtime.information import (
     InformationAccess,
@@ -161,8 +162,48 @@ def test_information_access_is_private_ledger_evidence_not_a_world_act(tmp_path)
     assert world.requests == [{"kind": "inspect", "source": "eats", "query": "North Beach"}]
     events = load_runtime_events(tmp_path)
     assert [event["event_type"] for event in events] == ["information_accessed"]
-    assert events[0]["payload"]["source"] == "eats"
-    assert events[0]["payload"]["record_refs"][0]["selection_mode"] == "neighborhood_match"
+    receipt = events[0]["payload"]
+    assert receipt == {
+        "reach_kind": "inspect",
+        "source": "eats",
+        "query_present": True,
+        "accessed": True,
+        "provenance": "local-knowledge",
+        "record_count": 1,
+        "reason": "",
+    }
+    encoded_receipt = json.dumps(receipt)
+    assert "North Beach" not in encoded_receipt
+    assert "Corner Bakery" not in encoded_receipt
+
+
+def test_growth_access_retains_only_the_record_id_needed_for_explicit_adoption(tmp_path):
+    class GrowthWorld:
+        async def access_information(self, *, kind: str, source: str, query: str = ""):
+            return {
+                "ok": True,
+                "provenance": "resident-ledger",
+                "records": [
+                    {
+                        "record_id": "growth-candidate:proposal-1",
+                        "title": "private title",
+                        "content": "private proposed identity words",
+                        "visibility": "private",
+                    }
+                ],
+            }
+
+    access = InformationAccess(ww_client=GrowthWorld(), memory_dir=tmp_path)
+
+    result = asyncio.run(access(Reach(kind="inspect", source="growth", query="proposal-1")))
+
+    assert result["accessed"] is True
+    receipt = load_runtime_events(tmp_path)[0]["payload"]
+    assert receipt["record_refs"] == [{"record_id": "growth-candidate:proposal-1"}]
+    encoded_receipt = json.dumps(receipt)
+    assert "proposal-1" in encoded_receipt
+    assert "private title" not in encoded_receipt
+    assert "private proposed identity words" not in encoded_receipt
 
 
 def test_information_access_reuses_an_equivalent_fresh_read_without_calling_world(tmp_path):

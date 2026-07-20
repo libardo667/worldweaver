@@ -71,6 +71,9 @@ inputs in the identity loader; they do not restore the old ownership model.
   Relative read roots resolve from that resident's home and remain behind FileScope's structural guards.
 - Elective information uses typed `Pulse.reach` → `InformationAccess`; it never masquerades as `act.do`
   and never crosses the engine action/narration endpoint. A reach continuation may end with no outward act.
+  Returned queries and prose are transient continuation input, not durable ledger content. Keep ordinary
+  `information_accessed` receipts content-blind; the growth source may retain only its proposal record ID
+  because explicit adoption depends on proof of exact inspection.
   The final allowed read must close the reading window in both prompt and routing: never invite or persist
   a reach that the current pulse can no longer fulfill. `CognitiveCore`, not the model producer, owns the
   run limit and clamps it to the host's `WW_REACH_CONTINUATION_MAX` (default two, absolute ceiling eight).
