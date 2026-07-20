@@ -23,9 +23,10 @@ receives it.
 The work is not complete. Existing residents are not all initialized, no real resident identity signing key
 is stored, and no cross-computer migration or remote-city attachment has been proven. The safe operator
 commands can now move a synthetic host-sealed identity into a dormant home. A resident-signed handoff binds
-that transfer to one source host, destination host, and N-to-N+1 generation step, but the separate
-source-retirement and destination-wake ceremony is not built yet. Active city nodes
-have separate signing identities; that does not by itself authorize a computer to run a resident's hearth.
+that transfer to one source host, destination host, N-to-N+1 generation step, and two node witnesses. Separate
+operator commands now retire and preserve the source, verify its receipt, activate the destination, and issue
+the destination receipt. Active city nodes have separate signing identities; only the resident-signed handoff
+authorizes those identities to witness this one transition. No current command deletes the source.
 
 ## Model
 
@@ -113,8 +114,9 @@ Build the private half in this order:
    that N+1 activated. The destination key cannot sign the source receipt. The library-level filesystem
    ceremony now applies those receipts in a restartable order and preflights every available key before changing
    state. Synthetic interruption tests leave the source retired and intact, let receipt generation resume, and
-   never advance the destination twice. Public folder-local retirement and activation commands are next. No
-   receipt or current command authorizes deletion of a retired source.
+   never advance the destination twice. The same retirement and activation steps are now available from both
+   the workspace root and isolated shard folders. Each mounts the relevant node key only into a short-lived
+   operator container. No receipt or current command authorizes deletion of a retired source.
 5. On an authorized host, decrypt the long-term key into memory only long enough to sign a fresh runtime
    public key for one city, generation, scope set, and expiry. Ordinary requests use the runtime key, not the
    long-term identity key.

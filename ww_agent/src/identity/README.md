@@ -177,7 +177,10 @@ temporary in-memory copy, and an authorized host can still copy a key while it i
 
 The agent-level commands are `export-transfer` and `import-transfer`. Public shard operators expose them as
 `hearth-host send` and `hearth-host receive-transfer`, using only fixed key-file mounts. These commands move
-custody material; they do not yet transfer permission to wake the resident.
+custody material and leave the destination dormant. `hearth-host retire-source` then preserves and retires N
+before emitting its witnessed receipt. `hearth-host activate-destination` requires that receipt before waking
+N+1 and emitting the destination receipt. Node private keys are mounted only into these short-lived operator
+commands, never the long-running resident or city process.
 
 `hearth_handoff.py` is the resident-signed instruction for that later authority step. It names one random
 transfer ID, the resident and hearth, the current and next generations, and the exact source and destination

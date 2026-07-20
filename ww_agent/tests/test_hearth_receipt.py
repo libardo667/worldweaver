@@ -20,6 +20,7 @@ from src.identity.host_witness import (
     HostWitnessDescriptor,
     HostWitnessError,
     host_witness_key_id,
+    load_host_witness_private_key,
 )
 from src.identity.resident_identity import create_resident_identity_descriptor
 
@@ -191,3 +192,23 @@ def test_node_descriptor_loader_contract_rejects_extra_fields():
 
     with pytest.raises(HostWitnessError, match="unexpected fields"):
         HostWitnessDescriptor.from_node_descriptor(json.loads(json.dumps(raw)))
+
+
+def test_witness_key_loader_refuses_links(tmp_path):
+    _witness_descriptor, private_key = _witness("source-node")
+    path = tmp_path / "node.key"
+    path.write_text(
+        base64.urlsafe_b64encode(private_key.private_bytes_raw())
+        .decode("ascii")
+        .rstrip("=")
+        + "\n",
+        encoding="utf-8",
+    )
+
+    assert load_host_witness_private_key(path).private_bytes_raw() == (
+        private_key.private_bytes_raw()
+    )
+    linked = tmp_path / "linked.key"
+    linked.symlink_to(path)
+    with pytest.raises(HostWitnessError, match="missing or unsafe"):
+        load_host_witness_private_key(linked)

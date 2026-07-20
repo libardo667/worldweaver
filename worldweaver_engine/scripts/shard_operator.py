@@ -495,6 +495,8 @@ def command_hearth_host(args: argparse.Namespace) -> int:
         )
     if args.hearth_host_action == "send":
         return _send_encrypted_hearth(args)
+    if args.hearth_host_action in {"retire-source", "activate-destination"}:
+        return _transition_hearth_handoff(args)
     if args.hearth_host_action != "initialize":
         raise OperatorError("Unsupported hearth-host action.")
 
@@ -697,6 +699,10 @@ def _send_encrypted_hearth(args: argparse.Namespace) -> int:
     if not source.is_dir() or source.is_symlink():
         raise OperatorError(f"Resident home is missing or unsafe: {source}")
     package = _new_output_path(args.package, label="transfer package")
+    handoff_output = _new_output_path(
+        f"{package}.handoff.json",
+        label="handoff sidecar",
+    )
     if not _docker_available():
         raise OperatorError("Docker is required to send an encrypted hearth transfer.")
 
@@ -731,6 +737,8 @@ def _send_encrypted_hearth(args: argparse.Namespace) -> int:
             "/transfer/source-node.json",
             "--recipient-witness",
             "/transfer/destination-node.json",
+            "--handoff-output",
+            f"/transfer-output/{handoff_output.name}",
         ]
     )
     try:
@@ -758,12 +766,138 @@ def _send_encrypted_hearth(args: argparse.Namespace) -> int:
         raise OperatorError(
             "The agent image reported success without creating the transfer package."
         )
+    if not handoff_output.is_file() or handoff_output.is_symlink():
+        raise OperatorError(
+            "The agent image reported success without creating the handoff sidecar."
+        )
     manifest = receipt.get("hearth_manifest")
     actor_id = manifest.get("actor_id") if isinstance(manifest, dict) else "unknown"
     print(f"Prepared the encrypted hearth transfer for {actor_id}: {package}")
+    print(f"Source handoff sidecar: {handoff_output}")
     print(
         "The source hearth is unchanged. Do not retire it until the destination is verified."
     )
+    return 0
+
+
+def _transition_hearth_handoff(args: argparse.Namespace) -> int:
+    """Run one witnessed state transition in a short-lived agent container."""
+
+    if (
+        not HEARTH_TRANSPORT_KEY.is_file()
+        or HEARTH_TRANSPORT_KEY.is_symlink()
+        or not NODE_FILE.is_file()
+        or NODE_FILE.is_symlink()
+        or not PRIVATE_KEY.is_file()
+        or PRIVATE_KEY.is_symlink()
+    ):
+        raise OperatorError(
+            "This folder needs complete hearth-host and node witness identities."
+        )
+    _read_hearth_transport_descriptor()
+    resident_name = _resident_directory_name(args.resident)
+    home = ROOT / "residents" / resident_name
+    if not home.is_dir() or home.is_symlink():
+        raise OperatorError(f"Resident home is missing or unsafe: {home}")
+    receipt_output = _new_output_path(args.receipt, label="handoff receipt")
+    if not _docker_available():
+        raise OperatorError("Docker is required for a witnessed hearth transition.")
+
+    run_options = ["run", "--rm", "--no-deps", "--no-TTY"]
+    getuid = getattr(os, "getuid", None)
+    getgid = getattr(os, "getgid", None)
+    if callable(getuid) and callable(getgid):
+        run_options.extend(["--user", f"{getuid()}:{getgid()}"])
+    run_options.extend(
+        [
+            "--volume",
+            f"{HEARTH_HOST_DIR.resolve()}:/hearth-host:ro",
+            "--volume",
+            f"{PRIVATE_KEY.resolve()}:/witness/node.key:ro",
+            "--volume",
+            f"{NODE_FILE.resolve()}:/witness/local-node.json:ro",
+            "--volume",
+            f"{receipt_output.parent.resolve()}:/receipt-output",
+            "--env",
+            "WW_HEARTH_TRANSPORT_PRIVATE_KEY=/hearth-host/identity/transport.key",
+            "--env",
+            "WW_HEARTH_WITNESS_PRIVATE_KEY=/witness/node.key",
+        ]
+    )
+    command = [
+        "agent",
+        "python",
+        "scripts/hearth_handoff.py",
+        args.hearth_host_action,
+        f"/app/residents/{resident_name}",
+    ]
+    if args.hearth_host_action == "retire-source":
+        handoff = _regular_input_path(args.handoff, label="Hearth handoff sidecar")
+        run_options.extend(["--volume", f"{handoff}:/handoff/handoff.json:ro"])
+        command.extend(
+            [
+                "/handoff/handoff.json",
+                "--source-witness",
+                "/witness/local-node.json",
+            ]
+        )
+        expected_status = "source_retired"
+    else:
+        retirement = _regular_input_path(
+            args.retirement_receipt,
+            label="Source retirement receipt",
+        )
+        source_witness = _regular_input_path(
+            args.source_witness,
+            label="Source node witness descriptor",
+        )
+        run_options.extend(
+            [
+                "--volume",
+                f"{retirement}:/handoff/source-retired.json:ro",
+                "--volume",
+                f"{source_witness}:/handoff/source-node.json:ro",
+            ]
+        )
+        command.extend(
+            [
+                "/handoff/source-retired.json",
+                "--source-witness",
+                "/handoff/source-node.json",
+                "--destination-witness",
+                "/witness/local-node.json",
+            ]
+        )
+        expected_status = "destination_activated"
+    command.extend(["--receipt-output", f"/receipt-output/{receipt_output.name}"])
+    try:
+        result = _compose(*run_options, *command, capture=True)
+    except subprocess.CalledProcessError as exc:
+        detail = (
+            ((exc.stdout or b"") + (exc.stderr or b""))
+            .decode("utf-8", errors="replace")
+            .strip()
+        )
+        raise OperatorError(
+            "The agent image refused the witnessed hearth transition."
+            + (f" Details: {detail[-2000:]}" if detail else "")
+        ) from exc
+    try:
+        response = json.loads(result.stdout.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise OperatorError(
+            "The agent image returned an invalid handoff receipt."
+        ) from exc
+    if not isinstance(response, dict) or response.get("status") != expected_status:
+        raise OperatorError("The agent image did not confirm the expected transition.")
+    if not receipt_output.is_file() or receipt_output.is_symlink():
+        raise OperatorError(
+            "The agent image reported success without creating its receipt."
+        )
+    print(f"Hearth transition complete: {expected_status}.")
+    print(f"Witness receipt: {receipt_output}")
+    if expected_status == "source_retired":
+        print("The retired source remains intact. This does not authorize deletion.")
     return 0
 
 
@@ -1521,6 +1655,21 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         help="existing folder name under residents/",
     )
+    retire_hearth = hearth_host_commands.add_parser(
+        "retire-source",
+        help="retire source generation N and write its witnessed receipt",
+    )
+    retire_hearth.add_argument("handoff", help="handoff sidecar created by send")
+    retire_hearth.add_argument("receipt", help="new source-retirement receipt")
+    retire_hearth.add_argument("--resident", required=True, help="source folder")
+    activate_hearth = hearth_host_commands.add_parser(
+        "activate-destination",
+        help="verify source retirement, activate N+1, and write its receipt",
+    )
+    activate_hearth.add_argument("retirement_receipt", help="source receipt")
+    activate_hearth.add_argument("source_witness", help="source node.json")
+    activate_hearth.add_argument("receipt", help="new destination receipt")
+    activate_hearth.add_argument("--resident", required=True, help="destination folder")
     hearth_host.set_defaults(handler=command_hearth_host)
 
     start = commands.add_parser("start", help="start the database and world server")

@@ -18,7 +18,10 @@ from pathlib import Path
 import re
 from typing import Any, Mapping
 
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+    Ed25519PrivateKey,
+    Ed25519PublicKey,
+)
 
 _BASE_FIELDS = {"schema", "schema_version", "node_id", "shard_type", "public_key"}
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
@@ -135,3 +138,20 @@ def load_host_witness_descriptor(path: str | Path) -> HostWitnessDescriptor:
             f"Could not load host witness descriptor: {descriptor_path}"
         ) from exc
     return HostWitnessDescriptor.from_node_descriptor(raw)
+
+
+def load_host_witness_private_key(path: str | Path) -> Ed25519PrivateKey:
+    """Load one regular node key for a short-lived witness operation."""
+
+    key_path = Path(path).expanduser()
+    if not key_path.is_file() or key_path.is_symlink():
+        raise HostWitnessError(f"Host witness key is missing or unsafe: {key_path}")
+    try:
+        encoded = key_path.read_bytes()
+        if len(encoded) > 256:
+            raise HostWitnessError("Host witness key is too large.")
+        return Ed25519PrivateKey.from_private_bytes(
+            _decode(encoded.decode("utf-8").strip(), label="private key")
+        )
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        raise HostWitnessError(f"Could not load host witness key: {key_path}") from exc

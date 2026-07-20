@@ -25,6 +25,11 @@ from src.identity.hearth_package import (  # noqa: E402
     import_hearth_package,
     inventory_hearth,
 )
+from src.identity.hearth_handoff import (  # noqa: E402
+    HearthHandoffAuthorization,
+    HearthHandoffError,
+    write_hearth_handoff_authorization,
+)
 from src.identity.hearth_envelope import (  # noqa: E402
     HearthEnvelopeError,
     load_transport_private_key,
@@ -36,6 +41,7 @@ from src.identity.host_witness import (  # noqa: E402
 )
 from src.identity.resident_identity import (  # noqa: E402
     ResidentIdentityError,
+    load_resident_identity_descriptor,
     load_resident_identity_descriptor_file,
 )
 
@@ -106,6 +112,11 @@ def main(argv: list[str] | None = None) -> int:
         required=True,
         help="destination host's reviewed node.json witness identity",
     )
+    transfer_export_parser.add_argument(
+        "--handoff-output",
+        required=True,
+        help="new source-retirement handoff sidecar path",
+    )
 
     import_parser = subparsers.add_parser(
         "import", help="validate and install a package into a new home"
@@ -148,8 +159,21 @@ def main(argv: list[str] | None = None) -> int:
     home = Path(args.home).expanduser().resolve()
     if args.command in {"export", "export-transfer"}:
         package = Path(args.package).expanduser().resolve()
+        handoff_output = (
+            Path(args.handoff_output).expanduser().resolve()
+            if args.command == "export-transfer"
+            else None
+        )
         try:
             if args.command == "export-transfer":
+                if handoff_output.exists() or handoff_output.is_symlink():
+                    raise HearthPackageError(
+                        f"refusing to replace existing handoff: {handoff_output}"
+                    )
+                if not handoff_output.parent.is_dir():
+                    raise HearthPackageError(
+                        f"handoff parent is not a directory: {handoff_output.parent}"
+                    )
                 key_path = str(
                     os.environ.get("WW_HEARTH_TRANSPORT_PRIVATE_KEY") or ""
                 ).strip()
@@ -171,10 +195,20 @@ def main(argv: list[str] | None = None) -> int:
                         Path(args.recipient_witness).expanduser().resolve()
                     ),
                 )
+                descriptor = load_resident_identity_descriptor(home)
+                write_hearth_handoff_authorization(
+                    handoff_output,
+                    HearthHandoffAuthorization.from_dict(
+                        report["handoff_authorization"],
+                        identity_descriptor=descriptor,
+                    ),
+                    identity_descriptor=descriptor,
+                )
             else:
                 report = export_hearth_package(home, package)
         except (
             HearthEnvelopeError,
+            HearthHandoffError,
             HearthPackageError,
             HostWitnessError,
             OSError,
@@ -196,6 +230,7 @@ def main(argv: list[str] | None = None) -> int:
                     **(
                         {
                             "handoff": report["handoff_authorization"],
+                            "handoff_path": str(handoff_output),
                         }
                         if args.command == "export-transfer"
                         else {}

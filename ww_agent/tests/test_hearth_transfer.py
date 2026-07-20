@@ -13,6 +13,10 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 import pytest
 
+from src.identity.hearth_activation import (
+    initialize_hearth_activation,
+    load_hearth_activation,
+)
 from src.identity.hearth_manifest import (
     initialize_hearth_manifest,
     load_hearth_manifest,
@@ -146,6 +150,18 @@ def _write_witness_file(tmp_path, name):
         encoding="utf-8",
     )
     return witness, private_key, path
+
+
+def _write_witness_private_key(tmp_path, name, private_key):
+    path = tmp_path / f"{name}.node.key"
+    path.write_text(
+        base64.urlsafe_b64encode(private_key.private_bytes_raw())
+        .decode("ascii")
+        .rstrip("=")
+        + "\n",
+        encoding="utf-8",
+    )
+    return path
 
 
 def test_transfer_reseals_identity_for_destination_and_keeps_home_dormant(tmp_path):
@@ -355,6 +371,7 @@ def test_transfer_rejects_a_signed_payload_with_the_wrong_inner_identity_key(tmp
 
 def test_transfer_commands_load_host_keys_from_files(tmp_path):
     home, _identity, descriptor, source_host, _source_seal = _sealed_home(tmp_path)
+    initialize_hearth_activation(home)
     destination_host = X25519PrivateKey.generate()
     source_key_path, _source_descriptor_path = _write_host_files(
         tmp_path, "source-host", source_host
@@ -369,6 +386,7 @@ def test_transfer_commands_load_host_keys_from_files(tmp_path):
         _write_witness_file(tmp_path, "destination-node")
     )
     package = tmp_path / "resident.wwhearth.transfer"
+    handoff_sidecar = tmp_path / "resident.wwhearth.handoff.json"
     target = tmp_path / "received"
     identity_path = home / "identity" / "resident_identity.json"
     script = Path(__file__).resolve().parents[1] / "scripts" / "hearth_package.py"
@@ -386,6 +404,8 @@ def test_transfer_commands_load_host_keys_from_files(tmp_path):
             str(source_witness_path),
             "--recipient-witness",
             str(destination_witness_path),
+            "--handoff-output",
+            str(handoff_sidecar),
         ],
         env={
             **os.environ,
@@ -397,6 +417,7 @@ def test_transfer_commands_load_host_keys_from_files(tmp_path):
     )
     assert exported.returncode == 0, exported.stdout + exported.stderr
     assert '"status": "exported-transfer"' in exported.stdout
+    assert handoff_sidecar.is_file()
 
     imported = subprocess.run(
         [
@@ -426,5 +447,70 @@ def test_transfer_commands_load_host_keys_from_files(tmp_path):
     assert opened.public_key().public_bytes_raw() == (
         _identity.public_key().public_bytes_raw()
     )
-    source_witness, _ = _witness("source-node")
-    destination_witness, _ = _witness("destination-node")
+
+    source_witness_key_path = _write_witness_private_key(
+        tmp_path,
+        "source-node",
+        _source_witness_key,
+    )
+    destination_witness_key_path = _write_witness_private_key(
+        tmp_path,
+        "destination-node",
+        _destination_witness_key,
+    )
+    handoff_script = (
+        Path(__file__).resolve().parents[1] / "scripts" / "hearth_handoff.py"
+    )
+    retirement_receipt = tmp_path / "source-retired.json"
+    retired = subprocess.run(
+        [
+            sys.executable,
+            str(handoff_script),
+            "retire-source",
+            str(home),
+            str(handoff_sidecar),
+            "--source-witness",
+            str(source_witness_path),
+            "--receipt-output",
+            str(retirement_receipt),
+        ],
+        env={
+            **os.environ,
+            "WW_HEARTH_TRANSPORT_PRIVATE_KEY": str(source_key_path),
+            "WW_HEARTH_WITNESS_PRIVATE_KEY": str(source_witness_key_path),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert retired.returncode == 0, retired.stdout + retired.stderr
+    assert '"status": "source_retired"' in retired.stdout
+    assert load_hearth_activation(home).state == "retired"
+
+    activation_receipt = tmp_path / "destination-active.json"
+    activated = subprocess.run(
+        [
+            sys.executable,
+            str(handoff_script),
+            "activate-destination",
+            str(target),
+            str(retirement_receipt),
+            "--source-witness",
+            str(source_witness_path),
+            "--destination-witness",
+            str(destination_witness_path),
+            "--receipt-output",
+            str(activation_receipt),
+        ],
+        env={
+            **os.environ,
+            "WW_HEARTH_TRANSPORT_PRIVATE_KEY": str(destination_key_path),
+            "WW_HEARTH_WITNESS_PRIVATE_KEY": str(destination_witness_key_path),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert activated.returncode == 0, activated.stdout + activated.stderr
+    assert '"status": "destination_activated"' in activated.stdout
+    assert load_hearth_activation(target).state == "active"

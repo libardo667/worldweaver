@@ -1043,6 +1043,23 @@ def _hearth_host(args: list[str]) -> int:
         required=True,
         help="existing folder name under the city's residents directory",
     )
+    retire = commands.add_parser(
+        "retire-source",
+        help="retire source generation N and write its witnessed receipt",
+    )
+    retire.add_argument("handoff", help="handoff sidecar created by send")
+    retire.add_argument("receipt", help="new source-retirement receipt path")
+    retire.add_argument("--resident", required=True, help="source resident folder")
+    activate = commands.add_parser(
+        "activate-destination",
+        help="verify source retirement, activate N+1, and write its receipt",
+    )
+    activate.add_argument("retirement_receipt", help="source retirement receipt")
+    activate.add_argument("source_witness", help="source node.json witness identity")
+    activate.add_argument("receipt", help="new destination-activation receipt path")
+    activate.add_argument(
+        "--resident", required=True, help="destination resident folder"
+    )
     parsed = parser.parse_args(args)
     if Path(parsed.city).name != parsed.city:
         parser.error("--city must be a single directory name")
@@ -1064,7 +1081,13 @@ def _hearth_host(args: list[str]) -> int:
     if env_values.get("SHARD_TYPE") == "world":
         print("A federation directory does not host resident hearths.", file=sys.stderr)
         return 2
-    if parsed.action in {"receive", "receive-transfer", "send"}:
+    if parsed.action in {
+        "receive",
+        "receive-transfer",
+        "send",
+        "retire-source",
+        "activate-destination",
+    }:
         resident_name = str(parsed.resident or "").strip()
         if (
             resident_name in {"", ".", ".."}
@@ -1080,20 +1103,27 @@ def _hearth_host(args: list[str]) -> int:
         key_path = city_dir / "hearth-host" / "identity" / "transport.key"
         runtime_env = os.environ.copy()
         runtime_env["WW_HEARTH_TRANSPORT_PRIVATE_KEY"] = str(key_path)
+        runtime_env["WW_HEARTH_WITNESS_PRIVATE_KEY"] = str(
+            city_dir / "identity" / "node.key"
+        )
         if parsed.action == "send":
+            package_path = Path(parsed.package).expanduser().resolve()
+            handoff_path = Path(f"{package_path}.handoff.json")
             result = _run(
                 [
                     sys.executable,
                     str(AGENT_DIR / "scripts" / "hearth_package.py"),
                     "export-transfer",
                     str(city_dir / "residents" / resident_name),
-                    str(Path(parsed.package).expanduser().resolve()),
+                    str(package_path),
                     "--recipient-host",
                     str(Path(parsed.recipient_host).expanduser().resolve()),
                     "--source-witness",
                     str(city_dir / "node.json"),
                     "--recipient-witness",
                     str(Path(parsed.recipient_witness).expanduser().resolve()),
+                    "--handoff-output",
+                    str(handoff_path),
                 ],
                 cwd=AGENT_DIR,
                 env=runtime_env,
@@ -1101,6 +1131,44 @@ def _hearth_host(args: list[str]) -> int:
             if result == 0:
                 print(
                     "The source hearth is unchanged. Do not retire it until the destination is verified."
+                )
+                print(f"Source handoff sidecar: {handoff_path}")
+            return result
+        if parsed.action in {"retire-source", "activate-destination"}:
+            command = [
+                sys.executable,
+                str(AGENT_DIR / "scripts" / "hearth_handoff.py"),
+                parsed.action,
+                str(city_dir / "residents" / resident_name),
+            ]
+            if parsed.action == "retire-source":
+                command.extend(
+                    [
+                        str(Path(parsed.handoff).expanduser().resolve()),
+                        "--source-witness",
+                        str(city_dir / "node.json"),
+                    ]
+                )
+            else:
+                command.extend(
+                    [
+                        str(Path(parsed.retirement_receipt).expanduser().resolve()),
+                        "--source-witness",
+                        str(Path(parsed.source_witness).expanduser().resolve()),
+                        "--destination-witness",
+                        str(city_dir / "node.json"),
+                    ]
+                )
+            command.extend(
+                [
+                    "--receipt-output",
+                    str(Path(parsed.receipt).expanduser().resolve()),
+                ]
+            )
+            result = _run(command, cwd=AGENT_DIR, env=runtime_env)
+            if result == 0 and parsed.action == "retire-source":
+                print(
+                    "The source is retired but preserved. This does not authorize deletion."
                 )
             return result
         import_command = (
@@ -1181,6 +1249,10 @@ def _help() -> None:
                                         encrypt a stopped hearth and identity for another host
   python dev.py hearth-host --city CITY receive-transfer PACKAGE IDENTITY --resident NAME
                                         verify, reseal, and install it dormant
+  python dev.py hearth-host --city CITY retire-source HANDOFF RECEIPT --resident NAME
+                                        retire N, preserve it, and issue source evidence
+  python dev.py hearth-host --city CITY activate-destination RETIREMENT SOURCE_NODE RECEIPT --resident NAME
+                                        verify source evidence and activate N+1
   python dev.py new-shard CITY [options]
                                         create an isolated, folder-operated node
   python dev.py city-draft create --city CITY

@@ -296,6 +296,8 @@ python ww.py hearth-host initialize  # city nodes; safe to rerun
 python ww.py hearth-host receive PACKAGE IDENTITY --resident NAME
 python ww.py hearth-host send DESTINATION_HOST DESTINATION_NODE PACKAGE --resident NAME
 python ww.py hearth-host receive-transfer PACKAGE IDENTITY --resident NAME
+python ww.py hearth-host retire-source HANDOFF RECEIPT --resident NAME
+python ww.py hearth-host activate-destination RETIREMENT SOURCE_NODE RECEIPT --resident NAME
 python ww.py map inspect /path/to/built-city-pack
 python ww.py map publish /path/to/built-city-pack --yes
 python ww.py resident-authority list  # city nodes only; public identity records
@@ -331,7 +333,7 @@ public identity card and signed encrypted package, writes only into a brand-new
 resident folder, and leaves the imported hearth dormant for review. The running
 city backend never receives the host key.
 
-Host-to-host custody transfer is deliberately two commands. On the source,
+Host-to-host custody and authority transfer are deliberately separate. On the source,
 `hearth-host send DESTINATION_HOST DESTINATION_NODE PACKAGE --resident NAME`
 opens the stopped resident's current host seal in memory and encrypts the hearth
 and identity key for the reviewed destination `hearth-host.json`. The resident's
@@ -339,7 +341,11 @@ signed handoff also binds both safe-to-share `node.json` witness identities. On 
 `hearth-host receive-transfer PACKAGE IDENTITY --resident NAME` verifies every
 identity and generation binding, reseals the key for that host, and installs a
 dormant hearth. Sending and receiving do not retire the source or wake the
-destination. That later transfer-of-authority step stays explicit.
+destination. After review, `hearth-host retire-source` preserves the old home in
+a retired state and emits a source-node receipt. Only that receipt lets
+`hearth-host activate-destination` advance and activate N+1. It emits a separate
+destination receipt. Both node keys are mounted only into their short-lived
+operator command. Neither receipt or command deletes the retired source.
 
 `update` accepts explicit versioned image references. `restore` requires a full
 backup made by this command surface and an explicit `--yes`. Backups contain the
