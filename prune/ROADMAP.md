@@ -32,11 +32,15 @@ remaining ordinary-action gaps: correspondence, safe encounter targets for direc
 human creation of temporary sublocations. Make the current place and its verb palette the default view;
 keep the map as an optional full-screen orientation and destination surface.
 
-### 2. Fix resident attention cost and timing
+### 2. Audit resident cognition before tuning it further
 
-Bound elective read continuations so one active pulse cannot consume most of a meeting and several model
-calls. Then let exact-place addressed speech and new co-presence wake a resident early without forcing an
-answer. Keep the completed one-hour Alderbank run as the fixed-cadence comparison.
+The resident host now bounds elective read continuations so one active pulse cannot consume most of a
+meeting and several model calls. Treat that as a cost and latency safety rail, not a theory of healthy
+attention. Trace what `CognitiveCore` actually computes, state what "working" could mean on several separate
+axes, and compare its scientific metaphors and design claims with supporting and critical work across
+neuroscience, biology, embodied cognition, philosophy, phenomenology, and plural contemplative traditions.
+Do not pathologize reading, solitude, silence, or slow action. Delay broad cadence tuning until the first
+causal map is complete; fixes for demonstrably lost or late exact-place signals may continue.
 
 ### 3. Add the private-to-public making boundary
 
