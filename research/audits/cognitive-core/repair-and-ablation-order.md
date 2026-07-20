@@ -12,16 +12,20 @@ from being interpretable.
    and protect any diagnostic endpoint with authentication plus actor/steward authorization.
 2. **Stop false prediction error.** Accept expectations only for sensed scopes, or represent an unobserved
    scope as unknown rather than zero.
-3. **Resolve social state from lifecycle evidence.** Pending prompt delivery, observed history, unanswered
+3. **Make time semantics true.** Remove poll-rate dependence from repeated evidence, give replays a virtual
+   clock, and stop calling time-since-last-pulse time-in-band.
+4. **Resolve social state from lifecycle evidence.** Pending prompt delivery, observed history, unanswered
    address, and replied exchange must be separate. Use wall time and canonical reply edges.
-4. **Write empty current snapshots.** A calm scene must clear old ambient pressure.
-5. **Make the pulse contract true.** Correct the description of `felt_sense`; remove dead fields from the live
+5. **Give direct address a lossless attention path.** A newly addressed event must reach attention even when
+   an aggregate social node is saturated, without forcing a reply or an outward act.
+6. **Write empty current snapshots.** A calm scene must clear old ambient pressure.
+7. **Make the pulse contract true.** Correct the description of `felt_sense`; remove dead fields from the live
    schema or give them an explicit, justified consumer.
-6. **Choose one memory authority.** Treat kept-memory materialization as a rebuildable index or derive it from
+8. **Choose one memory authority.** Treat kept-memory materialization as a rebuildable index or derive it from
    the append-only ledger.
-7. **Use the current checkpoint/projections for live reads.** Preserve complete cold history for audit without
+9. **Use the current checkpoint/projections for live reads.** Preserve complete cold history for audit without
    repeatedly rebuilding it on every tick.
-8. **Correct the archived/current docs.** Do not claim valence, reverie-weighted drive, semantic constitution
+10. **Correct the archived/current docs.** Do not claim valence, reverie-weighted drive, semantic constitution
    gating, or node-neighbor plasticity until the live path proves them.
 
 ## Second: establish a neutral reference runtime

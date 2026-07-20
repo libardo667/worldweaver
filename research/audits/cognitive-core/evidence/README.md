@@ -94,3 +94,9 @@ search before a decision.
   productivity;
 - AI-specific work on anthropomorphism, behavioral evidence, model welfare uncertainty, and the limits of
   consciousness inference.
+
+## First bounded review
+
+[`mechanism-review-01.md`](mechanism-review-01.md) applies the first source set plus targeted work on global
+workspace, quiet rest, and neurodivergent communication to five live code claims. Its decisions are narrow:
+rename overclaimed mechanisms, preserve quiet as a valid outcome, and require direct software comparisons.

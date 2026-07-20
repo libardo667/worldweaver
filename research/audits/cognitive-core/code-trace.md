@@ -81,8 +81,8 @@ active inference. Any relationship to those theories is currently analogy plus a
 Python can enter four model-call modes:
 
 - `react`: a threshold crossing or forced wake;
-- `settling`: five minutes below a low arousal ceiling;
-- `fervor`: three minutes in a middle-high arousal band;
+- `settling`: a low current value at least five minutes after the prior model call;
+- `fervor`: a middle-high current value at least three minutes after the prior model call;
 - `venture`: optional fervor plus no recent successful bodily action, a destination, and sufficient wake.
 
 The modes do not merely expose state. They change prompt language and sometimes remove choices. Current
@@ -145,6 +145,17 @@ behavior policies authored by the project. They must not be reported as an emerg
 19. **An empty ambient observation cannot clear prior pressure.** Perception emits an ambient snapshot only
     when signals are non-empty. Featureless calm can therefore leave an older crowding/event/weather record as
     current state until another non-empty ambient record arrives.
+20. **Poll cadence changes call pressure.** The same mismatch is appended once per observation while decay
+    uses wall time. The 0.5-second bounded runner is not a time-compressed form of the 20-second natural run.
+21. **Settling and fervor do not measure their claimed durations.** Both use time since the last model call,
+    not time since entering the relevant numeric band. A brand-new event can inherit minutes of false calm or
+    false restlessness.
+22. **A new direct address can be hidden by social-node saturation.** Exact-place packets remain pending, but
+    another address may not change an already-maxed node, city speech has no event-level force-attention hook,
+    and settling prompts withhold the pending words.
+23. **The waveform vital is an operational heuristic, not a health reading.** It counts idle attempts as
+    discharge without resetting ordinary pressure, omits the absence term from its reconstruction, and uses
+    threshold-dwell approximations that can diverge from the decaying curve.
 
 ## Questions for the next code pass
 

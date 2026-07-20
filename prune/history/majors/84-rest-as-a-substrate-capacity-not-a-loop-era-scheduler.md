@@ -1,5 +1,12 @@
 # Rest as a substrate capacity, not a loop-era scheduler — archived
 
+> **Audit correction (2026-07-19):** The no-model-call deep-night branch is live, but two completion claims
+> below are stronger than the code. `derive_rest` uses low-wake observations plus the current effective call
+> pressure and time since the last pulse; it does not prove pressure stayed low throughout the whole window.
+> City direct address also has no event-level wake hook, so a new address can be hidden behind an already
+> saturated social node. Major 136 owns the repair. The removal of the old rest scheduler and the derived
+> world-facing rest state remain real.
+
 ## Decision and lineage
 
 Major 83 slice 1a deleted `ww_agent/src/runtime/rest.py` — the loop-era rest scheduler — as

@@ -49,10 +49,14 @@ variable represents lived experience.
   interventions came from and audits the archived completion claim they inherited.
 - [`state-lifecycle.md`](state-lifecycle.md) traces how current, pending, historical, and decaying state opens
   and closes, including ghost pressure and post-Major-85 read costs.
+- [`temporal-and-attention-mechanics.md`](temporal-and-attention-mechanics.md) verifies how polling cadence,
+  false duration checks, social-node saturation, and the waveform monitor change resident behavior.
 - [`repair-and-ablation-order.md`](repair-and-ablation-order.md) puts software truth repairs before neutral
   reference runs and one-variable mechanism tests.
 - [`claim-ledger.md`](claim-ledger.md) lists terms and implied claims that require a decision.
 - [`evidence/README.md`](evidence/README.md) defines the review method and first source set.
+- [`evidence/mechanism-review-01.md`](evidence/mechanism-review-01.md) reaches initial bounded decisions on
+  prediction, ignition, arousal, quiet, and social-deficit assumptions.
 - `decisions.md` will be created only after a claim has both code evidence and literature review.
 
 ## Evidence boundary
