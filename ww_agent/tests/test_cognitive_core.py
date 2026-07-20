@@ -1120,7 +1120,7 @@ def test_pulse_engine_produces_valid_pulse(tmp_path):
 
 
 def test_pulse_engine_records_exact_private_prompt_trace_outside_ledger(tmp_path, monkeypatch):
-    monkeypatch.delenv("WW_PROMPT_TRACE", raising=False)
+    monkeypatch.setenv("WW_PROMPT_TRACE", "1")
     llm = _StubLLM(json_response={"felt_sense": "steam and footsteps", "act": None})
     producer = LLMPulseProducer(
         llm=llm,
@@ -1171,15 +1171,16 @@ def test_pulse_engine_records_exact_private_prompt_trace_outside_ledger(tmp_path
     assert load_runtime_events(tmp_path) == []  # diagnostics never enter the cognitive ledger
 
 
-def test_prompt_trace_can_be_disabled(tmp_path, monkeypatch):
-    monkeypatch.setenv("WW_PROMPT_TRACE", "0")
+def test_prompt_trace_is_disabled_by_default(tmp_path, monkeypatch):
+    monkeypatch.delenv("WW_PROMPT_TRACE", raising=False)
     producer = LLMPulseProducer(llm=_StubLLM(json_response={}), identity=_identity(), memory_dir=tmp_path)
 
     assert asyncio.run(producer(traces=[], stimulus={}, arousal=1.0)) is not None
     assert not (tmp_path / "prompt_traces.jsonl").exists()
 
 
-def test_settling_prompt_withholds_rolling_social_and_event_material(tmp_path):
+def test_settling_prompt_withholds_rolling_social_and_event_material(tmp_path, monkeypatch):
+    monkeypatch.setenv("WW_PROMPT_TRACE", "1")
     llm = _StubLLM(json_response={"felt_sense": "the quiet belongs to me", "act": None})
     producer = LLMPulseProducer(llm=llm, identity=_identity(), memory_dir=tmp_path)
     producer.latest_perception = {
@@ -1238,7 +1239,8 @@ def test_settling_prompt_withholds_rolling_social_and_event_material(tmp_path):
     assert context["withheld"]["recent_events"][0]["event_id"] == "event-9"
 
 
-def test_reactive_prompt_selects_only_rendered_encounter_ids(tmp_path):
+def test_reactive_prompt_selects_only_rendered_encounter_ids(tmp_path, monkeypatch):
+    monkeypatch.setenv("WW_PROMPT_TRACE", "1")
     llm = _StubLLM(json_response={"felt_sense": "several voices", "act": None})
     producer = LLMPulseProducer(llm=llm, identity=_identity(), memory_dir=tmp_path)
     producer.latest_perception = {
@@ -1266,7 +1268,8 @@ def test_reactive_prompt_selects_only_rendered_encounter_ids(tmp_path):
     assert [item["packet_id"] for item in context["withheld"]["heard"]] == ["pkt-0"]
 
 
-def test_reach_continuation_returns_chosen_result_without_reperception(tmp_path):
+def test_reach_continuation_returns_chosen_result_without_reperception(tmp_path, monkeypatch):
+    monkeypatch.setenv("WW_PROMPT_TRACE", "1")
     llm = _StubLLM(json_response={"felt_sense": "the market answer is enough", "act": None})
     producer = LLMPulseProducer(llm=llm, identity=_identity(), memory_dir=tmp_path)
     producer.latest_perception = {
@@ -1322,7 +1325,8 @@ def test_reach_continuation_returns_chosen_result_without_reperception(tmp_path)
     assert [item["name"] for item in records[0]["source_context"]["available_sources"]] == ["eats", "places"]
 
 
-def test_final_reach_continuation_closes_reading_and_drops_an_extra_request(tmp_path):
+def test_final_reach_continuation_closes_reading_and_drops_an_extra_request(tmp_path, monkeypatch):
+    monkeypatch.setenv("WW_PROMPT_TRACE", "1")
     llm = _StubLLM(
         json_response={
             "felt_sense": "I can leave it there",
@@ -1396,7 +1400,9 @@ def test_reach_continuation_frames_scoped_file_result_as_read_not_known(tmp_path
 
 def test_reach_continuation_sends_requested_images_only_when_vision_is_enabled(
     tmp_path,
+    monkeypatch,
 ):
+    monkeypatch.setenv("WW_PROMPT_TRACE", "1")
     llm = _StubLLM(json_response={"felt_sense": "the picture is in view", "act": None})
     producer = LLMPulseProducer(llm=llm, identity=_identity(), memory_dir=tmp_path)
     producer.vision = True
@@ -1465,7 +1471,9 @@ def test_pulse_engine_fails_closed_on_inference_error(tmp_path):
     assert pulse is None
 
 
-def test_private_inference_diagnostic_stays_in_private_prompt_trace(tmp_path):
+def test_private_inference_diagnostic_stays_in_private_prompt_trace(tmp_path, monkeypatch):
+    monkeypatch.setenv("WW_PROMPT_TRACE", "1")
+
     class _PrivateFailureLLM:
         async def complete_json(self, *_args, **_kwargs):
             raise InferenceError(

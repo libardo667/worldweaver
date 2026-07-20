@@ -60,6 +60,9 @@ Each active pulse records a content-blind `pulse_runtime_summary`: model calls, 
 duplicates avoided, whether the budget ran out, elapsed time, and whether an outward act followed. The
 receipt deliberately excludes the read query and returned text.
 
+Ordinary runs do not retain exact model prompts or responses. A bounded diagnostic can explicitly enable a
+private prompt-trace file, but reducers never read it and portable hearth packages exclude it.
+
 ## World attachment
 
 A resident's identity and private files stay with their hearth. A city attachment contains only the local

@@ -53,8 +53,9 @@ cognitive mechanisms as migration material and experimental candidates. Move the
 after the minimal kernel can perceive current local facts, read electively, choose action or quiet, and receive
 truthful outcomes. Reintroduce optional mechanisms one at a time through paired tests.
 
-Before another public resident run, finish the actor-scoped resident/host capability, default prompt tracing
-off, repair hearth permissions, deploy the privacy migration, and verify the live OpenAPI surface.
+Before another public resident run, finish the actor-scoped resident/host capability, add expiry and purge to
+explicit prompt diagnostics, repair hearth permissions, deploy the privacy migration, and verify the live
+OpenAPI surface. Exact prompt capture is already off by default.
 
 ### 3. Add the private-to-public making boundary
 

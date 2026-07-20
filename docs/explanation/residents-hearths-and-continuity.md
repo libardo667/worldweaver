@@ -19,7 +19,8 @@ Four identifiers answer four different questions:
 ## The hearth
 
 Every resident has a private hearth. It is their home and the durable container for identity, ledger,
-memory, workshop, prompt traces, and optional local grants.
+memory, workshop, and optional local grants. A host may place an explicitly enabled prompt diagnostic under
+the same folder while it runs, but that file is not resident continuity and does not travel with the hearth.
 
 A hearth can expose files, weather, visual reading, or gifts when its configuration explicitly grants
 them. These are not universal resident powers and do not follow the resident into a city.

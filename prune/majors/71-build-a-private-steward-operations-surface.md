@@ -16,10 +16,11 @@ reset and seeding default off; and a database migration removes old mirror field
 old combined client now shows only public roster presence rather than private rest and cognitive measurements.
 
 That closes the worst disclosure and arbitrary-mutation path in source, but does not finish this work item.
-Exact prompt capture is still default-on and unbounded. Agent bootstrap, leave, messaging, and travel still
-need a resident/host credential: checks that protect a human-owned session can accept an anonymous request when
-the session belongs to a resident. The public Alderbank image also remains unsafe until this repair is built,
-deployed, and checked against its live OpenAPI document. See
+Exact prompt capture now defaults off and requires `--trace-prompts` on a bounded resident or cohort run.
+Expiry, purpose and access receipts, and a tested purge path remain open. Agent bootstrap, leave, messaging,
+and travel still need a resident/host credential: checks that protect a human-owned session can accept an
+anonymous request when the session belongs to a resident. The public Alderbank image also remains unsafe until
+this repair is built, deployed, and checked against its live OpenAPI document. See
 [`private-state-data-custody-and-operator-boundary.md`](../../research/audits/cognitive-core/private-state-data-custody-and-operator-boundary.md).
 
 This is now a precondition rather than a later UI task: remove the private mirror and secure the underlying API
@@ -44,6 +45,14 @@ watching or shaping residents.
 5. Reuse old client code only after it passes the access table; delete the rest.
 6. Keep City Studio separate. City authoring before habitation does not grant access to resident state.
 
+The resident credential must be narrower than either existing shortcut. Giving the resident process the
+shard's JWT secret would let it impersonate every resident on that shard. Giving it the current node signing
+key would make a temporary host the resident's permanent authority and would stop working cleanly after
+cross-node travel. The capability must instead bind one `actor_id`, one active `runtime_generation`, an
+allowlist of city operations, and a short validity window. It must be transferable or freshly issued during
+travel, revocable without changing resident identity, and usable by a temporary host without making that host
+the resident's owner.
+
 ## Never show or control
 
 - prompt or response text;
@@ -60,7 +69,9 @@ procedure rather than a permanent dashboard field.
 - [x] A resident's private reduced state is not copied into a visited city's session storage.
 - [x] Generic public state read/write, legacy city-growth, rest-metrics, cleanup, pruning, and reset routes do
   not exist; old mirrored fields are removed during database migration.
+- [x] An ordinary resident run creates no exact prompt trace; bounded diagnostics require explicit opt-in.
 - [ ] Resident bootstrap, leave, messages, and travel require an actor-scoped resident/host capability.
+- [ ] Prompt diagnostics record their purpose and expiry, expose access receipts, and have a tested purge path.
 - [ ] A reviewed access table defines every steward-visible field and its retention.
 - [ ] The surface is separately authenticated and unavailable to ordinary participants and observers.
 - [ ] A steward can diagnose node health, storage, migrations, federation, inference, backups, and failed

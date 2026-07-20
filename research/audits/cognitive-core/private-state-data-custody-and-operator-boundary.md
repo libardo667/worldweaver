@@ -6,8 +6,9 @@ Repair checkpoint, 2026-07-20: the source no longer mirrors reduced resident sta
 read/write, legacy city-growth, rest-metrics, cleanup, duplicate-pruning, and whole-world reset routes were
 removed, development reset now defaults off, and a database migration deletes old mirror fields from existing
 sessions. Tests assert that the removed paths are absent from both HTTP behavior and OpenAPI. The sections below
-remain the audit record of what was found. Resident lifecycle/authorship authority, default prompt capture,
-hearth permissions, retention rules, and live redeployment remain open.
+remain the audit record of what was found. Exact prompt capture now defaults off and requires an explicit
+`--trace-prompts` bounded run; purpose, expiry, access receipts, and purge remain unfinished. Resident
+lifecycle/authorship authority, hearth permissions, retention rules, and live redeployment remain open.
 
 ## Plain-language result
 
@@ -44,7 +45,7 @@ must move with the resident. A prompt trace is not continuity: it is optional ho
 should disappear on a short, declared schedule. A public status such as awake/resting is neither of those and
 should have its own small authenticated publication contract.
 
-## Exact prompt capture is the normal path
+## Exact prompt capture was the normal path at audit time
 
 `runtime/prompt_trace.py` records:
 
@@ -59,9 +60,10 @@ Image bodies are hashed instead of copied, which is a sensible limit. Everything
 An elective file read or private recall is therefore not returned only to the continuation call; it is also
 copied into the host's prompt trace.
 
-Tracing defaults to enabled when `WW_PROMPT_TRACE` is absent. The repository-root bounded runner explicitly
-sets it to `1`. There is no rotation, size limit, expiry, purge command, purpose receipt, or resident-visible
-record that capture began.
+At audit time, tracing defaulted to enabled when `WW_PROMPT_TRACE` was absent and the repository-root bounded
+runner explicitly set it to `1`. The 2026-07-20 repair changed both defaults to off and added explicit
+`--trace-prompts` opt-in for a bounded resident or cohort run. There is still no rotation, size limit, expiry,
+purge command, purpose receipt, or resident-visible record that capture began.
 
 A content-blind filesystem scan found 14 trace files under current shard resident folders totaling 23,281,697
 bytes (22.20 MiB). The scan read names, sizes, and permission bits only. It did not open the records.
@@ -212,8 +214,8 @@ Several implementation choices are sound and should survive the repair:
 4. Protect cleanup, pruning, reset, bootstrap, leave, messaging, travel initiation/retry, and other
    administrative or authorship-sensitive routes under the appropriate player, resident, node, or steward
    capability. Treat this as a systematic API audit, not a patch to one handler.
-5. Default exact prompt capture off. Make it an explicit, time-bounded diagnostic mode with purpose, operator,
-   start, expiry, and purge receipts. Prefer structural call receipts by default.
+5. ~~Default exact prompt capture off.~~ Make the explicit diagnostic mode time-bounded, with purpose,
+   operator, start, expiry, and purge receipts. Prefer structural call receipts by default.
 6. Never copy an elective source's returned prose into a trace or durable ledger merely because the source was
    read. Define source-specific content retention, provenance, and redaction rules.
 7. Create resident roots as `0700` and private files as `0600`; repair existing active hearth permissions on

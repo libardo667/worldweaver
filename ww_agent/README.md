@@ -26,8 +26,9 @@ one bounded ignition, but only a typed effector can change the shared world.
 Every observation, decision, source read, and action receipt is appended to the resident ledger. A versioned
 checkpoint is intended to provide current state without rereading the resident's full life. That path is under
 active repair in Major 137: current bounded replay can lose older unfinished work, and some normal readers
-still scan the complete ledger. Exact model requests may also be captured in `memory/prompt_traces.jsonl`;
-those traces are private diagnostics and are never cognitive input.
+still scan the complete ledger. Exact model requests are not retained during ordinary runs. A deliberately
+enabled diagnostic may write them to `memory/prompt_traces.jsonl`; those traces are private host evidence and
+are never cognitive input or portable resident state.
 
 ## Run from the repository root
 
@@ -50,9 +51,10 @@ After reviewing the preflight, a bounded wake is explicit:
 python dev.py resident --city ww_alderbank --resident NAME --wake --ticks 3
 ```
 
-Use `--duration 15m` for natural wall-clock timing. The bounded runner disables the doula, captures private
-prompt traces, and parks the resident at their hearth afterward. `--park` performs cleanup without
-cognition after an interrupted run.
+Use `--duration 15m` for natural wall-clock timing. The bounded runner disables the doula and parks the
+resident at their hearth afterward. Add `--trace-prompts` only for a declared inference-boundary diagnostic;
+ordinary runs do not retain exact prompts. `--park` performs cleanup without cognition after an interrupted
+run.
 
 Create fresh dormant residents with a dry run first:
 

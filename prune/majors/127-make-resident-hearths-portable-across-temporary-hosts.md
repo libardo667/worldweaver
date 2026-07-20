@@ -41,6 +41,12 @@ whole hearth; moving the hearth to another computer is a separate operation.
 7. Design crash recovery separately. Do not claim that generation fencing revokes an undisclosed offline
    copy.
 
+Host authorization and city action authority are related but not interchangeable. A shard-wide JWT secret
+would let any holder impersonate every resident on that shard. A node signing key identifies the temporary
+machine operating a node; it does not become the resident's identity. Any city capability issued to the
+runtime must bind one actor and active generation, carry only the required operations and audience, expire,
+and be replaceable during travel or host migration without transferring ownership to the host.
+
 ## Boundaries
 
 - No canonical identity field names a permanent owner computer.

@@ -10,7 +10,8 @@
   repairing bounded replay that can lose older open work, silent malformed-record handling, dead projection
   files, and remaining full-history readers. It also derives the small relationship view from prompt-delivery
   and reply edges. These private projections stay in the hearth and are not copied into city session storage.
-- `runtime/prompt_trace.py` — private inference-boundary evidence, excluded from all substrate reducers.
+- `runtime/prompt_trace.py` — explicitly enabled private inference-boundary evidence, off during ordinary
+  runs and excluded from every substrate reducer.
 - `runtime/prompt_context.py` — typed available/selected/withheld source envelope and final prose renderer.
 - `runtime/information.py` — private elective source access plus the structured provider-record contract;
   separate from outward effectors. It briefly reuses an equivalent successful read so repeated requests do

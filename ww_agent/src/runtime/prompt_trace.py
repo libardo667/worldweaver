@@ -31,8 +31,13 @@ def _utc_now_iso() -> str:
 
 
 def _enabled() -> bool:
-    """Tracing is on by default; an operator may explicitly disable private capture."""
-    return str(os.environ.get("WW_PROMPT_TRACE", "1") or "").strip().lower() not in {"0", "false", "no", "off"}
+    """Capture exact prompts only during an explicit diagnostic run."""
+    return str(os.environ.get("WW_PROMPT_TRACE", "0") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 def _sha256_text(value: str) -> str:
@@ -118,11 +123,7 @@ class PromptTraceRecorder:
                 "resident": self._resident_name,
                 "error_type": exc.__class__.__name__,
                 "error": str(exc),
-                **(
-                    {"private_diagnostic": private_diagnostic}
-                    if private_diagnostic is not None
-                    else {}
-                ),
+                **({"private_diagnostic": private_diagnostic} if private_diagnostic is not None else {}),
             }
         )
 

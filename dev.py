@@ -267,7 +267,7 @@ def _prepare_resident_city(city: str) -> tuple[Path, dict[str, str]] | int:
             "WW_SERVER_URL": f"http://localhost:{backend_port}",
             "WW_RESIDENTS_DIR": str(city_dir / "residents"),
             "WW_DOULA": "0",
-            "WW_PROMPT_TRACE": "1",
+            "WW_PROMPT_TRACE": "0",
         }
     )
 
@@ -347,6 +347,11 @@ def _resident(args: list[str]) -> int:
         metavar="0-8",
         help="requested reads per active pulse; the host maximum may lower it",
     )
+    parser.add_argument(
+        "--trace-prompts",
+        action="store_true",
+        help="capture exact private prompts for this bounded diagnostic run",
+    )
     parsed = parser.parse_args(args)
     if parsed.ticks is None and parsed.duration is None:
         parsed.ticks = 3
@@ -408,6 +413,8 @@ def _resident(args: list[str]) -> int:
         command.append("--action-tendency")
     if parsed.reach_continuations is not None:
         command.extend(["--reach-continuations", str(parsed.reach_continuations)])
+    if parsed.trace_prompts:
+        command.append("--trace-prompts")
     if parsed.wake:
         command.append("--wake")
     if parsed.park:
@@ -456,6 +463,11 @@ def _cohort(args: list[str]) -> int:
         choices=range(0, 9),
         metavar="0-8",
         help="requested reads per active pulse; the resident host may lower it",
+    )
+    parser.add_argument(
+        "--trace-prompts",
+        action="store_true",
+        help="capture exact private prompts for this bounded cohort diagnostic",
     )
     parser.add_argument(
         "--output-dir",
@@ -514,6 +526,8 @@ def _cohort(args: list[str]) -> int:
         command.append("--action-tendency")
     if parsed.reach_continuations is not None:
         command.extend(["--reach-continuations", str(parsed.reach_continuations)])
+    if parsed.trace_prompts:
+        command.append("--trace-prompts")
     if parsed.output_dir:
         command.extend(["--output-dir", parsed.output_dir])
     return _run(command, env=runtime_env)

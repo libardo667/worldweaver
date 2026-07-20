@@ -70,8 +70,9 @@ from being interpretable.
    public resident run.
 
    **2026-07-20 checkpoint:** the mirror and generic state/growth/rest/cleanup/prune/reset routes are removed,
-   old mirror fields are scrubbed by migration, and development reset defaults off. Actor-scoped resident
-   authority, prompt-trace policy, hearth permission repair, and the custody table remain.
+   old mirror fields are scrubbed by migration, development reset defaults off, and ordinary resident runs no
+   longer capture exact prompts. Actor-scoped resident authority, diagnostic expiry/purpose/purge, hearth
+   permission repair, and the custody table remain.
 2. **Stop false prediction error.** Accept expectations only for sensed scopes, or represent an unobserved
    scope as unknown rather than zero.
 3. **Make time semantics true.** Remove poll-rate dependence from repeated evidence, give replays a virtual

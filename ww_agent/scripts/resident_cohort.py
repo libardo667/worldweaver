@@ -128,6 +128,7 @@ def _resident_command(
     temperature: float | None = None,
     action_tendency: bool = False,
     reach_continuations: int | None = None,
+    trace_prompts: bool = False,
 ) -> list[str]:
     command = [
         sys.executable,
@@ -152,6 +153,8 @@ def _resident_command(
         command.append("--action-tendency")
     if reach_continuations is not None:
         command.extend(["--reach-continuations", str(reach_continuations)])
+    if trace_prompts:
+        command.append("--trace-prompts")
     return command
 
 
@@ -265,6 +268,7 @@ def _run(args: argparse.Namespace) -> int:
                 temperature=args.temperature,
                 action_tendency=args.action_tendency,
                 reach_continuations=args.reach_continuations,
+                trace_prompts=args.trace_prompts,
             )
             process = subprocess.Popen(
                 command,
@@ -390,6 +394,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model", help="temporary model shared by this run")
     parser.add_argument("--temperature", type=float)
     parser.add_argument("--action-tendency", action="store_true")
+    parser.add_argument(
+        "--trace-prompts",
+        action="store_true",
+        help="capture each resident's exact private prompts during this bounded diagnostic",
+    )
     parser.add_argument(
         "--reach-continuations",
         type=int,

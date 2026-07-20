@@ -37,8 +37,10 @@ the consequences of moving through a shared world, not from a system dosing the 
 
 ## Private diagnostic records
 
-Exact model messages are recorded in a private prompt-trace file when enabled. Reducers do not read that
-file, so inspecting a prompt cannot change the resident who produced it.
+Exact model messages are not retained during ordinary runs. A declared, bounded diagnostic can explicitly
+record them in a private prompt-trace file. Reducers do not read that file, so enabling or inspecting a trace
+cannot become input to the resident who produced it. The file belongs to the temporary host's diagnostic
+custody, not to the resident's portable continuity, and should be deleted after its stated purpose.
 
 The public client exposes places and local encounter. It does not expose hearth files, memories, prompt
 traces, internal state, or shard-wide resident monitoring. Operator diagnostics require a separate,

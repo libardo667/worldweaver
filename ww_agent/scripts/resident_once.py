@@ -261,8 +261,8 @@ def _inference_checks(
         _check("embedding_model", bool(embedding_model), embedding_model or "missing"),
         _check(
             "prompt_trace",
-            str(os.environ.get("WW_PROMPT_TRACE", "1")).strip().lower() not in {"0", "false", "no", "off"},
-            ("enabled" if str(os.environ.get("WW_PROMPT_TRACE", "1")).strip().lower() not in {"0", "false", "no", "off"} else "disabled"),
+            True,
+            ("enabled for this diagnostic run" if str(os.environ.get("WW_PROMPT_TRACE", "0")).strip().lower() in {"1", "true", "yes", "on"} else "disabled (normal private default)"),
         ),
     ]
 
@@ -488,11 +488,18 @@ def main(argv: list[str] | None = None) -> int:
         help=("requested reads per active pulse; the host's WW_REACH_CONTINUATION_MAX may lower it"),
     )
     parser.add_argument(
+        "--trace-prompts",
+        action="store_true",
+        help="capture exact private prompts/completions for this bounded diagnostic run",
+    )
+    parser.add_argument(
         "--compact",
         action="store_true",
         help=argparse.SUPPRESS,
     )
     args = parser.parse_args(argv)
+    if args.trace_prompts:
+        os.environ["WW_PROMPT_TRACE"] = "1"
     if args.ticks is None and args.duration is None:
         args.ticks = 3
     if args.duration is not None and args.pause is not None:

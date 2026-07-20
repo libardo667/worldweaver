@@ -99,6 +99,12 @@ two computers. No resident was woken for this infrastructure check.
 6. Test directory outage, destination outage, interrupted departure, interrupted arrival, and replay across
    independently operated nodes.
 
+Do not implement step 1 by sharing a shard JWT secret with the resident process or by treating a source
+node's signing key as the resident's identity. The first grants all-resident impersonation; the second makes a
+temporary host authoritative and does not reconverge cleanly after travel. A valid capability binds one actor,
+one active runtime generation, named operations, audience, and expiry. Travel must revoke, transfer, or replace
+that authority without changing who the resident is.
+
 ## Rules
 
 - `actor_id` identifies the person; `session_id` is only a local runtime handle.

@@ -50,8 +50,9 @@ inputs in the identity loader; they do not restore the old ownership model.
   the supporting ledger event IDs and never turn chat text into an unsupported belief.
 - `runtime/prompt_context.py` is the typed selection boundary between perception and prose. Mode policy
   must be explicit there; source selection, recall/affect input, traces, and packet consumption must agree.
-- Exact prompts/completions may be captured in `memory/prompt_traces.jsonl` as private diagnostics. This
-  file is evidence about the inference boundary, never cognitive input; no reducer may read it.
+- Exact prompts/completions may be captured in `memory/prompt_traces.jsonl` only through an explicit bounded
+  diagnostic. Capture is off by default. This file is host evidence about the inference boundary, never
+  portable resident state or cognitive input; no reducer may read it.
 - `WorldWeaverClient` is the engine boundary. Keep engine-specific transport out of cognitive modules.
 - Canonical identity is immutable at runtime. Proposed growth stays in the private ledger. Mutable growth
   is hearth-owned and changes only after the resident inspects a proposal and explicitly adopts it there.
