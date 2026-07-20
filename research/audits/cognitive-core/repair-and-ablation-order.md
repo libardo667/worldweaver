@@ -49,6 +49,19 @@ from being interpretable.
    message reads, acknowledgements, sends, and chat posts before exposing a shard publicly.
 20. **Route people, not folders.** Move correspondence and relationship state to durable actor/account IDs
    with explicit ambiguity handling and federated mailbox resolution.
+21. **Disable automatic resident creation by default.** A new shard must not silently fill a population from
+   a shared host-side cast deck when inference credentials appear.
+22. **Remove the rejected player-shadow surface.** The live form discards most entered identity data, does not
+   authenticate consent, has contradictory file gates, and can eventually reclassify a nonconsenting human as
+   a novel character.
+23. **Make creation claims literal.** Remove genetic, consciousness, emergence, and life/health language from
+   host sampling and population targets. Separate city scenario casting from any claim about cognition.
+24. **Retire or rebuild doula voting.** The current request cannot reach a valid resident mailbox, the letter
+   cannot be read, no production code casts the vote, expired polls disappear unresolved, and duplicate polls
+   are allowed.
+25. **Give initial identity an authority model.** Preview the whole creation brief, record exact provenance,
+   make work optional, move local culture to city governance, and define what assigned canon a resident may
+   later revise.
 
 ## Second: establish a neutral reference runtime
 

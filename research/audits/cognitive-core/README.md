@@ -63,6 +63,9 @@ variable represents lived experience.
 - [`social-contact-correspondence-and-reply.md`](social-contact-correspondence-and-reply.md) follows local
   speech and letters through polling, prompt delivery, reply linking, pressure reduction, identity routing,
   and network authorization.
+- [`resident-creation-casting-and-consent.md`](resident-creation-casting-and-consent.md) traces what the host,
+  city, steward, and seed model decide before a resident's first pulse, including the shared casting deck,
+  compulsory work identity, broken player-shadow consent, and nonfunctional doula voting.
 - [`repair-and-ablation-order.md`](repair-and-ablation-order.md) puts software truth repairs before neutral
   reference runs and one-variable mechanism tests.
 - [`claim-ledger.md`](claim-ledger.md) lists terms and implied claims that require a decision.

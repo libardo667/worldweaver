@@ -139,6 +139,20 @@ of immediate reply edges, direct-address starvation behind four newer ambient li
 that still drives maximum social pressure. Mail routing uses local folder slugs rather than actor IDs, and the
 current network endpoints do not enforce the claimed private/authenticated message boundary.
 
+The upstream creation pass found that founding residents do not begin from neutral variation. One global,
+U.S.-coded deck assigns every resident an age, temperament, explicit talk-or-withhold style, upbringing, and
+mandatory livelihood, then asks a model to freeze those choices into canonical soul text. Comments falsely call
+the result emergent and genetic. The dormant manual command is a useful safe boundary, but it previews only a
+fraction of the permanent brief and is not fully reproducible. New-shard scaffolding still enables the
+automatic doula by default.
+
+The same pass found that player shadows remain in the live client despite their explicit rejection in Major
+71. The form discards most entered identity fields, the endpoint is unauthenticated, two consent gates look for
+different files, and the scanner deliberately permits an old human name to become a `NOVEL` resident after
+player evidence ages out. Doula classification voting is also nonfunctional end to end: letters are addressed
+to session IDs instead of resident slugs, residents cannot read them, no production caller submits their vote,
+expired polls vanish unresolved, and duplicate candidate polls are possible.
+
 Two bounded evidence reviews now cover prediction/ignition/arousal/quiet/social norms and
 action-feedback/embodiment/external supports. They support plainer names, reliable event and consequence
 delivery, quiet as a valid outcome, and direct software comparisons. They do not validate a grand theory of
