@@ -732,18 +732,17 @@ def command_resident_authority(args: argparse.Namespace) -> int:
         args.resident_authority_action,
     ]
     if args.resident_authority_action == "admit":
-        command.extend(
-            [
-                "--actor-id",
-                args.actor_id,
-                "--hearth-shard-id",
-                args.hearth_shard_id,
-                "--identity-public-key",
-                args.identity_public_key,
-                "--reason",
-                args.reason,
-            ]
-        )
+        descriptor_path = Path(args.descriptor).expanduser()
+        if not descriptor_path.is_absolute():
+            descriptor_path = ROOT / descriptor_path
+        if not descriptor_path.is_file() or descriptor_path.is_symlink():
+            raise OperatorError(f"Resident identity descriptor is not a regular file: {descriptor_path}")
+        descriptor = descriptor_path.read_bytes()
+        if len(descriptor) > 16 * 1024:
+            raise OperatorError("Resident identity descriptor is too large.")
+        command.extend(["--descriptor-stdin", "--reason", args.reason])
+        _compose(*command, input_bytes=descriptor)
+        return 0
     _compose(*command)
     return 0
 
@@ -871,11 +870,9 @@ def build_parser() -> argparse.ArgumentParser:
     resident_authority_commands.add_parser("list", help="list admitted resident public identities")
     admit_resident = resident_authority_commands.add_parser(
         "admit",
-        help="admit one reviewed resident public identity",
+        help="verify and admit one reviewed public resident identity card",
     )
-    admit_resident.add_argument("--actor-id", required=True)
-    admit_resident.add_argument("--hearth-shard-id", required=True)
-    admit_resident.add_argument("--identity-public-key", required=True)
+    admit_resident.add_argument("descriptor")
     admit_resident.add_argument("--reason", required=True)
     resident_authority.set_defaults(handler=command_resident_authority)
 

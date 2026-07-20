@@ -134,7 +134,10 @@ temporary compatibility path for residents that have not been migrated.
 
 City and folder-local operators can now list or admit resident public identities through a non-HTTP setup
 command. An admission records the steward's reason and source label. The command never accepts a resident
-private key.
+private key. Admission now consumes one safe-to-share `resident_identity.json` card instead of separately
+copied actor, hearth, and key arguments. The city verifies its exact fields, key fingerprint, and Ed25519
+self-signature before recording the steward's decision. That signature proves the card was made with the
+matching key; it does not make the card automatically trusted.
 
 The private-key trace now has a recorded implementation order in Major 127: a separate destination-host
 transport key, a resident-signed encrypted outer envelope around the deterministic hearth payload, in-memory

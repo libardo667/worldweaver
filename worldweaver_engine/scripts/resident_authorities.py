@@ -20,6 +20,10 @@ from src.services.resident_authority import (  # noqa: E402
     ResidentAuthorityError,
     bind_resident_identity,
 )
+from src.services.resident_protocol import (  # noqa: E402
+    ResidentIdentityDescriptor,
+    ResidentProtocolError,
+)
 
 
 def _authority_payload(db, row: ResidentAuthority) -> dict[str, object]:
@@ -49,9 +53,12 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("list", help="list admitted resident public identities")
     admit = commands.add_parser("admit", help="admit one reviewed resident public identity")
-    admit.add_argument("--actor-id", required=True)
-    admit.add_argument("--hearth-shard-id", required=True)
-    admit.add_argument("--identity-public-key", required=True)
+    admit.add_argument(
+        "--descriptor-stdin",
+        action="store_true",
+        required=True,
+        help="read and verify one public resident identity JSON document from stdin",
+    )
     admit.add_argument("--reason", required=True)
     return parser
 
@@ -65,17 +72,37 @@ def main() -> int:
         )
         return 1
 
+    descriptor: ResidentIdentityDescriptor | None = None
+    if args.command == "admit":
+        try:
+            descriptor = ResidentIdentityDescriptor.from_dict(json.load(sys.stdin))
+        except (json.JSONDecodeError, UnicodeDecodeError, ResidentProtocolError) as exc:
+            print(
+                json.dumps(
+                    {
+                        "status": "refused",
+                        "code": "invalid_descriptor",
+                        "message": str(exc),
+                    },
+                    sort_keys=True,
+                ),
+                file=sys.stderr,
+            )
+            return 1
+
     with SessionLocal() as db:
         try:
             if args.command == "list":
                 rows = db.query(ResidentAuthority).order_by(ResidentAuthority.actor_id).all()
                 payload: object = [_authority_payload(db, row) for row in rows]
             else:
+                assert descriptor is not None
                 row = bind_resident_identity(
                     db,
-                    actor_id=args.actor_id,
-                    hearth_shard_id=args.hearth_shard_id,
-                    identity_public_key=args.identity_public_key,
+                    actor_id=descriptor.actor_id,
+                    hearth_shard_id=descriptor.hearth_shard_id,
+                    identity_public_key=descriptor.identity_public_key,
+                    recovery_policy_version=descriptor.recovery_policy_version,
                     admission_reason=args.reason,
                     admitted_by="local-steward",
                 )

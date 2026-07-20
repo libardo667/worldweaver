@@ -130,26 +130,47 @@ class ResidentIdentityDescriptor:
             )
         if (
             raw.get("schema") != RESIDENT_IDENTITY_SCHEMA
+            or type(raw.get("schema_version")) is not int
             or raw.get("schema_version") != RESIDENT_IDENTITY_VERSION
         ):
             raise ResidentIdentityError("Resident identity schema is unsupported.")
         actor_id = str(raw.get("actor_id") or "").strip()
         hearth_shard_id = str(raw.get("hearth_shard_id") or "").strip()
-        if not _TOKEN_RE.fullmatch(actor_id) or len(actor_id) > 36:
+        if (
+            not isinstance(raw.get("actor_id"), str)
+            or raw.get("actor_id") != actor_id
+            or not _TOKEN_RE.fullmatch(actor_id)
+            or len(actor_id) > 36
+        ):
             raise ResidentIdentityError("Resident actor ID is invalid.")
-        if not _TOKEN_RE.fullmatch(hearth_shard_id) or len(hearth_shard_id) > 80:
+        if (
+            not isinstance(raw.get("hearth_shard_id"), str)
+            or raw.get("hearth_shard_id") != hearth_shard_id
+            or not _TOKEN_RE.fullmatch(hearth_shard_id)
+            or len(hearth_shard_id) > 80
+        ):
             raise ResidentIdentityError("Resident hearth shard ID is invalid.")
         if hearth_shard_id != f"hearth:{actor_id}":
             raise ResidentIdentityError(
                 "Resident hearth shard ID does not match the actor ID."
             )
         public_key = str(raw.get("identity_public_key") or "").strip()
+        if (
+            not isinstance(raw.get("identity_public_key"), str)
+            or raw.get("identity_public_key") != public_key
+        ):
+            raise ResidentIdentityError("Resident identity public key is invalid.")
         public_key_bytes = _decode(
             public_key,
             label="identity public key",
             expected_size=32,
         )
         key_id = str(raw.get("identity_key_id") or "").strip()
+        if (
+            not isinstance(raw.get("identity_key_id"), str)
+            or raw.get("identity_key_id") != key_id
+        ):
+            raise ResidentIdentityError("Resident identity key ID is invalid.")
         if key_id != resident_identity_key_id(public_key):
             raise ResidentIdentityError("Resident identity key ID does not match.")
         policy_version = raw.get("recovery_policy_version")
@@ -161,6 +182,11 @@ class ResidentIdentityDescriptor:
         ):
             raise ResidentIdentityError("Resident recovery policy version is invalid.")
         signature = str(raw.get("identity_signature") or "").strip()
+        if (
+            not isinstance(raw.get("identity_signature"), str)
+            or raw.get("identity_signature") != signature
+        ):
+            raise ResidentIdentityError("Resident identity signature is invalid.")
         signature_bytes = _decode(
             signature,
             label="identity signature",

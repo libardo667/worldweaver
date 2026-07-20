@@ -54,6 +54,8 @@ def test_public_descriptor_round_trip_is_self_signed_and_portable(tmp_path):
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     [
+        ("schema_version", True, "schema"),
+        ("actor_id", " actor-123", "actor ID"),
         ("actor_id", "actor-456", "hearth shard ID"),
         ("hearth_shard_id", "hearth:actor-456", "hearth shard ID"),
         ("identity_key_id", "ed25519:" + ("0" * 32), "key ID"),

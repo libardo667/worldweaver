@@ -64,6 +64,7 @@ def _run(
     *,
     cwd: Path = ROOT,
     env: dict[str, str] | None = None,
+    input_bytes: bytes | None = None,
 ) -> int:
     display: list[str] = []
     hide_next = False
@@ -80,7 +81,13 @@ def _run(
         display.append(argument)
     print(f"\n==> {' '.join(display)}", flush=True)
     try:
-        return subprocess.call(command, cwd=cwd, env=env)
+        return subprocess.run(
+            command,
+            cwd=cwd,
+            env=env,
+            input=input_bytes,
+            check=False,
+        ).returncode
     except KeyboardInterrupt:
         return 130
 
@@ -790,10 +797,8 @@ def _resident_authority(args: list[str]) -> int:
     parser.add_argument("--city", required=True, help="city shard directory name")
     commands = parser.add_subparsers(dest="action", required=True)
     commands.add_parser("list", help="list admitted resident public identities")
-    admit = commands.add_parser("admit", help="admit one reviewed resident public identity")
-    admit.add_argument("--actor-id", required=True)
-    admit.add_argument("--hearth-shard-id", required=True)
-    admit.add_argument("--identity-public-key", required=True)
+    admit = commands.add_parser("admit", help="verify and admit one reviewed public resident identity card")
+    admit.add_argument("descriptor")
     admit.add_argument("--reason", required=True)
     parsed = parser.parse_args(args)
     if Path(parsed.city).name != parsed.city:
@@ -806,7 +811,10 @@ def _resident_authority(args: list[str]) -> int:
         return 2
     docker = shutil.which("docker")
     if not docker:
-        print("Docker is required to reach the selected city's trusted setup seam.", file=sys.stderr)
+        print(
+            "Docker is required to reach the selected city's trusted setup seam.",
+            file=sys.stderr,
+        )
         return 2
     command = [
         docker,
@@ -822,20 +830,21 @@ def _resident_authority(args: list[str]) -> int:
         "scripts/resident_authorities.py",
         parsed.action,
     ]
+    descriptor: bytes | None = None
     if parsed.action == "admit":
-        command.extend(
-            [
-                "--actor-id",
-                parsed.actor_id,
-                "--hearth-shard-id",
-                parsed.hearth_shard_id,
-                "--identity-public-key",
-                parsed.identity_public_key,
-                "--reason",
-                parsed.reason,
-            ]
-        )
-    return _run(command, cwd=city_dir)
+        descriptor_path = Path(parsed.descriptor).expanduser().absolute()
+        if not descriptor_path.is_file() or descriptor_path.is_symlink():
+            print(
+                f"Resident identity descriptor is not a regular file: {descriptor_path}",
+                file=sys.stderr,
+            )
+            return 2
+        descriptor = descriptor_path.read_bytes()
+        if len(descriptor) > 16 * 1024:
+            print("Resident identity descriptor is too large.", file=sys.stderr)
+            return 2
+        command.extend(["--descriptor-stdin", "--reason", parsed.reason])
+    return _run(command, cwd=city_dir, input_bytes=descriptor)
 
 
 def _help() -> None:

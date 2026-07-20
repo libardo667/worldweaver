@@ -30,6 +30,8 @@ RESIDENT_SIGNATURE_HEADER = "X-WW-Resident-Signature"
 
 CERTIFICATE_SCHEMA = "worldweaver.resident-runtime-certificate"
 CERTIFICATE_VERSION = 1
+RESIDENT_IDENTITY_SCHEMA = "worldweaver.resident-identity"
+RESIDENT_IDENTITY_VERSION = 1
 DEFAULT_MAX_CLOCK_SKEW_SECONDS = 300
 MAX_CERTIFICATE_LIFETIME_SECONDS = 24 * 60 * 60
 MAX_RUNTIME_GENERATION = (2**63) - 1
@@ -47,6 +49,16 @@ _CERTIFICATE_FIELDS = {
     "scopes",
     "issued_at",
     "expires_at",
+    "identity_signature",
+}
+_RESIDENT_IDENTITY_FIELDS = {
+    "schema",
+    "schema_version",
+    "actor_id",
+    "hearth_shard_id",
+    "identity_public_key",
+    "identity_key_id",
+    "recovery_policy_version",
     "identity_signature",
 }
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9._:-]{1,128}$")
@@ -107,6 +119,83 @@ def _clean_scopes(scopes: Iterable[str]) -> tuple[str, ...]:
     if any(not _SCOPE_RE.fullmatch(scope) for scope in normalized):
         raise ResidentProtocolError("Certificate contains an invalid scope.")
     return normalized
+
+
+@dataclass(frozen=True, slots=True)
+class ResidentIdentityDescriptor:
+    """One safe-to-share, self-signed resident identity card."""
+
+    actor_id: str
+    hearth_shard_id: str
+    identity_public_key: str
+    identity_key_id: str
+    recovery_policy_version: int
+    identity_signature: str
+    schema: str = RESIDENT_IDENTITY_SCHEMA
+    schema_version: int = RESIDENT_IDENTITY_VERSION
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema": self.schema,
+            "schema_version": self.schema_version,
+            "actor_id": self.actor_id,
+            "hearth_shard_id": self.hearth_shard_id,
+            "identity_public_key": self.identity_public_key,
+            "identity_key_id": self.identity_key_id,
+            "recovery_policy_version": self.recovery_policy_version,
+            "identity_signature": self.identity_signature,
+        }
+
+    @classmethod
+    def from_dict(cls, raw: Mapping[str, Any]) -> "ResidentIdentityDescriptor":
+        if not isinstance(raw, Mapping) or set(raw) != _RESIDENT_IDENTITY_FIELDS:
+            raise ResidentProtocolError("Resident identity fields do not match version 1.")
+        if raw.get("schema") != RESIDENT_IDENTITY_SCHEMA or type(raw.get("schema_version")) is not int or raw.get("schema_version") != RESIDENT_IDENTITY_VERSION:
+            raise ResidentProtocolError("Resident identity schema is unsupported.")
+        actor_id = str(raw.get("actor_id") or "").strip()
+        hearth_shard_id = str(raw.get("hearth_shard_id") or "").strip()
+        if not isinstance(raw.get("actor_id"), str) or raw.get("actor_id") != actor_id or not _TOKEN_RE.fullmatch(actor_id) or len(actor_id) > 36:
+            raise ResidentProtocolError("Resident identity actor ID is invalid.")
+        if not isinstance(raw.get("hearth_shard_id"), str) or raw.get("hearth_shard_id") != hearth_shard_id or not _TOKEN_RE.fullmatch(hearth_shard_id) or len(hearth_shard_id) > 80:
+            raise ResidentProtocolError("Resident identity hearth shard ID is invalid.")
+        if hearth_shard_id != f"hearth:{actor_id}":
+            raise ResidentProtocolError("Resident identity hearth shard ID does not match the actor ID.")
+        public_key = str(raw.get("identity_public_key") or "").strip()
+        if not isinstance(raw.get("identity_public_key"), str) or raw.get("identity_public_key") != public_key:
+            raise ResidentProtocolError("Resident identity public key is invalid.")
+        public_key_bytes = _decode(public_key)
+        if len(public_key_bytes) != 32:
+            raise ResidentProtocolError("Resident identity public key is invalid.")
+        key_id = str(raw.get("identity_key_id") or "").strip()
+        if not isinstance(raw.get("identity_key_id"), str) or raw.get("identity_key_id") != key_id:
+            raise ResidentProtocolError("Resident identity key ID is invalid.")
+        if key_id != identity_key_id(public_key):
+            raise ResidentProtocolError("Resident identity key ID does not match.")
+        policy_version = raw.get("recovery_policy_version")
+        if isinstance(policy_version, bool) or not isinstance(policy_version, int) or policy_version < 1 or policy_version > (2**31) - 1:
+            raise ResidentProtocolError("Resident identity recovery policy version is invalid.")
+        signature = str(raw.get("identity_signature") or "").strip()
+        if not isinstance(raw.get("identity_signature"), str) or raw.get("identity_signature") != signature:
+            raise ResidentProtocolError("Resident identity signature is invalid.")
+        signature_bytes = _decode(signature)
+        if len(signature_bytes) != 64:
+            raise ResidentProtocolError("Resident identity signature is invalid.")
+        unsigned = {key: raw[key] for key in sorted(_RESIDENT_IDENTITY_FIELDS - {"identity_signature"})}
+        try:
+            Ed25519PublicKey.from_public_bytes(public_key_bytes).verify(
+                signature_bytes,
+                _canonical_json(unsigned),
+            )
+        except (InvalidSignature, ValueError) as exc:
+            raise ResidentProtocolError("Resident identity signature is invalid.") from exc
+        return cls(
+            actor_id=actor_id,
+            hearth_shard_id=hearth_shard_id,
+            identity_public_key=public_key,
+            identity_key_id=key_id,
+            recovery_policy_version=policy_version,
+            identity_signature=signature,
+        )
 
 
 @dataclass(frozen=True, slots=True)

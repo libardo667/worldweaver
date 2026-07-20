@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 
 import pytest
@@ -7,9 +8,13 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 from src.services.resident_protocol import (
     RESIDENT_CERTIFICATE_HEADER,
+    RESIDENT_IDENTITY_SCHEMA,
+    RESIDENT_IDENTITY_VERSION,
+    ResidentIdentityDescriptor,
     ResidentProtocolError,
     ResidentRuntimeCertificate,
     encoded_public_key,
+    identity_key_id,
     issue_runtime_certificate,
     signed_resident_request_headers,
     verify_resident_request,
@@ -20,6 +25,62 @@ ACTOR_ID = "actor-123"
 HEARTH_ID = "hearth:actor-123"
 AUDIENCE = "ww_alderbank"
 SCOPE = "session.act"
+
+
+def _encoded(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).decode("ascii").rstrip("=")
+
+
+def _identity_descriptor(identity_private: Ed25519PrivateKey) -> dict:
+    public_key = encoded_public_key(identity_private.public_key())
+    unsigned = {
+        "schema": RESIDENT_IDENTITY_SCHEMA,
+        "schema_version": RESIDENT_IDENTITY_VERSION,
+        "actor_id": ACTOR_ID,
+        "hearth_shard_id": HEARTH_ID,
+        "identity_public_key": public_key,
+        "identity_key_id": identity_key_id(public_key),
+        "recovery_policy_version": 1,
+    }
+    canonical = json.dumps(
+        unsigned,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return {
+        **unsigned,
+        "identity_signature": _encoded(identity_private.sign(canonical)),
+    }
+
+
+def test_public_identity_descriptor_verifies_without_granting_admission():
+    raw = _identity_descriptor(Ed25519PrivateKey.generate())
+
+    descriptor = ResidentIdentityDescriptor.from_dict(raw)
+
+    assert descriptor.to_dict() == raw
+    assert descriptor.actor_id == ACTOR_ID
+    assert descriptor.hearth_shard_id == HEARTH_ID
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("schema_version", True, "schema"),
+        ("actor_id", " actor-123", "actor ID"),
+        ("actor_id", "actor-other", "hearth shard ID"),
+        ("hearth_shard_id", "hearth:actor-other", "hearth shard ID"),
+        ("identity_key_id", "ed25519:" + ("0" * 32), "key ID"),
+        ("recovery_policy_version", 2, "signature"),
+    ],
+)
+def test_public_identity_descriptor_rejects_changed_fields(field, value, message):
+    raw = _identity_descriptor(Ed25519PrivateKey.generate())
+    raw[field] = value
+
+    with pytest.raises(ResidentProtocolError, match=message):
+        ResidentIdentityDescriptor.from_dict(raw)
 
 
 def _fixture():

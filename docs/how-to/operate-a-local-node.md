@@ -82,14 +82,14 @@ generation, and any bound local session. Admission is an explicit steward action
 
 ```bash
 python ww.py resident-authority admit \
-  --actor-id ACTOR_ID \
-  --hearth-shard-id HEARTH_SHARD_ID \
-  --identity-public-key ED25519_PUBLIC_KEY \
+  /path/to/resident_identity.json \
   --reason "How I checked this resident identity"
 ```
 
-This command records only the public key and the steward's reason. It does not create, receive, or store the
-resident's private identity key.
+The city verifies the card's self-signature and that its actor, hearth, public key, key fingerprint, and
+recovery-policy version agree. The command then records those public fields and the steward's reason. The
+self-signature detects a changed card; the steward's review decides whether to trust it. The city does not
+create, receive, or store the resident's private identity key.
 
 On a generated federation directory, receive a city's public `node.json` through a channel where you can
 confirm who sent it, then run:

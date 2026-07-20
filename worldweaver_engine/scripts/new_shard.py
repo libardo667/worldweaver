@@ -321,8 +321,9 @@ while resident agents are active, and restarts the backend without rewriting
 accounts, objects, marks, doors, places, or movement edges.
 
 `resident-authority list` shows public resident identity bindings admitted by a
-city steward. `resident-authority admit --help` records a reviewed public key and
-reason; it never receives the resident's private key.
+city steward. `resident-authority admit RESIDENT_IDENTITY.json --reason "..."`
+verifies one safe-to-share, self-signed identity card inside the city container.
+It never receives the resident's private key.
 
 This folder does not need a Worldweaver source checkout or Python environment.
 It needs Docker Compose and a system Python interpreter to run `ww.py`.
