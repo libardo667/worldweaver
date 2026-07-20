@@ -33,14 +33,14 @@
   lifecycle change without running cognition between nodes.
 - `runtime/memory.py`, `drive.py`, `anchors.py`, `incubation.py`, `circadian.py` — supporting substrate
   state. These are modules inside the unified runtime, not independent schedulers.
-- `identity/growth.py`, `runtime/workshop.py`, `runtime/doula.py` — resident-controlled identity growth,
-  private making, and optional birth support. Growth proposals remain private and change identity only
+- `identity/growth.py`, `identity/resident_creation.py`, `runtime/workshop.py`, `runtime/doula.py` —
+  resident-controlled identity growth, plain steward-created resident homes, private making, and legacy
+  model-written birth support. Growth proposals remain private and change identity only
   after the resident inspects and explicitly adopts one at their hearth. Workshop entries use
   machine-written ISO timestamp boundaries; Markdown headings
-  inside a resident's prose remain part of that entry. The doula records each birth in the new resident's
-  ledger and shared process settings in its separate administrative ledger before the resident boots.
-  A fixed steward-requested batch can instead stop with a hearth manifest in the dormant state; it does
-  not enter the daemon's spawn queue.
+  inside a resident's prose remain part of that entry. The normal creation path writes only a chosen name,
+  structural hearth identity, and a host-sealed signing key, leaving the ledger empty and the hearth dormant.
+  The old Doula remains comparison and migration code; its model-written batch apply command is disabled.
 - `world/client.py` — async WorldWeaver HTTP client, including exact request signing for an injected
   resident runtime certificate and the engine's recoverable inter-shard travel
   calls; `city_world.py` and `city_tools.py` adapt the named city source registry to runtime protocols.
@@ -51,7 +51,8 @@
   local trace endpoint. Unknown physical prose is declined locally rather than sent to `/api/action`.
   `world/resident_signing.py` signs transport bytes only; it does not issue certificates or load live keys.
 - `inference/client.py` — OpenAI-compatible completion boundary.
-- `identity/loader.py` — resident identity, tuning compatibility, and factual situational briefing.
+- `identity/loader.py` — resident identity, portable display name, tuning compatibility, and factual
+  situational briefing.
   `identity/README.md` defines the separation among durable identity, the resident's hearth shard, current
   world attachment, and the computer temporarily hosting the runtime; `identity/hearth_manifest.py`
   provides the first portable-hearth identity contract, and `identity/hearth_package.py` inventories what

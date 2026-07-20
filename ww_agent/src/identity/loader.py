@@ -351,10 +351,13 @@ class ResidentIdentity:
     core: str
     voice_seed: list  # seed utterances from IDENTITY.md — cold-start voice deck
     tuning: LoopTuning
+    declared_display_name: str = ""
 
     @property
     def display_name(self) -> str:
         """Human-readable name: 'fei_fei' → 'Fei Fei'."""
+        if self.declared_display_name:
+            return self.declared_display_name
         return " ".join(w.capitalize() for w in self.name.split("_"))
 
     @property
@@ -544,6 +547,12 @@ class IdentityLoader:
             tuning = LoopTuning()
 
         name = resident_dir.name
+        display_name_path = identity_dir / "display_name.txt"
+        declared_display_name = (
+            display_name_path.read_text(encoding="utf-8").strip()
+            if display_name_path.is_file()
+            else ""
+        )
 
         return ResidentIdentity(
             name=name,
@@ -555,6 +564,7 @@ class IdentityLoader:
             core=core,
             voice_seed=voice_seed,
             tuning=tuning,
+            declared_display_name=declared_display_name,
         )
 
     @staticmethod

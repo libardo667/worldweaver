@@ -66,27 +66,28 @@ The whole group must pass preflight before anyone wakes. The runner parks everyo
 
 ## Create residents without waking them
 
-Preview the founding deal:
+Choose one name and preview the exact home that would be created:
 
 ```bash
-python dev.py seed-residents --city ww_alderbank --count 3
+python dev.py create-resident --city ww_alderbank --name "Robin Vale"
 ```
 
-Create the dormant homes only after reviewing the preview:
+Create that dormant home only after reviewing the preview:
 
 ```bash
-python dev.py seed-residents --city ww_alderbank --count 3 --apply
+python dev.py create-resident --city ww_alderbank --name "Robin Vale" --apply
 ```
 
-Creation does not activate a hearth, create a city session, or start cognition.
-It does create a self-signed public identity card and a private key sealed for this hearth host. Review and
-admit that public card to the selected city before activation:
+Creation writes the chosen name and structural hearth files. It does not call a model, write a biography or
+job, start the private ledger, activate the hearth, create a city session, or start cognition. It does create
+a self-signed public identity card and a private key sealed for this hearth host. Review and admit that public
+card to the selected city before activation:
 
 ```bash
 python dev.py resident-authority --city ww_alderbank admit \
-  shards/ww_alderbank/residents/NAME/identity/resident_identity.json \
+  shards/ww_alderbank/residents/robin_vale/identity/resident_identity.json \
   --reason "Reviewed local resident creation"
-python dev.py resident --city ww_alderbank --resident NAME --activate
+python dev.py resident --city ww_alderbank --resident robin_vale --activate
 ```
 
 Admission trusts one public actor/key binding; it does not give the city the resident's private key or hearth.

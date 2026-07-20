@@ -45,8 +45,8 @@ or derive identity from a filesystem path, Compose project, hostname, or city sh
 
 `hearth_permissions.py` enforces the local custody floor. Resident startup repairs the hearth root and every
 real nested directory to `0700`, and every regular file to `0600`, without following symbolic links. The
-runtime repeats that normalization before releasing its lease, while new doula-created homes are secured
-before creation returns.
+runtime repeats that normalization before releasing its lease. New plain homes are secured before their
+atomic creation returns.
 
 City travel and host migration are separate state machines:
 

@@ -55,16 +55,17 @@ the model only on its first poll, new local speech, an explicit wake, or the fiv
 runner disables the doula and parks the resident at their hearth afterward. `--park` performs cleanup without
 cognition after an interrupted run.
 
-Create fresh dormant residents with a dry run first:
+Create one plain resident with a dry run first:
 
 ```bash
-python dev.py seed-residents --city ww_alderbank --count 4
-python dev.py seed-residents --city ww_alderbank --count 4 --apply
+python dev.py create-resident --city ww_alderbank --name "Robin Vale"
+python dev.py create-resident --city ww_alderbank --name "Robin Vale" --apply
 ```
 
-Creation does not activate, wake, or place them in the city. It creates a public identity card and seals the
-private identity key for the current hearth host. A steward must explicitly admit the public card before the
-resident can use signed city bootstrap.
+Creation writes only the chosen name and structural hearth files. It does not call a model, assign a biography
+or job, start a ledger, activate, wake, or place the resident in the city. It creates a public identity card
+and seals the private identity key for the current hearth host. A steward must separately review and admit the
+public card, then activate the hearth, before the resident can use signed city bootstrap.
 
 ## Resident homes
 

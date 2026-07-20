@@ -96,6 +96,7 @@ _HOST_SPECIFIC_ROOT_FILES = {
     HEARTH_ACTIVATION_RECEIPT_FILENAME,
 }
 _PORTABLE_IDENTITY_FILES = {
+    "display_name.txt",
     "IDENTITY.md",
     "SOUL.canonical.md",
     "SOUL.md",

@@ -142,13 +142,14 @@ neither file remain on the explicit unsigned migration path for now; no existing
 key. The checked-in Alderbank agent and new-shard template mount only the hearth host's receiver key into the
 agent process, not the city node key or another resident's secret.
 
-Manual dormant seeding now creates a new resident identity key directly into the current host's seal and writes
+Plain dormant creation now creates a new resident identity key directly into the current host's seal and writes
 the safe-to-share self-signed card. It refuses to proceed without the folder's hearth-host key. The card still
 requires a separate steward admission command, and creation still does not activate, wake, or attach the
 resident. Existing residents are never backfilled by this path.
 
-This does not yet sign inter-city travel or supply recovery. Those are later proof boundaries. The immediate
-next step is a disposable synthetic card/admission/bootstrap/action/leave round trip against a real city.
+The disposable signed card/admission/bootstrap/scene/leave round trip now passes against Alderbank and leaves
+no bound session. This proves the current one-city runtime signing path, not inter-city travel, key recovery,
+off-device hosting, or hostile-host protection. Those remain later proof boundaries.
 
 Encryption protects the package at rest and in transit and reduces accidental key exposure. It cannot stop a
 malicious temporary host from copying a key while that host is authorized to run the resident. Generation

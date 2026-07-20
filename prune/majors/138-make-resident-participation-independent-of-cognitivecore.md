@@ -2,11 +2,11 @@
 
 ## Problem
 
-WorldWeaver currently treats one implementation, `ww_agent`'s `CognitiveCore`, as if it were the definition
-of an artificial resident. The engine has increasingly useful actor, session, action, travel, and public-key
-contracts, but the only production client that combines them is the WorldWeaver resident runtime. This makes
-it difficult to tell which behavior comes from the world and which comes from one shared model, prompt,
-attention policy, memory system, and cadence.
+Historically, WorldWeaver treated one implementation, `ww_agent`'s `CognitiveCore`, as if it were the
+definition of an artificial resident. The engine has increasingly useful actor, session, action, travel, and
+public-key contracts, but the only production client that combines them is still the WorldWeaver resident
+runtime. This makes it difficult to tell which behavior comes from the world and which comes from one shared
+model, prompt, attention policy, memory system, and cadence.
 
 That sameness likely contributed to the conversational monoculture seen in earlier runs. Residents differed
 in names and histories, but used the same kind of brain, the same information pipeline, the same action
@@ -25,8 +25,9 @@ internals or grants unknown programs broad access.
 
 ## Proposed Solution
 
-Define a small, versioned participant protocol above the shared world rules. `CognitiveCore` becomes one
-reference resident implementation of that protocol, not part of the protocol itself.
+Define a small, versioned participant protocol above the shared world rules. The small reference resident
+loop becomes one implementation of that protocol, not part of the protocol itself. `CognitiveCore` remains
+non-production comparison code unless an individual mechanism earns re-entry.
 
 ### 1. Separate participant, resident, human, and automaton
 
@@ -82,7 +83,7 @@ additive so a simple client can participate without pretending to support the co
 
 ### 5. Build two deliberately different reference participants
 
-Keep the repaired resident-runtime kernel from Major 136 as the full WorldWeaver reference resident. Add one
+Keep the small resident-runtime kernel from Major 136 as the WorldWeaver reference resident. Add one
 tiny, dependency-light scripted example outside that runtime which can authenticate as a synthetic test actor,
 read its current place, perform a small allowlisted routine, handle a refusal, and leave cleanly.
 
@@ -187,6 +188,16 @@ or prompt-trace controls that the reference loop does not use.
 
 The scheduler polls exact-place facts and local speech every twenty seconds, activates immediately for newly
 observed local speech, and otherwise uses a five-minute baseline. It does not feed the same old speech back as
-a fresh signal at every baseline. A clean synthetic resident run is still required before this switch is
-considered operationally proven. Resident runtime key custody and signed bootstrap also remain prerequisites
-for a trustworthy real run.
+a fresh signal at every baseline.
+
+### 2026-07-20 — signed lifecycle proof and plain creation
+
+A disposable signed identity completed bootstrap, protected current-scene access, and clean leave against the
+real Alderbank backend. The final structural receipt confirmed that the city removed all sessions for that
+actor. No model ran and no resident prose was created or inspected.
+
+`python dev.py create-resident` now provides the path to the first real reference-loop run. It creates one
+dormant home atomically with a chosen name, empty ledger, portable display name, hearth manifest, public
+identity card, and private identity key sealed for the current hearth host. It writes no model output,
+biography, vocation, vibe, or sample dialogue. Admission, activation, and waking remain separate reviewed
+steps. The old model-written batch creator can produce dry-run plans but can no longer apply them.

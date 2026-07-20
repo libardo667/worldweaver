@@ -8,9 +8,11 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
+import unicodedata
 import urllib.parse
 import urllib.request
 
@@ -625,6 +627,13 @@ def _seed_residents(args: list[str]) -> int:
         parser.error("--city must be a single directory name")
     if not 1 <= parsed.count <= 5:
         parser.error("--count must be between 1 and 5")
+    if parsed.apply:
+        print(
+            "The model-written batch creator is disabled. Create and review one plain "
+            "resident at a time with: python dev.py create-resident --city CITY --name NAME",
+            file=sys.stderr,
+        )
+        return 2
 
     city_dir = ROOT / "shards" / parsed.city
     compose_file = city_dir / "docker-compose.yml"
@@ -718,6 +727,96 @@ def _seed_residents(args: list[str]) -> int:
     if parsed.apply:
         command.append("--apply")
     return _run(command, env=runtime_env)
+
+
+def _create_resident(args: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="python dev.py create-resident",
+        description=(
+            "Plan or create one minimal signed resident without biography, model output, "
+            "city admission, activation, or waking."
+        ),
+    )
+    parser.add_argument("--city", required=True, help="city shard directory name")
+    parser.add_argument("--name", required=True, help="resident's display name")
+    parser.add_argument(
+        "--entry-location",
+        default="",
+        help="optional exact city place used on first attachment",
+    )
+    parser.add_argument(
+        "--apply", action="store_true", help="create the home; omitted means dry-run"
+    )
+    parsed = parser.parse_args(args)
+    if Path(parsed.city).name != parsed.city:
+        parser.error("--city must be a single directory name")
+    display_name = parsed.name.strip()
+    if (
+        not display_name
+        or len(display_name) > 80
+        or not any(character.isalnum() for character in display_name)
+        or any(
+            unicodedata.category(character).startswith("C")
+            or not (character.isalnum() or character in " .'-")
+            for character in display_name
+        )
+    ):
+        parser.error(
+            "--name must be 1-80 plain name characters (letters, numbers, spaces, periods, apostrophes, or hyphens)"
+        )
+
+    city_dir = ROOT / "shards" / parsed.city
+    residents_dir = city_dir / "residents"
+    if not (city_dir / "docker-compose.yml").is_file() or not residents_dir.is_dir():
+        print(f"City shard not found or incomplete: {parsed.city}", file=sys.stderr)
+        return 2
+    hearth_host_key = city_dir / "hearth-host" / "identity" / "transport.key"
+    if not hearth_host_key.is_file() or hearth_host_key.is_symlink():
+        print(
+            "The city's hearth-host identity is missing; run hearth-host initialize first.",
+            file=sys.stderr,
+        )
+        return 2
+
+    normalized_name = (
+        unicodedata.normalize("NFKD", display_name)
+        .encode("ascii", "ignore")
+        .decode("ascii")
+    )
+    resident_slug = re.sub(r"[^a-z0-9]+", "_", normalized_name.strip().lower())
+    resident_slug = re.sub(r"_+", "_", resident_slug).strip("_")
+    if not resident_slug:
+        resident_slug = "resident"
+    if not resident_slug[0].isalpha():
+        resident_slug = f"resident_{resident_slug}"
+    print("Minimal resident plan")
+    print(f"  display name: {display_name}")
+    print(f"  home: {residents_dir / resident_slug}")
+    print(f"  first city place: {parsed.entry_location.strip() or 'city default'}")
+    print("  identity: name only; no biography, vocation, vibe, or sample dialogue")
+    print("  private ledger: empty")
+    print("  startup: dormant; not admitted, activated, attached, or woken")
+    if not parsed.apply:
+        print("Dry run only. Add --apply to create this resident.")
+        return 0
+
+    return _run(
+        [
+            sys.executable,
+            str(AGENT_DIR / "scripts" / "create_resident.py"),
+            "--residents-dir",
+            str(residents_dir),
+            "--name",
+            parsed.name,
+            "--host-key",
+            str(hearth_host_key),
+            *(
+                ["--entry-location", parsed.entry_location]
+                if parsed.entry_location.strip()
+                else []
+            ),
+        ]
+    )
 
 
 def _conversation_health(args: list[str]) -> int:
@@ -1194,9 +1293,11 @@ def _help() -> None:
   python dev.py cohort --city CITY --wake --duration 30m
                                         run a bounded cohort, then park everyone
   python dev.py seed-residents --city CITY --count 3
-                                        plan a small dormant cohort (dry-run)
-  python dev.py seed-residents --city CITY --count 3 --apply
-                                        create homes without activating or waking them
+                                        inspect the deprecated model-written cohort plan only
+  python dev.py create-resident --city CITY --name NAME
+                                        plan one minimal resident with an empty ledger
+  python dev.py create-resident --city CITY --name NAME --apply
+                                        create them dormant; admission and activation stay separate
   python dev.py conversation-health --city CITY --since-hours 24
                                         aggregate public speech without printing it
   python dev.py space-policy --city CITY --location PLACE --controller-resident NAME
@@ -1252,6 +1353,8 @@ def main() -> int:
         return _cohort(rest)
     if command == "seed-residents":
         return _seed_residents(rest)
+    if command == "create-resident":
+        return _create_resident(rest)
     if command == "conversation-health":
         return _conversation_health(rest)
     if command == "space-policy":

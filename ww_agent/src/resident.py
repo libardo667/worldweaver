@@ -953,7 +953,9 @@ class Resident:
 
         # player_role format "Name — vibe" lets the server extract just the name
         player_role = (
-            f"{identity.name} — {identity.vibe}" if identity.vibe else identity.name
+            f"{identity.display_name} — {identity.vibe}"
+            if identity.vibe
+            else identity.display_name
         )
 
         entry_location_path = self._resident_dir / "identity" / "entry_location.txt"

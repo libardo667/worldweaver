@@ -34,6 +34,19 @@ def test_identity_loader_preserves_existing_resident_actor_id(tmp_path):
     assert id_path.read_text(encoding="utf-8").strip() == "resident-maya-chen"
 
 
+def test_identity_loader_uses_an_explicit_portable_display_name(tmp_path):
+    resident_dir = tmp_path / "robin_vale"
+    _write_identity(resident_dir)
+    (resident_dir / "identity" / "display_name.txt").write_text(
+        "Robin O'Vale\n", encoding="utf-8"
+    )
+
+    identity = IdentityLoader.load(resident_dir)
+
+    assert identity.name == "robin_vale"
+    assert identity.display_name == "Robin O'Vale"
+
+
 def test_identity_loader_reads_home_location_from_tuning(tmp_path):
     resident_dir = tmp_path / "maya_chen"
     _write_identity(resident_dir)

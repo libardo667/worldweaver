@@ -34,11 +34,10 @@ inputs in the identity loader; they do not restore the old ownership model.
   root. Portraits and smoke runners may observe ticks but must not instantiate their own resident core.
 - Durable observations and actions enter the append-only ledger. Runtime views are projections, not a
   second source of truth, and they stay in the hearth rather than being copied into city session storage.
-- The doula writes a new resident's immutable `resident_seeded` record before booting them. Shared
-  spawn settings are written once per doula process in its administrative ledger; do not reconstruct
-  either from run notes or turn them into resident cognition. A manual fixed batch is the one supported
-  exception to immediate boot: it must use bare-place hand-only context, initialize a dormant hearth
-  manifest, and leave both the spawn queue and city roster untouched.
+- Normal resident creation is model-free and one-at-a-time. It writes a chosen name, stable ID, dormant
+  hearth manifest, public identity card, and host-sealed signing key while leaving the private ledger empty.
+  City admission, activation, and waking are separate operator acts. The old Doula and its model-written
+  batch creator are comparison and migration code, not the supported creation path.
 - The ledger file keeps the complete history for recovery and research. Normal writes must advance a
   versioned current-state checkpoint without rebuilding open work from an arbitrary event-count tail. A time
   window is valid only for a reducer whose declared contract is decay; unresolved routes, packets, intents,
