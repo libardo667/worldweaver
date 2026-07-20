@@ -42,6 +42,64 @@ def test_register_creates_actor_identity_and_local_projection(client, db_session
     assert player.pass_expires_at is None
 
 
+def test_email_first_registration_requires_matching_confirmation_and_name_before_entry(client, db_session, monkeypatch):
+    welcomes: list[tuple[str, str]] = []
+    monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda email, name: welcomes.append((email, name)))
+
+    mismatch = client.post(
+        "/api/auth/register",
+        json={
+            "email": "mismatch@example.com",
+            "password": "supersecret1",
+            "password_confirmation": "different-secret",
+            "terms_accepted": True,
+        },
+    )
+    assert mismatch.status_code == 422
+    assert db_session.query(FederationActorAuth).filter(FederationActorAuth.email == "mismatch@example.com").first() is None
+
+    registered = client.post(
+        "/api/auth/register",
+        json={
+            "email": "email-first@example.com",
+            "password": "supersecret1",
+            "password_confirmation": "supersecret1",
+            "terms_accepted": True,
+        },
+    )
+    assert registered.status_code == 200
+    payload = registered.json()
+    assert payload["email"] == "email-first@example.com"
+    assert payload["username"].startswith("ww_")
+    assert payload["display_name"] == "New arrival"
+    assert payload["profile_complete"] is False
+    assert welcomes == []
+
+    blocked = client.post(
+        "/api/session/bootstrap",
+        json={
+            "session_id": "email-first-session",
+            "player_role": "New arrival",
+            "bootstrap_source": "commons_client",
+        },
+        headers={"Authorization": f"Bearer {payload['token']}"},
+    )
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"] == "profile_incomplete"
+
+    completed = client.patch(
+        "/api/auth/profile",
+        json={"display_name": "River"},
+        headers={"Authorization": f"Bearer {payload['token']}"},
+    )
+    assert completed.status_code == 200
+    assert completed.json()["display_name"] == "River"
+    assert completed.json()["profile_complete"] is True
+    assert welcomes == [("email-first@example.com", "River")]
+    auth = db_session.get(FederationActorAuth, payload["actor_id"])
+    assert auth.profile_completed_at is not None
+
+
 def test_auth_me_rejects_legacy_player_token(client, monkeypatch):
     monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
     register = client.post(

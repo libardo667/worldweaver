@@ -6,10 +6,11 @@
 from __future__ import annotations
 
 import re
+import secrets
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 from sqlalchemy.orm import Session
 
 from ...database import get_db
@@ -43,18 +44,27 @@ TERMS_TEXT = "WorldWeaver is a shared, mixed-intelligence space. " "By registeri
 
 class RegisterRequest(BaseModel):
     email: EmailStr
-    username: str = Field(..., min_length=3, max_length=40)
-    display_name: str = Field(..., min_length=1, max_length=120)
+    username: Optional[str] = Field(default=None, min_length=3, max_length=40)
+    display_name: Optional[str] = Field(default=None, min_length=1, max_length=120)
     password: str = Field(..., min_length=8, max_length=128)
+    password_confirmation: Optional[str] = Field(default=None, min_length=8, max_length=128)
     pass_type: str = Field(default="citizen")
     terms_accepted: bool
 
     @field_validator("username")
     @classmethod
-    def validate_username(cls, v: str) -> str:
+    def validate_username(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
         if not _USERNAME_RE.match(v):
             raise ValueError("username must be 3–40 alphanumeric characters or underscores")
         return v.lower()
+
+    @model_validator(mode="after")
+    def passwords_match(self) -> "RegisterRequest":
+        if self.password_confirmation is not None and self.password_confirmation != self.password:
+            raise ValueError("passwords do not match")
+        return self
 
     @field_validator("terms_accepted")
     @classmethod
@@ -115,7 +125,9 @@ class AuthResponse(BaseModel):
     actor_id: str
     player_id: str
     username: str
+    email: str
     display_name: str
+    profile_complete: bool
     pass_type: str
     pass_expires_at: Optional[str]
     terms_text: str = TERMS_TEXT
@@ -132,7 +144,9 @@ def _make_response(player: Player, token: str) -> AuthResponse:
         actor_id=str(player.actor_id or ""),
         player_id=player.id,
         username=player.username,
+        email=player.email,
         display_name=player.display_name,
+        profile_complete=player.profile_completed_at is not None,
         pass_type=player.pass_type,
         pass_expires_at=player.pass_expires_at.isoformat() if player.pass_expires_at else None,
     )
@@ -151,19 +165,24 @@ def get_terms():
 
 @router.post("/register", response_model=AuthResponse)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
+    legacy_username = str(payload.username or f"ww_{secrets.token_hex(12)}").strip().lower()
+    requested_name = str(payload.display_name or "").strip()
+    profile_completed = bool(requested_name)
     bundle = register_human_actor(
         db,
         origin_shard=current_shard_id(),
         email=str(payload.email).strip().lower(),
-        username=payload.username,
-        display_name=payload.display_name,
+        username=legacy_username,
+        display_name=requested_name or "New arrival",
         password=payload.password,
         pass_type=payload.pass_type,
         terms_accepted=bool(payload.terms_accepted),
+        profile_completed=profile_completed,
     )
     player = ensure_local_player_projection(db, bundle)
 
-    send_welcome_email(str(payload.email), payload.display_name)
+    if profile_completed:
+        send_welcome_email(str(payload.email), requested_name)
 
     return _make_response(player, create_access_token(str(player.actor_id or player.id)))
 
@@ -220,6 +239,7 @@ def update_profile(
     if not actor_id:
         raise HTTPException(status_code=409, detail="actor_identity_missing")
     old_name = str(player.display_name or "").strip()
+    was_profile_complete = player.profile_completed_at is not None
     bundle = update_human_actor_display_name(
         db,
         actor_id=actor_id,
@@ -238,4 +258,6 @@ def update_profile(
             values["character_profile"] = bundle.display_name
         row.vars = values
     db.commit()
+    if not was_profile_complete:
+        send_welcome_email(player.email, bundle.display_name)
     return _make_response(player, create_access_token(actor_id))

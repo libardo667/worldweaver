@@ -17,6 +17,12 @@ name from the account panel. The update changes the canonical federation actor, 
 current city session without changing actor ID or world state. The route, client panel, and immutable engine
 image were deployed to isolated Alderbank on 2026-07-19. Registration and verification are still unchanged.
 
+The second slice is implemented but not yet deployed. The public form now asks for email, password, password
+confirmation, and terms. It generates the compatibility username internally, creates no city session under
+the placeholder name, and asks for a public name in a separate authenticated step. Login and reset forms show
+email only. Existing accounts are migrated as profile-complete. Email verification itself remains the next
+slice and is still not required on Alderbank.
+
 ## Problem
 
 People should not need both a username and an email address to enter this project. The extra username has
@@ -84,16 +90,16 @@ columns during migration, but they must not appear in the human form or become a
 
 ## Acceptance criteria
 
-- [ ] The public registration form asks only for email, password, password confirmation, and terms.
-- [ ] Login and password reset ask for email, not username-or-email.
-- [ ] A mismatched password confirmation cannot create an account.
+- [x] The public registration form asks only for email, password, password confirmation, and terms.
+- [x] Login and password reset ask for email, not username-or-email.
+- [x] A mismatched password confirmation cannot create an account.
 - [ ] Registration creates a hashed, expiring, one-use verification token and sends a working link.
 - [ ] An unverified account cannot bootstrap a city session.
 - [ ] A verified account without a display name is taken to display-name setup rather than into the city.
 - [x] Setting or changing a display name updates the canonical actor and local projection without changing
   actor ID or world state.
 - [x] Existing accounts can log in and correct their public name.
-- [ ] The UI no longer exposes the legacy username or uses it as a login identifier.
+- [x] The UI no longer exposes the legacy username or uses it as a login identifier.
 - [ ] Verification resend is rate-limited and does not reveal whether an unrelated email has an account.
 - [ ] A node configured to require verification fails readiness clearly when email delivery is unavailable.
 - [ ] Federation, session bootstrap, travel, password reset, and auth rate-limit tests pass.

@@ -48,6 +48,9 @@ python dev.py weave-status --city ww_alderbank --strict
 Open [http://localhost:5174](http://localhost:5174). Choose **Look around** to browse without an account or
 **Join the world** to register and act in the town.
 
+Registration uses email, password confirmation, and the town's terms. After the account is created, choose
+the public name others will see. The internal compatibility username is not part of the participant UI.
+
 The public client shows places, local presence, nearby speech, objects, making, and stoops. It does not show
 private resident histories or shard-wide behavior telemetry.
 

@@ -34,6 +34,7 @@ export function AccountPanel({ displayName, place, onUpdated, onClose }: Props) 
         actor_id: auth.actor_id,
         player_id: auth.player_id,
         username: auth.username,
+        email: auth.email,
         display_name: auth.display_name,
       });
       setName(auth.display_name);

@@ -207,6 +207,7 @@ class FederationRegisterHumanRequest(BaseModel):
     password: str
     pass_type: str = "citizen"
     terms_accepted: bool
+    profile_completed: bool = True
 
 
 class FederationLoginHumanRequest(BaseModel):
@@ -396,6 +397,7 @@ def register_human_actor(
         password=payload.password,
         pass_type=str(payload.pass_type).strip() or "citizen",
         terms_accepted=bool(payload.terms_accepted),
+        profile_completed=bool(payload.profile_completed),
     )
     return bundle.to_dict()
 

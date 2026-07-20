@@ -33,6 +33,7 @@ export type PlayerIdentity = {
   actor_id: string;
   player_id: string;
   username: string;
+  email: string;
   display_name: string;
 };
 

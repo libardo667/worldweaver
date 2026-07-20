@@ -263,7 +263,9 @@ export type AuthResponse = {
   actor_id: string;
   player_id: string;
   username: string;
+  email: string;
   display_name: string;
+  profile_complete: boolean;
 };
 
 export type MoveResponse = {

@@ -23,6 +23,7 @@ from ...models import (
     DurableObject,
     DoulaPoll,
     ExchangeReceipt,
+    FederationActorAuth,
     LocationChat,
     MaterialPool,
     ObjectExchange,
@@ -291,6 +292,9 @@ def _require_ordinary_player_attachment(
     actor_id = str(player.actor_id or "").strip()
     if not actor_id:
         raise HTTPException(status_code=409, detail="This player has no durable actor identity.")
+    actor_auth = db.get(FederationActorAuth, actor_id)
+    if actor_auth is not None and actor_auth.profile_completed_at is None:
+        raise HTTPException(status_code=409, detail="profile_incomplete")
 
     live_session = db.query(SessionVars).filter(SessionVars.actor_id == actor_id).first()
     if live_session is not None and str(live_session.session_id) != str(session_id):

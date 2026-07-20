@@ -5,13 +5,14 @@ import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import {
   getTerms,
+  patchProfile,
   postLogin,
   postRegister,
   postRequestPasswordReset,
   postResetPassword,
   postSessionBootstrap,
 } from "../api/ww";
-import type { EntryInfo } from "../api/types";
+import type { AuthResponse, EntryInfo } from "../api/types";
 import { getPlayer, mintSessionId, setJwt, setPlayer, setStandingPlace } from "../session/store";
 
 type Props = {
@@ -24,7 +25,7 @@ type Props = {
   arrival?: { onAuthenticated: () => Promise<void> };
 };
 
-type Mode = "register" | "login" | "reset";
+type Mode = "register" | "profile" | "login" | "reset";
 
 /**
  * Native join: make or recall an identity, then step into the world at a
@@ -33,10 +34,10 @@ type Mode = "register" | "login" | "reset";
 export function JoinFlow({ entry, suggestedPlace, onJoined, onClose, arrival }: Props) {
   const [mode, setMode] = useState<Mode>(arrival || getPlayer() ? "login" : "register");
   const [email, setEmail] = useState("");
-  const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
-  const [identifier, setIdentifier] = useState(getPlayer()?.username ?? "");
+  const [passwordConfirmation, setPasswordConfirmation] = useState("");
+  const [identifier, setIdentifier] = useState(getPlayer()?.email ?? "");
   const [resetToken, setResetToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [resetNotice, setResetNotice] = useState("");
@@ -87,48 +88,58 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose, arrival }: 
     }
   }, [suggestedPlace, entryPlaces, place]);
 
+  function rememberAuth(auth: AuthResponse) {
+    setJwt(auth.token);
+    setPlayer({
+      actor_id: auth.actor_id,
+      player_id: auth.player_id,
+      username: auth.username,
+      email: auth.email,
+      display_name: auth.display_name,
+    });
+  }
+
+  async function finishEntry(auth: AuthResponse) {
+    rememberAuth(auth);
+    if (arrival) {
+      await arrival.onAuthenticated();
+      return;
+    }
+    const sessionId = mintSessionId();
+    await postSessionBootstrap(sessionId, entry!.world_id, auth.display_name, place!);
+    setStandingPlace(place!);
+    onJoined(place!, auth.display_name);
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (busy || (!arrival && (!entry || !place))) return;
     setBusy(true);
     setError("");
-    let newlyRegisteredUsername = "";
     try {
       const auth = mode === "register" && !arrival
-        ? await postRegister({ email, username, display_name: displayName, password, terms_accepted: termsAccepted })
-        : mode === "reset"
-          ? await postResetPassword(resetToken, newPassword)
-          : await postLogin(identifier, password);
-      if (mode === "register") newlyRegisteredUsername = auth.username;
-      setJwt(auth.token);
-      setPlayer({
-        actor_id: auth.actor_id,
-        player_id: auth.player_id,
-        username: auth.username,
-        display_name: auth.display_name,
-      });
-      if (arrival) {
-        await arrival.onAuthenticated();
+        ? await postRegister({ email, password, password_confirmation: passwordConfirmation, terms_accepted: termsAccepted })
+        : mode === "profile"
+          ? await patchProfile(displayName)
+          : mode === "reset"
+            ? await postResetPassword(resetToken, newPassword)
+            : await postLogin(identifier, password);
+      rememberAuth(auth);
+      if (!auth.profile_complete) {
+        setDisplayName("");
+        setMode("profile");
         return;
       }
-      const sessionId = mintSessionId();
-      await postSessionBootstrap(sessionId, entry!.world_id, auth.display_name, place!);
-      setStandingPlace(place!);
-      onJoined(place!, auth.display_name);
+      await finishEntry(auth);
     } catch (err) {
-      if (newlyRegisteredUsername) {
-        setMode("login");
-        setIdentifier(newlyRegisteredUsername);
-        setError("Your account was created, but the shard did not let you enter. Try again under Coming back.");
-      } else {
-        setError(err instanceof Error && err.message ? err.message : "That didn't work — try again.");
-      }
+      setError(err instanceof Error && err.message ? err.message : "That didn't work — try again.");
     } finally {
       setBusy(false);
     }
   }
 
-  const registerReady = email && username && displayName && password.length >= 8 && termsText && termsAccepted && !termsLoading && !termsError;
+  const registerReady = email && password.length >= 8 && password === passwordConfirmation && termsText && termsAccepted && !termsLoading && !termsError;
+  const profileReady = displayName.trim().length > 0;
   const loginReady = identifier && password;
   const resetReady = resetToken && newPassword.length >= 8;
 
@@ -150,8 +161,8 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose, arrival }: 
   return (
     <div className="threshold">
       <div className="threshold-card join-card" role="dialog" aria-labelledby="join-title">
-        <h1 id="join-title" className="threshold-title">{arrival ? "Sign in to finish your trip" : "Join the world"}</h1>
-        <div className="join-tabs" aria-label="Choose how to join">
+        <h1 id="join-title" className="threshold-title">{mode === "profile" ? "Choose your public name" : arrival ? "Sign in to finish your trip" : "Join the world"}</h1>
+        {mode !== "profile" && <div className="join-tabs" aria-label="Choose how to join">
           {!arrival && (
             <button type="button" aria-pressed={mode === "register"} className={mode === "register" ? "is-active" : ""} onClick={() => setMode("register")}>
               New here
@@ -163,19 +174,17 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose, arrival }: 
           <button type="button" aria-pressed={mode === "reset"} className={mode === "reset" ? "is-active" : ""} onClick={() => setMode("reset")}>
             Reset password
           </button>
-        </div>
+        </div>}
 
         <form onSubmit={submit} className="join-form">
           {mode === "register" ? (
             <>
               <label className="sr-only" htmlFor="join-email">Email</label>
               <input id="join-email" type="email" placeholder="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
-              <label className="sr-only" htmlFor="join-username">Username</label>
-              <input id="join-username" placeholder="username" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" />
-              <label className="sr-only" htmlFor="join-display-name">Name people will see</label>
-              <input id="join-display-name" placeholder="name people will see" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
               <label className="sr-only" htmlFor="join-new-password">Password, at least 8 characters</label>
               <input id="join-new-password" type="password" placeholder="password (8+ characters)" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+              <label className="sr-only" htmlFor="join-confirm-password">Confirm password</label>
+              <input id="join-confirm-password" type="password" placeholder="confirm password" value={passwordConfirmation} onChange={(e) => setPasswordConfirmation(e.target.value)} autoComplete="new-password" />
               {termsLoading && <p className="place-empty">Loading this shard's terms…</p>}
               {termsError && (
                 <div>
@@ -192,17 +201,23 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose, arrival }: 
                 </label>
               )}
             </>
+          ) : mode === "profile" ? (
+            <>
+              <p className="place-empty">This is the name people and residents will see. You can change it later from your account.</p>
+              <label className="sr-only" htmlFor="join-display-name">Name people will see</label>
+              <input id="join-display-name" placeholder="name people will see" value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoFocus />
+            </>
           ) : mode === "login" ? (
             <>
-              <label className="sr-only" htmlFor="join-identifier">Username or email</label>
-              <input id="join-identifier" placeholder="username or email" value={identifier} onChange={(e) => setIdentifier(e.target.value)} autoComplete="username" />
+              <label className="sr-only" htmlFor="join-identifier">Email</label>
+              <input id="join-identifier" type="email" placeholder="email" value={identifier} onChange={(e) => setIdentifier(e.target.value)} autoComplete="email" />
               <label className="sr-only" htmlFor="join-password">Password</label>
               <input id="join-password" type="password" placeholder="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
             </>
           ) : (
             <>
-              <label className="sr-only" htmlFor="reset-identifier">Username or email</label>
-              <input id="reset-identifier" placeholder="username or email" value={identifier} onChange={(e) => setIdentifier(e.target.value)} autoComplete="username" />
+              <label className="sr-only" htmlFor="reset-identifier">Email</label>
+              <input id="reset-identifier" type="email" placeholder="email" value={identifier} onChange={(e) => setIdentifier(e.target.value)} autoComplete="email" />
               <button type="button" className="btn btn-quiet reset-request" disabled={busy || !identifier.trim()} onClick={() => void requestReset()}>
                 Email a reset token
               </button>
@@ -230,8 +245,8 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose, arrival }: 
           {error && <p className="join-error" role="alert">{error}</p>}
 
           <div className="threshold-actions">
-            <button type="submit" className="btn btn-primary" disabled={busy || (!arrival && !place) || !(mode === "register" ? registerReady : mode === "reset" ? resetReady : loginReady)}>
-              {busy ? "Checking…" : arrival ? (mode === "reset" ? "Reset and finish the trip" : "Sign in and finish the trip") : mode === "reset" ? "Reset and step into the world" : "Step into the world"}
+            <button type="submit" className="btn btn-primary" disabled={busy || (!arrival && !place) || !(mode === "register" ? registerReady : mode === "profile" ? profileReady : mode === "reset" ? resetReady : loginReady)}>
+              {busy ? "Checking…" : mode === "profile" ? "Use this name and enter" : arrival ? (mode === "reset" ? "Reset and finish the trip" : "Sign in and finish the trip") : mode === "reset" ? "Reset and step into the world" : mode === "register" ? "Create account" : "Step into the world"}
             </button>
             <button type="button" className="btn btn-quiet" onClick={onClose}>
               {arrival ? "Return to the map" : "Just look around instead"}

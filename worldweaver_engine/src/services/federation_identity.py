@@ -48,6 +48,7 @@ class ActorProjectionBundle:
     pass_type: str
     pass_expires_at: Optional[str]
     terms_accepted_at: Optional[str]
+    profile_completed_at: Optional[str]
     home_shard: str
     current_shard: str
     status: str
@@ -64,6 +65,7 @@ class ActorProjectionBundle:
             "pass_type": self.pass_type,
             "pass_expires_at": self.pass_expires_at,
             "terms_accepted_at": self.terms_accepted_at,
+            "profile_completed_at": self.profile_completed_at,
             "home_shard": self.home_shard,
             "current_shard": self.current_shard,
             "status": self.status,
@@ -89,6 +91,7 @@ class ActorProjectionBundle:
             pass_type=normalized_pass_type,
             pass_expires_at=_iso(normalized_pass_expires_at),
             terms_accepted_at=(str(payload.get("terms_accepted_at")).strip() if payload.get("terms_accepted_at") else None),
+            profile_completed_at=(str(payload.get("profile_completed_at")).strip() if payload.get("profile_completed_at") else None),
             home_shard=str(payload.get("home_shard") or "").strip(),
             current_shard=str(payload.get("current_shard") or "").strip(),
             status=str(payload.get("status") or "active").strip() or "active",
@@ -159,6 +162,7 @@ def _build_bundle(db: Session, actor_id: str) -> ActorProjectionBundle:
         pass_type=normalized_pass_type,
         pass_expires_at=_iso(normalized_pass_expires_at),
         terms_accepted_at=_iso(auth.terms_accepted_at),
+        profile_completed_at=_iso(auth.profile_completed_at),
         home_shard=actor.home_shard,
         current_shard=actor.current_shard,
         status=actor.status,
@@ -175,6 +179,7 @@ def register_human_actor_local(
     password: str,
     pass_type: str,
     terms_accepted: bool,
+    profile_completed: bool = True,
 ) -> ActorProjectionBundle:
     if db.query(FederationActorAuth).filter(FederationActorAuth.email == email).first():
         raise HTTPException(status_code=409, detail="email_taken")
@@ -203,6 +208,7 @@ def register_human_actor_local(
         pass_type=normalized_pass_type,
         pass_expires_at=normalized_pass_expires_at,
         terms_accepted_at=accepted_at,
+        profile_completed_at=datetime.now(timezone.utc) if profile_completed else None,
     )
     db.add(actor)
     db.add(auth)
@@ -293,6 +299,10 @@ def update_human_actor_display_name_local(
     if not clean_name:
         raise HTTPException(status_code=422, detail="display_name_required")
     actor.display_name = clean_name
+    auth = db.get(FederationActorAuth, actor.actor_id)
+    if auth is None:
+        raise HTTPException(status_code=409, detail="actor_auth_missing")
+    auth.profile_completed_at = auth.profile_completed_at or datetime.now(timezone.utc)
     db.commit()
     return _build_bundle(db, actor.actor_id)
 
@@ -384,6 +394,7 @@ def register_human_actor_remote(
     password: str,
     pass_type: str,
     terms_accepted: bool,
+    profile_completed: bool = True,
 ) -> ActorProjectionBundle:
     payload = _federation_request(
         "POST",
@@ -396,6 +407,7 @@ def register_human_actor_remote(
             "password": password,
             "pass_type": pass_type,
             "terms_accepted": terms_accepted,
+            "profile_completed": profile_completed,
         },
     )
     return ActorProjectionBundle.from_dict(payload)
@@ -455,6 +467,7 @@ def register_human_actor(
     password: str,
     pass_type: str,
     terms_accepted: bool,
+    profile_completed: bool = True,
 ) -> ActorProjectionBundle:
     if settings.shard_type == "world" or not str(settings.federation_url or "").strip():
         return register_human_actor_local(
@@ -466,6 +479,7 @@ def register_human_actor(
             password=password,
             pass_type=pass_type,
             terms_accepted=terms_accepted,
+            profile_completed=profile_completed,
         )
     return register_human_actor_remote(
         origin_shard=origin_shard,
@@ -475,6 +489,7 @@ def register_human_actor(
         password=password,
         pass_type=pass_type,
         terms_accepted=terms_accepted,
+        profile_completed=profile_completed,
     )
 
 
@@ -553,6 +568,7 @@ def ensure_local_player_projection(db: Session, bundle: ActorProjectionBundle) -
             pass_type=normalized_pass_type,
             pass_expires_at=normalized_pass_expires_at,
             terms_accepted_at=_parse_iso(bundle.terms_accepted_at),
+            profile_completed_at=_parse_iso(bundle.profile_completed_at),
         )
         db.add(player)
     else:
@@ -564,6 +580,7 @@ def ensure_local_player_projection(db: Session, bundle: ActorProjectionBundle) -
         player.pass_type = normalized_pass_type
         player.pass_expires_at = normalized_pass_expires_at
         player.terms_accepted_at = _parse_iso(bundle.terms_accepted_at)
+        player.profile_completed_at = _parse_iso(bundle.profile_completed_at)
     db.commit()
     db.refresh(player)
     return player
