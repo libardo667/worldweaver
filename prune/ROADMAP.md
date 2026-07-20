@@ -17,6 +17,7 @@ The project now has:
 - a fictional test town, Alderbank, with four game-native resident homes and bounded human/resident play;
 - a place-centered public client;
 - recoverable local city-to-city handoff;
+- a synthetic human round trip between separately isolated Ubuntu VM hosts, with exactly one final presence;
 - one isolated public Alderbank node and one closed directory using separate signed node identities;
 - one completed one-hour, four-resident Alderbank baseline with clean hearth parking;
 - stopped hearth export, import, and generation fencing;
@@ -31,10 +32,11 @@ There is no deletion command, and no real resident should be migrated as part of
 
 Publication Major 139's first audit and truth/safety corrections are complete. The public site no longer serves
 obsolete architecture exhibits, the manual records its exact source commit, GitHub has focused contribution and
-private security-reporting paths, and a non-destructive `demo-init` command now supplies fresh local tutorial
-state. The next proof is the full documented launch in a clean checkout, followed by a production-built public
-client and a small browser smoke suite. This prepares WorldWeaver for review; it does not declare the network
-ready for unattended public operation.
+private security-reporting paths, a non-destructive `demo-init` command now supplies fresh local tutorial
+state, and the live client uses a production build. A two-VM round trip now proves the independent host shape
+on one computer. The remaining network proof needs separately administered HTTPS addresses on different
+computers or genuinely separate trust domains. This prepares WorldWeaver for review; it does not declare the
+network ready for unattended public operation.
 
 ## Now
 
@@ -81,10 +83,12 @@ creating resources or travel duplicating it.
 ### 4. Finish the public-node proof
 
 Independent node identities, signed requests, HTTPS ingress, and the first `world-weaver.org` directory/node
-are live on one computer. The checked-in shard backends now bind to loopback by default, the public readiness
-response no longer exposes internal federation addresses or resident-inference configuration, and the live
-client now serves built static assets rather than Vite development mode. Test an encrypted off-device restore,
-add folder-local resident operation, and prove entry and travel between two computers.
+have been proven on one computer. The checked-in shard backends bind to loopback by default, the public
+readiness response does not expose internal federation addresses or resident-inference configuration, and the
+live client serves built static assets rather than Vite development mode. A synthetic human has also completed
+a full round trip between two isolated Ubuntu VM hosts over a private link. Next, test an encrypted off-device
+restore, add folder-local resident operation, and repeat entry and travel between separately administered HTTPS
+computers or trust domains.
 
 ## Next
 

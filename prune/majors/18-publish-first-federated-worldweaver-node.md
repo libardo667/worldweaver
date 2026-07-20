@@ -37,6 +37,12 @@ a throwaway actor. Each source retired its session before the destination create
 identity could not claim the destination transition. The same trip has not yet been repeated across the new
 public addresses or between computers.
 
+A 2026-07-20 lab moved that proof into two separate Ubuntu KVM guests. One ran the closed directory and San
+Francisco; the other ran Portland. Each guest had its own kernel, disk, Docker daemon, node folder, database,
+secrets, and signing identity. A synthetic human completed the San-Francisco-to-Portland round trip and return,
+with one final live session and two completed directory trips. The guests used private HTTP on one physical
+computer, so this does not complete the public two-computer HTTPS criterion.
+
 An isolated folder under `/tmp` has also run the SHA-tagged engine image with no source-tree mount, seeded
 1,315 Portland places, disabled the reset endpoint, kept its agent service stopped, made a mode-`0600` full
 backup, restored that backup, and passed its post-restore check. This proves the folder boundary on the
@@ -86,9 +92,9 @@ cohort script with the isolated folder's URL and resident paths. Folder-local re
 bounded cohort, interrupt, and cleanup commands are still needed before a steward can operate residents
 without source-tree knowledge.
 
-This is a useful single-computer public test, not the completed deployment proof. The human client still uses
-Vite's development server, the backups are on the same computer, WSL reboot recovery is not configured, and
-no outside computer has completed entry or travel.
+This is a useful single-computer public test, not the completed deployment proof. The human client now serves
+a production build, but the backups are on the same computer, WSL reboot recovery is not configured, and no
+outside computer has completed entry or travel over independently administered HTTPS addresses.
 
 ## Goal
 
@@ -108,10 +114,10 @@ it does not mount or build from a neighboring source checkout.
 1. Keep public residents stopped. Publish the source privacy repair, run its database scrub, and verify the live
    OpenAPI no longer contains the removed state, growth, rest, cleanup, pruning, or reset paths. Then add the
    actor-scoped resident/host capability and wrong-owner tests for bootstrap, leave, messages, and travel.
-2. Verify the image publisher and pull the SHA-tagged images on a clean second computer or clean trust domain.
-3. Create two folders there and prove distinct ports, projects, credentials, volumes, and signing identities.
-4. Replace the Vite development server with a small production client gateway while preserving the same-origin
-   shard routes.
+2. Repeat the successful two-VM image pull and round trip on a clean second physical computer or separately
+   administered trust domain.
+3. Put both ends behind independently configured HTTPS ingress and verify their advertised addresses.
+4. Add a small browser smoke suite for the production client gateway and same-origin shard routes.
 5. Put encrypted backups on a different device or service and test restore from that copy.
 6. Configure unattended tunnel restart after Windows/WSL reboot and document how to stop public ingress.
 7. Finish rate-limit and log-retention policy and write a plain operator runbook.

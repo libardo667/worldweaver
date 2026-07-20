@@ -65,10 +65,26 @@ Francisco arrival was rejected with HTTP 403. Both travel records reached `arriv
 in Portland, and all probe rows were removed afterward. This proves the local multi-node path and its separate
 signing identities; it is not yet the required two-computer HTTPS proof.
 
-The standalone generator now writes image-only Compose files and a folder-local operator. A clean temporary
-folder ran without either source tree mounted, seeded its copied city pack, kept residents stopped, backed up
-its database, secrets, identity, city data, and resident directory, restored them, and passed its safety
-check. The next isolation proof is two independently created folders, then two computers.
+On 2026-07-20, the same boundary passed a stronger
+[`two-VM human round trip`](../../research/audits/federation/2026-07-20-two-vm-human-round-trip.md).
+San Francisco and the closed directory ran in one Ubuntu KVM guest; Portland ran in another. The guests had
+separate kernels, disks, Docker daemons, node folders, databases, secrets, and signing keys and communicated
+over a private guest-to-guest Ethernet link. A synthetic human traveled San Francisco to Portland and back.
+Only the returned San Francisco session remained live, both directory trips ended `arrived`, repeated
+transitions were harmless, and a Portland-signed attempt to claim San Francisco's node ID received HTTP 403.
+No resident ran. Because both guests were on one physical computer and used private HTTP, this is an
+independent-host lab proof rather than the final two-computer HTTPS proof.
+
+The same lab also stopped the complete directory while both cities stayed up. Their health and local world
+state remained available, route discovery reported the directory unreachable with no hosted destinations,
+and the final human session remained in San Francisco. Restarting the directory preserved admission and both
+signed nodes resumed pulsing. Mid-departure and mid-arrival outage injection remain open.
+
+The standalone generator now writes image-only Compose files and a folder-local operator. It accepts explicit
+listen, public API, and human client addresses while keeping loopback listening as the safe default. A clean
+temporary folder ran without either source tree mounted, seeded its copied city pack, kept residents stopped,
+backed up its database, secrets, identity, city data, and resident directory, restored them, and passed its
+safety check. Separate local folders and separate VM guests now pass; different HTTPS computers remain.
 
 That two-folder check now passes locally as well: disposable Portland and Alderbank nodes ran concurrently
 with different project names, ports, credentials, keys, networks, and database volumes. Neither mounted the
@@ -144,4 +160,4 @@ coordinator labels the trip `agent`. See the
 - [ ] A two-computer HTTPS test completes city-to-city travel and return.
 - [ ] No tested failure leaves one actor active in both cities.
 - [x] The public client offers the same travel contract to a human.
-- [ ] Directory failure leaves local life intact and reports remote travel as unavailable.
+- [x] Directory failure leaves local life intact and reports remote travel as unavailable.

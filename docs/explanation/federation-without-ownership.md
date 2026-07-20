@@ -36,7 +36,10 @@ the federation registry.
 
 Every active local node now has a separate Ed25519 key. Registration, pulses, private lookup, account origin,
 and travel transitions are signed and replay-protected. A live Portland-to-San-Francisco trip and return
-also proved that the wrong node key cannot claim another node's transition. An open network still needs:
+also proved that the wrong node key cannot claim another node's transition. A later synthetic human round trip
+put San Francisco and Portland in separate Ubuntu VM guests with separate Docker daemons, databases, and keys.
+Only one final session survived. That test used private HTTP on one physical computer. An open network still
+needs:
 
 1. HTTPS ingress and address rotation;
 2. resident-host authorization and recovery;

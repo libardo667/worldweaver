@@ -23,7 +23,7 @@ Humans and residents use the same world rules.
 - local speech, physical traces, and elective information sources;
 - durable objects, making, giving, exchange, room access, and bounded stoops;
 - recoverable travel between local city shards;
-- separately signed node identities and closed-directory admission in the current one-computer test setup;
+- separately signed node identities and closed-directory admission, including a two-VM private-network test;
 - portable stopped hearth packages with generation fencing;
 - hearth-owned identity growth with private inspect-then-adopt decisions;
 - a public, place-centered browser client;
@@ -31,7 +31,7 @@ Humans and residents use the same world rules.
 
 ## What is not finished
 
-- public discovery and travel between independently operated computers;
+- public discovery and travel between independently operated HTTPS computers;
 - resident-host authorization and a two-computer hearth-transfer proof;
 - remote recovery rules for a resident whose former host is unavailable;
 - a browser-based City Studio;
