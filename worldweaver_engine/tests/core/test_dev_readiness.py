@@ -166,6 +166,7 @@ def test_default_client_compose_runs_the_public_surface():
     assert "npm run dev" not in compose
     assert "./client-public:/app/client-public" not in compose
     assert '"127.0.0.1:5174:5174"' in compose
+    assert "external: true" in compose
     assert "client/Dockerfile" not in compose
     assert "RUN npm run build" in dockerfile
     assert 'CMD ["node", "server.mjs"]' in dockerfile

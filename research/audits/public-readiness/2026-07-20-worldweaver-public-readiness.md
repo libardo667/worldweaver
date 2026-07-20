@@ -76,7 +76,7 @@ is to run the documented sequence in a clean exported checkout with Docker.
 
 Severity: **blocker for invited playtest and public service**
 
-Remediation status: **resolved in source on 2026-07-20; live deployment pending**
+Remediation status: **resolved and deployed on 2026-07-20**
 
 Evidence:
 
@@ -90,7 +90,8 @@ The Compose client now uses a multi-stage image: Vite and TypeScript build stati
 Node server serves them and proxies the configured shards at runtime. Development hot reload remains available
 only through the explicit local client command. A disposable container proved static assets, deep-link fallback,
 runtime shard selection, backend health proxying, and the absence of Vite development modules. The live client
-container still needs to be recreated from this source.
+was recreated from this source, is healthy, binds only to loopback behind the explicit tunnel, and no longer
+serves Vite development modules.
 
 ### PR-03 — Public account expectations are not complete
 

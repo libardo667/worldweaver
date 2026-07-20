@@ -28,4 +28,5 @@ services:
 
 networks:
   federation:
+    external: true
     name: ww_dev_federation
