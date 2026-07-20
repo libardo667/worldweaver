@@ -277,6 +277,26 @@ def get_actor_bundle_local(db: Session, actor_id: str) -> ActorProjectionBundle:
     return _build_bundle(db, actor_id)
 
 
+def update_human_actor_display_name_local(
+    db: Session,
+    *,
+    actor_id: str,
+    display_name: str,
+) -> ActorProjectionBundle:
+    """Change one human actor's public name without changing their identity."""
+    actor = db.get(FederationActor, str(actor_id or "").strip())
+    if actor is None:
+        raise HTTPException(status_code=404, detail="actor_not_found")
+    if str(actor.actor_type or "").strip() != "human":
+        raise HTTPException(status_code=409, detail="actor_is_not_human")
+    clean_name = str(display_name or "").strip()
+    if not clean_name:
+        raise HTTPException(status_code=422, detail="display_name_required")
+    actor.display_name = clean_name
+    db.commit()
+    return _build_bundle(db, actor.actor_id)
+
+
 def sync_resident_actor_local(
     db: Session,
     *,
@@ -412,6 +432,19 @@ def get_actor_bundle_remote(actor_id: str) -> ActorProjectionBundle:
     return ActorProjectionBundle.from_dict(payload)
 
 
+def update_human_actor_display_name_remote(
+    *,
+    actor_id: str,
+    display_name: str,
+) -> ActorProjectionBundle:
+    payload = _federation_request(
+        "PATCH",
+        f"/api/federation/auth/actors/{actor_id}/display-name",
+        {"display_name": display_name},
+    )
+    return ActorProjectionBundle.from_dict(payload)
+
+
 def register_human_actor(
     db: Session,
     *,
@@ -481,6 +514,24 @@ def get_actor_bundle(db: Session, actor_id: str) -> ActorProjectionBundle:
     if settings.shard_type == "world" or not str(settings.federation_url or "").strip():
         return get_actor_bundle_local(db, actor_id)
     return get_actor_bundle_remote(actor_id)
+
+
+def update_human_actor_display_name(
+    db: Session,
+    *,
+    actor_id: str,
+    display_name: str,
+) -> ActorProjectionBundle:
+    if settings.shard_type == "world" or not str(settings.federation_url or "").strip():
+        return update_human_actor_display_name_local(
+            db,
+            actor_id=actor_id,
+            display_name=display_name,
+        )
+    return update_human_actor_display_name_remote(
+        actor_id=actor_id,
+        display_name=display_name,
+    )
 
 
 def ensure_local_player_projection(db: Session, bundle: ActorProjectionBundle) -> Player:

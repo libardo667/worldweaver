@@ -37,6 +37,7 @@ from ...services.federation_identity import (
     register_human_actor_local,
     reset_password_local,
     sync_resident_actor_local,
+    update_human_actor_display_name_local,
 )
 from ...services.federation_node_auth import (
     NODE_ID_HEADER,
@@ -227,6 +228,10 @@ class FederationPasswordResetConfirmRequest(BaseModel):
     token: str
     new_password: str
     current_shard: Optional[str] = None
+
+
+class FederationDisplayNameRequest(BaseModel):
+    display_name: str = Field(min_length=1, max_length=120)
 
 
 class StartTravelRequest(BaseModel):
@@ -433,6 +438,21 @@ def reset_password_human_actor(
         db,
         token=str(payload.token or "").strip(),
         new_password=payload.new_password,
+    )
+    return bundle.to_dict()
+
+
+@router.patch("/auth/actors/{actor_id}/display-name")
+def update_human_display_name(
+    actor_id: str,
+    payload: FederationDisplayNameRequest,
+    db: Session = Depends(get_db),
+    _: AuthenticatedNode = Depends(_require_node),
+) -> Dict[str, Any]:
+    bundle = update_human_actor_display_name_local(
+        db,
+        actor_id=actor_id,
+        display_name=payload.display_name,
     )
     return bundle.to_dict()
 

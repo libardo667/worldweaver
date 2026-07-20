@@ -13,7 +13,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.orm import Session
 
 from ...database import get_db
-from ...models import Player
+from ...models import Player, SessionVars
 from ...services.auth_service import (
     create_access_token,
     require_player,
@@ -26,6 +26,7 @@ from ...services.federation_identity import (
     request_password_reset,
     register_human_actor,
     reset_password,
+    update_human_actor_display_name,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -95,6 +96,18 @@ class PasswordResetRequest(BaseModel):
 class PasswordResetConfirmRequest(BaseModel):
     token: str = Field(..., min_length=12, max_length=256)
     new_password: str = Field(..., min_length=8, max_length=128)
+
+
+class ProfileUpdateRequest(BaseModel):
+    display_name: str = Field(..., min_length=1, max_length=120)
+
+    @field_validator("display_name")
+    @classmethod
+    def clean_display_name(cls, value: str) -> str:
+        cleaned = str(value or "").strip()
+        if not cleaned:
+            raise ValueError("display name is required")
+        return cleaned
 
 
 class AuthResponse(BaseModel):
@@ -195,3 +208,34 @@ def reset_password_route(payload: PasswordResetConfirmRequest, db: Session = Dep
 def me(player: Player = Depends(require_player)):
     # Re-issue a fresh token so long-lived sessions stay alive
     return _make_response(player, create_access_token(str(player.actor_id or player.id)))
+
+
+@router.patch("/profile", response_model=AuthResponse)
+def update_profile(
+    payload: ProfileUpdateRequest,
+    player: Player = Depends(require_player),
+    db: Session = Depends(get_db),
+):
+    actor_id = str(player.actor_id or "").strip()
+    if not actor_id:
+        raise HTTPException(status_code=409, detail="actor_identity_missing")
+    old_name = str(player.display_name or "").strip()
+    bundle = update_human_actor_display_name(
+        db,
+        actor_id=actor_id,
+        display_name=payload.display_name,
+    )
+    player = ensure_local_player_projection(db, bundle)
+
+    # Keep the person's current local incarnation in sync. Historical events
+    # retain the name under which they happened; only live presence changes.
+    for row in db.query(SessionVars).filter(SessionVars.actor_id == actor_id).all():
+        values = dict(row.vars or {})
+        values["name"] = bundle.display_name
+        if str(values.get("player_role") or "").strip() in {"", old_name}:
+            values["player_role"] = bundle.display_name
+        if str(values.get("character_profile") or "").strip() in {"", old_name}:
+            values["character_profile"] = bundle.display_name
+        row.vars = values
+    db.commit()
+    return _make_response(player, create_access_token(actor_id))

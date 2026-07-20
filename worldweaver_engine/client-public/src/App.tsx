@@ -6,6 +6,7 @@ import { Route, useLocation, useRoute, useSearch } from "wouter";
 import { generatedMapSvgUrl, getEntry, getGeneratedMap, getShardExperience, postLeaveSession, postMove, queryMap } from "./api/ww";
 import type { EntryInfo, GeneratedMapArtifact, MapEdge, MapNode, ShardExperience } from "./api/types";
 import { JoinFlow } from "./components/JoinFlow";
+import { AccountPanel } from "./components/AccountPanel";
 import { PlacePanel } from "./components/PlacePanel";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { ThresholdOverlay } from "./components/ThresholdOverlay";
@@ -258,19 +259,12 @@ export function App() {
       )}
       <Route path="/join">
         {me ? (
-          <div className="threshold">
-            <div className="threshold-card">
-              <h1 className="threshold-title">You're already here</h1>
-              <p className="threshold-summary">
-                Standing at {me.place} as {me.displayName}.
-              </p>
-              <div className="threshold-actions">
-                <button className="btn btn-primary" onClick={() => navigate(`/place/${slugifyPlace(me.place)}`)}>
-                  Back to {me.place}
-                </button>
-              </div>
-            </div>
-          </div>
+          <AccountPanel
+            displayName={me.displayName}
+            place={me.place}
+            onUpdated={(displayName) => setMe((current) => current ? { ...current, displayName } : current)}
+            onClose={() => navigate(`/place/${slugifyPlace(me.place)}`)}
+          />
         ) : (
           <JoinFlow
             entry={entry}
@@ -289,6 +283,9 @@ export function App() {
         <div className="me-chip">
           <button className="me-chip-name" onClick={() => navigate(`/place/${slugifyPlace(me.place)}`)} title="Back to where you are standing">
             {me.displayName} · at {me.place}
+          </button>
+          <button className="me-chip-leave" onClick={() => navigate("/join")} title="Account and public name">
+            account
           </button>
           <button className="me-chip-leave" onClick={() => void leaveWorld()} title="Leave the world">
             leave

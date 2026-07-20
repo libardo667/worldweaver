@@ -129,6 +129,51 @@ def test_login_accepts_email_or_username(client, db_session, monkeypatch):
     assert login_by_email.json()["actor_id"] == register.json()["actor_id"]
 
 
+def test_authenticated_human_can_correct_public_display_name(client, db_session, monkeypatch):
+    monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
+    register = client.post(
+        "/api/auth/register",
+        json={
+            "email": "rename-me@example.com",
+            "username": "renameme",
+            "display_name": "Wrong Name",
+            "password": "supersecret1",
+            "terms_accepted": True,
+        },
+    )
+    actor_id = register.json()["actor_id"]
+    player = db_session.query(Player).filter(Player.actor_id == actor_id).one()
+    session = SessionVars(
+        session_id="rename-me-session",
+        player_id=player.id,
+        actor_id=actor_id,
+        vars={
+            "name": "Wrong Name",
+            "player_role": "Wrong Name",
+            "character_profile": "Wrong Name",
+            "location": "Commons Bank",
+        },
+    )
+    db_session.add(session)
+    db_session.commit()
+
+    updated = client.patch(
+        "/api/auth/profile",
+        json={"display_name": "Right Name"},
+        headers={"Authorization": f"Bearer {register.json()['token']}"},
+    )
+
+    assert updated.status_code == 200
+    assert updated.json()["actor_id"] == actor_id
+    assert updated.json()["display_name"] == "Right Name"
+    assert db_session.get(FederationActor, actor_id).display_name == "Right Name"
+    assert db_session.query(Player).filter(Player.actor_id == actor_id).one().display_name == "Right Name"
+    db_session.refresh(session)
+    assert session.vars["name"] == "Right Name"
+    assert session.vars["player_role"] == "Right Name"
+    assert session.vars["character_profile"] == "Right Name"
+
+
 def test_login_does_not_move_the_actor_to_the_authenticating_shard(client, db_session, monkeypatch):
     monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
     register = client.post(

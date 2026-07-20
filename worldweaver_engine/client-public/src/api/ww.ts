@@ -141,6 +141,24 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   return (await resp.json()) as T;
 }
 
+async function patchJson<T>(path: string, body: unknown): Promise<T> {
+  const headers: Record<string, string> = { "Content-Type": "application/json", Accept: "application/json" };
+  const jwt = getJwt();
+  if (jwt) headers.Authorization = `Bearer ${jwt}`;
+  const resp = await fetch(localShardPath(path), { method: "PATCH", headers, body: JSON.stringify(body) });
+  if (!resp.ok) {
+    let detail = "";
+    try {
+      const payload = await resp.json();
+      detail = typeof payload?.detail === "string" ? payload.detail : JSON.stringify(payload?.detail ?? "");
+    } catch {
+      // Leave the status alone.
+    }
+    throw new ApiError(resp.status, detail || `${path} -> ${resp.status}`);
+  }
+  return (await resp.json()) as T;
+}
+
 export function getTerms(): Promise<{ terms: string }> {
   return getJson("/api/auth/terms");
 }
@@ -151,6 +169,10 @@ export function postRegister(input: { email: string; username: string; display_n
 
 export function postLogin(identifier: string, password: string): Promise<AuthResponse> {
   return postJson("/api/auth/login", { identifier, password });
+}
+
+export function patchProfile(displayName: string): Promise<AuthResponse> {
+  return patchJson("/api/auth/profile", { display_name: displayName });
 }
 
 export function postRequestPasswordReset(identifier: string): Promise<{ ok: boolean }> {
