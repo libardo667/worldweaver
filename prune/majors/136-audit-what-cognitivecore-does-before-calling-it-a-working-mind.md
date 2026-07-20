@@ -99,10 +99,10 @@ that some mechanisms are useful engineering controls despite weak biological ana
 be made plainer, or that competing designs need isolated comparison. It must not claim to solve consciousness
 or select one spiritual or philosophical tradition as WorldWeaver's official account of mind.
 
-Major 134's two-read default remains an operational cost and latency safety rail while this audit proceeds.
-It is not a claim that healthy cognition should prefer action over reading. Major 132's broad cadence and
-attention tuning should wait for this audit's first causal map, apart from fixes that restore demonstrably
-lost or late signal delivery.
+The reference loop now enforces Major 134's operational safety goal with one elective read per activation;
+the old multi-read CognitiveCore comparison is superseded. This is not a claim that healthy cognition should
+prefer action over reading. Major 132 is now limited to demonstrably reliable live-signal delivery and leaves
+timing and response choices with the resident process.
 
 ## Files Affected
 
@@ -241,8 +241,11 @@ activity, or wait. A read response cannot contain an action or another durable f
 inference commits no provisional choice. Action receipts are reduced to confirmed, declined, or unknown, and
 tests prove that unavailable observation is not presented as an empty scene. Existing identity, hearth,
 travel, information, workshop, and effector adapters now surround this smaller core. The old cognitive path
-remains source material rather than a second production scheduler; a clean synthetic resident run is the next
-operational proof.
+remains source material rather than a second production scheduler. Synthetic contract tests and a real
+name-only Levi run now prove the first operational path. That run also found and led to fixes for archived
+speech presented as live hearing and prompt vocabulary echoed into public speech. The reference loop is now
+the small control implementation; it does not validate the old policy layer or answer the wider scientific
+questions in this audit.
 
 Three bounded evidence reviews now cover prediction/ignition/arousal/quiet/social norms,
 action-feedback/embodiment/external supports, and clock cadence/sleep/interoception/semantic policy. They

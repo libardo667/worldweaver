@@ -1,0 +1,84 @@
+# Build a multi-timescale resident gym from production world rules
+
+## Problem
+
+Short prompt examples can teach a model to emit valid JSON, but they cannot show whether a resident maintains
+a plan, resumes after interruption, distinguishes live events from history, adapts to delayed consequences,
+or changes through experience. Running every candidate for real days or years would be too slow and expensive.
+
+A separate toy simulator would create a worse problem: models would learn its shortcuts and then meet different
+rules in a live shard. The gym must therefore reuse the same action validation, receipts, event formats,
+permissions, object custody, travel rules, and resident-process contract used in production.
+
+## Proposed Solution
+
+Build a discrete-event training and evaluation environment around the real WorldWeaver contracts. It should
+run conversations and short-lived conflicts at real or measured interactive speed, then skip quiet wall-clock
+periods by advancing an injected clock directly to the next scheduled event.
+
+1. Give engine and resident time-dependent code one injected clock and event queue. Production uses real UTC;
+   the gym uses controlled virtual time. No test-only alternative physics or action handler may replace the
+   production rule path.
+2. Support mixed-time episodes: live conversation, interruption, and competing actions in seconds; reading,
+   appointments, projects, correspondence, travel, and delayed consequences over virtual days or years.
+3. Snapshot and fork complete synthetic states. Run matched branches in which one event changes while the
+   resident, model, seed, and prior history stay fixed.
+4. Build scenario generators from validated city packs and rulesets. Vary geography, access, objects,
+   schedules, failures, missing information, social density, and participant implementations without writing
+   a host-authored personality for the resident.
+5. Use scripted actors, small policies, and deterministic environment processes for most background activity.
+   Use additional language-model residents only where their behavior is part of the question.
+6. Record complete synthetic structural trajectories: observation version, event delivery, resident choice,
+   attempted action, canonical receipt, elapsed time, checkpoint version, interruption, and later consequence.
+   Do not require or import private prose from real residents.
+7. Score separate competencies rather than one engagement reward: state grounding, action validity,
+   uncertainty, plan revision, interruption recovery, timing, permission handling, and consistency. Waiting,
+   reading, abandoning a plan, or remaining silent may all be valid.
+8. Run many independent resident states against shared model weights through batched inference. Training speed
+   comes from parallel episodes and skipped quiet time, not from weakening the world rules.
+9. Publish a held-out benchmark with unseen cities, paraphrased observations, renamed internal fields,
+   different event orderings, and repeated trials. Keep the training scenarios separate.
+
+## Files Affected
+
+- `worldweaver_engine/src/services/state/`
+- `worldweaver_engine/src/services/action/`
+- `worldweaver_engine/src/services/simulation/`
+- `worldweaver_engine/src/services/map_generation/`
+- `worldweaver_engine/tests/`
+- `ww_agent/src/runtime/`
+- `ww_agent/tests/`
+- `research/resident-gym/` (new)
+- `scripts/` (new gym operation commands)
+- `docs/reference/architecture.md`
+- `docs/reference/resident-gym.md` (new)
+
+## Acceptance Criteria
+
+- [ ] The same production domain functions decide an action in a live test shard and in the gym.
+- [ ] One episode can combine sub-minute conversation with multi-day scheduled activities without sleeping
+  through the quiet virtual interval.
+- [ ] Synthetic snapshots include enough engine and resident state to fork, replay, stop, and resume an
+  episode with documented determinism.
+- [ ] Scenario actors cannot bypass the public participant protocol or write authoritative state directly.
+- [ ] The suite covers live speech, deliberate delay, interruption, stale information, uncertain outcomes,
+  object custody, access refusal, correspondence, travel, and a later consequence of an earlier choice.
+- [ ] Evaluation gives no general reward for speaking, moving, pleasing a human, finishing every plan, or
+  producing dramatic output.
+- [ ] At least two different participant implementations can run in the same episode.
+- [ ] Training and held-out city packs, scenarios, seeds, and model versions are recorded separately.
+- [ ] A counterfactual fork can show whether one changed event caused a later change without reading private
+  prose.
+- [ ] Gym trajectories contain only synthetic or explicitly licensed material and retain their generation and
+  model provenance.
+
+## Risks & Rollback
+
+Accelerated time can hide latency, race conditions, or costs that matter in a live city. Keep measured real-time
+windows and repeat important scenarios against an actual containerized shard. A fast simulation is evidence
+about the contracts it exercises, not proof of live operational performance.
+
+Scenario generators can also encode one developer's idea of desirable behavior. Keep scoring structural,
+preserve multiple valid outcomes, publish scenario assumptions, and reject any benchmark that quietly equates
+visible activity with a better resident. If production and gym rules diverge, stop training on the gym until
+the shared boundary is restored.

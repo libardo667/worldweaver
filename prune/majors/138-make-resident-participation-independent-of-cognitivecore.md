@@ -29,6 +29,11 @@ Define a small, versioned participant protocol above the shared world rules. The
 loop becomes one implementation of that protocol, not part of the protocol itself. `CognitiveCore` remains
 non-production comparison code unless an individual mechanism earns re-entry.
 
+Major 132's durable live-signal cursor belongs in this public boundary. Major 141's private process state does
+not: a checkpointable trained resident is one client of the protocol. Major 142 must use the same protocol in
+the gym, and Major 143 may produce several more client implementations without making any model family the
+canonical resident.
+
 ### 1. Separate participant, resident, human, and automaton
 
 Use **participant** as the broad transport-level term for something that can enter and act in a world.
@@ -202,7 +207,7 @@ identity card, and private identity key sealed for the current hearth host. It w
 biography, vocation, vibe, or sample dialogue. Admission, activation, and waking remain separate reviewed
 steps. The old model-written batch creator can produce dry-run plans but can no longer apply them.
 
-### 2026-07-20 — first clean resident run
+### 2026-07-20 — first plain resident run
 
 Levi ran for fifteen minutes in Alderbank from a name-only identity and empty ledger. Six model activations
 produced one confirmed move, four confirmed public speech acts, two elective reads, and no declined or unknown

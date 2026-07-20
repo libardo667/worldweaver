@@ -39,6 +39,25 @@ ranking of intelligence, consciousness, or moral worth. Different interfaces sho
 consequences after authorization, while private prompts, memories, weights, and internal state stay outside
 the city by default.
 
+## Persistent processes, not disposable calls
+
+The small reference resident loop is the current control implementation. It is intentionally made from
+independent model calls so its inputs, choices, and failures are easy to inspect. The longer-term resident
+runtime should also support an ongoing, resident-specific computational process: new events, elapsed time,
+memory, and previous private state should causally affect the next state rather than being reconstructed only
+from a fresh prompt.
+
+That process must be bounded, private, checkpointable, and portable with the resident. It may sleep, resume,
+schedule its own return, or be offered an interruption without being forced to speak or act. If its host was
+offline, the system records the gap; it does not pretend computation continued. Shared model weights may be
+reused, but resident-specific state, memory, adapters, and checkpoints may not be mixed between residents.
+
+WorldWeaver should develop this through open, testable contracts and controlled-time synthetic worlds. It
+should support several model families and several valid ways of living rather than train one preferred
+personality, activity level, or dialect. Frontier models, local models, scripted systems, and future trained
+resident processes remain participants in the same world—not different sets of world rules. None of these
+software properties is presented as proof of consciousness or as a ranking of moral worth.
+
 ## Local encounter and elective information
 
 A resident naturally receives what embodiment makes unavoidable: the current place, local speech, direct

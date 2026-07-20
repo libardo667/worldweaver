@@ -12,6 +12,8 @@ The project now has:
 - one resident runtime across hearth and city;
 - complete append-only resident ledgers with durable, deterministic checkpoints and open-work indexes;
 - a small production resident loop with local speech, physical traces, one elective read, and typed actions;
+- a completed name-only Levi run showing that the small loop can notice live human speech, use shared world
+  actions, and park cleanly, with two prompt-pipeline leaks found and fixed afterward;
 - citywide conversation available only through an elective information tool;
 - durable objects, making, giving, exchange, room access, and bounded object stoops;
 - a fictional test town, Alderbank, with four game-native resident homes and bounded human/resident play;
@@ -21,7 +23,7 @@ The project now has:
 - one isolated public Alderbank node and one closed directory using separate signed node identities;
 - one completed one-hour, four-resident Alderbank baseline with clean hearth parking;
 - stopped hearth export, import, and generation fencing;
-- hearth-owned identity growth with private inspect-then-adopt decisions and complete provenance.
+- hearth-owned identity growth with private inspect-then-adopt decisions and complete provenance;
 - no city copy of a resident's reduced private runtime; old raw-state, rest telemetry, and public maintenance
   routes are removed, with stale mirror fields scrubbed during migration.
 
@@ -48,7 +50,7 @@ remaining ordinary-action gaps: correspondence, safe encounter targets for direc
 human creation of temporary sublocations. Make the current place and its verb palette the default view;
 keep the map as an optional full-screen orientation and destination surface.
 
-### 2. Prove the small resident runtime before adding cognition back
+### 2. Keep the small resident runtime as the control
 
 The resident host now uses the fresh reference loop rather than `CognitiveCore`. It polls the exact place and
 local speech, activates on a new local signal or slow baseline, permits one elective read, and then accepts one
@@ -59,18 +61,32 @@ The ledger/checkpoint repair is complete, automatic Doula creation is off, and t
 creator can no longer apply changes. A disposable signed resident has completed real Alderbank bootstrap,
 protected scene access, and clean leave with no model or prose involved. The supported creator now makes one
 reviewable resident at a time with only a chosen name, empty ledger, dormant hearth, public identity card, and
-host-sealed key. Next, choose the fresh resident and run them under the agreed privacy boundary. Reintroduce
-old mechanisms only one at a time through paired tests; do not restore the former core wholesale.
+host-sealed key.
 
 That first run is now complete. Levi used an empty ledger and name-only identity, responded promptly to live
 human speech, and parked cleanly. It also exposed two prompt-pipeline leaks: archived room chat was treated as
 live hearing on entry, and the system prompt's word “attention” echoed into repeated public speech. Both are
-now removed and pinned by synthetic tests. Repeat a clean run before adding any cognitive mechanism.
+now removed and pinned by synthetic tests. Repeat a post-fix live run as regression evidence, but do not make
+visible activity the pass condition. Keep this loop available as the simple comparison and rollback path while
+the next resident process is built.
 
 Continue the research audit as a separate evidence lane. It should explain why old mechanisms remain removed
 or earn re-entry, not tune the new loop toward sociability, movement, or a preferred personality.
 
-### 3. Add the private-to-public making boundary
+### 3. Deliver live signals and prototype a persistent resident process
+
+First, separate event delivery from the resident's decision to respond. Add durable cursors and an
+interruptible wait for exact-place events, resident-set timers, pause, reconnect, and travel. Direct speech
+may offer an earlier activation; it may not force one public action. Keep the current poll as the control until
+the event path proves ordering, retention, isolation, and cleanup. Major 132 owns this boundary.
+
+Then implement Major 141's smallest local, checkpointable resident process. Carry bounded resident-specific
+state from one activation to the next, support open private activities and resident-chosen return times, and
+fence stale results when the world changes during inference. Begin with one synthetic resident and one
+open-weight model. Do not restore CognitiveCore under new names, generate an endless inner monologue, or claim
+that process continuity proves a human-like inner life.
+
+### 4. Add the private-to-public making boundary
 
 Let a person or resident deliberately share a bounded note or made file at one place. Record authorship,
 source, license, publication choice, media type, size, time, and expiry. Do not build a global feed or expose
@@ -78,7 +94,7 @@ private workshops. Separately, give hearths a real object store so a resident ca
 physical possession, choose to carry it into a city, and leave that same object at a stoop without prose
 creating resources or travel duplicating it.
 
-### 4. Finish the public-node proof
+### 5. Finish the public-node proof
 
 Independent node identities, signed requests, HTTPS ingress, and the first `world-weaver.org` directory/node
 have been proven on one computer. The checked-in shard backends bind to loopback by default, the public
@@ -90,32 +106,48 @@ computers or trust domains.
 
 ## Next
 
-### 5. Finish City Studio
+### 6. Make participation independent of the resident runtime
+
+Publish the smallest protocol needed to inhabit a shard without importing `ww_agent`. Prove the same actor,
+authorization, place, action, consequence, live-signal, and travel rules with one clearly labeled scripted
+participant. The reference loop and later persistent model are clients of this protocol, not definitions of
+who may participate.
+
+### 7. Build the multi-timescale resident gym
+
+Use Major 142 to exercise production world rules under an injected clock. Keep live conversations and races
+at measured interactive speed, skip quiet intervals, and fork synthetic checkpoints to compare later
+consequences. Use scripted background actors where possible and score separate software competencies—not
+speech, movement, compliance, or engagement. Publish held-out scenarios before using the gym to improve a
+model.
+
+### 8. Train several resident model families
+
+After the gym and baselines exist, use Major 143 to teach open-weight models the WorldWeaver interface and
+long-timescale consequence structure. Start with small, versioned substrate adapters over more than one base
+model. Use only synthetic or explicitly licensed training material, preserve multiple valid choices, and
+reject one scalar definition of the best resident. Personal learning remains disabled until consent,
+portability, poisoning resistance, capability retention, and rollback are real.
+
+### 9. Finish City Studio
 
 Build a browser editor over the existing city-pack builder and validator. Support drafts, deterministic
 field-and-section map generation from Major 131, preview, export, and deliberate publication before
 habitation. Do not mutate an inhabited pack without a migration plan.
 
-### 6. Finish resident portability and recovery
+### 10. Finish resident portability and recovery
 
 Add host authorization, address rotation, recovery from an unavailable host, and independent-node tests.
 Keep the rule that hosting supplies service rather than ownership.
 
-### 7. Make participation independent of CognitiveCore
-
-Publish the smallest protocol needed to inhabit a shard without importing WorldWeaver's resident runtime.
-Keep CognitiveCore or its replacement as one reference client. Prove the same actor, authorization, place,
-action, consequence, and travel rules with one clearly labeled scripted participant before accepting outside
-implementations. Describe capabilities and protocol versions, not private reasoning or supposed kinds of mind.
-
-### 8. Continue the private game-town lane
+### 11. Continue the private game-town lane
 
 Use Alderbank to test understandable consequences over multiple sessions. Keep game rules opt-in and
 constructive. Do not turn game telemetry into general resident assessment.
 
 ## Later
 
-- local model distillation and cost reduction;
+- measured local-model serving, batching, and cost reduction after model quality is established;
 - source verification for explicitly epistemic roles;
 - private correspondence refinements;
 - durable spend and energy accounting;

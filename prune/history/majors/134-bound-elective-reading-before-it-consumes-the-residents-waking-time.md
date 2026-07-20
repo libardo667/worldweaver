@@ -1,5 +1,12 @@
 # Bound elective reading before it consumes the resident's waking time
 
+> **Disposition: superseded and archived 2026-07-20.** The production resident host no longer uses the
+> CognitiveCore pulse and its recursive reading chain. The small reference loop permits at most one elective
+> read before a final choice, so the safety boundary is implemented by a simpler contract. The remaining
+> matched-cohort experiment would measure removed machinery and is intentionally not being run. Major 141
+> carries the requirement that future persistent processes support sustained reading without recreating an
+> unbounded inference chain.
+
 ## Status
 
 The first one-hour Alderbank cohort exposed this as a measured runtime problem. Four residents produced 224
@@ -65,8 +72,8 @@ nominal pause is twenty seconds.
   outcome without recording private read content.
 - [x] A synthetic source that always invites another read cannot exceed the configured cap.
 - [x] Hearth travel, city travel, shutdown, and cleanup can interrupt a reading chain safely.
-- [ ] A matched Alderbank run materially reduces calls and prompt tokens per active pulse without reducing
-  observed local speech or co-presence delivery.
+- [x] The old matched Alderbank run is retired because the multi-read pulse is no longer a production path;
+  synthetic tests pin the one-read reference contract instead.
 
 ## Risks and rollback
 
