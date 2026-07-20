@@ -62,6 +62,20 @@ from being interpretable.
 25. **Give initial identity an authority model.** Preview the whole creation brief, record exact provenance,
    make work optional, move local culture to city governance, and define what assigned canon a resident may
    later revise.
+26. **Split semantic retrieval from hidden policy.** Prompt identity recall, public-chat ranking, destination
+   ranking, anchor admission, and growth review must have separate switches, provider receipts, privacy
+   declarations, and controls. Stop calling cosine affect, caring, contradiction, or gravity.
+27. **Remove poll-count grief from call pressure.** Preserve literal absence evidence if useful, but do not
+   call it loss or emotion until tags refer to durable entities and observations are provenance-backed and
+   normalized by elapsed time.
+28. **Describe night behavior as cadence.** Keep an optional clock multiplier only under a plain scheduler
+   name. Remove claims of sleep, fatigue, homeostasis, felt night, and interoception unless those mechanisms
+   are actually implemented and independently tested.
+29. **Retire covert incubation speech rewriting.** A shard may visibly delay one public channel, but an
+   intended speech or reply must remain that attempted act and receive an honest result. Event count is not
+   evidence that a self formed.
+30. **Remove the anti-repetition verdict.** Keep semantic concentration as an offline measure while testing;
+   do not tell a resident its pleasure is spent or order novelty based on cosine similarity.
 
 ## Second: establish a neutral reference runtime
 
@@ -116,6 +130,11 @@ Once the causal paths are clean, names should describe computation:
 - `social_pull` → separate `unseen_direct_address`, `unread_mail`, and `recent_contact` fields;
 - `withdrawn` → `no_current_social_signal`;
 - `grief` → `predicted_anchor_absence_integral` while experimental;
+- `drive vector` → separate `identity_fragment_retrieval`, `chat_ranker`, `destination_ranker`, and
+  `growth_similarity_check` roles;
+- `rest drive` / `wakefulness` → `night_call_multiplier` while based only on the city clock;
+- `incubation` → no general replacement; a game-specific `citywide_channel_delay` if explicitly retained;
+- `self-sameness` → `recent_making_similarity` as measurement only;
 - `vital/distress/strangled` → `call_delivery_status` and `above_threshold_without_completion`;
 - `owes_reply_to` → `unanswered_direct_address_from` only while actually unanswered;
 - `felt_sense` → `model_self_report` in code/telemetry, while the resident-facing label may remain humane.

@@ -66,6 +66,9 @@ variable represents lived experience.
 - [`resident-creation-casting-and-consent.md`](resident-creation-casting-and-consent.md) traces what the host,
   city, steward, and seed model decide before a resident's first pulse, including the shared casting deck,
   compulsory work identity, broken player-shadow consent, and nonfunctional doula voting.
+- [`inner-state-drive-rest-and-incubation.md`](inner-state-drive-rest-and-incubation.md) audits the actual
+  computations behind drive, anchors, grief, circadian rest, interoception claims, incubation, and
+  anti-repetition feedback.
 - [`repair-and-ablation-order.md`](repair-and-ablation-order.md) puts software truth repairs before neutral
   reference runs and one-variable mechanism tests.
 - [`claim-ledger.md`](claim-ledger.md) lists terms and implied claims that require a decision.
@@ -74,6 +77,9 @@ variable represents lived experience.
   prediction, ignition, arousal, quiet, and social-deficit assumptions.
 - [`evidence/mechanism-review-02.md`](evidence/mechanism-review-02.md) compares the action-feedback path with
   competing accounts of sensorimotor integration, situated systems, and durable external supports.
+- [`evidence/mechanism-review-03.md`](evidence/mechanism-review-03.md) separates clock-based call cadence from
+  sleep and homeostasis, applies a bounded definition of interoception, and narrows semantic and incubation
+  claims to what their code can support.
 - `decisions.md` will be created only after a claim has both code evidence and literature review.
 
 ## Evidence boundary

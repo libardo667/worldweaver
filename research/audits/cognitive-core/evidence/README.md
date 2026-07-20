@@ -104,3 +104,7 @@ rename overclaimed mechanisms, preserve quiet as a valid outcome, and require di
 [`mechanism-review-02.md`](mechanism-review-02.md) compares the action path with competing internal-model,
 sensorimotor, situated-robotics, and extended-mind accounts. Its narrow decision is to preserve proposals,
 world outcomes, and later observations separately and test the feedback loop without calling it biological.
+
+[`mechanism-review-03.md`](mechanism-review-03.md) compares the clock-derived rest path with sleep and
+circadian research, applies a bounded interoception definition, and records why semantic similarity and
+event-count incubation must be tested as software policies rather than borrowed accounts of affect or selfhood.

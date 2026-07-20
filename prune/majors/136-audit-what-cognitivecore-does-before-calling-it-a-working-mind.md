@@ -153,15 +153,27 @@ player evidence ages out. Doula classification voting is also nonfunctional end 
 to session IDs instead of resident slugs, residents cannot read them, no production caller submits their vote,
 expired polls vanish unresolved, and duplicate candidate polls are possible.
 
-Two bounded evidence reviews now cover prediction/ignition/arousal/quiet/social norms and
-action-feedback/embodiment/external supports. They support plainer names, reliable event and consequence
-delivery, quiet as a valid outcome, and direct software comparisons. They do not validate a grand theory of
-mind.
+The inner-state pass found that `DriveVector` is positive semantic similarity over host-authored identity, not
+affect or valence. It steers prompt wording, elective public-chat ranking, destination ranking, optional anchor
+admission, and growth review, creating a concrete feedback path from initial casting to semantic concentration.
+Anchors mix model self-reports with double-weighted names from the current public scene, then call the result an
+inner fixation. `grief` counts polls in which a predicted text tag is missing and can add `0.8` to later call
+pressure. The same ten-minute absence produced a raw value of `1.0` with one poll and `7.4664` with ten.
 
-Still required before this major is complete: finish the term inventory, cover the remaining memory,
-interoception, homeostasis, identity, philosophical, phenomenological, contemplative, and AI-ethics lanes;
-repair software-truth bugs; run paired mechanism tests; and write the final decisions and public architecture
-corrections.
+The clock path is a fixed day/night call multiplier, not sleep, homeostasis, fatigue, or interoception. A
+“resting” core continues to poll and record the city but skips the LLM call. Optional incubation is more serious:
+it hides citywide chatter, silently rewrites every attempted speech or direct reply as private journal text, and
+then counts that rewritten speech toward evidence that the resident has “built a self.” `self_sameness` likewise
+turns embedding similarity into the unsupported prompt verdict that repeated work's pleasure is spent.
+
+Three bounded evidence reviews now cover prediction/ignition/arousal/quiet/social norms,
+action-feedback/embodiment/external supports, and clock cadence/sleep/interoception/semantic policy. They
+support plainer names, reliable event and consequence delivery, quiet and repetition as valid outcomes, and
+direct software comparisons. They do not validate a grand theory of mind.
+
+Still required before this major is complete: finish the term inventory; cover the remaining philosophical,
+phenomenological, contemplative, disability/neurodiversity, and AI-ethics lanes; repair software-truth bugs; run
+paired mechanism tests; and write the final decisions and public architecture corrections.
 
 ## Acceptance Criteria
 
