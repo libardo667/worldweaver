@@ -44,15 +44,12 @@ whole hearth; moving the hearth to another computer is a separate operation.
 1. Initialize manifests for current residents through reviewed, idempotent migration commands.
 2. Decide and implement resident identity-key custody and recovery without storing the only recovery key in
    a federation directory or treating a temporary host as owner.
-3. Build a stopped-hearth encrypted export command that can sign without writing a plaintext package or
-   accepting private key material as a command-line value.
-4. Define explicit hearth-host authorization using cryptographic identity without treating the host as the
-   resident's owner.
-5. Authorize a host and generation explicitly before it may wake a hearth.
-6. Prove a stopped hearth transfer between two clean computers, including interruption at every write.
-7. Prove that a resident hosted on one computer can attach over HTTPS to a city on another without giving
+3. Prove the completed encrypted, resident-authorized handoff between two clean computers, including a real
+   process interruption at every durable boundary. The synthetic library and command tests already cover the
+   same ordering on one computer.
+4. Prove that a resident hosted on one computer can attach over HTTPS to a city on another without giving
    that city the private hearth.
-8. Design crash recovery separately. Do not claim that generation fencing revokes an undisclosed offline
+5. Design crash recovery separately. Do not claim that generation fencing revokes an undisclosed offline
    copy.
 
 Host authorization and city action authority are related but not interchangeable. A shard-wide JWT secret
@@ -122,9 +119,11 @@ Build the private half in this order:
    long-term identity key.
 6. Give each running resident its own signed world client. The current daemon's one shared client cannot carry
    resident authority safely.
-7. The stopped transfer can now be re-encrypted for the next reviewed host. Next, bind the explicit
-   generation advance and source retirement to a reviewed transfer authorization before the destination
-   wakes. Receiving bytes alone must never perform that step.
+7. The stopped transfer can now be re-encrypted for the next reviewed host. Its resident-signed authorization
+   binds the exact source, destination, witnesses, and N-to-N+1 generation change. Receiving bytes leaves the
+   destination dormant. A separate command retires and preserves the source before another separate command
+   verifies that receipt and activates the destination. The destination refuses to advance if its copy is
+   already active at generation N.
 8. Specify recovery separately. A federation directory must not hold the only recovery key, and an ordinary
    transfer must not quietly invent a guardian or owner.
 
@@ -132,6 +131,22 @@ Encryption protects the package at rest and in transit and reduces accidental ke
 malicious temporary host from copying a key while that host is authorized to run the resident. Generation
 fencing can stop an orderly old copy; it cannot revoke an undisclosed offline copy. Do not claim otherwise
 without a separate hardware-backed or quorum design.
+
+## Deletion decision boundary
+
+Retirement is reversible coordination, not permission to erase the old hearth. The current workflow therefore
+preserves the complete source and has no deletion command. Before this project considers adding one, a separate
+work item and operator review must define all of the following:
+
+- how both matching receipts and the resident-signed handoff are checked;
+- how the destination is shown to contain the complete ledger and resident-owned artifacts;
+- what recovery copy exists, who can use it, and what consent governs it;
+- how long a retired source is retained and how a steward can cancel deletion;
+- how an explicit deletion request is distinguished from retirement; and
+- what can honestly be proven when a source host may have kept an undisclosed copy.
+
+Passing the present transfer tests supplies evidence for that later decision. It does not satisfy these deletion
+requirements.
 
 ## Boundaries
 
@@ -153,7 +168,8 @@ without a separate hardware-backed or quorum design.
 - [x] New and started hearths enforce owner-only filesystem permissions on the temporary host.
 - [ ] Existing resident homes have reviewed, valid manifests.
 - [x] Archives support encryption and authenticated origin.
-- [ ] Independent hosts use separate identities and explicit authorization.
+- [x] Synthetic independent hosts use separate transport and witness identities with explicit resident
+  authorization.
 - [ ] A two-computer stopped migration preserves identity, full ledger evidence, and resident-owned artifacts.
 - [ ] One host can run the hearth while the resident visits a remote city over HTTPS.
 - [ ] Directory outage leaves the local hearth usable.
