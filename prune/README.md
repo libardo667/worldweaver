@@ -21,6 +21,14 @@
 | Operations and accounting | 70 |
 | Stoops, City Studio, and game town | 125, 126, 130, 131, 135 |
 
+## Active publication work
+
+| Item | Purpose |
+| --- | --- |
+| Publication Major 139 | Public-readiness audit |
+| Publication Major 140 | One honest public doorway and demonstration |
+| Publication Minor 123 | First five informed outside responses |
+
 ## Active bounded work
 
 | Minor | Purpose |

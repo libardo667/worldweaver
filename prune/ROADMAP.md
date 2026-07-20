@@ -24,6 +24,15 @@ The project now has:
 - no city copy of a resident's reduced private runtime; old raw-state, rest telemetry, and public maintenance
   routes are removed, with stale mirror fields scrubbed during migration.
 
+## Current focus — public readiness
+
+Deeper hearth-transfer work is paused at the encrypted, witnessed, source-preserving synthetic checkpoint.
+There is no deletion command, and no real resident should be migrated as part of this pause.
+
+The immediate work is Publication Major 139: audit whether a stranger can understand, inspect, and safely try the
+project. Then build one honest Alderbank doorway and seek a small number of informed outside responses. This
+prepares WorldWeaver for review; it does not declare the network ready for unattended public operation.
+
 ## Now
 
 ### 1. Finish the human-surface split

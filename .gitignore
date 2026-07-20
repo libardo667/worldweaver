@@ -34,13 +34,19 @@ shards/*/_*frozen*/
 !shards/*/docker-compose.yml
 
 # prune/ holds the PUBLIC work-item ledger AND local strategy/scratch. Track the ledger
-# (majors/minors/harness/v6_docs), the project anchors (VISION/ROADMAP/README), and the CI
+# (majors/minors/publication/harness/v6_docs), the project anchors (VISION/ROADMAP/README), and the CI
 # warning baseline; keep loose strategy/planning docs + history/ local by default.
 /prune/*
 !/prune/majors/
 # major 79 (funding strategy) kept private — keeper decision 2026-06-16
 /prune/majors/79-*
 !/prune/minors/
+!/prune/publication/
+!/prune/publication/README.md
+!/prune/publication/majors/
+!/prune/publication/majors/*.md
+!/prune/publication/minors/
+!/prune/publication/minors/*.md
 !/prune/harness/
 !/prune/v6_docs/
 !/prune/VISION.md
