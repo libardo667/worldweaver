@@ -12,7 +12,9 @@ from src.runtime.incubation import (
     INCUBATION_MIN_SECONDS,
     groundedness,
     is_incubating,
+    is_incubating_projection,
 )
+from src.runtime.ledger import reduce_runtime_events
 
 
 def _ev(ts: datetime, etype: str = "tick") -> dict:
@@ -54,6 +56,21 @@ def test_between_floor_and_ceiling_lifts_once_grounded():
         _ev(arrival, "workshop_entry") for _ in range(INCUBATION_GROUNDING_THRESHOLD)
     ]
     assert is_incubating(grounded, now=now) is False
+
+
+def test_checkpoint_incubation_view_matches_event_history():
+    now = datetime.now(timezone.utc)
+    arrival = now - timedelta(
+        seconds=(INCUBATION_MIN_SECONDS + INCUBATION_MAX_SECONDS) / 2
+    )
+    events = [_ev(arrival)] + [
+        _ev(arrival, "workshop_entry") for _ in range(INCUBATION_GROUNDING_THRESHOLD)
+    ]
+    projection = reduce_runtime_events(events).runtime_projection
+
+    assert is_incubating_projection(projection, now=now) == is_incubating(
+        events, now=now
+    )
 
 
 def test_disabled_path_is_caller_side():

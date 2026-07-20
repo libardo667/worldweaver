@@ -43,7 +43,9 @@ numbered, flushed to disk, and checked for corruption; an incomplete final fragm
 before the next append. Replay is deterministic at an explicit `as_of` time, and expired packet or intent work
 closes through a ledger event at the tick's chosen time. A normal append writes only the ledger record and one
 checkpoint; an explicit rebuild removes the former projection and snapshot files. Several live readers still
-need classification or migration onto the checkpoint API.
+need classification or migration onto the checkpoint API. The normal tick, prompt, recent voice, and current
+salience paths already use checkpoint or explicitly bounded recent state; complete replay is reserved for
+recovery, migration, and audit paths, apart from the still-open kept-memory compatibility reader.
 
 ## Information and action are separate
 

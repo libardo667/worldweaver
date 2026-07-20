@@ -36,9 +36,13 @@ from src.runtime import integrator
 from src.runtime.anchors import extract_anchors, record_anchors
 from src.runtime.drive import DriveVector, RemoteEmbedder, _cosine
 from src.runtime.effectors import WorldEffector
-from src.runtime.incubation import is_incubating
+from src.runtime.incubation import is_incubating_projection
 from src.runtime.information import InformationAccess
-from src.runtime.ledger import append_runtime_event, load_runtime_events
+from src.runtime.ledger import (
+    append_runtime_event,
+    load_current_runtime_state,
+    load_runtime_projection_events,
+)
 from src.runtime.memory import MemoryRecall
 from src.runtime.perception import perceive
 from src.runtime.prediction import tag_mattering
@@ -305,8 +309,11 @@ class CognitiveCore:
         # Incubation keeps a new arrival from deliberately listening to or broadcasting
         # on the citywide channel until it has built some private history. Exact-place
         # perception remains available. CityWorld reads this flag before building tools.
-        events = load_runtime_events(self._memory_dir)
-        incubating = self._incubation and is_incubating(events, now=effective_now)
+        current_state = load_current_runtime_state(self._memory_dir)
+        recent_events = load_runtime_projection_events(self._memory_dir)
+        incubating = self._incubation and is_incubating_projection(
+            current_state.runtime_projection, now=effective_now
+        )
         self._effector.incubating = incubating
         setattr(self._ww, "incubating", incubating)
         brief = await perceive(
@@ -333,7 +340,7 @@ class CognitiveCore:
             # Scored-but-quiet: anchors never touch the arousal/ignition rhythm.
             prose = [
                 str((e.get("payload") or {}).get("felt_sense") or "")
-                for e in events
+                for e in recent_events
                 if str(e.get("event_type") or "") == "felt_sense_logged"
             ][-10:]
             structured = list(brief.get("present") or [])
@@ -345,7 +352,12 @@ class CognitiveCore:
             ]
             anchors = extract_anchors(prose, structured=structured, top_k=8)
             brief["anchors"] = anchors
-            record_anchors(self._memory_dir, anchors, now=effective_now, events=events)
+            record_anchors(
+                self._memory_dir,
+                anchors,
+                now=effective_now,
+                events=recent_events,
+            )
             self._producer.latest_perception = brief
             # Sight: the images in view (the most-recent visual read), pulled off the world by its
             # duck-typed surface. A WorldClient without it (the city shard) simply offers none.

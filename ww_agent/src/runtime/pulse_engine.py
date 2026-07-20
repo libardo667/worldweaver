@@ -34,8 +34,9 @@ from src.runtime.drive import _cosine
 from src.runtime.information import provenance_guidance
 from src.runtime.ledger import (
     append_runtime_event,
-    load_runtime_events,
-    reduce_runtime_events,
+    load_current_runtime_state,
+    load_runtime_projection_events,
+    load_runtime_reducer_events,
 )
 from src.runtime.memory import memories
 from src.runtime.pulse import Pulse, PulseValidationError
@@ -576,7 +577,7 @@ class LLMPulseProducer:
         samples = list(seed)
         if VOICE_RECENT_N > 0:
             recent: list[str] = []
-            for e in reversed(load_runtime_events(self._memory_dir)):
+            for e in reversed(load_runtime_projection_events(self._memory_dir)):
                 if e.get("event_type") not in ("chat_sent", "city_broadcast_sent"):
                     continue
                 body = str((e.get("payload") or {}).get("message") or "").strip()
@@ -732,11 +733,11 @@ class LLMPulseProducer:
         tendency: dict[str, Any] | None = None,
         prompt_context: PulseContext | None = None,
     ) -> str:
-        events = load_runtime_events(self._memory_dir)
+        events = load_runtime_reducer_events(self._memory_dir)
         afterimage = predict(self._memory_dir, now=None)
         baseline = derive_baseline(events, now=None)
-        reduced = reduce_runtime_events(events)
-        nodes = reduced.cognitive_projection.get("nodes") or {}
+        current = load_current_runtime_state(self._memory_dir)
+        nodes = current.cognitive_projection.get("nodes") or {}
 
         self_baseline = (baseline.get("by_scope") or {}).get("self") or {}
         if self_baseline:

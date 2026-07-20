@@ -29,7 +29,9 @@ active repair in Major 137: new records now have serialized sequence numbers, du
 corruption handling, and unfinished lifecycle work now survives bounded semantic replay. Some normal readers
 still scan the complete ledger, but queue expiry is now an explicit event at the tick's injected time and full
 replay is deterministic. Normal append writes only the ledger record and one current-state checkpoint; old
-projection and snapshot files are removed by an explicit rebuild. Exact model requests are not retained during ordinary runs. A deliberately
+projection and snapshot files are removed by an explicit rebuild. The normal tick, prompt, voice, and salience
+paths use checkpoint or bounded recent state rather than replaying a whole life. Exact model requests are not
+retained during ordinary runs. A deliberately
 enabled diagnostic may write them to `memory/prompt_traces.jsonl`; those traces are private host evidence and
 are never cognitive input or portable resident state.
 

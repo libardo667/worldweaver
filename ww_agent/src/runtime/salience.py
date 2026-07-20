@@ -34,9 +34,8 @@ from typing import Any, Callable
 
 from src.runtime.ledger import (
     append_runtime_event,
-    load_runtime_events,
+    load_current_runtime_state,
     load_runtime_reducer_events,
-    reduce_runtime_events,
 )
 from src.runtime.substrate import BASELINE_EPSILON, derive_baseline, predict_combined
 
@@ -269,8 +268,8 @@ def stimulus_from_substrate(memory_dir: Path) -> dict[str, dict[str, float]]:
     The Major 46 cognitive node activations are the substrate's felt stimulus;
     each node becomes a ``self``-scoped tag keyed by its node id.
     """
-    reduced = reduce_runtime_events(load_runtime_events(memory_dir))
-    nodes = reduced.cognitive_projection.get("nodes") or {}
+    current = load_current_runtime_state(memory_dir)
+    nodes = current.cognitive_projection.get("nodes") or {}
     field: dict[str, float] = {}
     for node_id, node in nodes.items():
         if not isinstance(node, dict):

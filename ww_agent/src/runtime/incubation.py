@@ -100,3 +100,31 @@ def is_incubating(
     if elapsed < min_seconds:
         return True  # floor — always habituate a real beat first
     return groundedness(events) < grounding_threshold
+
+
+def is_incubating_projection(
+    runtime_projection: dict[str, Any],
+    *,
+    now: Any = None,
+    min_seconds: float = INCUBATION_MIN_SECONDS,
+    max_seconds: float = INCUBATION_MAX_SECONDS,
+    grounding_threshold: int = INCUBATION_GROUNDING_THRESHOLD,
+) -> bool:
+    """Evaluate the optional arrival gate from checkpoint aggregates."""
+    arrival = _parse_ts(runtime_projection.get("first_event_at"))
+    if arrival is None:
+        return True
+    moment = now if isinstance(now, datetime) else datetime.now(timezone.utc)
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    elapsed = (moment - arrival).total_seconds()
+    if elapsed >= max_seconds:
+        return False
+    if elapsed < min_seconds:
+        return True
+    event_counts = runtime_projection.get("event_counts")
+    counts = event_counts if isinstance(event_counts, dict) else {}
+    built = sum(
+        int(counts.get(event_type) or 0) for event_type in GROUNDING_EVENT_TYPES
+    )
+    return built < grounding_threshold

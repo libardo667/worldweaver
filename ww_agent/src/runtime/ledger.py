@@ -31,7 +31,7 @@ _LEGACY_DERIVED_FILENAMES = {
 }
 
 CHECKPOINT_FORMAT_VERSION = 2
-REDUCER_FORMAT_VERSION = 3
+REDUCER_FORMAT_VERSION = 4
 PROJECTION_FORMAT_VERSIONS = {
     "runtime": 1,
     "subjective": 1,
@@ -883,6 +883,14 @@ def _build_runtime_projection(
     return {
         "updated_at": as_of,
         "ledger_event_count": len(events),
+        "first_event_at": next(
+            (
+                str(event.get("ts") or "").strip()
+                for event in events
+                if str(event.get("ts") or "").strip()
+            ),
+            None,
+        ),
         "event_counts": event_counts,
         "recent_events": [
             {
@@ -2229,6 +2237,9 @@ def _advance_runtime_projection(
             "updated_at": _replay_as_of_iso([event]),
             "ledger_event_count": int(runtime_projection.get("ledger_event_count") or 0)
             + 1,
+            "first_event_at": runtime_projection.get("first_event_at")
+            or str(event.get("ts") or "").strip()
+            or None,
             "event_counts": event_counts,
             "recent_events": recent_events[-20:],
         }

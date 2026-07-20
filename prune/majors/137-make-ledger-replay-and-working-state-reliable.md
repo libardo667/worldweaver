@@ -82,7 +82,7 @@ semantics, converge readers, and only then delete dead shadows.
       projection or compatibility files.
 - [ ] Normal runtime readers use the checkpoint/current-state API and do not repeatedly parse the complete
       cold ledger.
-- [ ] A full replay oracle agrees with the incremental checkpoint after every event in lifecycle and randomized
+- [x] A full replay oracle agrees with the incremental checkpoint after every event in lifecycle and randomized
       sequence tests.
 - [x] Complete cold history remains streamable for audit and research with no front truncation.
 - [x] Migration/recovery tests cover existing ledgers and rebuild old derived files only when explicitly needed.
@@ -155,3 +155,18 @@ The daily operator digest reads queued intents from the checkpoint and falls bac
 only for an old folder that has no checkpoint intent state. Queue operations and expiry no longer refresh that
 snapshot. A repository-wide reader search and focused migration tests cover this removal. The remaining work is
 to classify direct cold-history readers and add a broader randomized incremental/full-replay oracle.
+
+### 2026-07-20 — hot readers stop replaying a whole life
+
+The ordinary cognitive tick now gets incubation aggregates and current cognitive nodes from the checkpoint.
+Recent felt sense, anchor rate limiting, and voice samples use a bounded recent-event reader; decaying baseline
+input uses the declared hot time window. Current salience reads the checkpoint directly. Runtime projection
+format 4 records the first event time and aggregate event counts so the optional incubation calculation no
+longer needs every historical record.
+
+A deterministic shuffled lifecycle test compares the incremental checkpoint with a full replay after every
+packet, intent, route, mail, and research transition. The remaining complete-history calls are now a short,
+named list: resident attachment/travel crash recovery, legacy kept-memory reconciliation, explicit prediction
+scoring, an anchor compatibility fallback, and operator/import scripts. Kept memory is the only remaining
+ordinary duplicate-authority reader that needs consolidation before the current-state acceptance criterion is
+complete.

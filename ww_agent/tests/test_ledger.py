@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import random
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
@@ -577,6 +578,109 @@ def test_open_lifecycle_state_survives_the_complex_replay_boundary(tmp_path) -> 
     assert state["research_queue"] == []
     assert state["packets"][0]["status"] == "observed"
     assert state["intents"][0]["status"] == "executed"
+
+
+def test_incremental_checkpoint_matches_full_replay_after_random_lifecycle_events(
+    tmp_path,
+) -> None:
+    rng = random.Random(137)
+    packet_ids = [f"packet-{index}" for index in range(4)]
+    intent_ids = [f"intent-{index}" for index in range(4)]
+    mail_ids = [f"mail-{index}" for index in range(3)]
+    queries = [f"question {index}" for index in range(3)]
+    candidates = [
+        (
+            "packet_emitted",
+            {
+                "packet_id": packet_id,
+                "packet_type": "sample",
+                "created_at": f"2026-07-17T12:00:0{index}+00:00",
+                "status": "pending",
+            },
+        )
+        for index, packet_id in enumerate(packet_ids)
+    ]
+    candidates += [
+        (
+            "packet_status_changed",
+            {"packet_id": packet_id, "status": "observed"},
+        )
+        for packet_id in packet_ids
+    ]
+    candidates += [
+        (
+            "intent_staged",
+            {
+                "intent_id": intent_id,
+                "intent_type": "inspect",
+                "created_at": f"2026-07-17T12:01:0{index}+00:00",
+                "priority": 0.5,
+                "status": "pending",
+            },
+        )
+        for index, intent_id in enumerate(intent_ids)
+    ]
+    candidates += [
+        (
+            "intent_status_changed",
+            {"intent_id": intent_id, "status": "executed"},
+        )
+        for intent_id in intent_ids
+    ]
+    candidates += [
+        (
+            "mail_intent_staged",
+            {
+                "mail_intent_id": mail_id,
+                "recipient": f"Person {index}",
+                "staged_at": f"2026-07-17T12:02:0{index}+00:00",
+            },
+        )
+        for index, mail_id in enumerate(mail_ids)
+    ]
+    candidates += [
+        ("mail_intent_sent", {"mail_intent_id": mail_id}) for mail_id in mail_ids
+    ]
+    candidates += [
+        ("research_queued", {"query": query, "priority": "normal"}) for query in queries
+    ]
+    candidates += [("research_popped", {"query": query}) for query in queries]
+    candidates += [
+        (
+            "route_state_changed",
+            {
+                "status": "active",
+                "destination": f"Place {index}",
+                "remaining": [],
+            },
+        )
+        for index in range(3)
+    ]
+    candidates += [("route_state_changed", {"status": "cleared"})] * 3
+    rng.shuffle(candidates)
+
+    for index, (event_type, payload) in enumerate(candidates):
+        ts = f"2026-07-18T12:{index:02d}:00+00:00"
+        ledger.append_runtime_event(
+            tmp_path,
+            event_type=event_type,
+            payload=payload,
+            ts=ts,
+        )
+        oracle = ledger.reduce_runtime_events(
+            ledger.load_runtime_events(tmp_path), as_of=ts
+        )
+        current = ledger.load_current_runtime_state(tmp_path)
+        assert current.packets == oracle.packets
+        assert current.intents == oracle.intents
+        assert current.active_route == oracle.active_route
+        assert current.active_mail_intents == oracle.active_mail_intents
+        assert current.research_queue == oracle.research_queue
+        assert current.runtime_projection == oracle.runtime_projection
+        assert current.subjective_projection == oracle.subjective_projection
+        assert current.memory_projection == oracle.memory_projection
+        assert current.subjective_facts == oracle.subjective_facts
+        assert current.cognitive_projection == oracle.cognitive_projection
 
 
 def test_projection_neutral_append_advances_checkpoint_without_loading_cold_history(
