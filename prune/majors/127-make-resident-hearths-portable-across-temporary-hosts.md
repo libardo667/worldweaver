@@ -14,10 +14,10 @@ The local stopped-migration foundation is built:
 - the root preflight can inspect, activate, wake, and park one named resident safely;
 - older `the-stable` homes can be imported through an explicit allowlist.
 
-The work is not complete. Existing residents are not all initialized, archives are not encrypted or signed,
-hearth-host authorization is not defined, and no cross-computer migration or remote-city attachment has been
-proven. Active city nodes now have separate signing identities; that does not by itself authorize a computer
-to run a resident's hearth.
+The work is not complete. Existing residents are not all initialized, ordinary archive commands do not yet
+use the new encrypted-envelope primitive, hearth-host authorization is not defined, and no cross-computer
+migration or remote-city attachment has been proven. Active city nodes now have separate signing identities;
+that does not by itself authorize a computer to run a resident's hearth.
 
 ## Model
 
@@ -68,9 +68,10 @@ Build the private half in this order:
    key, format version, and no private or city-local data.
 2. Give a temporary host a dedicated X25519 transport key. Do not reuse its Ed25519 node-signing key, and do
    not treat either host key as the resident's identity.
-3. Keep the current deterministic ZIP as an inner payload. Put it inside a versioned encrypted envelope whose
-   random content key is wrapped for the reviewed destination host. Sign the envelope metadata and inner
-   payload hash with the resident identity key.
+3. Keep the current deterministic ZIP as an inner payload. Put it inside a versioned encrypted envelope for
+   the reviewed destination host. Sign the complete encrypted envelope with the resident identity key. Do
+   not publish a plaintext archive hash that lets observers recognize repeated private state. The standalone
+   envelope primitive now proves this format; package export/import is not wired to it yet.
 4. Only the encrypted format may carry the resident identity private key. Plain `.wwhearth` export must keep
    excluding it and must fail if a future key-bearing hearth would otherwise leak it.
 5. On an authorized host, decrypt the long-term key into memory only long enough to sign a fresh runtime

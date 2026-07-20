@@ -138,6 +138,14 @@ This protects the cooperating old host and prevents two processes from using the
 does not remotely disable an undisclosed offline copy, recover a destroyed host, or establish who signed a
 transfer; those require the later node-trust and recovery design, not a central owner hidden in the hearth.
 
+`hearth_envelope.py` is the first cryptographic transfer building block. It encrypts arbitrary stopped-hearth
+bytes for one temporary host's separate X25519 transport key and has the resident identity sign the complete
+encrypted envelope. Opening it requires both the intended host private key and the independently expected
+resident public key. Actor, hearth, and generation are authenticated with the ciphertext. The envelope does
+not publish a plaintext payload hash, so an observer cannot use it to recognize repeated private archives.
+This module does not yet store keys, authorize a host, wrap `.wwhearth` export/import, or change activation
+state; those remain separate steps so a partial implementation cannot look like safe migration.
+
 ## Open decisions that must remain explicit
 
 - Where the resident's identity signing/recovery material lives and how it can be recovered without making

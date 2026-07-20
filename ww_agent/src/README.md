@@ -56,6 +56,8 @@
   provides the first portable-hearth identity contract, and `identity/hearth_package.py` inventories what
   can move without copying city state or host credentials. `identity/hearth_activation.py` holds one local
   runtime lock and makes an orderly imported successor advance while its stopped source retires.
+  `identity/hearth_envelope.py` provides authenticated encryption for one reviewed host as an isolated
+  primitive; package wiring, key storage, host authorization, and activation remain explicit later steps.
 - `familiar/` — the private hearth adapter and its optional grants. `config.py` reads per-resident
   `hearth.json`; `file_scope.py` enforces read roots, ignore rules, secret denial, bounded pagination,
   path recovery, and bounded image/PDF reads; `visual.py` converts an explicitly requested visual file
