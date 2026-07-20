@@ -105,6 +105,12 @@ temporary host authoritative and does not reconverge cleanly after travel. A val
 one active runtime generation, named operations, audience, and expiry. Travel must revoke, transfer, or replace
 that authority without changing who the resident is.
 
+The concrete design now uses a stable resident identity public key to verify a signed, short-lived runtime
+generation certificate. Travel carries an exact destination transfer grant for that same actor, key,
+generation, travel ID, and expiry. The destination must not accept anonymous agent arrival merely because the
+coordinator labels the trip `agent`. See the
+[`resident authority audit`](../../research/audits/cognitive-core/resident-authority-route-and-key-boundary.md).
+
 ## Rules
 
 - `actor_id` identifies the person; `session_id` is only a local runtime handle.

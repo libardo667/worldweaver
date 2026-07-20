@@ -74,6 +74,12 @@ from being interpretable.
    longer capture exact prompts. New and started hearths now enforce owner-only local permissions, and elective
    read receipts no longer retain the query, returned prose, or ordinary record IDs. Actor-scoped resident
    authority, diagnostic expiry/purpose/purge, and the custody table remain.
+
+   The resident-authority route audit now defines the missing trust chain as a stable resident identity key,
+   a signed short-lived runtime-generation certificate, and exact per-request signatures. It also establishes
+   that movement, speech, marks, typed consequences, correspondence, and session-enriched reads need the same
+   proof—not only bootstrap and travel. Live key migration waits on encrypted hearth packaging; cryptographic
+   schemas and synthetic-key verification do not.
 2. **Stop false prediction error.** Accept expectations only for sensed scopes, or represent an unobserved
    scope as unknown rather than zero.
 3. **Make time semantics true.** Remove poll-rate dependence from repeated evidence, give replays a virtual

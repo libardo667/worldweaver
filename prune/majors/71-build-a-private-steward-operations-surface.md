@@ -53,6 +53,12 @@ allowlist of city operations, and a short validity window. It must be transferab
 travel, revocable without changing resident identity, and usable by a temporary host without making that host
 the resident's owner.
 
+The route and key audit found that this boundary covers more than bootstrap and travel. Movement, local
+speech, marks, objects, making, stoops, exchanges, space access, and correspondence also accept a session ID
+without proving caller control. Administrative doula, graph, seed, and reset routes require node/steward
+authority or removal, not a broader resident token. The versioned signing and rollout contract is recorded in
+[`resident-authority-route-and-key-boundary.md`](../../research/audits/cognitive-core/resident-authority-route-and-key-boundary.md).
+
 ## Never show or control
 
 - prompt or response text;
@@ -74,7 +80,8 @@ procedure rather than a permanent dashboard field.
   links outside the hearth.
 - [x] Elective-read receipts do not copy queries, returned prose, or ordinary source record IDs into durable
   resident history; identity growth retains only the proposal ID required for explicit adoption.
-- [ ] Resident bootstrap, leave, messages, and travel require an actor-scoped resident/host capability.
+- [ ] Resident bootstrap, private/session-enriched reads, leave, messages, movement, typed world commands, and
+  travel require actor-and-generation-scoped authority.
 - [ ] Prompt diagnostics record their purpose and expiry, expose access receipts, and have a tested purge path.
 - [ ] A reviewed access table defines every steward-visible field and its retention.
 - [ ] The surface is separately authenticated and unavailable to ordinary participants and observers.

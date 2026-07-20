@@ -49,6 +49,12 @@ machine operating a node; it does not become the resident's identity. Any city c
 runtime must bind one actor and active generation, carry only the required operations and audience, expire,
 and be replaceable during travel or host migration without transferring ownership to the host.
 
+The resident authority audit identifies a hard packaging dependency: the stable resident identity private
+key belongs to portable continuity, but the current `.wwhearth` archive is plaintext. Do not add that key to
+the archive until the package is encrypted for its reviewed destination and the transfer authorization is
+authenticated. Runtime request and certificate validation can be built against synthetic keys first. See
+[`resident-authority-route-and-key-boundary.md`](../../research/audits/cognitive-core/resident-authority-route-and-key-boundary.md).
+
 ## Boundaries
 
 - No canonical identity field names a permanent owner computer.
