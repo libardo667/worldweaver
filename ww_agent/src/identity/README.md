@@ -167,6 +167,18 @@ not publish a plaintext payload hash, so an observer cannot use it to recognize 
 This module does not store keys, authorize a host, or change activation state; those remain separate steps
 so a partial implementation cannot look like safe migration.
 
+`hearth_transfer.py` defines the secret-bearing inner part of a host-to-host custody transfer. It exists only
+inside that encrypted, resident-signed envelope. The source command opens the current host seal in memory,
+builds the ordinary secret-free hearth archive, and addresses both to the reviewed next host. The destination
+checks the outer envelope, inner manifest, public identity card, and transferred private key against each
+other before immediately writing a new destination-host seal. The private key is never written as a plaintext
+file. Import leaves the new home dormant and does not alter the source. Python cannot promise to erase every
+temporary in-memory copy, and an authorized host can still copy a key while it is open.
+
+The agent-level commands are `export-transfer` and `import-transfer`. Public shard operators expose them as
+`hearth-host send` and `hearth-host receive-transfer`, using only fixed key-file mounts. These commands move
+custody material; they do not yet transfer permission to wake the resident.
+
 ## Open decisions that must remain explicit
 
 - Where the resident's identity signing/recovery material lives and how it can be recovered without making

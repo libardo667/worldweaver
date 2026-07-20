@@ -254,6 +254,17 @@ def _regular_input_path(path_value: str, *, label: str) -> Path:
     return path.resolve()
 
 
+def _new_output_path(path_value: str, *, label: str) -> Path:
+    path = Path(path_value).expanduser()
+    if not path.is_absolute():
+        path = ROOT / path
+    if path.exists() or path.is_symlink():
+        raise OperatorError(f"Refusing to replace existing {label}: {path}")
+    if not path.parent.is_dir() or path.parent.is_symlink():
+        raise OperatorError(f"{label} parent is missing or unsafe: {path.parent}")
+    return path.absolute()
+
+
 def _resident_directory_name(value: str) -> str:
     name = str(value or "").strip()
     if (
@@ -477,8 +488,13 @@ def command_hearth_host(args: argparse.Namespace) -> int:
     if _read_env().get("SHARD_TYPE") == "world":
         raise OperatorError("A federation directory does not host resident hearths.")
 
-    if args.hearth_host_action == "receive":
-        return _receive_encrypted_hearth(args)
+    if args.hearth_host_action in {"receive", "receive-transfer"}:
+        return _receive_encrypted_hearth(
+            args,
+            custody_transfer=args.hearth_host_action == "receive-transfer",
+        )
+    if args.hearth_host_action == "send":
+        return _send_encrypted_hearth(args)
     if args.hearth_host_action != "initialize":
         raise OperatorError("Unsupported hearth-host action.")
 
@@ -562,7 +578,11 @@ def command_hearth_host(args: argparse.Namespace) -> int:
     return 0
 
 
-def _receive_encrypted_hearth(args: argparse.Namespace) -> int:
+def _receive_encrypted_hearth(
+    args: argparse.Namespace,
+    *,
+    custody_transfer: bool,
+) -> int:
     """Install one encrypted package through a short-lived agent container."""
 
     if (
@@ -607,7 +627,7 @@ def _receive_encrypted_hearth(args: argparse.Namespace) -> int:
             "agent",
             "python",
             "scripts/hearth_package.py",
-            "import-encrypted",
+            "import-transfer" if custody_transfer else "import-encrypted",
             "/transfer/package.wwhearth.enc",
             f"/app/residents/{resident_name}",
             "--resident-identity",
@@ -633,7 +653,8 @@ def _receive_encrypted_hearth(args: argparse.Namespace) -> int:
         raise OperatorError(
             "The agent image returned an invalid import receipt."
         ) from exc
-    if not isinstance(receipt, dict) or receipt.get("status") != "imported-encrypted":
+    expected_status = "imported-transfer" if custody_transfer else "imported-encrypted"
+    if not isinstance(receipt, dict) or receipt.get("status") != expected_status:
         raise OperatorError(
             "The agent image did not confirm an encrypted hearth import."
         )
@@ -646,6 +667,90 @@ def _receive_encrypted_hearth(args: argparse.Namespace) -> int:
     print(f"Received the signed hearth for {actor_id} into residents/{resident_name}.")
     print(
         "The imported hearth is dormant. Review it before activation or city admission."
+    )
+    return 0
+
+
+def _send_encrypted_hearth(args: argparse.Namespace) -> int:
+    """Create a destination-sealed transfer through a short-lived container."""
+
+    if (
+        not HEARTH_TRANSPORT_KEY.is_file()
+        or HEARTH_TRANSPORT_KEY.is_symlink()
+        or not HEARTH_TRANSPORT_DESCRIPTOR.is_file()
+        or HEARTH_TRANSPORT_DESCRIPTOR.is_symlink()
+    ):
+        raise OperatorError(
+            "Initialize this city's complete hearth-host identity before sending a transfer."
+        )
+    _read_hearth_transport_descriptor()
+    recipient_host = _regular_input_path(
+        args.recipient_host,
+        label="Destination hearth-host descriptor",
+    )
+    resident_name = _resident_directory_name(args.resident)
+    source = ROOT / "residents" / resident_name
+    if not source.is_dir() or source.is_symlink():
+        raise OperatorError(f"Resident home is missing or unsafe: {source}")
+    package = _new_output_path(args.package, label="transfer package")
+    if not _docker_available():
+        raise OperatorError("Docker is required to send an encrypted hearth transfer.")
+
+    run_options = ["run", "--rm", "--no-deps", "--no-TTY"]
+    getuid = getattr(os, "getuid", None)
+    getgid = getattr(os, "getgid", None)
+    if callable(getuid) and callable(getgid):
+        run_options.extend(["--user", f"{getuid()}:{getgid()}"])
+    run_options.extend(
+        [
+            "--volume",
+            f"{recipient_host}:/transfer/destination-hearth-host.json:ro",
+            "--volume",
+            f"{HEARTH_HOST_DIR.resolve()}:/hearth-host:ro",
+            "--volume",
+            f"{package.parent.resolve()}:/transfer-output",
+            "--env",
+            "WW_HEARTH_TRANSPORT_PRIVATE_KEY=/hearth-host/identity/transport.key",
+            "agent",
+            "python",
+            "scripts/hearth_package.py",
+            "export-transfer",
+            f"/app/residents/{resident_name}",
+            f"/transfer-output/{package.name}",
+            "--recipient-host",
+            "/transfer/destination-hearth-host.json",
+        ]
+    )
+    try:
+        result = _compose(*run_options, capture=True)
+    except subprocess.CalledProcessError as exc:
+        detail = (
+            ((exc.stdout or b"") + (exc.stderr or b""))
+            .decode("utf-8", errors="replace")
+            .strip()
+        )
+        raise OperatorError(
+            "The agent image refused to create the hearth transfer. "
+            "Check that the resident is stopped and both host identities are current."
+            + (f" Details: {detail[-2000:]}" if detail else "")
+        ) from exc
+    try:
+        receipt = json.loads(result.stdout.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise OperatorError(
+            "The agent image returned an invalid transfer receipt."
+        ) from exc
+    if not isinstance(receipt, dict) or receipt.get("status") != "exported-transfer":
+        raise OperatorError("The agent image did not confirm a hearth transfer.")
+    if not package.is_file() or package.is_symlink():
+        raise OperatorError(
+            "The agent image reported success without creating the transfer package."
+        )
+    manifest = receipt.get("hearth_manifest")
+    actor_id = manifest.get("actor_id") if isinstance(manifest, dict) else "unknown"
+    print(f"Prepared the encrypted hearth transfer for {actor_id}: {package}")
+    print(
+        "The source hearth is unchanged. Do not retire it until the destination is verified."
     )
     return 0
 
@@ -1371,6 +1476,34 @@ def build_parser() -> argparse.ArgumentParser:
         "--resident",
         required=True,
         help="new folder name under residents/",
+    )
+    receive_transfer = hearth_host_commands.add_parser(
+        "receive-transfer",
+        help="verify, reseal, and install a resident transfer without waking it",
+    )
+    receive_transfer.add_argument("package", help="encrypted transfer package")
+    receive_transfer.add_argument(
+        "resident_identity",
+        help="reviewed safe-to-share resident identity card",
+    )
+    receive_transfer.add_argument(
+        "--resident",
+        required=True,
+        help="new folder name under residents/",
+    )
+    send_hearth = hearth_host_commands.add_parser(
+        "send",
+        help="encrypt a stopped resident and identity for another hearth host",
+    )
+    send_hearth.add_argument(
+        "recipient_host",
+        help="reviewed destination hearth-host.json",
+    )
+    send_hearth.add_argument("package", help="new encrypted transfer package")
+    send_hearth.add_argument(
+        "--resident",
+        required=True,
+        help="existing folder name under residents/",
     )
     hearth_host.set_defaults(handler=command_hearth_host)
 

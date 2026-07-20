@@ -98,13 +98,18 @@ Build the private half in this order:
    wrong card, tampering, links, and replacement. `identity/resident_identity.sealed.json` is classified as
    host-specific and never enters plaintext export. There is deliberately no creation command for real
    residents yet and no claim that a host seal is a recovery policy.
+   A stopped, sealed synthetic hearth can now be exported with `hearth-host send` for a reviewed destination
+   host. The destination's `hearth-host receive-transfer` command verifies the resident card, envelope,
+   generation, inner archive, and private key before resealing the key and installing a dormant home. The
+   source remains unchanged. This completes the encrypted custody handoff, not authority transfer or recovery.
 5. On an authorized host, decrypt the long-term key into memory only long enough to sign a fresh runtime
    public key for one city, generation, scope set, and expiry. Ordinary requests use the runtime key, not the
    long-term identity key.
 6. Give each running resident its own signed world client. The current daemon's one shared client cannot carry
    resident authority safely.
-7. Re-encrypt a stopped transfer for the next reviewed host, advance the generation, and retire the source
-   through the existing activation fence before the destination wakes.
+7. The stopped transfer can now be re-encrypted for the next reviewed host. Next, bind the explicit
+   generation advance and source retirement to a reviewed transfer authorization before the destination
+   wakes. Receiving bytes alone must never perform that step.
 8. Specify recovery separately. A federation directory must not hold the only recovery key, and an ordinary
    transfer must not quietly invent a guardian or owner.
 

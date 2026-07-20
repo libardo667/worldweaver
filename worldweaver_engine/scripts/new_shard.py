@@ -294,6 +294,8 @@ python ww.py seed   # new city nodes only; also closes the reset endpoint
 python ww.py status
 python ww.py hearth-host initialize  # city nodes; safe to rerun
 python ww.py hearth-host receive PACKAGE IDENTITY --resident NAME
+python ww.py hearth-host send DESTINATION_HOST PACKAGE --resident NAME
+python ww.py hearth-host receive-transfer PACKAGE IDENTITY --resident NAME
 python ww.py map inspect /path/to/built-city-pack
 python ww.py map publish /path/to/built-city-pack --yes
 python ww.py resident-authority list  # city nodes only; public identity records
@@ -328,6 +330,15 @@ receiver key only into a short-lived agent container. It verifies the resident's
 public identity card and signed encrypted package, writes only into a brand-new
 resident folder, and leaves the imported hearth dormant for review. The running
 city backend never receives the host key.
+
+Host-to-host custody transfer is deliberately two commands. On the source,
+`hearth-host send DESTINATION_HOST PACKAGE --resident NAME` opens the stopped
+resident's current host seal in memory and encrypts the hearth and identity key
+for the reviewed destination `hearth-host.json`. On the destination,
+`hearth-host receive-transfer PACKAGE IDENTITY --resident NAME` verifies every
+identity and generation binding, reseals the key for that host, and installs a
+dormant hearth. Sending and receiving do not retire the source or wake the
+destination. That later transfer-of-authority step stays explicit.
 
 `update` accepts explicit versioned image references. `restore` requires a full
 backup made by this command surface and an explicit `--yes`. Backups contain the

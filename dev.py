@@ -1011,6 +1011,34 @@ def _hearth_host(args: list[str]) -> int:
         required=True,
         help="new folder name under the city's residents directory",
     )
+    receive_transfer = commands.add_parser(
+        "receive-transfer",
+        help="verify, reseal, and install a resident transfer without waking it",
+    )
+    receive_transfer.add_argument("package", help="encrypted transfer package")
+    receive_transfer.add_argument(
+        "resident_identity",
+        help="reviewed safe-to-share resident identity card",
+    )
+    receive_transfer.add_argument(
+        "--resident",
+        required=True,
+        help="new folder name under the city's residents directory",
+    )
+    send = commands.add_parser(
+        "send",
+        help="encrypt a stopped resident and identity for another hearth host",
+    )
+    send.add_argument(
+        "recipient_host",
+        help="reviewed safe-to-share destination hearth-host descriptor",
+    )
+    send.add_argument("package", help="new encrypted transfer package")
+    send.add_argument(
+        "--resident",
+        required=True,
+        help="existing folder name under the city's residents directory",
+    )
     parsed = parser.parse_args(args)
     if Path(parsed.city).name != parsed.city:
         parser.error("--city must be a single directory name")
@@ -1032,7 +1060,7 @@ def _hearth_host(args: list[str]) -> int:
     if env_values.get("SHARD_TYPE") == "world":
         print("A federation directory does not host resident hearths.", file=sys.stderr)
         return 2
-    if parsed.action == "receive":
+    if parsed.action in {"receive", "receive-transfer", "send"}:
         resident_name = str(parsed.resident or "").strip()
         if (
             resident_name in {"", ".", ".."}
@@ -1048,11 +1076,35 @@ def _hearth_host(args: list[str]) -> int:
         key_path = city_dir / "hearth-host" / "identity" / "transport.key"
         runtime_env = os.environ.copy()
         runtime_env["WW_HEARTH_TRANSPORT_PRIVATE_KEY"] = str(key_path)
+        if parsed.action == "send":
+            result = _run(
+                [
+                    sys.executable,
+                    str(AGENT_DIR / "scripts" / "hearth_package.py"),
+                    "export-transfer",
+                    str(city_dir / "residents" / resident_name),
+                    str(Path(parsed.package).expanduser().resolve()),
+                    "--recipient-host",
+                    str(Path(parsed.recipient_host).expanduser().resolve()),
+                ],
+                cwd=AGENT_DIR,
+                env=runtime_env,
+            )
+            if result == 0:
+                print(
+                    "The source hearth is unchanged. Do not retire it until the destination is verified."
+                )
+            return result
+        import_command = (
+            "import-transfer"
+            if parsed.action == "receive-transfer"
+            else "import-encrypted"
+        )
         result = _run(
             [
                 sys.executable,
                 str(AGENT_DIR / "scripts" / "hearth_package.py"),
-                "import-encrypted",
+                import_command,
                 str(Path(parsed.package).expanduser().resolve()),
                 str(city_dir / "residents" / resident_name),
                 "--resident-identity",
@@ -1117,6 +1169,10 @@ def _help() -> None:
                                         create or verify its encrypted-package receiver
   python dev.py hearth-host --city CITY receive PACKAGE IDENTITY --resident NAME
                                         install a signed hearth, dormant, into a new home
+  python dev.py hearth-host --city CITY send HOST PACKAGE --resident NAME
+                                        encrypt a stopped hearth and identity for another host
+  python dev.py hearth-host --city CITY receive-transfer PACKAGE IDENTITY --resident NAME
+                                        verify, reseal, and install it dormant
   python dev.py new-shard CITY [options]
                                         create an isolated, folder-operated node
   python dev.py city-draft create --city CITY
