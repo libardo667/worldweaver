@@ -1374,6 +1374,16 @@ class TestWorldEventLedgerEndpoints:
         assert speaker_projection is not None
         assert speaker_projection.value == "Levi"
 
+        # The author stays identifiable to another authenticated resident after
+        # the author goes home and their temporary city session is retired.
+        db_session.add(SessionVars(session_id="reader-session", actor_id="actor-reader", vars={"location": "Cafe"}))
+        db_session.commit()
+        leave = client.post("/api/session/leave", json={"session_id": "speaker-session"})
+        assert leave.status_code == 200
+        retired_chat = client.get("/api/world/location/Cafe/chat", params={"session_id": "reader-session"}).json()["messages"][-1]
+        assert retired_chat["actor_id"] == "actor-speaker"
+        assert retired_chat["session_id"] == "speaker-session"
+
     def test_player_dm_stays_private_and_does_not_touch_public_ledger(self, client, db_session):
         response = client.post(
             "/api/world/dm",

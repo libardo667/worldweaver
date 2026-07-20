@@ -3041,7 +3041,7 @@ def get_location_chat(
         }
         if include_speaker_ids:
             entry["session_id"] = r.session_id
-            entry["actor_id"] = actor_ids_by_session.get(str(r.session_id or "").strip(), "")
+            entry["actor_id"] = str(r.actor_id or actor_ids_by_session.get(str(r.session_id or "").strip(), "") or "").strip()
         messages.append(entry)
     return {"location": location, "messages": messages}
 
@@ -3094,6 +3094,7 @@ def post_location_chat(
     row = LocationChat(
         location=session_location,
         session_id=session_id,
+        actor_id=str(session_row.actor_id or vars_payload.get("actor_id") or "").strip() or None,
         display_name=display_name,
         message=message,
     )

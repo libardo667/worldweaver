@@ -506,6 +506,7 @@ class LocationChat(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     location = Column(String(200), nullable=False, index=True)
     session_id = Column(String(64), nullable=False)
+    actor_id = Column(String(36), nullable=True)
     display_name = Column(String(200), nullable=True)
     message = Column(Text, nullable=False)
     created_at = Column(DateTime, server_default=func.now(), index=True)

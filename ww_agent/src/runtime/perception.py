@@ -259,6 +259,7 @@ async def _sense_chat(
     location: str,
     packets: StimulusPacketQueue,
     name_variants: set[str],
+    self_actor_id: str,
     channel: str,
 ) -> list[dict[str, Any]]:
     chat_location = "__city__" if channel == "city" else location
@@ -274,6 +275,15 @@ async def _sense_chat(
         if str(message.session_id or "") == session_id:
             continue
         speaker = str(message.display_name or "").strip()
+        speaker_actor_id = str(getattr(message, "actor_id", "") or "").strip()
+        if speaker_actor_id and self_actor_id and speaker_actor_id == self_actor_id:
+            continue
+        # Older chat rows kept only the city session. Once that session was
+        # retired, the engine could no longer recover its durable actor ID. A
+        # resident returning from their hearth must not hear that legacy speech
+        # as somebody else's merely because they now have a new session ID.
+        if not speaker_actor_id and speaker.lower() in name_variants:
+            continue
         body = str(message.message or "").strip()
         ts = str(message.ts or "").strip()
         mid = str(getattr(message, "id", "") or "")  # Major 66: stable utterance id (reply-edge identity)
@@ -293,7 +303,7 @@ async def _sense_chat(
                 "id": mid,
                 "ts": ts,
                 "speaker": speaker,
-                "actor_id": str(getattr(message, "actor_id", "") or ""),
+                "actor_id": speaker_actor_id,
                 "session_id": message.session_id,
                 "location": str(getattr(message, "location", "") or chat_location),
                 "message": body,
@@ -570,6 +580,7 @@ async def perceive(
             location=location,
             packets=packets,
             name_variants=name_variants,
+            self_actor_id=str(identity.actor_id or "").strip(),
             channel="local",
         )
         mail_count = await _sense_mail(ww_client=ww_client, agent_name=identity.name, packets=packets)

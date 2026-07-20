@@ -878,6 +878,22 @@ def test_perceive_senses_direct_chat_and_mail(tmp_path):
     assert stimulus["self"].get("correspondence_pull", 0.0) > 0.0
 
 
+def test_perceive_does_not_hear_its_own_speech_from_an_older_city_session(tmp_path):
+    world = _StubWorld(
+        _Scene(),
+        local_chat=[
+            _Chat("old-session", "Sun Li", "My earlier words.", actor_id="actor-123"),
+            _Chat("legacy-session", "Sun Li", "My legacy words without an actor ID."),
+            _Chat("other-session", "Sun Li", "A different person with my name.", actor_id="actor-other"),
+        ],
+    )
+
+    brief = asyncio.run(perceive(ww_client=world, session_id="new-session", memory_dir=tmp_path, identity=_identity()))
+
+    assert [item["message"] for item in brief["heard"]] == ["A different person with my name."]
+    assert brief["heard"][0]["speaker_actor_id"] == "actor-other"
+
+
 def test_perceive_surfaces_reachable_destinations(tmp_path):
     graph = {
         "nodes": [
