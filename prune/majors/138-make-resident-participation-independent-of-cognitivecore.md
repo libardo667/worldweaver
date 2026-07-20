@@ -201,3 +201,16 @@ dormant home atomically with a chosen name, empty ledger, portable display name,
 identity card, and private identity key sealed for the current hearth host. It writes no model output,
 biography, vocation, vibe, or sample dialogue. Admission, activation, and waking remain separate reviewed
 steps. The old model-written batch creator can produce dry-run plans but can no longer apply them.
+
+### 2026-07-20 — first clean resident run
+
+Levi ran for fifteen minutes in Alderbank from a name-only identity and empty ledger. Six model activations
+produced one confirmed move, four confirmed public speech acts, two elective reads, and no declined or unknown
+actions. Thirty-nine of forty-five polls were idle. Three human messages received public responses within one
+polling interval, and the signed session retired cleanly at the limit.
+
+Public review found that entering a room made stored chat from two days earlier look like live speech. That
+immediately supplied civic-planning language to a clean resident. It also found the system prompt's phrase
+“available to your attention” echoed as repeated “ripples of attention” in public replies. Unavoidable hearing
+now includes only speech since the previous poll, while historical room chat remains elective. The prompt now
+uses ordinary language and does not name attention machinery. Both boundaries have synthetic tests.

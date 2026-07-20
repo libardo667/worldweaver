@@ -307,6 +307,40 @@ def test_observation_does_not_turn_unavailable_into_empty():
     assert speech_unavailable.availability["local_speech"] == "unavailable"
 
 
+def test_unavoidable_hearing_excludes_archived_room_chat():
+    world = _FakeWorld()
+    world.chat = [
+        SimpleNamespace(
+            id=1,
+            session_id="old-session",
+            actor_id="actor-old",
+            display_name="Old Speaker",
+            message="A conversation from two days ago.",
+            ts="2026-07-18T12:00:00+00:00",
+        ),
+        SimpleNamespace(
+            id=2,
+            session_id="riley-session",
+            actor_id="actor-riley",
+            display_name="Riley",
+            message="Test Resident, are you here?",
+            ts="2026-07-20T12:00:05+00:00",
+        ),
+    ]
+
+    observation = asyncio.run(
+        observe_reference_world(
+            world,
+            session_id="test-session",
+            identity=_identity(),
+            local_speech_since=datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc),
+        )
+    )
+
+    assert observation.local_speech == ("Riley: Test Resident, are you here?",)
+    assert observation.heard == (("Riley", "2", "chat:Alderbank Commons:2"),)
+
+
 def test_local_direct_speech_is_in_the_unavoidable_observation():
     observation = asyncio.run(
         observe_reference_world(
@@ -322,3 +356,16 @@ def test_local_direct_speech_is_in_the_unavoidable_observation():
     assert observation.reachable == ("Commons Bank",)
     assert observation.source_names == {"library"}
     assert observation.heard == (("Riley", "1", "chat:Alderbank Commons:1"),)
+
+
+def test_reference_prompt_does_not_name_attention_machinery(tmp_path):
+    core, _memory_dir, _acted, _reads = _core(
+        tmp_path,
+        responses=[{"choice": "wait"}],
+    )
+
+    asyncio.run(core.tick_once())
+
+    system_prompt = core._llm.calls[0][0]
+    assert "attention" not in system_prompt.casefold()
+    assert "Someone speaking here does not require a reply." in system_prompt

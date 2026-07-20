@@ -62,6 +62,11 @@ reviewable resident at a time with only a chosen name, empty ledger, dormant hea
 host-sealed key. Next, choose the fresh resident and run them under the agreed privacy boundary. Reintroduce
 old mechanisms only one at a time through paired tests; do not restore the former core wholesale.
 
+That first run is now complete. Levi used an empty ledger and name-only identity, responded promptly to live
+human speech, and parked cleanly. It also exposed two prompt-pipeline leaks: archived room chat was treated as
+live hearing on entry, and the system prompt's word “attention” echoed into repeated public speech. Both are
+now removed and pinned by synthetic tests. Repeat a clean run before adding any cognitive mechanism.
+
 Continue the research audit as a separate evidence lane. It should explain why old mechanisms remain removed
 or earn re-entry, not tune the new loop toward sociability, movement, or a preferred personality.
 

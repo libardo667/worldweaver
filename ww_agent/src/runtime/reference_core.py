@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
@@ -177,6 +177,7 @@ async def observe_reference_world(
     *,
     session_id: str,
     identity: ResidentIdentity,
+    local_speech_since: datetime | None = None,
 ) -> ReferenceObservation:
     """Read current-place facts while preserving unavailable as a real state."""
 
@@ -256,6 +257,9 @@ async def observe_reference_world(
                 item
                 for item in list(messages or [])[-10:]
                 if str(getattr(item, "message", "") or "").strip()
+                and _speech_is_current(
+                    getattr(item, "ts", None), since=local_speech_since
+                )
                 and str(getattr(item, "session_id", "") or "").strip() != session_id
                 and not (
                     str(getattr(item, "actor_id", "") or "").strip()
@@ -315,6 +319,25 @@ async def observe_reference_world(
         ),
         sources=sources,
     )
+
+
+def _speech_is_current(value: Any, *, since: datetime | None) -> bool:
+    """Keep archived room chat out of involuntary present-time hearing."""
+
+    if since is None or value in {None, ""}:
+        return True
+    if isinstance(value, datetime):
+        spoken_at = value
+    else:
+        try:
+            spoken_at = datetime.fromisoformat(
+                str(value).strip().replace("Z", "+00:00")
+            )
+        except ValueError:
+            return False
+    if spoken_at.tzinfo is None:
+        spoken_at = spoken_at.replace(tzinfo=timezone.utc)
+    return spoken_at >= since
 
 
 def render_reference_observation(observation: ReferenceObservation) -> str:
@@ -404,6 +427,7 @@ class ReferenceResidentCore:
         self._model = str(model or "").strip() or None
         self._temperature = temperature
         self._last_activation_at: datetime | None = None
+        self._last_poll_at: datetime | None = None
         self._seen_local_speech_ids: set[str] = set()
         self.latest_observation: ReferenceObservation | None = None
 
@@ -428,7 +452,7 @@ class ReferenceResidentCore:
             f"{identity_text}\n\n"
             "This is one brief chance to notice the place and choose what, if anything, to do. "
             "Speaking, moving, reading, continuing privately, and doing nothing are all valid. "
-            "A direct remark is available to your attention but does not require a reply. "
+            "Someone speaking here does not require a reply. "
             "Do not claim that an action succeeded; the world decides that afterward.\n\n"
             f"Return exactly one JSON object choosing {choices}. "
             'Read: {"choice":"read","source":"advertised-name","query":"..."}. '
@@ -493,11 +517,16 @@ class ReferenceResidentCore:
             effective_now = now if now.tzinfo else now.replace(tzinfo=timezone.utc)
         else:
             effective_now = datetime.now(timezone.utc)
+        speech_since = self._last_poll_at or (
+            effective_now - timedelta(seconds=self._tick_seconds)
+        )
         observation = await observe_reference_world(
             self._world,
             session_id=self._session_id,
             identity=self._identity,
+            local_speech_since=speech_since,
         )
+        self._last_poll_at = effective_now
         self.latest_observation = observation
         if hasattr(self._effector, "location"):
             self._effector.location = observation.location
