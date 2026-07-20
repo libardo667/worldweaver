@@ -3,24 +3,26 @@
 
 """The typed pulse contract and its back-prop routing layer (Major 49, Phase 1).
 
-One ignition produces one ``Pulse``: the single LLM call returns JSON, which is
-validated into the typed contract here and then *mechanically* routed. The
-routing layer is pure mechanism — it fans each field to its region of the
-substrate and never interprets prose as control:
+One activation episode routes one final ``Pulse``. The episode begins with a model
+call and may include continuation calls after elective reads. Each returned JSON
+object is validated here, but only the episode's final pulse is mechanically routed.
+The routing layer fans each field to its region of the substrate and never treats
+free prose as an outward world command:
 
-- ``felt_sense`` is a logged readout only; it goes to the chronicle and is never
-  read back as control.
+- ``felt_sense`` is a logged model self-report. It is not sent directly to the
+  world effector, but recall and anchor extraction can feed it into later calls.
 - ``reach`` is an elective, private information request; it never becomes a world act.
 - ``act`` is the only path to the outward world.
 - ``expectations`` become the afterimage — a decaying top-down prediction stored
   as ledger events and read back via ``substrate.predict`` (see substrate.py).
-- ``drive_nudges`` are transient reverie pulls, stored the same decaying way.
+- ``drive_nudges`` are stored with decay metadata, but no production consumer
+  currently feeds the reduced value into a later activation.
 - ``self_delta`` must pass the Major 42 constitution gate before it can stage any
   identity change; the gate is enforced in code, never asked of the prompt.
 - ``trace_verdicts`` record consolidate/release/watch judgements on traces.
 
-Everything is routed through the one canonical ledger (``append_runtime_event``)
-so the substrate stays a derived projection with full provenance.
+Pulse fields are recorded in the canonical append-only ledger. Kept memories are
+also copied into a historical side store that remains a second read authority.
 """
 
 from __future__ import annotations
@@ -290,7 +292,7 @@ class Keepsake:
 
 @dataclass(frozen=True)
 class Pulse:
-    """The single typed output of one ignition."""
+    """The typed output returned at one step of an activation episode."""
 
     felt_sense: str = ""
     reach: Reach | None = None
@@ -448,7 +450,8 @@ def route_pulse(
         payload={"pulse_id": pulse_id, "cast_ts": cast_ts, "pulse": pulse.to_dict()},
     )
 
-    # felt_sense — readout only, to the chronicle; never routed as control.
+    # felt_sense is not sent to the world effector. Later recall and anchor
+    # extraction do read it, so this event is causally relevant to future pulses.
     append_runtime_event(
         memory_dir,
         event_type="felt_sense_logged",
@@ -485,7 +488,8 @@ def route_pulse(
             payload={"pulse_id": pulse_id, "cast_ts": cast_ts, **expectation.to_dict()},
         )
 
-    # drive_nudges — transient reverie pulls, decaying the same way.
+    # drive_nudges are stored with decay metadata. A reducer exists, but the
+    # reduced field currently has no production consumer.
     for nudge in pulse.drive_nudges:
         append_runtime_event(
             memory_dir,
@@ -510,9 +514,9 @@ def route_pulse(
             payload={"pulse_id": pulse_id, **trace_verdict.to_dict()},
         )
 
-    # keepsakes — what the resident chose to remember across days. The ledger event
-    # is provenance; the DURABLE write (memory.record_kept) is the real home, because
-    # the ledger is hard-capped and would otherwise evict the memory within hours.
+    # keepsakes are written to the append-only ledger and to the older kept-memory
+    # side store. Both are currently read authorities; the audit tracks their
+    # consolidation rather than pretending the ledger is still capped.
     for keepsake in pulse.keepsakes:
         append_runtime_event(
             memory_dir,

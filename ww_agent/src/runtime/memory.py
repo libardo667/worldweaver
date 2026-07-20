@@ -28,14 +28,10 @@ from src.runtime.ledger import load_runtime_events
 
 DEFAULT_MEMORY_LIMIT = 12
 
-# Kept memory must outlive the rolling event ledger. The ledger is hard-capped at
-# the last N events (ledger._MAX_EVENTS), which at the substrate's event rate is
-# only a few hours — so a ``memory_kept`` event left there is silently *evicted*,
-# and the resident forgets what it deliberately chose to carry "across days". This
-# is the durable store that fixes that: an append-only file, never trimmed, that is
-# the real home of kept memory. The ledger event is kept too (for in-session
-# provenance), but ``memories()`` reads from here and lazily rescues any ledger
-# keepsakes into it before they can scroll off the back.
+# This side store predates the append-only ledger. It originally protected selected
+# memory from a rolling event cap that no longer exists. Production recall still
+# reads it and copies ledger keepsakes into it, so it remains a second authority
+# until a migration deliberately consolidates the two sources.
 KEPT_STORE_NAME = "kept_memory.jsonl"
 
 
@@ -146,9 +142,9 @@ def derive_memories(events: list[dict[str, Any]], *, limit: int = DEFAULT_MEMORY
 
 def memories(memory_dir: Path, *, limit: int = DEFAULT_MEMORY_LIMIT) -> list[dict[str, Any]]:
     """The resident's durable kept memories, most recent first — what it carries
-    across days. Reads the durable store, and first *rescues* any keepsakes still
-    sitting in the rolling ledger into it (migration of survivors + safety net), so
-    a memory is preserved long before the ledger's hard cap could evict it."""
+    across days. Reads the historical side store and copies any ledger-only
+    keepsakes into it. The append-only ledger now preserves both; this synchronization
+    remains for compatibility until the duplicate authority is migrated."""
     memory_dir = Path(memory_dir)
     durable = _load_kept_records(memory_dir)
     seen = {r["note"].strip().lower() for r in durable}

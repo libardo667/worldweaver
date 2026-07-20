@@ -6,15 +6,15 @@
 This is what replaces the loop-era mind. On each tick the core:
 
   1. perceives the world  → emits substrate perturbations (perception.py),
-  2. runs one integrator tick → surprise vs afterimage, leaky arousal, and on
-     ignition the single LLM pulse (pulse_engine.py),
-  3. routes the typed pulse back into the substrate and lets the effector carry
+  2. runs one integrator tick → surprise vs afterimage, decaying call pressure,
+     and possibly a model activation with elective-read continuations,
+  3. routes the final typed pulse back into the substrate and lets the effector carry
      the one act to the world (effectors.py).
 
-The core holds no behavioral logic. It is the orchestration seam between the
-mechanism (substrate, salience, integrator) and the world (perception, effector,
-LLM pulse). The fast / slow / mail / ground / wander loops are demoted beneath
-it to pure sensorimotor mechanism.
+The core is the orchestration seam between derived state, scheduling and prompt
+policy, the model, and the world. It also owns behavioral controls such as mode,
+incubation, action tendency, refractory timing, and the host read limit. The old
+fast / slow / mail / ground / wander loops are gone.
 """
 
 from __future__ import annotations

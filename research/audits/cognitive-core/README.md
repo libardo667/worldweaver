@@ -51,6 +51,9 @@ variable represents lived experience.
   and closes, including ghost pressure and post-Major-85 read costs.
 - [`temporal-and-attention-mechanics.md`](temporal-and-attention-mechanics.md) verifies how polling cadence,
   false duration checks, social-node saturation, and the waveform monitor change resident behavior.
+- [`elective-information-and-agency.md`](elective-information-and-agency.md) traces what a resident can read,
+  who opens the reading window, what survives a continuation, and why the current cap is a host circuit
+  breaker rather than durable resident-controlled attention.
 - [`repair-and-ablation-order.md`](repair-and-ablation-order.md) puts software truth repairs before neutral
   reference runs and one-variable mechanism tests.
 - [`claim-ledger.md`](claim-ledger.md) lists terms and implied claims that require a decision.

@@ -189,7 +189,7 @@ class CityWorld:
         - mobile / mail: ``post_map_move`` and the correspondence channel (the real client mutes no
           self-senses, so the city resident keeps movement and mail).
         - no_reward / suspendable / runs_on_model: substrate-universal truths (the Dwarf Fortress law;
-          the ledger persists across stop/start; the pulse is one LLM call).
+          the ledger persists across stop/start; model calls produce each activation episode).
 
         Deliberately NOT reported (kept honest):
         - place / peers / players: dynamic, surfaced every tick through the live scene, not the standing

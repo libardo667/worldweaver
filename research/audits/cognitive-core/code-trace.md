@@ -156,6 +156,21 @@ behavior policies authored by the project. They must not be reported as an emerg
 23. **The waveform vital is an operational heuristic, not a health reading.** It counts idle attempts as
     discharge without resetting ordinary pressure, omits the absence term from its reconstruction, and uses
     threshold-dwell approximations that can diverge from the decaying curve.
+24. **Elective reading begins only after a host-scheduled model call.** The model chooses a named source from
+    inside an activation episode, but no durable resident-owned task can schedule or resume a long inquiry.
+25. **One pulse may contain several LLM calls.** The default two-read limit permits an initial call plus two
+    continuations. “Single LLM call” comments describe the pre-reach design, not the live implementation.
+26. **Only the final continuation pulse becomes durable.** Earlier memories, expectations, self edits, drive
+    nudges, trace verdicts, and felt reports are discarded unless the model repeats them in the final response.
+27. **Duplicate-read timing is not replayable.** The cache ignores the supplied `now`, uses process-local
+    monotonic time, disappears on core rebuild, and can close a fresh model episode without presenting the
+    cached result to that episode.
+28. **The read cap is not a cost budget.** It counts sources, while model calls, input size, output tokens,
+    latency, and provider price remain variable. It is a useful circuit breaker with a misleading unit.
+29. **The continuation's “frozen world” is only partly frozen.** Initial perception and the source catalog
+    stay fixed, source providers may read live shard state, and the final action reaches the live engine.
+30. **Direct address is still prompt-level response pressure.** The shared contract instructs the model to
+    choose a non-null act when addressed instead of merely ensuring the event reaches attention.
 
 ## Questions for the next code pass
 
@@ -166,3 +181,5 @@ behavior policies authored by the project. They must not be reported as an emerg
 - Which constants were calibrated against recorded behavior, and which were selected by intuition?
 - Can prompt pressure be reduced enough that a substrate ablation measures the substrate rather than the
   prose describing it?
+- What is the smallest durable inquiry lifecycle that lets a resident resume chosen reading while keeping
+  event delivery and steward resource limits separate?

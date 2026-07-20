@@ -9,14 +9,13 @@ This is the mechanism that closes the loop the architecture is built around:
         →  leaky arousal  →  ignition  →  pulse  →  afterimage out  →  act
         →  (afterimage decays)  →  surprise re-accumulates  →  …
 
-``tick`` runs that cycle once. It is pure mechanism — it never calls the LLM or
-the world itself. The single LLM pulse is injected as ``pulse_producer`` and the
-outward act is carried by an injected ``effector``; ignition hands the producer
-the igniting traces and current self-state, routes whatever typed ``Pulse`` it
-returns back into the substrate, then lets the effector carry the one ``act`` to
-the world. Both injected callables may be sync or async, so the same tick drives
-the deterministic test stubs and the real LLM/world clients (see
-cognitive_core.py). Phase 3 wires the real producer and effector in.
+``tick`` runs that cycle once. It is provider-neutral orchestration: an injected
+``pulse_producer`` makes the initial model call and any elective-read continuation
+calls, while an injected ``effector`` carries at most one outward act. The
+integrator hands the producer the igniting traces and current self-state, routes
+only the final typed ``Pulse`` back into the substrate, then lets the effector
+carry its act to the world. Injected callables may be sync or async, so the same
+tick drives deterministic test stubs and real model/world clients.
 """
 
 from __future__ import annotations

@@ -3,11 +3,12 @@
 
 """The LLM-backed pulse producer (Major 49, Phase 3).
 
-This is the single LLM call of the architecture. It fires only on ignition: the
-integrator hands it the igniting traces and current self-state, it assembles one
-prompt from the resident's canonical soul plus that state, and it returns the one
-typed ``Pulse``. Everything downstream is mechanism — the pulse is validated and
-routed; prose never becomes control.
+The initial call fires only when the integrator opens an activation episode. The
+integrator hands it the igniting traces and current self-state, it assembles a
+prompt from the resident's canonical soul plus that state, and it returns a typed
+``Pulse``. An elective reach may then open continuation calls before the integrator
+routes one final pulse. Everything downstream is mechanism — the pulse is validated
+and routed; prose never becomes an outward world command by itself.
 
 The producer holds no behavioral logic of its own. Its job is to turn "what
 surprised me + who I am + what I now feel" into a typed pulse, and to fail closed
@@ -347,7 +348,7 @@ def _format_field(field: dict[str, dict[str, float]] | dict[str, Any]) -> str:
 
 
 class LLMPulseProducer:
-    """Produce a typed ``Pulse`` from one LLM call on ignition."""
+    """Produce an initial pulse and any reach continuations for one activation."""
 
     def __init__(
         self,

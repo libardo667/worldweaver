@@ -64,8 +64,8 @@ class Resident:
     and run until cancelled. The mind is the
     Major 49 substrate + pulse: perception lays the world down as perturbations,
     the ledger-derived substrate accumulates surprise against its afterimage, and
-    on ignition a single LLM pulse acts and re-predicts. Everything else comes
-    from the world.
+    an opened activation may use several model calls before one final pulse acts
+    and re-predicts. The host also supplies scheduling and prompt policy.
     """
 
     def __init__(

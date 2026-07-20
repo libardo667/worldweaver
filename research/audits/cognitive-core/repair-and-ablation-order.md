@@ -27,6 +27,9 @@ from being interpretable.
    repeatedly rebuilding it on every tick.
 10. **Correct the archived/current docs.** Do not claim valence, reverie-weighted drive, semantic constitution
    gating, or node-neighbor plasticity until the live path proves them.
+11. **Make the information episode contract true.** Stop calling a reach-enabled pulse one LLM call, define
+   whether only the final continuation commits, return cached results to the requesting model, and use an
+   injected clock for replayable cache behavior.
 
 ## Second: establish a neutral reference runtime
 
@@ -39,6 +42,13 @@ The reference arm should retain only:
 - immutable canonical identity plus explicit growth provenance;
 - permissions and world consequences;
 - content-blind operational receipts.
+
+Host resource limits should be explicit in this reference arm, but they should report calls, tokens, time,
+and cost as host constraints rather than presenting a fixed read count as a theory of attention.
+
+Add one small resident-owned inquiry lifecycle after the truth repairs: start, checkpoint, pause, resume, and
+close. It should retain source references and structural progress, not hidden chain-of-thought. A new embodied
+event may interrupt the task without forcing a reply or destroying the resident's place in it.
 
 It should remove mode metaphors, stock life examples, anti-repetition judgements, unused pulse fields, and
 unsupported health language. Quiet, reading, repeated practice, refusal, speech, making, and movement should
