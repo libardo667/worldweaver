@@ -847,6 +847,50 @@ def _resident_authority(args: list[str]) -> int:
     return _run(command, cwd=city_dir, input_bytes=descriptor)
 
 
+def _hearth_host(args: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="python dev.py hearth-host",
+        description="Initialize or verify one city's folder-owned package receiver.",
+    )
+    parser.add_argument("--city", required=True, help="city shard directory name")
+    commands = parser.add_subparsers(dest="action", required=True)
+    commands.add_parser(
+        "initialize",
+        help="create, repair, or verify the private receiver key and public descriptor",
+    )
+    parsed = parser.parse_args(args)
+    if Path(parsed.city).name != parsed.city:
+        parser.error("--city must be a single directory name")
+
+    city_dir = ROOT / "shards" / parsed.city
+    compose_file = city_dir / "docker-compose.yml"
+    if not compose_file.is_file():
+        print(f"City shard not found: {parsed.city}", file=sys.stderr)
+        return 2
+    env_file = city_dir / ".env"
+    if not env_file.is_file():
+        print(f"City shard configuration not found: {env_file}", file=sys.stderr)
+        return 2
+    env_values: dict[str, str] = {}
+    for raw_line in env_file.read_text(encoding="utf-8").splitlines():
+        if raw_line and not raw_line.startswith("#") and "=" in raw_line:
+            key, value = raw_line.split("=", 1)
+            env_values[key.strip()] = value.strip()
+    if env_values.get("SHARD_TYPE") == "world":
+        print("A federation directory does not host resident hearths.", file=sys.stderr)
+        return 2
+    return _run(
+        [
+            sys.executable,
+            str(ENGINE_DIR / "scripts" / "hearth_transport_identity.py"),
+            "--private-key",
+            str(city_dir / "hearth-host" / "identity" / "transport.key"),
+            "--descriptor",
+            str(city_dir / "hearth-host.json"),
+        ]
+    )
+
+
 def _help() -> None:
     print("""WorldWeaver workspace commands
 
@@ -879,6 +923,8 @@ def _help() -> None:
                                         assign one reviewed place without waking its controller
   python dev.py resident-authority --city CITY list
                                         inspect public resident identities admitted by one city
+  python dev.py hearth-host --city CITY initialize
+                                        create or verify its encrypted-package receiver
   python dev.py new-shard CITY [options]
                                         create an isolated, folder-operated node
   python dev.py city-draft create --city CITY
@@ -919,6 +965,8 @@ def main() -> int:
         return _space_policy(rest)
     if command == "resident-authority":
         return _resident_authority(rest)
+    if command == "hearth-host":
+        return _hearth_host(rest)
     if command == "new-shard":
         return _run([sys.executable, "scripts/new_shard.py", *rest], cwd=ENGINE_DIR)
     if command == "city-draft":

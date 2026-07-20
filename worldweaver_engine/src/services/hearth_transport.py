@@ -120,6 +120,60 @@ def _write_new(path: Path, content: bytes) -> None:
             temporary.unlink(missing_ok=True)
 
 
+def descriptor_for_hearth_transport_private_key(
+    path: str | Path,
+) -> HearthTransportDescriptor:
+    """Derive the safe-to-share descriptor for one existing private key."""
+
+    private_key = load_hearth_transport_private_key(path)
+    public_key = encoded_transport_public_key(private_key.public_key())
+    return HearthTransportDescriptor(
+        transport_key_id=hearth_transport_key_id(public_key),
+        transport_public_key=public_key,
+    )
+
+
+def create_hearth_transport_private_key(
+    private_key_path: str | Path,
+) -> HearthTransportDescriptor:
+    """Create one private host key and return its public descriptor."""
+
+    private_path = Path(private_key_path)
+    if private_path.exists() or private_path.is_symlink():
+        raise HearthTransportError(f"Refusing to replace existing path: {private_path}")
+    private_key = X25519PrivateKey.generate()
+    public_key = encoded_transport_public_key(private_key.public_key())
+    descriptor = HearthTransportDescriptor(
+        transport_key_id=hearth_transport_key_id(public_key),
+        transport_public_key=public_key,
+    )
+    private_path.parent.mkdir(parents=True, exist_ok=True)
+    private_path.parent.chmod(0o700)
+    _write_new(
+        private_path,
+        f"{_encode(private_key.private_bytes_raw())}\n".encode(),
+    )
+    private_path.chmod(0o600)
+    return descriptor
+
+
+def write_hearth_transport_descriptor(
+    descriptor_path: str | Path,
+    descriptor: HearthTransportDescriptor,
+) -> None:
+    """Validate and write one public descriptor without replacement."""
+
+    public_path = Path(descriptor_path)
+    if public_path.exists() or public_path.is_symlink():
+        raise HearthTransportError(f"Refusing to replace existing path: {public_path}")
+    verified = HearthTransportDescriptor.from_dict(descriptor.to_dict())
+    public_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_new(
+        public_path,
+        (json.dumps(verified.to_dict(), indent=2, sort_keys=True) + "\n").encode("utf-8"),
+    )
+
+
 def generate_hearth_transport_identity(
     *,
     private_key_path: Path,
@@ -132,24 +186,11 @@ def generate_hearth_transport_identity(
     for path in (private_path, public_path):
         if path.exists() or path.is_symlink():
             raise HearthTransportError(f"Refusing to replace existing path: {path}")
-    private_key = X25519PrivateKey.generate()
-    public_key = encoded_transport_public_key(private_key.public_key())
-    descriptor = HearthTransportDescriptor(
-        transport_key_id=hearth_transport_key_id(public_key),
-        transport_public_key=public_key,
-    )
-    private_path.parent.mkdir(parents=True, exist_ok=True)
-    private_path.parent.chmod(0o700)
-    public_path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = create_hearth_transport_private_key(private_path)
     wrote_private = False
     try:
-        _write_new(private_path, f"{_encode(private_key.private_bytes_raw())}\n".encode())
         wrote_private = True
-        private_path.chmod(0o600)
-        _write_new(
-            public_path,
-            (json.dumps(descriptor.to_dict(), indent=2, sort_keys=True) + "\n").encode("utf-8"),
-        )
+        write_hearth_transport_descriptor(public_path, descriptor)
     except Exception:
         if wrote_private:
             private_path.unlink(missing_ok=True)

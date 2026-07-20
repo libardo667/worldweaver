@@ -171,6 +171,49 @@ def _https_url(value: str, label: str, *, origin_only: bool = False) -> str:
     return normalized
 
 
+def _hearth_transport_descriptor(raw: object) -> dict[str, object]:
+    """Validate the small public half of a hearth-host transport identity."""
+
+    fields = {
+        "schema",
+        "schema_version",
+        "transport_key_id",
+        "transport_public_key",
+    }
+    if not isinstance(raw, dict) or set(raw) != fields:
+        raise OperatorError("hearth-host.json has unexpected fields.")
+    encoded = raw.get("transport_public_key")
+    if not isinstance(encoded, str) or not re.fullmatch(r"[A-Za-z0-9_-]{43}", encoded):
+        raise OperatorError("hearth-host.json has an invalid public key.")
+    try:
+        public_key = base64.urlsafe_b64decode(encoded + "=")
+    except ValueError as exc:
+        raise OperatorError("hearth-host.json has an invalid public key.") from exc
+    expected_key_id = f"x25519:{hashlib.sha256(public_key).hexdigest()[:32]}"
+    if len(public_key) != 32 or raw.get("schema") != "worldweaver.hearth-transport" or type(raw.get("schema_version")) is not int or raw.get("schema_version") != 1 or raw.get("transport_key_id") != expected_key_id:
+        raise OperatorError("hearth-host.json is not a valid hearth transport descriptor.")
+    return raw
+
+
+def _read_hearth_transport_descriptor() -> dict[str, object]:
+    try:
+        return _hearth_transport_descriptor(json.loads(HEARTH_TRANSPORT_DESCRIPTOR.read_text(encoding="utf-8")))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise OperatorError("hearth-host.json could not be read.") from exc
+
+
+def _write_new_public_descriptor(descriptor: dict[str, object]) -> None:
+    HEARTH_TRANSPORT_DESCRIPTOR.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with HEARTH_TRANSPORT_DESCRIPTOR.open("x", encoding="utf-8") as handle:
+            json.dump(descriptor, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+    except FileExistsError as exc:
+        raise OperatorError("Refusing to replace the existing hearth-host.json.") from exc
+
+
 def collect_problems(*, offline: bool = False) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -205,13 +248,8 @@ def collect_problems(*, offline: bool = False) -> tuple[list[str], list[str]]:
             errors.append("Hearth transport identity is incomplete; both the private key and public descriptor are required.")
         else:
             try:
-                transport = json.loads(HEARTH_TRANSPORT_DESCRIPTOR.read_text(encoding="utf-8"))
-                encoded_transport = str(transport.get("transport_public_key") or "")
-                raw_transport = base64.urlsafe_b64decode(encoded_transport + "=" * (-len(encoded_transport) % 4))
-                expected_transport_id = f"x25519:{hashlib.sha256(raw_transport).hexdigest()[:32]}"
-                if transport.get("schema") != "worldweaver.hearth-transport" or type(transport.get("schema_version")) is not int or transport.get("schema_version") != 1 or not re.fullmatch(r"[A-Za-z0-9_-]{43}", encoded_transport) or len(raw_transport) != 32 or transport.get("transport_key_id") != expected_transport_id:
-                    raise ValueError
-            except (OSError, ValueError, json.JSONDecodeError):
+                _read_hearth_transport_descriptor()
+            except OperatorError:
                 errors.append("hearth-host.json is not a valid hearth transport descriptor.")
     elif env.get("SHARD_TYPE") != "world":
         warnings.append("This legacy city folder has no hearth transport key and cannot receive encrypted hearth packages.")
@@ -319,6 +357,72 @@ def command_setup(args: argparse.Namespace) -> int:
     if not args.no_pull:
         _compose("pull")
     print("Setup complete. Agents remain stopped until start --agents is requested.")
+    return 0
+
+
+def command_hearth_host(args: argparse.Namespace) -> int:
+    """Create or verify the city's host-only package decryption identity."""
+
+    if args.hearth_host_action != "initialize":
+        raise OperatorError("Unsupported hearth-host action.")
+    if _read_env().get("SHARD_TYPE") == "world":
+        raise OperatorError("A federation directory does not host resident hearths.")
+
+    private_present = HEARTH_TRANSPORT_KEY.exists() or HEARTH_TRANSPORT_KEY.is_symlink()
+    public_present = HEARTH_TRANSPORT_DESCRIPTOR.exists() or HEARTH_TRANSPORT_DESCRIPTOR.is_symlink()
+    if HEARTH_TRANSPORT_KEY.is_symlink() or HEARTH_TRANSPORT_DESCRIPTOR.is_symlink():
+        raise OperatorError("Hearth transport identity paths must not be symbolic links.")
+    if public_present and not private_present:
+        raise OperatorError("Refusing to replace a hearth-host descriptor whose private key is missing.")
+    if private_present and not HEARTH_TRANSPORT_KEY.is_file():
+        raise OperatorError("The hearth transport private key is not a regular file.")
+    if public_present and not HEARTH_TRANSPORT_DESCRIPTOR.is_file():
+        raise OperatorError("hearth-host.json is not a regular file.")
+    if not _docker_available():
+        raise OperatorError("Docker is required to initialize a folder-owned hearth host.")
+
+    HEARTH_TRANSPORT_KEY.parent.mkdir(parents=True, exist_ok=True)
+    if os.name != "nt":
+        HEARTH_TRANSPORT_KEY.parent.chmod(0o700)
+    run_options = ["run", "--rm", "--no-deps"]
+    getuid = getattr(os, "getuid", None)
+    getgid = getattr(os, "getgid", None)
+    if callable(getuid) and callable(getgid):
+        run_options.extend(["--user", f"{getuid()}:{getgid()}"])
+    run_options.extend(
+        [
+            "--volume",
+            f"{HEARTH_HOST_DIR.resolve()}:/hearth-host",
+            "backend",
+            "python",
+            "scripts/hearth_transport_identity.py",
+            "--private-key",
+            "/hearth-host/identity/transport.key",
+        ]
+    )
+    try:
+        result = _compose(*run_options, capture=True)
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or b"").decode("utf-8", errors="replace").strip()
+        raise OperatorError("The engine image could not initialize the hearth host. " "Update this folder to a current version first." + (f" Details: {detail}" if detail else "")) from exc
+    try:
+        payload = json.loads(result.stdout.decode("utf-8"))
+        descriptor = _hearth_transport_descriptor(payload["descriptor"])
+    except (KeyError, TypeError, UnicodeDecodeError, json.JSONDecodeError, OperatorError) as exc:
+        raise OperatorError("The engine image returned an invalid public descriptor.") from exc
+
+    if public_present:
+        if _read_hearth_transport_descriptor() != descriptor:
+            raise OperatorError("hearth-host.json does not match the folder's private transport key.")
+        status = "already ready"
+    else:
+        _write_new_public_descriptor(descriptor)
+        status = "repaired" if private_present else "created"
+    if os.name != "nt":
+        HEARTH_TRANSPORT_KEY.chmod(0o600)
+    print(f"Hearth host identity {status}.")
+    print(f"Safe-to-share descriptor: {HEARTH_TRANSPORT_DESCRIPTOR}")
+    print("The private transport key stayed inside hearth-host/.")
     return 0
 
 
@@ -856,6 +960,20 @@ def build_parser() -> argparse.ArgumentParser:
     setup = commands.add_parser("setup", help="prepare folders, permissions, and images without starting residents")
     setup.add_argument("--no-pull", action="store_true", help="do not download container images")
     setup.set_defaults(handler=command_setup)
+
+    hearth_host = commands.add_parser(
+        "hearth-host",
+        help="manage this city's folder-owned encrypted-package receiver",
+    )
+    hearth_host_commands = hearth_host.add_subparsers(
+        dest="hearth_host_action",
+        required=True,
+    )
+    hearth_host_commands.add_parser(
+        "initialize",
+        help="create, repair, or verify the private receiver key and public descriptor",
+    )
+    hearth_host.set_defaults(handler=command_hearth_host)
 
     start = commands.add_parser("start", help="start the database and world server")
     start.add_argument("--agents", action="store_true", help="also wake residents in this city")
