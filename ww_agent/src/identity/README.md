@@ -43,6 +43,11 @@ These are four different things. Code in this package and in `resident.py` must 
 A steward or city may host a resident/hearth, but does not own it. Do not add a permanent owner-host field
 or derive identity from a filesystem path, Compose project, hostname, or city shard.
 
+`hearth_permissions.py` enforces the local custody floor. Resident startup repairs the hearth root and every
+real nested directory to `0700`, and every regular file to `0600`, without following symbolic links. The
+runtime repeats that normalization before releasing its lease, while new doula-created homes are secured
+before creation returns.
+
 City travel and host migration are separate state machines:
 
 - city/hearth or city/city travel changes world attachment;

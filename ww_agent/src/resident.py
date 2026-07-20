@@ -23,6 +23,7 @@ from src.identity.hearth_activation import (
 )
 from src.identity.growth import repair_growth_adoptions
 from src.identity.loader import IdentityLoader, ResidentIdentity
+from src.identity.hearth_permissions import secure_hearth_permissions
 from src.inference.client import InferenceClient
 from src.runtime.cognitive_core import CognitiveCore
 from src.runtime.ledger import append_runtime_event, load_runtime_events
@@ -132,7 +133,8 @@ class Resident:
         """Claim this hearth generation, then establish one world attachment."""
         if self._runtime_lease is not None:
             raise RuntimeError(f"Resident {self.name} is already started")
-        self._resident_dir.mkdir(parents=True, exist_ok=True)
+        self._resident_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        secure_hearth_permissions(self._resident_dir)
         self._runtime_lease = acquire_hearth_runtime(self._resident_dir)
         try:
             await self._start_attached(
@@ -348,7 +350,13 @@ class Resident:
         lease = self._runtime_lease
         self._runtime_lease = None
         if lease is not None:
-            lease.release()
+            try:
+                # Files written during the run remain protected by the 0700 hearth
+                # root. Normalize their own modes before this host gives up the
+                # generation lease as well.
+                secure_hearth_permissions(self._resident_dir)
+            finally:
+                lease.release()
 
     def _build_current_world(self) -> CityWorld | LocalWorld:
         if self._attachment_kind == "hearth":

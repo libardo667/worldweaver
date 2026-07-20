@@ -72,6 +72,11 @@ The city does not receive the resident's ledger, reduced cognitive projections, 
 or rest measurements. There is no generic HTTP route for reading or patching session variables. Shared-world
 changes use specific typed commands, while private current state is derived inside the hearth.
 
+On startup, the resident host repairs the hearth root and nested directories to owner-only `0700`, and regular
+files to owner-only `0600`, without following symbolic links outside the hearth. New resident creation applies
+the same rule before returning. A clean stop normalizes files created during the run before releasing the
+hearth generation lease.
+
 City-to-city travel uses a recoverable two-node handoff. The source retires its session, the destination
 verifies the trip and creates a new local session for the same actor, and the resident host resumes only
 after arrival succeeds.

@@ -9,6 +9,8 @@ The local stopped-migration foundation is built:
   sessions;
 - deterministic export and import verify file hashes and paths;
 - runtime-generation fencing and a host-local lock stop a retired copy from waking normally;
+- resident startup and clean shutdown enforce owner-only hearth directories and regular files without
+  following links outside the hearth;
 - the root preflight can inspect, activate, wake, and park one named resident safely;
 - older `the-stable` homes can be imported through an explicit allowlist.
 
@@ -64,6 +66,7 @@ and be replaceable during travel or host migration without transferring ownershi
 - [x] Export/import is deterministic, integrity-checked, and excludes machine-local state and secrets.
 - [x] A newer stopped generation can activate while the retired source refuses normal startup.
 - [x] Offline migration and interruption tests pass on synthetic homes.
+- [x] New and started hearths enforce owner-only filesystem permissions on the temporary host.
 - [ ] Existing resident homes have reviewed, valid manifests.
 - [ ] Archives support encryption and authenticated origin.
 - [ ] Independent hosts use separate identities and explicit authorization.

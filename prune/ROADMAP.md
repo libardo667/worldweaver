@@ -54,8 +54,9 @@ after the minimal kernel can perceive current local facts, read electively, choo
 truthful outcomes. Reintroduce optional mechanisms one at a time through paired tests.
 
 Before another public resident run, finish the actor-scoped resident/host capability, add expiry and purge to
-explicit prompt diagnostics, repair hearth permissions, deploy the privacy migration, and verify the live
-OpenAPI surface. Exact prompt capture is already off by default.
+explicit prompt diagnostics, deploy the privacy migration, restart resident hosts so permission repair runs,
+and verify the live OpenAPI surface. Exact prompt capture is already off by default, and resident startup now
+repairs owner-only hearth permissions.
 
 ### 3. Add the private-to-public making boundary
 

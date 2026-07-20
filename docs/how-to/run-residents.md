@@ -17,6 +17,10 @@ python dev.py resident --city ww_alderbank --resident NAME
 This verifies the city, federation registration, model configuration, hearth generation, and runtime lock.
 It prints structural information without printing private resident prose.
 
+When a resident is actually started, the host also repairs that hearth's local permissions before loading
+identity: directories become owner-only `0700` and regular files become owner-only `0600`. Newly created
+dormant residents receive those modes during creation.
+
 For a newly created dormant resident, activate the first hearth generation without waking them:
 
 ```bash

@@ -8,7 +8,9 @@ removed, development reset now defaults off, and a database migration deletes ol
 sessions. Tests assert that the removed paths are absent from both HTTP behavior and OpenAPI. The sections below
 remain the audit record of what was found. Exact prompt capture now defaults off and requires an explicit
 `--trace-prompts` bounded run; purpose, expiry, access receipts, and purge remain unfinished. Resident
-lifecycle/authorship authority, hearth permissions, retention rules, and live redeployment remain open.
+lifecycle/authorship authority, retention rules, and live redeployment remain open. New and started hearths
+now enforce owner-only directory and file permissions; existing deployments need a resident restart for the
+startup repair to run.
 
 ## Plain-language result
 
@@ -88,10 +90,11 @@ ledger. That can copy part of a private file, correspondence item, or recall res
 history even when the full result was meant only for one inference continuation. Structural source references
 belong in the ledger; arbitrary excerpts need a source-specific retention rule and an explicit reason.
 
-Current Alderbank ledgers and workshop files are mode `0644`, and resident, memory, identity, letter, and
-workshop directories are mode `0755`. On a conventional multi-user Unix host, another local account can read
-them. The append and projection writers rely on the process umask rather than enforcing the resident boundary.
-Imported hearth packages do better: imported directories are created as `0700` and files as `0600`.
+At audit time, Alderbank ledgers and workshop files were mode `0644`, and resident, memory, identity, letter,
+and workshop directories were mode `0755`. On a conventional multi-user Unix host, another local account
+could read them. The 2026-07-20 repair now makes new and started hearth directories `0700` and regular files
+`0600`, repeats the repair at clean shutdown, and skips symbolic links rather than changing outside targets.
+Imported hearth packages already used those modes.
 
 ## The city mirror breaks the hearth boundary
 
@@ -218,8 +221,8 @@ Several implementation choices are sound and should survive the repair:
    operator, start, expiry, and purge receipts. Prefer structural call receipts by default.
 6. Never copy an elective source's returned prose into a trace or durable ledger merely because the source was
    read. Define source-specific content retention, provenance, and redaction rules.
-7. Create resident roots as `0700` and private files as `0600`; repair existing active hearth permissions on
-   startup or through an explicit migration command.
+7. ~~Create resident roots as `0700` and private files as `0600`; repair existing active hearth permissions on
+   startup or through an explicit migration command.~~
 8. Publish a versioned data-classification table: field, owner, storage locations, recipient, purpose,
    retention, deletion/export behavior, and audit record.
 9. Encrypt portable hearth packages for their destination and sign the transfer authorization before treating

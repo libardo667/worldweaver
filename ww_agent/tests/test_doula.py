@@ -4,6 +4,7 @@ import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import stat
 
 from src.runtime.doula import DoulaLoop, EntityClass, ProximityCheck, _SpawnLedger
 from src.identity.hearth_manifest import load_hearth_manifest
@@ -596,6 +597,9 @@ def test_fixed_creation_seeds_a_hand_only_dormant_hearth(tmp_path):
     assert seeded["payload"]["dormant"] is True
     assert seeded["payload"]["hand_only_context"] is True
     assert seeded["payload"]["dealt_hand"]["livelihood_domain"].startswith("teaching and tutoring")
+    assert stat.S_IMODE(home.stat().st_mode) == 0o700
+    assert stat.S_IMODE((home / "identity").stat().st_mode) == 0o700
+    assert stat.S_IMODE((home / "identity" / "SOUL.md").stat().st_mode) == 0o600
 
 
 def test_doula_rebalances_novel_spawn_out_of_saturated_location(tmp_path):

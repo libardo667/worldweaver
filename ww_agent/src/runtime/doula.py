@@ -18,6 +18,7 @@ from pathlib import Path
 
 from src.inference.client import InferenceClient
 from src.identity.hearth_manifest import initialize_hearth_manifest
+from src.identity.hearth_permissions import secure_hearth_permissions
 from src.runtime.ledger import append_runtime_event
 from src.runtime.naming import slugify_resident_name
 from src.world.client import WorldWeaverClient
@@ -1967,6 +1968,7 @@ class DoulaLoop:
 
         if initialize_manifest:
             initialize_hearth_manifest(resident_dir)
+        secure_hearth_permissions(resident_dir)
         if record_spawn:
             self._ledger.record_spawn()
         if enqueue:

@@ -70,6 +70,8 @@ procedure rather than a permanent dashboard field.
 - [x] Generic public state read/write, legacy city-growth, rest-metrics, cleanup, pruning, and reset routes do
   not exist; old mirrored fields are removed during database migration.
 - [x] An ordinary resident run creates no exact prompt trace; bounded diagnostics require explicit opt-in.
+- [x] New and started hearths enforce owner-only directories and private-file permissions without following
+  links outside the hearth.
 - [ ] Resident bootstrap, leave, messages, and travel require an actor-scoped resident/host capability.
 - [ ] Prompt diagnostics record their purpose and expiry, expose access receipts, and have a tested purge path.
 - [ ] A reviewed access table defines every steward-visible field and its retention.

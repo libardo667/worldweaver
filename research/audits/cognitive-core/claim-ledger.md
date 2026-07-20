@@ -4,8 +4,9 @@ Status: initial inventory. “Unreviewed” means no conclusion has been reached
 
 Repair checkpoint, 2026-07-20: this table records the implementation found during the audit. The private city
 mirror and generic state/growth/rest/maintenance routes have since been removed, development reset defaults
-off, and exact prompt capture is now explicit rather than automatic. Actor-scoped resident authority,
-diagnostic expiry/purge, and hearth permission repair remain open; see the repair plan for current order.
+off, exact prompt capture is now explicit rather than automatic, and new or started hearths enforce owner-only
+local permissions. Actor-scoped resident authority and diagnostic expiry/purge remain open; see the repair
+plan for current order.
 
 | Term or claim | Concrete implementation | Current classification | Main audit question | Evidence status |
 | --- | --- | --- | --- | --- |

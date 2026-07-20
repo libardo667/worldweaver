@@ -22,6 +22,10 @@ Every resident has a private hearth. It is their home and the durable container 
 memory, workshop, and optional local grants. A host may place an explicitly enabled prompt diagnostic under
 the same folder while it runs, but that file is not resident continuity and does not travel with the hearth.
 
+The local filesystem boundary is enforced as well as described: the hearth and its directories are owner-only
+`0700`, and its regular files are owner-only `0600`. Startup repairs older active homes without following
+symbolic links outside them, and clean shutdown repairs files created during the run.
+
 A hearth can expose files, weather, visual reading, or gifts when its configuration explicitly grants
 them. These are not universal resident powers and do not follow the resident into a city.
 
