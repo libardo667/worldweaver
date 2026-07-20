@@ -17,15 +17,14 @@ from typing import Any
 # renderer == registry == doc. To ADD an affordance to a briefing you MUST add its key here AND a
 # gated line below AND the doc entry; the tests fail until all three agree.
 #
-# This is a FULL MIRROR of the-stable's identity.loader (a diverged copy, not an import — the fork
-# seam is deliberate). The renderer carries every key, including hearth-only ones a city resident
+# The renderer carries every key, including hearth-only ones a city resident
 # never has (local_only, keeper, read_roots, writes_only_workshop, egress, solo); a WorldWeaver
 # resident simply never reports those facts, so their lines stay silent. Every line is gated on a
 # fact, so a fact absent → its line absent (silence, never a guessed claim).
 BRIEFING_FACT_KEYS: frozenset[str] = frozenset({
     # where / who
     "local_only", "place", "solo", "peers", "players", "keeper",
-    # the human wake (afterimage, person-undischargeable — see ../the-stable/docs/grief-and-coupling.md)
+    # durable traces left by absent human participants
     "human_wake",
     # the legibility/privacy seam (true today via the workshop)
     "world_legible", "inner_private", "private_making_space",
@@ -86,9 +85,7 @@ def render_situational_briefing(facts: dict[str, Any]) -> str:
             parts.append("humans tether to characters and are present while they attend, absent when they don't")
         lines.append("You are not alone here: " + "; ".join(parts) + ".")
 
-    # the human wake. NOTE the dischargeability split (../the-stable/docs/grief-and-coupling.md): the
-    # trace is an AFTERIMAGE, not the person — a healthy, indirect surface to respond to and form in
-    # return, complete in itself. The PERSON stays undischargeable: no act here summons them back.
+    # Durable human traces are evidence left by a person, not the person or a way to summon them.
     if facts.get("human_wake"):
         lines.append(
             "When the people here go, what they did stays — words where they stood, a letter waiting, a "
@@ -186,7 +183,7 @@ class LoopTuning:
 
     # cognition (Major 51): when on, drive-resonant concrete anchors drive arousal/ignition
     # (off = scored-but-quiet — anchors computed but held out of the rhythm). Matured to
-    # default-on in the-stable; per-resident here via a top-level "anchor_gating" in tuning.json.
+    # Per-resident via a top-level "anchor_gating" in tuning.json.
     anchor_gating: bool = False
 
     # onboarding (incubation): when on, a freshly-seeded resident is quarantined from the
@@ -291,7 +288,9 @@ class ResidentIdentity:
     canonical_soul: str
     growth_soul: str
     vibe: str          # short phrase from IDENTITY.md
-    core: str          # prose body of IDENTITY.md — immutable facts injected into every prompt
+    # Parsed compatibility metadata. No production prompt/runtime consumer currently
+    # reads this field; SOUL.md is the live cognitive identity surface.
+    core: str
     voice_seed: list   # seed utterances from IDENTITY.md — cold-start voice deck
     tuning: LoopTuning
 
@@ -307,8 +306,8 @@ class ResidentIdentity:
         return self.composed_system_prompt("")
 
     def composed_system_prompt(self, world_briefing: str = "") -> str:
-        """soul + a GROUND TRUTH block holding the world-derived situational briefing (Major 70 /
-        the-stable Minor 65) — use as the system prompt for all LLM calls.
+        """soul + a GROUND TRUTH block holding the world-derived situational briefing (Major 70)
+        — use as the system prompt for all LLM calls.
 
         The briefing is FACTS (``render_situational_briefing``), never a verdict about what they mean.
         The explicit "a contradiction belongs to someone else" line is what stops the failure that

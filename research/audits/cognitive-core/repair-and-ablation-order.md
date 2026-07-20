@@ -35,6 +35,12 @@ from being interpretable.
    successful history.
 13. **Make hearth physics honest.** Distinguish imaginative gesture from state-changing action until the
    hearth implements the same canonical object and place consequences as other shards.
+14. **Make identity independent of host paths.** Preserve resident-owned name and explicit traits across
+   import; do not hash a target folder to choose circadian or prompt policy.
+15. **Turn ground truth into revisable capability facts.** Version and refresh mutable host/world claims,
+   narrow absolutes to tested guarantees, and never forbid memory from correcting a stale briefing.
+16. **Remove silent identity and tuning surfaces.** Either wire each advertised field with a clear owner or
+   classify it as migration-only and warn when an operator expects it to work.
 
 ## Second: establish a neutral reference runtime
 

@@ -57,6 +57,9 @@ variable represents lived experience.
 - [`action-consequence-and-embodiment.md`](action-consequence-and-embodiment.md) follows outward proposals
   through world receipts and back toward the next prompt, including false success history, missing decline
   feedback, incomplete venture accounting, and prose-only hearth physics.
+- [`memory-identity-and-authority.md`](memory-identity-and-authority.md) separates durable actor identity,
+  prompt identity, host-authored facts, chosen growth, and selected memory; it also records path-derived
+  behavior, ignored birth traits, stale ground truth, and duplicate memory authority.
 - [`repair-and-ablation-order.md`](repair-and-ablation-order.md) puts software truth repairs before neutral
   reference runs and one-variable mechanism tests.
 - [`claim-ledger.md`](claim-ledger.md) lists terms and implied claims that require a decision.

@@ -11,7 +11,7 @@ change in behavior is not mistakenly credited to the numeric substrate.
 | Prompt block | What it contains | Classification | Main concern |
 | --- | --- | --- | --- |
 | `SOUL.md` | Authored identity description plus adopted growth | Identity scaffold | Strong and intentionally individual, but still authored/model-facing text rather than discovered ground truth |
-| `GROUND TRUTH` | World-supplied situational statements | Claimed facts plus philosophical boundary | Some claims are accurate affordances; the privacy claim is contradicted by the runtime mirror and raw vars endpoint |
+| `GROUND TRUTH` | World-supplied situational statements, rendered once when the core is built | Host claims plus philosophical and memory authority | Some are accurate affordances; others are false, mutable, or stale, yet the model is told not to remember contrary evidence |
 | current moment | Exact-place scene, selected speech/events, reachable places, and source catalog | Observation filtered by Python | The model sees what prompt-selection policy includes, not an unmediated world |
 | act trace | Counts dominant proposed act kinds and names unused doors | Behavioral nudge built from false success semantics | It reads `pulse_act_emitted`, not outcomes, so blocked moves are described as movement and declined actions as completed history |
 | memory | Relevant or recent resident-selected notes | Retrieved history | Embedding retrieval can repeatedly surface one semantic cluster; recency fallback is a separate condition |

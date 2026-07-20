@@ -127,6 +127,12 @@ poll-rate-dependent call pressure, false settling/fervor durations, stale social
 starvation, lossy reading continuations, non-replayable read caching, false successful act history, missing
 command outcomes, incomplete venture accounting, and prose-only hearth action reported as physics.
 
+The identity and memory pass has also reproduced path-dependent live behavior for one unchanged actor and
+side-file memory with no ledger provenance. It found that the doula's recorded chronotype and the advertised
+`IDENTITY.md` core prose are unused, most loop tuning is inert, mutable world facts are cached and called
+unchanging, and embedding availability silently changes both retrieval and memory-storage policy. The explicit
+proposal/inspection/adoption lifecycle for identity growth remains a strong boundary worth preserving.
+
 Two bounded evidence reviews now cover prediction/ignition/arousal/quiet/social norms and
 action-feedback/embodiment/external supports. They support plainer names, reliable event and consequence
 delivery, quiet as a valid outcome, and direct software comparisons. They do not validate a grand theory of

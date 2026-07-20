@@ -17,9 +17,10 @@ locale's real hour it derives two things:
 - ``rest_pressure`` — the felt pull toward rest, emitted as a ``fatigue`` signal
   that drives the ``rest_drive`` node, so the resident *feels* the late hour.
 
-Pure functions over (hour, chronotype); no I/O. The chronotype is derived
-deterministically from identity so it is a stable trait, never a scripted
-schedule — Saoirse is simply a lark and always will be, the way she is in life.
+Pure functions over (hour, chronotype); no I/O. The current fallback chronotype
+is derived from ``identity.name``. That name presently comes from the resident
+directory, so the value is deterministic for one path but is not yet a portable
+resident-owned trait.
 """
 
 from __future__ import annotations
@@ -55,10 +56,11 @@ def _identity_key(identity_or_name: Any) -> str:
 
 
 def chronotype(identity_or_name: Any, *, explicit: float | None = None) -> float:
-    """The resident's stable phase offset in hours (lark −, owl +).
+    """The resident's phase offset in hours (lark −, owl +).
 
-    An explicit value (e.g. set by the doula at birth) wins; otherwise it is
-    derived deterministically from identity so it never drifts between runs.
+    An explicit numeric value wins; otherwise the current implementation hashes
+    the identity name. The doula's categorical birth-time chronotype is not wired
+    to this function.
     """
     if explicit is not None:
         return round(max(-CHRONOTYPE_SPREAD_HOURS, min(CHRONOTYPE_SPREAD_HOURS, float(explicit))), 2)

@@ -181,6 +181,32 @@ behavior policies authored by the project. They must not be reported as an emerg
     movement, and travel but not object, making, stoop, exchange, or access success events.
 35. **A generic hearth `do` records prose as executed physics.** `LocalWorld` stores a gesture line and returns
     a success narrative without creating inspectable object, place, or inventory state.
+36. **The resident's folder name changes live policy.** It becomes the runtime/display name and selects the
+    default circadian phase and stock worked example, even when the durable actor ID and all portable identity
+    files are unchanged.
+37. **The chronotype recorded at birth is not the chronotype used at runtime.** The doula writes a categorical
+    value to `IDENTITY.md`; the loader ignores it, parsed tuning chronotype is also unused, and circadian code
+    hashes the folder-derived name instead.
+38. **The advertised immutable identity prose is inert.** `IDENTITY.md` prose is loaded as `identity.core` and
+    documented as prompt input, but no production consumer reads it. Vibe affects city bootstrap metadata;
+    voice samples affect prompts only behind a default-off process flag.
+39. **Most `LoopTuning` settings are silent no-ops.** Current production consumers use model fallback,
+    temperature, anchor gating, and incubation. The remaining loop, rest, mail, home, and landmark fields are
+    parsed compatibility data despite documentation that describes broader live behavior.
+40. **Mutable host claims are cached as unchanging truth.** Situational facts are rendered once at core
+    construction, told to outrank contrary observation and memory, and not refreshed when capabilities or
+    policy change.
+41. **Kept memory is constrained to a narrow human-authored ontology.** The prompt admits lasting facts and
+    decisions while discouraging affective, episodic, procedural, uncertain, and unfinished memory, even as
+    automatically retained felt reports enter other continuity paths.
+42. **Embedding availability changes memory policy.** It switches recall from recent notes to positive-cosine
+    relevance selection and enables semantic storage deduplication, so a provider/configuration change alters
+    what can be remembered and retained.
+43. **A side file can create memory without ledger evidence.** `kept_memory.jsonl` is read as an authority;
+    well-formed notes with no `memory_kept` event enter later recall.
+44. **The semantic constitution gate is not live.** `CognitiveCore` never passes the checker to pulse routing;
+    its existing async method also does not match the synchronous callback contract. Cosine relevance would
+    not by itself establish contradiction or earned change in any case.
 
 ## Questions for the next code pass
 
@@ -195,3 +221,7 @@ behavior policies authored by the project. They must not be reported as an emerg
   event delivery and steward resource limits separate?
 - What is the smallest outcome lifecycle that gives residents reliable consequence feedback without turning
   private failures into public narration?
+- Which resident-owned fields must remain stable across a hearth import, and which host/world facts need a
+  visible revision lifecycle?
+- Which kinds of memory should the system support without deciding in advance that facts and declared
+  decisions are the only continuity worth keeping?

@@ -12,8 +12,9 @@ one accepted `soul_edit` proposal at their hearth and adopt its exact wording th
 action. The proposal, inspection, and adoption event IDs remain in the private resident ledger.
 
 `LoopTuning` and loop-shaped keys in `tuning.json` remain compatibility inputs for existing resident
-directories. Current consumers translate those values into pulse, rest, incubation, grounding, and
-other substrate behavior. They are not evidence that the removed loop bank still exists.
+directories. Current production consumers use only the model fallback, pulse temperature, anchor-gating,
+and incubation values. The other parsed loop, rest, mail, home, and landmark values do not configure the
+current runtime. They are not evidence that the removed loop bank still exists.
 
 When adding a situational affordance, update all three pinned surfaces together:
 
