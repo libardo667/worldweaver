@@ -37,9 +37,12 @@ inputs in the identity loader; they do not restore the old ownership model.
   either from run notes or turn them into resident cognition. A manual fixed batch is the one supported
   exception to immediate boot: it must use bare-place hand-only context, initialize a dormant hearth
   manifest, and leave both the spawn queue and city roster untouched.
-- The ledger file keeps the complete history for recovery and research. Normal writes advance a versioned
-  checkpoint; updates that need a rebuild read at most the latest 10,000 entries. Only checkpoint recovery
-  may reread the complete file. Do not make the normal write path grow with lifetime history again.
+- The ledger file keeps the complete history for recovery and research. Normal writes must advance a
+  versioned current-state checkpoint without rebuilding open work from an arbitrary event-count tail. A time
+  window is valid only for a reducer whose declared contract is decay; unresolved routes, packets, intents,
+  mail, research, and action outcomes remain indexed until a terminal event or enforced expiry. The current
+  implementation violates this invariant at its 10,000-event complex replay boundary; Major 137 owns the
+  repair. Do not make the normal write path grow with lifetime history or restore front truncation.
 - Polling a source emits a stable stimulus packet; it does not by itself mean the resident attended to
   that source. Prompt-included encounters transition from `pending` to `observed` through ledger events.
 - Relationship summaries are reducer output, not a second memory store. They may use only an

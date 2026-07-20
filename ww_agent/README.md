@@ -9,7 +9,7 @@ engine decides shared world facts and whether actions succeed.
 ```text
 world observation
       ↓
-perception → append-only ledger → bounded derived state → salience and pulse → typed effectors
+perception → append-only ledger → derived current state → salience and pulse → typed effectors
                                               ↘ elective source read ↗
 ```
 
@@ -23,10 +23,11 @@ speech, direct correspondence, local traces, and action results. Broader city in
 recall, measurement, objects, making, and stoops are elective sources. A source read can continue within
 one bounded ignition, but only a typed effector can change the shared world.
 
-Every observation, decision, source read, and action receipt is appended to the resident ledger. Normal
-runtime work uses versioned checkpoints and bounded replay rather than rereading the resident's full life.
-Exact model requests may also be captured in `memory/prompt_traces.jsonl`; those traces are private
-diagnostics and are never cognitive input.
+Every observation, decision, source read, and action receipt is appended to the resident ledger. A versioned
+checkpoint is intended to provide current state without rereading the resident's full life. That path is under
+active repair in Major 137: current bounded replay can lose older unfinished work, and some normal readers
+still scan the complete ledger. Exact model requests may also be captured in `memory/prompt_traces.jsonl`;
+those traces are private diagnostics and are never cognitive input.
 
 ## Run from the repository root
 
@@ -78,7 +79,7 @@ hearths; they use the same `Resident` host and do not define a second kind of pe
 
 - `src/resident.py`: resident lifetime, hearth/city attachment, and travel recovery
 - `src/runtime/cognitive_core.py`: authoritative perceive-to-act composition
-- `src/runtime/ledger.py`: complete evidence and bounded derived state
+- `src/runtime/ledger.py`: complete event history and derived current state; checkpoint repair is active
 - `src/runtime/perception.py`: source identity and consume-on-prompt handling
 - `src/runtime/information.py`: elective typed source access
 - `src/runtime/pulse_engine.py`: salience, ignition, and pulse generation

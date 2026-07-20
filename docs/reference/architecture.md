@@ -32,8 +32,14 @@ The core follows this cycle:
 perceive -> append evidence -> derive state -> maybe produce one model pulse -> act or rest
 ```
 
-The complete ledger is append-only. A versioned checkpoint stores a bounded working projection so normal
-ticks do not replay the entire life history. The checkpoint can be rebuilt from the ledger.
+The complete ledger file is append-only and is intended to be the resident's durable event authority. A
+versioned checkpoint is intended to hold current working state so normal ticks do not replay the entire life
+history, and it can be rebuilt from the ledger.
+
+That checkpoint path is under active repair in Major 137. The current implementation rebuilds some complex
+state from only the newest 10,000 events, which can erase older unfinished work, and several live readers still
+scan the complete ledger. Treat cold-history retention as implemented; do not yet treat checkpoint replay,
+tail durability, or flat-cost current-state reads as a finished guarantee.
 
 ## Information and action are separate
 

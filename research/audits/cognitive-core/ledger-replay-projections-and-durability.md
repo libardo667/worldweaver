@@ -163,6 +163,37 @@ final record from corruption in the middle. Appends should be serialized, newlin
 according to a declared durability policy. Every accepted event should receive an ordered sequence number so
 checkpoints can prove exactly what they include.
 
+## Why the existing tests passed
+
+The ledger tests are not worthless. They verify cold-log retention, byte-offset invalidation, checkpoint
+version checks, short-horizon numerical agreement, and a bounded cost ceiling. They failed to test the
+semantic boundary introduced by the optimization.
+
+- The 10,051-event retention test replaces `rebuild_runtime_artifacts()` with a no-op. It correctly proves
+  that the JSONL file is not front-trimmed, but exercises none of the checkpoint or projection path
+  (`test_ledger.py:15-29`).
+- The bounded packet test creates 250 packets that are all already observed, then explicitly requires the
+  first 50 to disappear. That is safe for its fixture and silently establishes the unsafe algorithm for a
+  mixed pending/terminal queue (`test_ledger.py:172-193`).
+- The complex-update oracle test uses only two events. At that size, “newest 10,000” and “complete history”
+  are the same input, so agreement cannot test what happens at the boundary (`test_ledger.py:289-314`).
+- The 100,000-event timing test writes the same event, including the same event ID, 100,000 times and manually
+  constructs a checkpoint whose aggregate count says 100,000. It proves that the path's wall time is capped
+  by a 10,000-record replay. It does not prove that the capped replay preserves current state
+  (`test_ledger.py:317-355`).
+- The corruption recovery test damages `runtime_checkpoint.json`, not `runtime_ledger.jsonl`. It proves the
+  disposable cache can be rebuilt from a good ledger, not that the authoritative ledger survives a damaged
+  tail (`test_ledger.py:147-169`).
+- The test named “atomically” verifies version fields, final byte offset, and absence of leftover temporary
+  files after a successful write. It does not interrupt replacement or verify the ledger/checkpoint pair as
+  one transaction (`test_ledger.py:106-121`).
+- Tests frequently freeze `_utc_now_iso()` or remove `updated_at` before comparison. Those are reasonable
+  fixture techniques, but they also hide that the public reducer contract itself reads the live clock.
+
+The general lesson is to test lifecycle invariants across the exact optimization boundary. Comparing a fast
+path against a full replay is strong only when fixtures include old still-open state, every terminal
+transition, mixed statuses, and corrupted storage.
+
 ## The target shape
 
 The smallest coherent design is:

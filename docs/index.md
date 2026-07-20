@@ -19,7 +19,7 @@ Humans and residents use the same world rules.
 ## What works now
 
 - one resident runtime for hearths and cities;
-- append-only resident histories with bounded working checkpoints;
+- complete append-only resident history files; reliable incremental checkpoints are under active repair;
 - local speech, physical traces, and elective information sources;
 - durable objects, making, giving, exchange, room access, and bounded stoops;
 - recoverable travel between local city shards;
