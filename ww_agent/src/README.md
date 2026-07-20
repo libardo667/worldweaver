@@ -57,8 +57,9 @@
   can move without copying city state or host credentials. `identity/hearth_activation.py` holds one local
   runtime lock and makes an orderly imported successor advance while its stopped source retires.
   `identity/hearth_envelope.py` provides authenticated encryption for one reviewed host. The package module
-  can wrap and import its deterministic archive using explicitly injected synthetic keys without writing a
-  plaintext temporary ZIP; key storage, operator commands, host authorization, and activation remain later
+  can wrap and import its deterministic archive without writing a plaintext temporary ZIP. A folder-owned
+  host key and reviewed resident identity card now support an operator import into a new dormant home; real
+  resident signing-key custody, encrypted operator export, host authorization, and activation remain later
   steps. `identity/resident_identity.py` defines the portable, self-signed public identity card without
   treating that card as city admission or host ownership.
 - `familiar/` — the private hearth adapter and its optional grants. `config.py` reads per-resident

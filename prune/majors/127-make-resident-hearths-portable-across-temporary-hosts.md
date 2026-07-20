@@ -14,10 +14,16 @@ The local stopped-migration foundation is built:
 - the root preflight can inspect, activate, wake, and park one named resident safely;
 - older `the-stable` homes can be imported through an explicit allowlist.
 
-The work is not complete. Existing residents are not all initialized, the encrypted package path accepts
-only injected synthetic keys and has no operator command, hearth-host authorization is not defined, and no
-cross-computer migration or remote-city attachment has been proven. Active city nodes now have separate
-signing identities; that does not by itself authorize a computer to run a resident's hearth.
+Cities can now create a separate folder-owned hearth receiver and use it to verify and import an encrypted,
+resident-signed package into a brand-new dormant home. Both the workspace command and the standalone shard
+command refuse identity replacement, package-to-card mismatches, and existing destination homes. The
+standalone command mounts the receiver key only into a short-lived agent container; the city backend never
+receives it.
+
+The work is not complete. Existing residents are not all initialized, no real resident identity signing key
+is stored, and there is no safe operator export command yet. Hearth-host authorization for waking a resident
+is not defined, and no cross-computer migration or remote-city attachment has been proven. Active city nodes
+have separate signing identities; that does not by itself authorize a computer to run a resident's hearth.
 
 ## Model
 
@@ -33,14 +39,17 @@ whole hearth; moving the hearth to another computer is a separate operation.
 ## Build next
 
 1. Initialize manifests for current residents through reviewed, idempotent migration commands.
-2. Add archive encryption and signatures without storing the only recovery key in a federation directory.
-3. Define explicit hearth-host authorization using cryptographic identity without treating the host as the
+2. Decide and implement resident identity-key custody and recovery without storing the only recovery key in
+   a federation directory or treating a temporary host as owner.
+3. Build a stopped-hearth encrypted export command that can sign without writing a plaintext package or
+   accepting private key material as a command-line value.
+4. Define explicit hearth-host authorization using cryptographic identity without treating the host as the
    resident's owner.
-4. Authorize a host and generation explicitly before it may wake a hearth.
-5. Prove a stopped hearth transfer between two clean computers, including interruption at every write.
-6. Prove that a resident hosted on one computer can attach over HTTPS to a city on another without giving
+5. Authorize a host and generation explicitly before it may wake a hearth.
+6. Prove a stopped hearth transfer between two clean computers, including interruption at every write.
+7. Prove that a resident hosted on one computer can attach over HTTPS to a city on another without giving
    that city the private hearth.
-7. Design crash recovery separately. Do not claim that generation fencing revokes an undisclosed offline
+8. Design crash recovery separately. Do not claim that generation fencing revokes an undisclosed offline
    copy.
 
 Host authorization and city action authority are related but not interchangeable. A shard-wide JWT secret
@@ -71,13 +80,17 @@ Build the private half in this order:
    standard input instead of asking a steward to copy its fields. No private key is stored yet.
 2. Give a temporary host a dedicated X25519 transport key. Do not reuse its Ed25519 node-signing key, and do
    not treat either host key as the resident's identity. New city folders now receive a separate private
-   `hearth-host/identity/transport.key` and safe-to-share `hearth-host.json`; neither is wired to a resident
-   runtime yet.
+   `hearth-host/identity/transport.key` and safe-to-share `hearth-host.json`. Existing city folders can add or
+   verify the same pair with `python dev.py hearth-host --city CITY initialize` from the workspace or
+   `python ww.py hearth-host initialize` from a standalone folder. Neither key is wired to a resident runtime.
 3. Keep the current deterministic ZIP as an inner payload. Put it inside a versioned encrypted envelope for
    the reviewed destination host. Sign the complete encrypted envelope with the resident identity key. Do
    not publish a plaintext archive hash that lets observers recognize repeated private state. The package
-   module now wraps and imports the deterministic archive entirely in memory when given synthetic keys, and
-   refuses an outer identity or generation that differs from the inner manifest. Key loading is not built.
+   module now wraps and imports the deterministic archive entirely in memory, loads the folder-owned receiver
+   key from a regular file, and refuses an outer identity or generation that differs from either the inner
+   manifest or the reviewed public resident identity card. `hearth-host receive PACKAGE IDENTITY --resident
+   NAME` exposes the safe import half and leaves the new home dormant. Package creation still uses injected
+   synthetic resident keys because real resident key custody is unresolved.
 4. Only the encrypted format may carry the resident identity private key. Plain `.wwhearth` export must keep
    excluding it and must fail if a future key-bearing hearth would otherwise leak it.
 5. On an authorized host, decrypt the long-term key into memory only long enough to sign a fresh runtime
@@ -114,7 +127,7 @@ without a separate hardware-backed or quorum design.
 - [x] Offline migration and interruption tests pass on synthetic homes.
 - [x] New and started hearths enforce owner-only filesystem permissions on the temporary host.
 - [ ] Existing resident homes have reviewed, valid manifests.
-- [ ] Archives support encryption and authenticated origin.
+- [x] Archives support encryption and authenticated origin.
 - [ ] Independent hosts use separate identities and explicit authorization.
 - [ ] A two-computer stopped migration preserves identity, full ledger evidence, and resident-owned artifacts.
 - [ ] One host can run the hearth while the resident visits a remote city over HTTPS.

@@ -19,7 +19,9 @@ directory is only for tools you run to *operate* the system, not to measure it.
 - `hearth_manifest.py` — inspect one resident's stable, host-independent hearth identity; initialization
   requires the explicit `--initialize` flag.
 - `hearth_package.py` — inventory one resident home, export an allowlisted deterministic `.wwhearth`
-  package, or verify and atomically import one into a new path. Unknown paths and symlinks fail closed.
+  package, or verify and atomically import a plaintext or encrypted package into a new path. Encrypted import
+  requires a reviewed public resident identity card and a host key supplied through the fixed
+  `WW_HEARTH_TRANSPORT_PRIVATE_KEY` file path. Unknown paths and symlinks fail closed.
 - `hearth_activation.py` — inspect a hearth's runtime generation, explicitly activate a new manifest, or
   retire a stopped source and activate its already imported successor.
 - `import_stable_hearth.py` — dry-run-first, allowlisted import of one legacy Stable familiar into a new,

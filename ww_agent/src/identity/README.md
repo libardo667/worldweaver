@@ -133,11 +133,13 @@ the metadata, manifest, declared paths, sizes, and SHA-256 hashes all agree. Imp
 sibling and renames it into place only after validation; it never replaces an existing home. Export also
 requires an explicitly initialized hearth manifest and refuses to read a home whose runtime lock is held.
 
-The module also has an encrypted package path for injected synthetic keys. It builds the inner ZIP in memory,
-encrypts it for one host transport key, and verifies that the resident-signed outer actor, hearth, and
-generation exactly match the inner manifest before import writes anything. This is tested library plumbing,
-not an operator workflow: no real identity key is stored, no host key is loaded, no command exposes private
-key flags, and the current portable allowlist still excludes every key-like path.
+The module also has an encrypted package path. It builds the inner ZIP in memory, encrypts it for one host
+transport key, and verifies that the resident-signed outer actor, hearth, and generation exactly match both
+the inner manifest and a separately reviewed public identity card before import writes anything. The import
+command loads a folder-owned host key from the `WW_HEARTH_TRANSPORT_PRIVATE_KEY` file path; the operator fixes
+that path rather than accepting private key material as an argument. It installs only into a new dormant
+home. Encrypted export still accepts only an injected synthetic resident key because real resident key
+custody and recovery are unresolved. The portable allowlist continues to exclude every key-like path.
 
 `hearth_activation.py` supplies the first orderly stopped-transfer fence. A manifested home is dormant
 until its first explicit activation. During transfer, the already imported target advances from generation
