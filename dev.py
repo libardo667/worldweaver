@@ -20,6 +20,8 @@ ENGINE_DIR = ROOT / "worldweaver_engine"
 AGENT_DIR = ROOT / "ww_agent"
 REQUIREMENTS = ROOT / "requirements.txt"
 _SENSITIVE_FLAGS = frozenset({"--token", "--password", "--api-key", "--secret"})
+ENGINE_PYTHON_SCOPE = ("src", "tests", "scripts", "alembic", "main.py")
+AGENT_PYTHON_SCOPE = ("src", "tests", "scripts")
 
 
 def _duration_seconds(value: str) -> float:
@@ -30,9 +32,13 @@ def _duration_seconds(value: str) -> float:
     try:
         seconds = float(number) * units[suffix]
     except ValueError as exc:
-        raise argparse.ArgumentTypeError("duration must look like 30s, 15m, or 1h") from exc
+        raise argparse.ArgumentTypeError(
+            "duration must look like 30s, 15m, or 1h"
+        ) from exc
     if not 0 < seconds <= 7200:
-        raise argparse.ArgumentTypeError("duration must be greater than zero and at most 2h")
+        raise argparse.ArgumentTypeError(
+            "duration must be greater than zero and at most 2h"
+        )
     return seconds
 
 
@@ -114,12 +120,20 @@ def _install() -> int:
     if not _python_works(python_path):
         action = "Rebuilding" if VENV_DIR.exists() else "Creating"
         print(f"{action} shared environment at {VENV_DIR}", flush=True)
-        create_command = [uv, "venv", "--clear", str(VENV_DIR), "--python", sys.executable] if uv else [sys.executable, "-m", "venv", "--clear", str(VENV_DIR)]
+        create_command = (
+            [uv, "venv", "--clear", str(VENV_DIR), "--python", sys.executable]
+            if uv
+            else [sys.executable, "-m", "venv", "--clear", str(VENV_DIR)]
+        )
         created = _run(create_command)
         if created != 0:
             return created
     python = str(python_path)
-    install_command = [uv, "pip", "install", "--upgrade", "--python", python, "-r", str(REQUIREMENTS)] if uv else [python, "-m", "pip", "install", "--upgrade", "-r", str(REQUIREMENTS)]
+    install_command = (
+        [uv, "pip", "install", "--upgrade", "--python", python, "-r", str(REQUIREMENTS)]
+        if uv
+        else [python, "-m", "pip", "install", "--upgrade", "-r", str(REQUIREMENTS)]
+    )
     dependencies = _run(install_command)
     if dependencies != 0:
         return dependencies
@@ -169,7 +183,77 @@ def _check_workspace_command() -> int:
     linted = _run([sys.executable, "-m", "ruff", "check", "--config", config, "dev.py"])
     if linted != 0:
         return linted
-    return _run([sys.executable, "-m", "black", "--check", "--config", config, "dev.py"])
+    return _run(
+        [sys.executable, "-m", "black", "--check", "--config", config, "dev.py"]
+    )
+
+
+def _check_agent_command() -> int:
+    config = str(AGENT_DIR / "pyproject.toml")
+    linted = _run(
+        [
+            sys.executable,
+            "-m",
+            "ruff",
+            "check",
+            "--config",
+            config,
+            *AGENT_PYTHON_SCOPE,
+        ],
+        cwd=AGENT_DIR,
+    )
+    if linted != 0:
+        return linted
+    return _run(
+        [
+            sys.executable,
+            "-m",
+            "black",
+            "--check",
+            "--config",
+            config,
+            *AGENT_PYTHON_SCOPE,
+        ],
+        cwd=AGENT_DIR,
+    )
+
+
+def _format(args: list[str]) -> int:
+    target, extra = _target_and_args(args)
+    if extra:
+        print("Usage: python dev.py format [all|engine|agent]", file=sys.stderr)
+        return 2
+    root_config = str(ENGINE_DIR / "pyproject.toml")
+    result = _run([sys.executable, "-m", "black", "--config", root_config, "dev.py"])
+    if result != 0:
+        return result
+    if target in {"all", "engine"}:
+        result = _run(
+            [
+                sys.executable,
+                "-m",
+                "black",
+                "--config",
+                str(ENGINE_DIR / "pyproject.toml"),
+                *ENGINE_PYTHON_SCOPE,
+            ],
+            cwd=ENGINE_DIR,
+        )
+        if result != 0:
+            return result
+    if target in {"all", "agent"}:
+        return _run(
+            [
+                sys.executable,
+                "-m",
+                "black",
+                "--config",
+                str(AGENT_DIR / "pyproject.toml"),
+                *AGENT_PYTHON_SCOPE,
+            ],
+            cwd=AGENT_DIR,
+        )
+    return 0
 
 
 def _check(args: list[str]) -> int:
@@ -179,13 +263,19 @@ def _check(args: list[str]) -> int:
         return result
     if target in {"all", "engine"}:
         print("\n--- engine lint and build ---", flush=True)
-        result = _run([sys.executable, "scripts/dev.py", "gate3-strict"], cwd=ENGINE_DIR)
+        result = _run(
+            [sys.executable, "scripts/dev.py", "gate3-strict"], cwd=ENGINE_DIR
+        )
         if result != 0:
             return result
         result = _pytest("engine", extra)
         if result != 0:
             return result
     if target in {"all", "agent"}:
+        print("\n--- agent lint ---", flush=True)
+        result = _check_agent_command()
+        if result != 0:
+            return result
         return _pytest("agent", extra)
     return 0
 
@@ -220,7 +310,9 @@ def _prepare_resident_city(city: str) -> tuple[Path, dict[str, str]] | int:
 
     docker = shutil.which("docker")
     if not docker:
-        print("Docker is required for city and agent-process preflight.", file=sys.stderr)
+        print(
+            "Docker is required for city and agent-process preflight.", file=sys.stderr
+        )
         return 2
     compose_status = subprocess.run(
         [
@@ -283,7 +375,9 @@ def _prepare_resident_city(city: str) -> tuple[Path, dict[str, str]] | int:
         parsed_embedding = urllib.parse.urlsplit(embedding_url)
 
         def ollama_reachable(parts: urllib.parse.SplitResult) -> bool:
-            tags_url = urllib.parse.urlunsplit((parts.scheme or "http", parts.netloc, "/api/tags", "", ""))
+            tags_url = urllib.parse.urlunsplit(
+                (parts.scheme or "http", parts.netloc, "/api/tags", "", "")
+            )
             try:
                 with urllib.request.urlopen(tags_url, timeout=2) as response:
                     return response.status == 200
@@ -291,9 +385,13 @@ def _prepare_resident_city(city: str) -> tuple[Path, dict[str, str]] | int:
                 return False
 
         if not ollama_reachable(parsed_embedding):
-            local_embedding = parsed_embedding._replace(netloc=f"localhost:{parsed_embedding.port or 11434}")
+            local_embedding = parsed_embedding._replace(
+                netloc=f"localhost:{parsed_embedding.port or 11434}"
+            )
             if ollama_reachable(local_embedding):
-                runtime_env["WW_EMBEDDING_URL"] = urllib.parse.urlunsplit(local_embedding)
+                runtime_env["WW_EMBEDDING_URL"] = urllib.parse.urlunsplit(
+                    local_embedding
+                )
                 print(
                     "Host-side embedder resolved to localhost; the shard's Docker hostname was unreachable.",
                     flush=True,
@@ -307,7 +405,9 @@ def _resident(args: list[str]) -> int:
         description="Preflight or wake exactly one named resident against one city.",
     )
     parser.add_argument("--city", required=True, help="city shard directory name")
-    parser.add_argument("--resident", required=True, help="exact resident directory name")
+    parser.add_argument(
+        "--resident", required=True, help="exact resident directory name"
+    )
     action = parser.add_mutually_exclusive_group()
     action.add_argument(
         "--wake",
@@ -345,7 +445,10 @@ def _resident(args: list[str]) -> int:
     parser.add_argument(
         "--action-tendency",
         action="store_true",
-        help=("for this run only, let sustained restless fervor become a venture " "toward a reachable place"),
+        help=(
+            "for this run only, let sustained restless fervor become a venture "
+            "toward a reachable place"
+        ),
     )
     parser.add_argument(
         "--reach-continuations",
@@ -363,7 +466,9 @@ def _resident(args: list[str]) -> int:
     if parsed.ticks is None and parsed.duration is None:
         parsed.ticks = 3
     if parsed.duration is not None and parsed.pause is not None:
-        parser.error("--duration uses the resident's natural cadence; do not pass --pause")
+        parser.error(
+            "--duration uses the resident's natural cadence; do not pass --pause"
+        )
     if parsed.duration is None and parsed.pause is None:
         parsed.pause = 0.5
     if parsed.duration is not None:
@@ -373,7 +478,10 @@ def _resident(args: list[str]) -> int:
         parser.error("--ticks must be between 1 and 20")
     if parsed.pause is not None and not 0 <= parsed.pause <= 60:
         parser.error("--pause must be between 0 and 60 seconds")
-    if Path(parsed.city).name != parsed.city or Path(parsed.resident).name != parsed.resident:
+    if (
+        Path(parsed.city).name != parsed.city
+        or Path(parsed.resident).name != parsed.resident
+    ):
         parser.error("--city and --resident must be single directory names")
 
     prepared_city = _prepare_resident_city(parsed.city)
@@ -499,7 +607,13 @@ def _cohort(args: list[str]) -> int:
     residents_dir = city_dir / "residents"
     names = list(dict.fromkeys(parsed.resident))
     if not names:
-        names = sorted(path.name for path in residents_dir.iterdir() if path.is_dir() and not path.name.startswith(".") and (path / "identity" / "SOUL.md").is_file())
+        names = sorted(
+            path.name
+            for path in residents_dir.iterdir()
+            if path.is_dir()
+            and not path.name.startswith(".")
+            and (path / "identity" / "SOUL.md").is_file()
+        )
     if not 2 <= len(names) <= 5:
         parser.error("a cohort must contain between 2 and 5 residents")
 
@@ -549,7 +663,9 @@ def _seed_residents(args: list[str]) -> int:
     parser.add_argument("--count", type=int, default=3, help="resident count (1-5)")
     parser.add_argument("--seed", type=int, default=0, help="repeatable creation deal")
     parser.add_argument("--location", action="append", default=[])
-    parser.add_argument("--apply", action="store_true", help="create homes; omitted means dry-run")
+    parser.add_argument(
+        "--apply", action="store_true", help="create homes; omitted means dry-run"
+    )
     parsed = parser.parse_args(args)
     if Path(parsed.city).name != parsed.city:
         parser.error("--city must be a single directory name")
@@ -564,7 +680,9 @@ def _seed_residents(args: list[str]) -> int:
 
     docker = shutil.which("docker")
     if not docker:
-        print("Docker is required for city and agent-process preflight.", file=sys.stderr)
+        print(
+            "Docker is required for city and agent-process preflight.", file=sys.stderr
+        )
         return 2
     compose_status = subprocess.run(
         [
@@ -658,8 +776,12 @@ def _conversation_health(args: list[str]) -> int:
         default=3,
         help="minimum population for language metrics (3-100)",
     )
-    parser.add_argument("--windows", type=int, default=3, help="ordered comparison windows (2-12)")
-    parser.add_argument("--shuffle-seed", type=int, default=0, help="repeatable null-comparison seed")
+    parser.add_argument(
+        "--windows", type=int, default=3, help="ordered comparison windows (2-12)"
+    )
+    parser.add_argument(
+        "--shuffle-seed", type=int, default=0, help="repeatable null-comparison seed"
+    )
     parsed = parser.parse_args(args)
     if Path(parsed.city).name != parsed.city:
         parser.error("--city must be a single directory name")
@@ -714,7 +836,9 @@ def _space_policy(args: list[str]) -> int:
     )
     parser.add_argument("--city", required=True, help="city shard directory name")
     parser.add_argument("--location", required=True, help="exact canonical place name")
-    parser.add_argument("--controller-resident", required=True, help="resident directory name")
+    parser.add_argument(
+        "--controller-resident", required=True, help="resident directory name"
+    )
     parser.add_argument(
         "--mode",
         choices=("public", "requestable", "private", "closed"),
@@ -722,7 +846,10 @@ def _space_policy(args: list[str]) -> int:
     )
     parser.add_argument("--note", default="", help="short steward-visible setup note")
     parsed = parser.parse_args(args)
-    if Path(parsed.city).name != parsed.city or Path(parsed.controller_resident).name != parsed.controller_resident:
+    if (
+        Path(parsed.city).name != parsed.city
+        or Path(parsed.controller_resident).name != parsed.controller_resident
+    ):
         parser.error("--city and --controller-resident must be single directory names")
 
     city_dir = ROOT / "shards" / parsed.city
@@ -732,13 +859,23 @@ def _space_policy(args: list[str]) -> int:
         print(f"City shard not found: {parsed.city}", file=sys.stderr)
         return 2
     try:
-        manifest = json.loads((resident_home / "identity" / "hearth_manifest.json").read_text(encoding="utf-8"))
-        activation = json.loads((resident_home / "hearth_activation.json").read_text(encoding="utf-8"))
+        manifest = json.loads(
+            (resident_home / "identity" / "hearth_manifest.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        activation = json.loads(
+            (resident_home / "hearth_activation.json").read_text(encoding="utf-8")
+        )
     except (OSError, json.JSONDecodeError) as exc:
         print(f"Resident hearth is not ready for stewardship: {exc}", file=sys.stderr)
         return 2
     actor_id = str(manifest.get("actor_id") or "").strip()
-    if not actor_id or activation.get("state") != "active" or str(activation.get("actor_id") or "").strip() != actor_id:
+    if (
+        not actor_id
+        or activation.get("state") != "active"
+        or str(activation.get("actor_id") or "").strip() != actor_id
+    ):
         print(
             "Resident hearth must be active and match its stable actor ID.",
             file=sys.stderr,
@@ -797,7 +934,9 @@ def _resident_authority(args: list[str]) -> int:
     parser.add_argument("--city", required=True, help="city shard directory name")
     commands = parser.add_subparsers(dest="action", required=True)
     commands.add_parser("list", help="list admitted resident public identities")
-    admit = commands.add_parser("admit", help="verify and admit one reviewed public resident identity card")
+    admit = commands.add_parser(
+        "admit", help="verify and admit one reviewed public resident identity card"
+    )
     admit.add_argument("descriptor")
     admit.add_argument("--reason", required=True)
     parsed = parser.parse_args(args)
@@ -895,8 +1034,17 @@ def _hearth_host(args: list[str]) -> int:
         return 2
     if parsed.action == "receive":
         resident_name = str(parsed.resident or "").strip()
-        if resident_name in {"", ".", ".."} or len(resident_name) > 80 or not all(character.isalnum() or character in "._-" for character in resident_name) or not resident_name[0].isalnum():
-            parser.error("--resident must use 1-80 letters, numbers, dots, dashes, or underscores")
+        if (
+            resident_name in {"", ".", ".."}
+            or len(resident_name) > 80
+            or not all(
+                character.isalnum() or character in "._-" for character in resident_name
+            )
+            or not resident_name[0].isalnum()
+        ):
+            parser.error(
+                "--resident must use 1-80 letters, numbers, dots, dashes, or underscores"
+            )
         key_path = city_dir / "hearth-host" / "identity" / "transport.key"
         runtime_env = os.environ.copy()
         runtime_env["WW_HEARTH_TRANSPORT_PRIVATE_KEY"] = str(key_path)
@@ -914,7 +1062,9 @@ def _hearth_host(args: list[str]) -> int:
             env=runtime_env,
         )
         if result == 0:
-            print("The imported hearth is dormant. Review it before activation or city admission.")
+            print(
+                "The imported hearth is dormant. Review it before activation or city admission."
+            )
         return result
     return _run(
         [
@@ -937,7 +1087,10 @@ def _help() -> None:
   python dev.py test agent [pytest...]  run only agent tests
   python dev.py check                   run engine lint/build plus all Python tests
   python dev.py check engine            run only the engine checks
-  python dev.py check agent             run only the agent tests
+  python dev.py check agent             run agent lint plus agent tests
+  python dev.py format                  format root, engine, and agent Python
+  python dev.py format engine           format only root and engine Python
+  python dev.py format agent            format only root and agent Python
   python dev.py agent                   run the resident process
   python dev.py resident --city CITY --resident NAME
                                         preflight exactly one resident (read-only)
@@ -990,6 +1143,8 @@ def main() -> int:
         return _test(rest)
     if command == "check":
         return _check(rest)
+    if command == "format":
+        return _format(rest)
     if command == "run":
         return _run_repo_script(rest)
     if command == "resident":

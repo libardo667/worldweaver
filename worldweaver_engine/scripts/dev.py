@@ -25,13 +25,12 @@ CLIENT_ENV_FILE = ROOT / "client-public" / ".env.local"
 CLIENT_COMPOSE_FILE = ROOT / "docker-compose.yml"
 LEGACY_STACK_COMPOSE_FILE = ROOT / "docker-compose.legacy.yml"
 API_KEY_NAMES = ("OPENROUTER_API_KEY", "LLM_API_KEY", "OPENAI_API_KEY")
-DEFAULT_LINT_SCOPE = ("src/api", "src/services", "src/models", "main.py")
+DEFAULT_LINT_SCOPE = ("src", "main.py")
 DEFAULT_LINT_EXTENDED_SCOPE = (
-    "src/api",
-    "src/services",
-    "src/models",
+    "src",
     "tests",
     "scripts",
+    "alembic",
     "main.py",
 )
 DEFAULT_RUNTIME_DB_PATHS = ("worldweaver.db", "db/worldweaver.db")
