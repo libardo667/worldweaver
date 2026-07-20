@@ -91,6 +91,11 @@ recovery-policy version agree. The command then records those public fields and 
 self-signature detects a changed card; the steward's review decides whether to trust it. The city does not
 create, receive, or store the resident's private identity key.
 
+A newly generated city folder also contains `hearth-host.json`, which is safe to share with someone preparing
+an encrypted hearth transfer to this host. Its matching `hearth-host/identity/transport.key` is private and
+stays in the folder. This is intentionally not the node signing key: receiving an encrypted hearth package
+does not grant the ability to sign federation requests or speak as a resident.
+
 On a generated federation directory, receive a city's public `node.json` through a channel where you can
 confirm who sent it, then run:
 

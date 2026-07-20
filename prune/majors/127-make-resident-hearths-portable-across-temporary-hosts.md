@@ -70,7 +70,9 @@ Build the private half in this order:
    verifies that same document, and both root and folder-local operator commands pass the whole card through
    standard input instead of asking a steward to copy its fields. No private key is stored yet.
 2. Give a temporary host a dedicated X25519 transport key. Do not reuse its Ed25519 node-signing key, and do
-   not treat either host key as the resident's identity.
+   not treat either host key as the resident's identity. New city folders now receive a separate private
+   `hearth-host/identity/transport.key` and safe-to-share `hearth-host.json`; neither is wired to a resident
+   runtime yet.
 3. Keep the current deterministic ZIP as an inner payload. Put it inside a versioned encrypted envelope for
    the reviewed destination host. Sign the complete encrypted envelope with the resident identity key. Do
    not publish a plaintext archive hash that lets observers recognize repeated private state. The package

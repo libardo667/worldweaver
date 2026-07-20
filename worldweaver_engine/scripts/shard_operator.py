@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -26,6 +27,9 @@ COMPOSE_FILE = ROOT / "docker-compose.yml"
 ENV_FILE = ROOT / ".env"
 NODE_FILE = ROOT / "node.json"
 PRIVATE_KEY = ROOT / "identity" / "node.key"
+HEARTH_HOST_DIR = ROOT / "hearth-host"
+HEARTH_TRANSPORT_KEY = HEARTH_HOST_DIR / "identity" / "transport.key"
+HEARTH_TRANSPORT_DESCRIPTOR = ROOT / "hearth-host.json"
 BACKUP_SCHEMA = "worldweaver.node-backup"
 BACKUP_SCHEMA_VERSION = 1
 MUTABLE_IMAGE_TAGS = {"latest", "main", "master", "edge", "dev", "stable"}
@@ -172,13 +176,17 @@ def collect_problems(*, offline: bool = False) -> tuple[list[str], list[str]]:
     warnings: list[str] = []
     env = _read_env()
 
-    for path in (COMPOSE_FILE, ENV_FILE, NODE_FILE, PRIVATE_KEY):
+    required_paths = [COMPOSE_FILE, ENV_FILE, NODE_FILE, PRIVATE_KEY]
+    for path in required_paths:
         if not path.is_file():
             errors.append(f"Missing required file: {path.relative_to(ROOT)}")
     if errors:
         return errors, warnings
 
-    for path in (ENV_FILE, PRIVATE_KEY):
+    private_paths = [ENV_FILE, PRIVATE_KEY]
+    if HEARTH_TRANSPORT_KEY.is_file():
+        private_paths.append(HEARTH_TRANSPORT_KEY)
+    for path in private_paths:
         if not _secure_mode(path):
             errors.append(f"{path.relative_to(ROOT)} is readable by other local users; run setup to repair permissions.")
 
@@ -191,6 +199,22 @@ def collect_problems(*, offline: bool = False) -> tuple[list[str], list[str]]:
         errors.append("node.json uses an unsupported descriptor version.")
     if str(descriptor.get("node_id") or "") != env.get("SHARD_ID", ""):
         errors.append("node.json and .env name different node IDs.")
+
+    if env.get("SHARD_TYPE") != "world" and (HEARTH_TRANSPORT_KEY.exists() or HEARTH_TRANSPORT_DESCRIPTOR.exists()):
+        if not HEARTH_TRANSPORT_KEY.is_file() or HEARTH_TRANSPORT_KEY.is_symlink() or not HEARTH_TRANSPORT_DESCRIPTOR.is_file() or HEARTH_TRANSPORT_DESCRIPTOR.is_symlink():
+            errors.append("Hearth transport identity is incomplete; both the private key and public descriptor are required.")
+        else:
+            try:
+                transport = json.loads(HEARTH_TRANSPORT_DESCRIPTOR.read_text(encoding="utf-8"))
+                encoded_transport = str(transport.get("transport_public_key") or "")
+                raw_transport = base64.urlsafe_b64decode(encoded_transport + "=" * (-len(encoded_transport) % 4))
+                expected_transport_id = f"x25519:{hashlib.sha256(raw_transport).hexdigest()[:32]}"
+                if transport.get("schema") != "worldweaver.hearth-transport" or type(transport.get("schema_version")) is not int or transport.get("schema_version") != 1 or not re.fullmatch(r"[A-Za-z0-9_-]{43}", encoded_transport) or len(raw_transport) != 32 or transport.get("transport_key_id") != expected_transport_id:
+                    raise ValueError
+            except (OSError, ValueError, json.JSONDecodeError):
+                errors.append("hearth-host.json is not a valid hearth transport descriptor.")
+    elif env.get("SHARD_TYPE") != "world":
+        warnings.append("This legacy city folder has no hearth transport key and cannot receive encrypted hearth packages.")
 
     required = ("COMPOSE_PROJECT_NAME", "SHARD_ID", "BACKEND_PORT", "WW_DB_EXTERNAL_PORT", "WW_DB_PASSWORD", "WW_JWT_SECRET", "WW_DATA_ENCRYPTION_KEY", "WW_ENGINE_IMAGE")
     for key in required:
@@ -275,14 +299,21 @@ def command_check(args: argparse.Namespace) -> int:
 
 
 def command_setup(args: argparse.Namespace) -> int:
-    for directory in (ROOT / "data", ROOT / "residents", ROOT / "identity", ROOT / "backups"):
+    directories = [ROOT / "data", ROOT / "residents", ROOT / "identity", ROOT / "backups"]
+    if _read_env().get("SHARD_TYPE") != "world":
+        directories.append(HEARTH_TRANSPORT_KEY.parent)
+    for directory in directories:
         directory.mkdir(parents=True, exist_ok=True)
     if os.name != "nt":
         if ENV_FILE.exists():
             ENV_FILE.chmod(0o600)
         if PRIVATE_KEY.exists():
             PRIVATE_KEY.chmod(0o600)
+        if HEARTH_TRANSPORT_KEY.exists():
+            HEARTH_TRANSPORT_KEY.chmod(0o600)
         PRIVATE_KEY.parent.chmod(0o700)
+        if HEARTH_TRANSPORT_KEY.parent.exists():
+            HEARTH_TRANSPORT_KEY.parent.chmod(0o700)
     if command_check(argparse.Namespace(offline=False)):
         return 1
     if not args.no_pull:
@@ -565,12 +596,22 @@ def command_backup(args: argparse.Namespace) -> int:
             "created_at": datetime.now(timezone.utc).isoformat(),
             "contains_private_identity": True,
             "contains_resident_state": True,
+            "contains_hearth_transport_identity": (HEARTH_TRANSPORT_KEY.is_file() and HEARTH_TRANSPORT_DESCRIPTOR.is_file()),
         }
         (temporary / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         with tarfile.open(archive, "w:gz") as bundle:
             bundle.add(temporary / "manifest.json", arcname="manifest.json")
             bundle.add(temporary / "database.dump", arcname="database.dump")
-            for relative in (".env", "docker-compose.yml", "node.json", "identity", "data", "residents"):
+            for relative in (
+                ".env",
+                "docker-compose.yml",
+                "node.json",
+                "hearth-host.json",
+                "identity",
+                "hearth-host",
+                "data",
+                "residents",
+            ):
                 path = ROOT / relative
                 if path.exists():
                     bundle.add(path, arcname=relative)
@@ -611,12 +652,19 @@ def command_restore(args: argparse.Namespace) -> int:
             if current.get("node_id") != manifest.get("node_id"):
                 raise OperatorError("Backup belongs to a different node identity.")
 
-        for relative in (".env", "docker-compose.yml", "node.json"):
+        required_files = [".env", "docker-compose.yml", "node.json"]
+        carries_hearth_transport = bool(manifest.get("contains_hearth_transport_identity"))
+        if carries_hearth_transport:
+            required_files.append("hearth-host.json")
+        for relative in required_files:
             source = staging / relative
             if not source.is_file():
                 raise OperatorError(f"Backup is missing {relative}.")
             shutil.copy2(source, ROOT / relative)
-        for relative in ("identity", "data", "residents"):
+        required_directories = ["identity", "data", "residents"]
+        if carries_hearth_transport:
+            required_directories.append("hearth-host")
+        for relative in required_directories:
             source = staging / relative
             destination = ROOT / relative
             if destination.exists():
@@ -626,6 +674,9 @@ def command_restore(args: argparse.Namespace) -> int:
             ENV_FILE.chmod(0o600)
             PRIVATE_KEY.chmod(0o600)
             PRIVATE_KEY.parent.chmod(0o700)
+            if HEARTH_TRANSPORT_KEY.exists():
+                HEARTH_TRANSPORT_KEY.chmod(0o600)
+                HEARTH_TRANSPORT_KEY.parent.chmod(0o700)
 
         _compose("up", "-d", "db")
         deadline = time.monotonic() + 60

@@ -49,6 +49,9 @@ if str(ENGINE_ROOT) not in sys.path:
     sys.path.insert(0, str(ENGINE_ROOT))
 
 from src.services.federation_node_auth import generate_node_identity  # noqa: E402
+from src.services.hearth_transport import (  # noqa: E402
+    generate_hearth_transport_identity,
+)
 
 OPERATOR_SOURCE = Path(__file__).resolve().with_name("shard_operator.py")
 
@@ -271,14 +274,15 @@ backups/
 .env.*
 *.env
 identity/node.key
+hearth-host/identity/transport.key
 """
 
 _README = """\
 # WorldWeaver node folder
 
 This folder is one independently operated WorldWeaver node. Its container images
-are replaceable software. Its `.env`, `identity/`, `data/`, `residents/`, and
-`backups/` are private node state.
+are replaceable software. Its `.env`, `identity/`, `hearth-host/`, `data/`,
+`residents/`, and `backups/` are private node state.
 
 Run every operator command from this folder:
 
@@ -309,6 +313,11 @@ python ww.py node history new-city-node-id
 `node revoke` stops an admitted node from using private federation routes.
 Changing a node key requires `node revoke` followed by `node recover` with the
 replacement `node.json`. These commands are only available on a world node.
+
+City folders also have a separate `hearth-host.json` public encryption descriptor
+and private `hearth-host/identity/transport.key`. That X25519 key can receive a
+hearth package encrypted for this temporary host. It cannot sign federation
+traffic or speak as a resident.
 
 `update` accepts explicit versioned image references. `restore` requires a full
 backup made by this command surface and an explicit `--yes`. Backups contain the
@@ -585,6 +594,8 @@ def main() -> None:
         shard_dir / "identity",
         shard_dir / "residents",
     ]
+    if args.shard_type != "world":
+        dirs.append(shard_dir / "hearth-host" / "identity")
 
     # Print plan
     print(f"\nCreating shard: {shard_dir_name}/")
@@ -638,6 +649,11 @@ def main() -> None:
         shard_type=args.shard_type,
         city_id=city_id if args.shard_type != "world" else None,
     )
+    if args.shard_type != "world":
+        generate_hearth_transport_identity(
+            private_key_path=(shard_dir / "hearth-host" / "identity" / "transport.key"),
+            descriptor_path=shard_dir / "hearth-host.json",
+        )
 
     # Copy city pack into shard data dir
     if city_pack_src is not None:

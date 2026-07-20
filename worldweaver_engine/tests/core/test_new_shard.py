@@ -119,6 +119,7 @@ def test_new_shards_receive_separate_secure_local_secrets(tmp_path: Path) -> Non
     script = Path(__file__).resolve().parents[2] / "scripts" / "new_shard.py"
 
     generated: list[dict[str, str]] = []
+    transport_descriptors: list[dict[str, str]] = []
     for directory_name, shard_id in (("first", "river-coop-1"), ("second", "river-coop-2")):
         base_dir = tmp_path / directory_name
         subprocess.run(
@@ -144,6 +145,13 @@ def test_new_shards_receive_separate_secure_local_secrets(tmp_path: Path) -> Non
         descriptor = json.loads((base_dir / "ww_pdx" / "node.json").read_text(encoding="utf-8"))
         assert descriptor["node_id"] == shard_id
         assert descriptor["city_id"] == "portland"
+        transport_key = base_dir / "ww_pdx" / "hearth-host" / "identity" / "transport.key"
+        assert transport_key.stat().st_mode & 0o077 == 0
+        transport_descriptor = json.loads((base_dir / "ww_pdx" / "hearth-host.json").read_text(encoding="utf-8"))
+        assert transport_descriptor["schema"] == "worldweaver.hearth-transport"
+        assert transport_descriptor["transport_key_id"].startswith("x25519:")
+        assert transport_descriptor["transport_public_key"] != descriptor["public_key"]
+        transport_descriptors.append(transport_descriptor)
 
     first, second = generated
     assert first["COMPOSE_PROJECT_NAME"] == "river-coop-1"
@@ -155,6 +163,7 @@ def test_new_shards_receive_separate_secure_local_secrets(tmp_path: Path) -> Non
     assert first["WW_DATA_ENCRYPTION_KEY"] != second["WW_DATA_ENCRYPTION_KEY"]
     assert first["WW_DB_PASSWORD"] != second["WW_DB_PASSWORD"]
     assert first["WW_NODE_PRIVATE_KEY_PATH"] == "identity/node.key"
+    assert transport_descriptors[0]["transport_key_id"] != transport_descriptors[1]["transport_key_id"]
     assert first["WW_REQUIRE_EMAIL_VERIFICATION"] == "false"
     assert "CHANGE_ME" not in first["WW_JWT_SECRET"]
 
@@ -219,6 +228,30 @@ def test_new_game_shard_copies_versioned_experience_and_uses_readable_name(tmp_p
     )
     assert checked.returncode == 0, checked.stderr
     assert "Node folder check passed" in checked.stdout
+
+    transport_key = shard / "hearth-host" / "identity" / "transport.key"
+    transport_descriptor = shard / "hearth-host.json"
+    descriptor_bytes = transport_descriptor.read_bytes()
+    transport_key.unlink()
+    transport_descriptor.unlink()
+    legacy = subprocess.run(
+        [sys.executable, str(shard / "ww.py"), "check", "--offline"],
+        cwd=shard,
+        capture_output=True,
+        text=True,
+    )
+    assert legacy.returncode == 0, legacy.stderr
+    assert "cannot receive encrypted hearth packages" in legacy.stdout
+
+    transport_descriptor.write_bytes(descriptor_bytes)
+    incomplete = subprocess.run(
+        [sys.executable, str(shard / "ww.py"), "check", "--offline"],
+        cwd=shard,
+        capture_output=True,
+        text=True,
+    )
+    assert incomplete.returncode == 1
+    assert "Hearth transport identity is incomplete" in incomplete.stderr
 
 
 def test_folder_operator_verifies_generated_maps_before_publication(tmp_path: Path) -> None:
