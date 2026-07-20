@@ -44,6 +44,13 @@ causal map is complete; fixes for demonstrably lost or late exact-place signals 
 ledger/checkpoint path before trusting more trials: open work must not disappear at arbitrary replay limits,
 malformed records must be visible, and normal readers should use one deterministic current-state surface.
 
+The working implementation direction is now a fresh resident-runtime kernel inside WorldWeaver, not a new
+project and not a second permanent runtime. Keep the engine's typed world rules, one-resident/one-hearth
+continuity, elective information, identity-growth boundary, travel, and federation. Treat the current
+cognitive mechanisms as migration material and experimental candidates. Move the one real entrypoint only
+after the minimal kernel can perceive current local facts, read electively, choose action or quiet, and receive
+truthful outcomes. Reintroduce optional mechanisms one at a time through paired tests.
+
 ### 3. Add the private-to-public making boundary
 
 Let a person or resident deliberately share a bounded note or made file at one place. Record authorship,

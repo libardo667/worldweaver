@@ -3,6 +3,59 @@
 Status: proposed from verified code findings. This is not yet a claim that any particular cognitive theory is
 correct.
 
+## Working architectural direction: a fresh kernel, not a fresh project
+
+The audit has reached the point where repairing each visible behavior inside the current `CognitiveCore` is
+no longer the safest default. Too many mechanisms share hidden state, misleading names, duplicated files, and
+one oversized model response. Local fixes can preserve assumptions that have not earned preservation.
+
+WorldWeaver should therefore build a small reference resident-runtime kernel inside this repository and move
+the real entrypoint to it in controlled slices. This is not a greenfield rewrite and must not become a second
+permanent resident architecture. The existing runtime remains useful as:
+
+- a source of requirements and failure cases;
+- a migration source for resident-owned state;
+- a comparison arm for paired tests;
+- working code to keep only after its contract is made explicit and verified.
+
+The broader project should remain in place. These parts have enough clear value to carry forward through
+narrow interfaces:
+
+- engine-owned world facts, permissions, and typed consequences;
+- one continuing actor across one hearth and at most one shared-world attachment;
+- elective, typed information sources alongside unavoidable exact-place perception;
+- complete resident event history, rebuilt on a reliable writer and reducer contract;
+- explicit identity-growth proposal, private inspection, and deliberate adoption;
+- portable hearths, recoverable travel, and federation without host ownership;
+- the same underlying world affordances for people and residents.
+
+The following parts do not transfer by default merely because they already exist:
+
+- the five-node cognitive projection and its biological names;
+- settling, fervor, venture, grief, incubation, self-sameness, and other behavior policies;
+- the current mixed-authority `Pulse` schema;
+- automatic workshop, self-report, or recent-speech feedback;
+- duplicate projections, mirrors, snapshots, and compatibility side files;
+- automatic casting, player shadows, and doula machinery;
+- any behavior whose only evidence is a test that restates its implementation.
+
+The replacement sequence is:
+
+1. Secure resident data and actor authority so both old and new paths operate inside a truthful boundary.
+2. Implement Major 137's durable writer, deterministic current-state checkpoint, and lifecycle-aware indexes.
+3. Build one minimal activation episode: receive current local facts with availability, optionally read a
+   named source, then act, continue a chosen activity, or do nothing.
+4. Record a durable confirmed, declined, or unknown result without promoting provisional model output.
+5. Carry identity, hearth attachment, travel, and existing effectors through narrow adapters.
+6. Move the one production resident entrypoint to the reference kernel; do not run two competing cores.
+7. Reintroduce memory retrieval, prediction, cadence changes, and other mechanisms only as isolated treatments
+   after paired tests show what each changes.
+8. Delete the superseded runtime once migration and recovery tests pass.
+
+This direction is provisional only in the scientific sense: evidence may change which optional mechanisms
+return. The architectural boundary itself is now the working default. New fixes should make the reference
+kernel possible or repair a safety boundary, rather than deepen coupling to the current cognitive machinery.
+
 ## First: repair software truth
 
 These are not behavioral experiments. They are contradictions or lifecycle bugs that prevent later evidence

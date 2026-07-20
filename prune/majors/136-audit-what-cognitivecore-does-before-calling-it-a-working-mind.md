@@ -212,6 +212,15 @@ several projection and compatibility files that have no production reader, while
 complete ledger three times. Active Major 137 now owns the storage, pure-replay, lifecycle-index, and reader
 convergence repair.
 
+These combined findings now support one working architecture decision without pretending the scientific
+review is finished: build a small reference resident-runtime kernel inside WorldWeaver instead of continuing
+to tune the current core mechanism by mechanism. This is not a new repository or a permanent parallel system.
+Engine-owned world state, typed consequences, one actor across hearth and city, elective information,
+resident-owned history, deliberate identity growth, portability, travel, and federation carry forward through
+narrow contracts. The five-node projection, mode policies, mixed pulse, recursive feedback, duplicate views,
+and automatic creation machinery must each earn re-entry through explicit tests. After privacy and ledger
+repairs, the minimal kernel becomes the one production entrypoint and the superseded path is removed.
+
 Three bounded evidence reviews now cover prediction/ignition/arousal/quiet/social norms,
 action-feedback/embodiment/external supports, and clock cadence/sleep/interoception/semantic policy. They
 support plainer names, reliable event and consequence delivery, quiet and repetition as valid outcomes, and
