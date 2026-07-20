@@ -15,6 +15,8 @@ AUTH_RATE_LIMITED_PATHS = frozenset(
         "/api/auth/login",
         "/api/auth/request-password-reset",
         "/api/auth/reset-password",
+        "/api/auth/resend-verification",
+        "/api/auth/verify-email",
     }
 )
 

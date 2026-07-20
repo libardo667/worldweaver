@@ -37,6 +37,7 @@ class Player(Base):
     pass_type = Column(String(20), nullable=False, default="citizen")
     pass_expires_at = Column(DateTime, nullable=True)
     terms_accepted_at = Column(DateTime, nullable=True)
+    email_verified_at = Column(DateTime, nullable=True)
     profile_completed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
 
@@ -652,6 +653,10 @@ class FederationActorAuth(Base):
     password_reset_token_hash = Column(String(128), nullable=True)
     password_reset_expires_at = Column(DateTime, nullable=True)
     password_reset_requested_at = Column(DateTime, nullable=True)
+    email_verified_at = Column(DateTime, nullable=True)
+    email_verification_token_hash = Column(String(128), nullable=True)
+    email_verification_expires_at = Column(DateTime, nullable=True)
+    email_verification_sent_at = Column(DateTime, nullable=True)
     pass_type = Column(String(20), nullable=False, default="citizen")
     pass_expires_at = Column(DateTime, nullable=True)
     terms_accepted_at = Column(DateTime, nullable=True)

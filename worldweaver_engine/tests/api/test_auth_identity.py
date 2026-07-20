@@ -100,6 +100,109 @@ def test_email_first_registration_requires_matching_confirmation_and_name_before
     assert auth.profile_completed_at is not None
 
 
+def test_required_email_verification_precedes_public_name_and_city_entry(client, db_session, monkeypatch):
+    delivered: list[tuple[str, str]] = []
+    monkeypatch.setattr(settings, "require_email_verification", True)
+    monkeypatch.setattr(settings, "resend_api_key", "test-resend-key")
+    monkeypatch.setattr(settings, "resend_from_email", "hello@example.test")
+    monkeypatch.setattr(
+        "src.api.auth.routes.send_email_verification",
+        lambda email, token: delivered.append((email, token)),
+    )
+    monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
+
+    registered = client.post(
+        "/api/auth/register",
+        json={
+            "email": "verify-first@example.com",
+            "password": "supersecret1",
+            "password_confirmation": "supersecret1",
+            "terms_accepted": True,
+        },
+    )
+    assert registered.status_code == 200
+    payload = registered.json()
+    assert payload["email_verified"] is False
+    assert payload["email_verification_required"] is True
+    assert payload["profile_complete"] is False
+    assert len(delivered) == 1
+    assert delivered[0][0] == "verify-first@example.com"
+    verification_token = delivered[0][1]
+
+    auth = db_session.get(FederationActorAuth, payload["actor_id"])
+    assert auth.email_verified_at is None
+    assert auth.email_verification_token_hash
+    assert verification_token not in auth.email_verification_token_hash
+
+    resent = client.post(
+        "/api/auth/resend-verification",
+        headers={"Authorization": f"Bearer {payload['token']}"},
+    )
+    assert resent.status_code == 200
+    assert len(delivered) == 1
+
+    headers = {"Authorization": f"Bearer {payload['token']}"}
+    blocked_profile = client.patch(
+        "/api/auth/profile",
+        json={"display_name": "River"},
+        headers=headers,
+    )
+    assert blocked_profile.status_code == 409
+    assert blocked_profile.json()["detail"] == "email_unverified"
+
+    blocked_entry = client.post(
+        "/api/session/bootstrap",
+        json={
+            "session_id": "unverified-session",
+            "player_role": "New arrival",
+            "bootstrap_source": "commons_client",
+        },
+        headers=headers,
+    )
+    assert blocked_entry.status_code == 409
+    assert blocked_entry.json()["detail"] == "email_unverified"
+
+    rejected = client.post("/api/auth/verify-email", json={"token": "not-the-right-token"})
+    assert rejected.status_code == 401
+    verified = client.post("/api/auth/verify-email", json={"token": verification_token})
+    assert verified.status_code == 200
+    verified_payload = verified.json()
+    assert verified_payload["email_verified"] is True
+    assert verified_payload["profile_complete"] is False
+
+    reused = client.post("/api/auth/verify-email", json={"token": verification_token})
+    assert reused.status_code == 401
+
+    completed = client.patch(
+        "/api/auth/profile",
+        json={"display_name": "River"},
+        headers={"Authorization": f"Bearer {verified_payload['token']}"},
+    )
+    assert completed.status_code == 200
+    assert completed.json()["display_name"] == "River"
+    assert completed.json()["profile_complete"] is True
+
+
+def test_required_email_verification_refuses_registration_without_delivery(client, db_session, monkeypatch):
+    monkeypatch.setattr(settings, "require_email_verification", True)
+    monkeypatch.setattr(settings, "resend_api_key", "")
+    monkeypatch.setattr(settings, "resend_from_email", "")
+
+    response = client.post(
+        "/api/auth/register",
+        json={
+            "email": "stranded@example.com",
+            "password": "supersecret1",
+            "password_confirmation": "supersecret1",
+            "terms_accepted": True,
+        },
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "email_verification_delivery_unavailable"
+    assert db_session.query(FederationActorAuth).filter(FederationActorAuth.email == "stranded@example.com").first() is None
+
+
 def test_auth_me_rejects_legacy_player_token(client, monkeypatch):
     monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None)
     register = client.post(

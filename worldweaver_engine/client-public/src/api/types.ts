@@ -266,6 +266,8 @@ export type AuthResponse = {
   email: string;
   display_name: string;
   profile_complete: boolean;
+  email_verified: boolean;
+  email_verification_required: boolean;
 };
 
 export type MoveResponse = {

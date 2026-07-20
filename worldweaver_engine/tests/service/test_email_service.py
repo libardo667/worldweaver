@@ -1,4 +1,8 @@
-from src.services.email_service import build_password_reset_email_payload, build_welcome_email_payload
+from src.services.email_service import (
+    build_email_verification_payload,
+    build_password_reset_email_payload,
+    build_welcome_email_payload,
+)
 from src.config import settings
 
 
@@ -28,3 +32,14 @@ def test_password_reset_link_prefers_human_client_url(monkeypatch):
 
     assert "https://play.example/?reset_token=once-only" in payload["text"]
     assert "https://api.example" not in payload["text"]
+
+
+def test_email_verification_link_prefers_human_client_url(monkeypatch):
+    monkeypatch.setattr(settings, "client_url", "https://play.example")
+    monkeypatch.setattr(settings, "public_url", "https://api.example")
+
+    payload = build_email_verification_payload("dale@example.com", "verify-once")
+
+    assert "https://play.example/?verify_token=verify-once" in payload["text"]
+    assert "https://api.example" not in payload["text"]
+    assert payload["subject"] == "Confirm your WorldWeaver email"

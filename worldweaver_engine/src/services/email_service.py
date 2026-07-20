@@ -88,6 +88,33 @@ def build_password_reset_email_payload(to_email: str, display_name: str, reset_t
     }
 
 
+def build_email_verification_payload(to_email: str, verification_token: str) -> dict[str, object]:
+    public_url = str(settings.client_url or settings.public_url or "").strip().rstrip("/")
+    verification_link = f"{public_url}/?verify_token={escape(verification_token)}" if public_url else ""
+    text_lines = [
+        "Confirm your WorldWeaver email address.",
+        "",
+        f"Verification token: {verification_token}",
+        "This token expires in 24 hours and can be used once.",
+    ]
+    if verification_link:
+        text_lines.extend(["", f"Open this link to verify your email: {verification_link}"])
+    html_parts = [
+        "<p>Confirm your WorldWeaver email address.</p>",
+        f"<p><strong>Verification token:</strong> <code>{escape(verification_token)}</code></p>",
+        "<p>This token expires in 24 hours and can be used once.</p>",
+    ]
+    if verification_link:
+        html_parts.append(f'<p><a href="{escape(verification_link)}">Verify your email</a></p>')
+    return {
+        "from": settings.resend_from_email,
+        "to": [to_email],
+        "subject": "Confirm your WorldWeaver email",
+        "text": "\n".join(text_lines),
+        "html": "".join(html_parts),
+    }
+
+
 def send_welcome_email(to_email: str, display_name: str) -> None:
     """Send a welcome email. Non-blocking — never raises."""
     if not settings.resend_api_key:
@@ -116,3 +143,18 @@ def send_password_reset_email(to_email: str, display_name: str, reset_token: str
         logger.info("Password reset email sent to %s", to_email)
     except Exception as exc:
         logger.warning("Failed to send password reset email to %s: %s", to_email, exc)
+
+
+def send_email_verification(to_email: str, verification_token: str) -> None:
+    """Send one verification link. Never log or persist the plain token here."""
+    if not settings.resend_api_key:
+        logger.debug("RESEND_API_KEY not set — skipping email verification delivery to %s", to_email)
+        return
+    try:
+        import resend
+
+        resend.api_key = settings.resend_api_key
+        resend.Emails.send(build_email_verification_payload(to_email, verification_token))
+        logger.info("Email verification sent to %s", to_email)
+    except Exception as exc:
+        logger.warning("Failed to send email verification to %s: %s", to_email, exc)

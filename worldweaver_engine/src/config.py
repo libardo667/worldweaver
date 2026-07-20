@@ -99,6 +99,10 @@ class Settings(BaseSettings):
         default="noreply@worldweaver.example.com",
         validation_alias="RESEND_FROM_EMAIL",
     )
+    require_email_verification: bool = Field(
+        default=False,
+        validation_alias="WW_REQUIRE_EMAIL_VERIFICATION",
+    )
 
 
 # Global settings instance

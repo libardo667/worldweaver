@@ -33,6 +33,11 @@ def _validate_runtime_settings() -> None:
         missing.append("WW_JWT_SECRET")
     if not str(settings.data_encryption_key or settings.jwt_secret or "").strip():
         missing.append("WW_DATA_ENCRYPTION_KEY")
+    if settings.require_email_verification:
+        if not str(settings.resend_api_key or "").strip():
+            missing.append("RESEND_API_KEY")
+        if not str(settings.resend_from_email or "").strip():
+            missing.append("RESEND_FROM_EMAIL")
     if settings.shard_type == "city":
         if not str(settings.federation_url or "").strip():
             missing.append("FEDERATION_URL")

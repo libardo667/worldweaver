@@ -131,6 +131,7 @@ def test_new_shards_receive_separate_secure_local_secrets(tmp_path: Path) -> Non
     assert first["WW_DATA_ENCRYPTION_KEY"] != second["WW_DATA_ENCRYPTION_KEY"]
     assert first["WW_DB_PASSWORD"] != second["WW_DB_PASSWORD"]
     assert first["WW_NODE_PRIVATE_KEY_PATH"] == "identity/node.key"
+    assert first["WW_REQUIRE_EMAIL_VERIFICATION"] == "false"
     assert "CHANGE_ME" not in first["WW_JWT_SECRET"]
 
 

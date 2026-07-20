@@ -83,18 +83,25 @@ export function App() {
   const atmosphere = useGrounding();
   const [, navigate] = useLocation();
   const [, placeParams] = useRoute("/place/:slug");
+  const [joinRoute] = useRoute("/join");
   const [arrivalRoute] = useRoute("/travel/arrive");
   const search = useSearch();
   const travelId = arrivalRoute ? new URLSearchParams(search).get("travel_id") : null;
 
-  // Password-reset emails point at the public root. Carry their one-time token
-  // into the join card instead of making the person dismiss the town threshold.
+  // Account emails point at the public root. Carry their one-time token into
+  // the join card instead of making the person dismiss the town threshold.
   useEffect(() => {
-    const resetToken = new URLSearchParams(search).get("reset_token");
-    if (!resetToken || placeParams) return;
+    const params = new URLSearchParams(search);
+    const verificationToken = params.get("verify_token");
+    const resetToken = params.get("reset_token");
+    if ((!verificationToken && !resetToken) || placeParams) return;
     setThresholdOpen(false);
-    navigate(`/join?reset_token=${encodeURIComponent(resetToken)}`, { replace: true });
-  }, [navigate, placeParams, search]);
+    if (joinRoute) return;
+    const query = verificationToken
+      ? `verify_token=${encodeURIComponent(verificationToken)}`
+      : `reset_token=${encodeURIComponent(resetToken!)}`;
+    navigate(`/join?${query}`, { replace: true });
+  }, [joinRoute, navigate, placeParams, search]);
 
   useEffect(() => {
     if (travelId) setThresholdOpen(false);

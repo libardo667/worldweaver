@@ -13,21 +13,24 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 from sqlalchemy.orm import Session
 
+from ...config import settings
 from ...database import get_db
 from ...models import Player, SessionVars
 from ...services.auth_service import (
     create_access_token,
     require_player,
 )
-from ...services.email_service import send_password_reset_email, send_welcome_email
+from ...services.email_service import send_email_verification, send_password_reset_email, send_welcome_email
 from ...services.federation_identity import (
     current_shard_id,
     ensure_local_player_projection,
     login_human_actor,
+    request_email_verification,
     request_password_reset,
     register_human_actor,
     reset_password,
     update_human_actor_display_name,
+    verify_email,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -120,6 +123,10 @@ class ProfileUpdateRequest(BaseModel):
         return cleaned
 
 
+class EmailVerificationRequest(BaseModel):
+    token: str = Field(..., min_length=12, max_length=256)
+
+
 class AuthResponse(BaseModel):
     token: str
     actor_id: str
@@ -128,6 +135,8 @@ class AuthResponse(BaseModel):
     email: str
     display_name: str
     profile_complete: bool
+    email_verified: bool
+    email_verification_required: bool
     pass_type: str
     pass_expires_at: Optional[str]
     terms_text: str = TERMS_TEXT
@@ -147,6 +156,8 @@ def _make_response(player: Player, token: str) -> AuthResponse:
         email=player.email,
         display_name=player.display_name,
         profile_complete=player.profile_completed_at is not None,
+        email_verified=player.email_verified_at is not None,
+        email_verification_required=bool(settings.require_email_verification),
         pass_type=player.pass_type,
         pass_expires_at=player.pass_expires_at.isoformat() if player.pass_expires_at else None,
     )
@@ -165,6 +176,8 @@ def get_terms():
 
 @router.post("/register", response_model=AuthResponse)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
+    if settings.require_email_verification and (not str(settings.resend_api_key or "").strip() or not str(settings.resend_from_email or "").strip()):
+        raise HTTPException(status_code=503, detail="email_verification_delivery_unavailable")
     legacy_username = str(payload.username or f"ww_{secrets.token_hex(12)}").strip().lower()
     requested_name = str(payload.display_name or "").strip()
     profile_completed = bool(requested_name)
@@ -178,10 +191,17 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
         pass_type=payload.pass_type,
         terms_accepted=bool(payload.terms_accepted),
         profile_completed=profile_completed,
+        email_verified=not settings.require_email_verification,
     )
     player = ensure_local_player_projection(db, bundle)
 
-    if profile_completed:
+    if settings.require_email_verification:
+        verification = request_email_verification(db, actor_id=str(player.actor_id or ""))
+        verification_token = str(verification.get("verification_token") or "").strip()
+        verification_email = str(verification.get("email") or "").strip()
+        if verification_token and verification_email:
+            send_email_verification(verification_email, verification_token)
+    elif profile_completed:
         send_welcome_email(str(payload.email), requested_name)
 
     return _make_response(player, create_access_token(str(player.actor_id or player.id)))
@@ -223,6 +243,34 @@ def reset_password_route(payload: PasswordResetConfirmRequest, db: Session = Dep
     return _make_response(player, create_access_token(str(player.actor_id or player.id)))
 
 
+@router.post("/verify-email", response_model=AuthResponse)
+def verify_email_route(payload: EmailVerificationRequest, db: Session = Depends(get_db)):
+    bundle = verify_email(db, token=payload.token.strip())
+    player = ensure_local_player_projection(db, bundle)
+    return _make_response(player, create_access_token(str(player.actor_id or player.id)))
+
+
+@router.post("/resend-verification")
+def resend_email_verification_route(
+    player: Player = Depends(require_player),
+    db: Session = Depends(get_db),
+):
+    actor_id = str(player.actor_id or "").strip()
+    if not actor_id:
+        raise HTTPException(status_code=409, detail="actor_identity_missing")
+    result = request_email_verification(db, actor_id=actor_id)
+    verification_token = str(result.get("verification_token") or "").strip()
+    verification_email = str(result.get("email") or "").strip()
+    if verification_token and verification_email:
+        send_email_verification(verification_email, verification_token)
+    return {
+        "ok": True,
+        "sent": bool(verification_token and verification_email),
+        "retry_later": bool(result.get("retry_later")),
+        "already_verified": bool(result.get("already_verified")),
+    }
+
+
 @router.get("/me", response_model=AuthResponse)
 def me(player: Player = Depends(require_player)):
     # Re-issue a fresh token so long-lived sessions stay alive
@@ -238,6 +286,8 @@ def update_profile(
     actor_id = str(player.actor_id or "").strip()
     if not actor_id:
         raise HTTPException(status_code=409, detail="actor_identity_missing")
+    if settings.require_email_verification and player.email_verified_at is None:
+        raise HTTPException(status_code=409, detail="email_unverified")
     old_name = str(player.display_name or "").strip()
     was_profile_complete = player.profile_completed_at is not None
     bundle = update_human_actor_display_name(

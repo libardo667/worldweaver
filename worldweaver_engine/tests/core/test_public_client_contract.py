@@ -40,6 +40,17 @@ def test_public_client_keeps_actor_password_recovery_on_the_public_entry_path():
     assert 'mode === "reset"' in join
 
 
+def test_public_client_carries_email_verification_links_into_the_join_flow():
+    source = PUBLIC_API.read_text(encoding="utf-8")
+    app = (ENGINE_ROOT / "client-public" / "src" / "App.tsx").read_text(encoding="utf-8")
+    join = (PUBLIC_COMPONENTS / "JoinFlow.tsx").read_text(encoding="utf-8")
+
+    assert '"/api/auth/verify-email"' in source
+    assert '"/api/auth/resend-verification"' in source
+    assert 'get("verify_token")' in app
+    assert 'mode === "verify"' in join
+
+
 def test_public_client_does_not_wrap_private_or_shard_wide_telemetry():
     source = PUBLIC_API.read_text(encoding="utf-8")
 

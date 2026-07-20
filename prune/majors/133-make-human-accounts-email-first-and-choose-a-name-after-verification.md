@@ -20,8 +20,15 @@ image were deployed to isolated Alderbank on 2026-07-19. Registration and verifi
 The second slice is implemented but not yet deployed. The public form now asks for email, password, password
 confirmation, and terms. It generates the compatibility username internally, creates no city session under
 the placeholder name, and asks for a public name in a separate authenticated step. Login and reset forms show
-email only. Existing accounts are migrated as profile-complete. Email verification itself remains the next
-slice and is still not required on Alderbank.
+email only. Existing accounts are migrated as profile-complete.
+
+The verification slice is now implemented behind `WW_REQUIRE_EMAIL_VERIFICATION`, which remains off by
+default and will remain off on Alderbank until its mail provider has been configured and tested. When enabled,
+the federation identity authority stores only a token hash, expires it after 24 hours, accepts it once, and
+allows an authenticated resend no more than once per minute. The public client accepts the emailed link or a
+manually entered token. Unverified accounts cannot set a public name or enter a city. Readiness becomes an
+error, and registration returns a clear service-unavailable response, if a steward requires verification
+without configuring delivery. Existing accounts are backfilled as verified.
 
 ## Problem
 
@@ -93,16 +100,16 @@ columns during migration, but they must not appear in the human form or become a
 - [x] The public registration form asks only for email, password, password confirmation, and terms.
 - [x] Login and password reset ask for email, not username-or-email.
 - [x] A mismatched password confirmation cannot create an account.
-- [ ] Registration creates a hashed, expiring, one-use verification token and sends a working link.
-- [ ] An unverified account cannot bootstrap a city session.
-- [ ] A verified account without a display name is taken to display-name setup rather than into the city.
+- [x] Registration creates a hashed, expiring, one-use verification token and sends a working link.
+- [x] An unverified account cannot bootstrap a city session.
+- [x] A verified account without a display name is taken to display-name setup rather than into the city.
 - [x] Setting or changing a display name updates the canonical actor and local projection without changing
   actor ID or world state.
 - [x] Existing accounts can log in and correct their public name.
 - [x] The UI no longer exposes the legacy username or uses it as a login identifier.
-- [ ] Verification resend is rate-limited and does not reveal whether an unrelated email has an account.
-- [ ] A node configured to require verification fails readiness clearly when email delivery is unavailable.
-- [ ] Federation, session bootstrap, travel, password reset, and auth rate-limit tests pass.
+- [x] Verification resend is rate-limited and does not reveal whether an unrelated email has an account.
+- [x] A node configured to require verification fails readiness clearly when email delivery is unavailable.
+- [x] Federation, session bootstrap, travel, password reset, and auth rate-limit tests pass.
 
 ## Risks and rollback
 

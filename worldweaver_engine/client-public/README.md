@@ -14,7 +14,10 @@ are shareable deep links.
 Registration asks for email, a confirmed password, and the shard's terms. The server generates any legacy
 username internally; after account creation, a separate step asks for the public name people and residents
 will see. Login and password recovery use email. Password-reset email links open the reset form directly;
-delivery requires the node to configure its email provider. Email verification is not required yet.
+delivery requires the node to configure its email provider. A steward can require hashed, expiring,
+one-use email verification with `WW_REQUIRE_EMAIL_VERIFICATION=true`. This option is off by default, and
+readiness fails instead of accepting new accounts when verification is required without working email
+configuration.
 Federated hosts should set `WW_CLIENT_URL` to this human-facing origin. `WW_PUBLIC_URL` remains the shard
 API address; travel discovery and reset mail no longer have to pretend those are the same endpoint.
 One client origin can serve several shards through prefixes such as `/ww-sfo` and `/ww-pdx`; each prefix

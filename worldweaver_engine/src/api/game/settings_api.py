@@ -64,6 +64,8 @@ def get_settings_readiness():
         runtime_missing.append("jwt_secret")
     if not encryption_ready:
         runtime_missing.append("data_encryption_key")
+    if settings.require_email_verification and not resend_ready:
+        runtime_missing.append("email_delivery")
     if settings.shard_type == "city":
         if not federation_url_ready:
             runtime_missing.append("federation_url")
@@ -121,10 +123,10 @@ def get_settings_readiness():
         ),
         ReadinessCheck(
             code="email_delivery",
-            label="Welcome email",
+            label="Email verification" if settings.require_email_verification else "Welcome email",
             ok=resend_ready,
-            severity="info",
-            message=(f"Welcome email configured from {settings.resend_from_email}." if resend_ready else "Optional welcome email delivery is not configured."),
+            severity="error" if settings.require_email_verification else "info",
+            message=(f"Email delivery configured from {settings.resend_from_email}." if resend_ready else "Email verification is required, but delivery is not configured." if settings.require_email_verification else "Optional welcome email delivery is not configured."),
         ),
         ReadinessCheck(
             code="agent_inference_key",

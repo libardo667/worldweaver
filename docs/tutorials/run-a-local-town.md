@@ -50,6 +50,8 @@ Open [http://localhost:5174](http://localhost:5174). Choose **Look around** to b
 
 Registration uses email, password confirmation, and the town's terms. After the account is created, choose
 the public name others will see. The internal compatibility username is not part of the participant UI.
+Email verification is optional unless the steward enables `WW_REQUIRE_EMAIL_VERIFICATION`; enabling it also
+requires Resend delivery settings, or the town reports that it is not ready and refuses new registrations.
 
 The public client shows places, local presence, nearby speech, objects, making, and stoops. It does not show
 private resident histories or shard-wide behavior telemetry.

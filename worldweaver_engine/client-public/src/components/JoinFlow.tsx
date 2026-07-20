@@ -8,9 +8,11 @@ import {
   patchProfile,
   postLogin,
   postRegister,
+  postResendVerification,
   postRequestPasswordReset,
   postResetPassword,
   postSessionBootstrap,
+  postVerifyEmail,
 } from "../api/ww";
 import type { AuthResponse, EntryInfo } from "../api/types";
 import { getPlayer, mintSessionId, setJwt, setPlayer, setStandingPlace } from "../session/store";
@@ -25,7 +27,7 @@ type Props = {
   arrival?: { onAuthenticated: () => Promise<void> };
 };
 
-type Mode = "register" | "profile" | "login" | "reset";
+type Mode = "register" | "verify" | "profile" | "login" | "reset";
 
 /**
  * Native join: make or recall an identity, then step into the world at a
@@ -41,6 +43,8 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose, arrival }: 
   const [resetToken, setResetToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [resetNotice, setResetNotice] = useState("");
+  const [verificationToken, setVerificationToken] = useState("");
+  const [verificationNotice, setVerificationNotice] = useState("");
   const [termsText, setTermsText] = useState("");
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [termsLoading, setTermsLoading] = useState(true);
@@ -73,10 +77,18 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose, arrival }: 
   }, [loadTerms]);
 
   useEffect(() => {
-    const token = new URLSearchParams(window.location.search).get("reset_token");
-    if (!token) return;
-    setResetToken(token);
-    setMode("reset");
+    const params = new URLSearchParams(window.location.search);
+    const verification = params.get("verify_token");
+    if (verification) {
+      setVerificationToken(verification);
+      setMode("verify");
+      return;
+    }
+    const reset = params.get("reset_token");
+    if (reset) {
+      setResetToken(reset);
+      setMode("reset");
+    }
   }, []);
 
   useEffect(() => {
@@ -119,12 +131,24 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose, arrival }: 
     try {
       const auth = mode === "register" && !arrival
         ? await postRegister({ email, password, password_confirmation: passwordConfirmation, terms_accepted: termsAccepted })
+        : mode === "verify"
+          ? await postVerifyEmail(verificationToken)
         : mode === "profile"
           ? await patchProfile(displayName)
           : mode === "reset"
             ? await postResetPassword(resetToken, newPassword)
             : await postLogin(identifier, password);
       rememberAuth(auth);
+      if (auth.email_verification_required && !auth.email_verified) {
+        setVerificationNotice("Check your email for a one-time verification link or token.");
+        setMode("verify");
+        return;
+      }
+      if (mode === "verify") {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("verify_token");
+        window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+      }
       if (!auth.profile_complete) {
         setDisplayName("");
         setMode("profile");
@@ -140,6 +164,7 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose, arrival }: 
 
   const registerReady = email && password.length >= 8 && password === passwordConfirmation && termsText && termsAccepted && !termsLoading && !termsError;
   const profileReady = displayName.trim().length > 0;
+  const verificationReady = verificationToken.trim().length >= 12;
   const loginReady = identifier && password;
   const resetReady = resetToken && newPassword.length >= 8;
 
@@ -158,11 +183,34 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose, arrival }: 
     }
   }
 
+  async function resendVerification() {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    setVerificationNotice("");
+    try {
+      const result = await postResendVerification();
+      setVerificationNotice(
+        result.already_verified
+          ? "This email is already verified. Sign in again to continue."
+          : result.retry_later
+            ? "A verification email was sent recently. Please wait a minute before asking again."
+            : result.sent
+              ? "A fresh verification link has been sent."
+              : "No new verification email was needed.",
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The verification email could not be sent.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="threshold">
       <div className="threshold-card join-card" role="dialog" aria-labelledby="join-title">
-        <h1 id="join-title" className="threshold-title">{mode === "profile" ? "Choose your public name" : arrival ? "Sign in to finish your trip" : "Join the world"}</h1>
-        {mode !== "profile" && <div className="join-tabs" aria-label="Choose how to join">
+        <h1 id="join-title" className="threshold-title">{mode === "verify" ? "Verify your email" : mode === "profile" ? "Choose your public name" : arrival ? "Sign in to finish your trip" : "Join the world"}</h1>
+        {mode !== "profile" && mode !== "verify" && <div className="join-tabs" aria-label="Choose how to join">
           {!arrival && (
             <button type="button" aria-pressed={mode === "register"} className={mode === "register" ? "is-active" : ""} onClick={() => setMode("register")}>
               New here
@@ -200,6 +248,16 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose, arrival }: 
                   <span>{termsText}</span>
                 </label>
               )}
+            </>
+          ) : mode === "verify" ? (
+            <>
+              <p className="place-empty">Use the one-time token from your verification email. You can also open the link in that email.</p>
+              <label className="sr-only" htmlFor="verification-token">Email verification token</label>
+              <input id="verification-token" placeholder="verification token" value={verificationToken} onChange={(e) => setVerificationToken(e.target.value)} autoComplete="one-time-code" autoFocus />
+              <button type="button" className="btn btn-quiet reset-request" disabled={busy} onClick={() => void resendVerification()}>
+                Send another verification email
+              </button>
+              {verificationNotice && <p className="object-notice" role="status">{verificationNotice}</p>}
             </>
           ) : mode === "profile" ? (
             <>
@@ -245,8 +303,8 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose, arrival }: 
           {error && <p className="join-error" role="alert">{error}</p>}
 
           <div className="threshold-actions">
-            <button type="submit" className="btn btn-primary" disabled={busy || (!arrival && !place) || !(mode === "register" ? registerReady : mode === "profile" ? profileReady : mode === "reset" ? resetReady : loginReady)}>
-              {busy ? "Checking…" : mode === "profile" ? "Use this name and enter" : arrival ? (mode === "reset" ? "Reset and finish the trip" : "Sign in and finish the trip") : mode === "reset" ? "Reset and step into the world" : mode === "register" ? "Create account" : "Step into the world"}
+            <button type="submit" className="btn btn-primary" disabled={busy || (!arrival && !place) || !(mode === "register" ? registerReady : mode === "verify" ? verificationReady : mode === "profile" ? profileReady : mode === "reset" ? resetReady : loginReady)}>
+              {busy ? "Checking…" : mode === "verify" ? "Verify email" : mode === "profile" ? "Use this name and enter" : arrival ? (mode === "reset" ? "Reset and finish the trip" : "Sign in and finish the trip") : mode === "reset" ? "Reset and step into the world" : mode === "register" ? "Create account" : "Step into the world"}
             </button>
             <button type="button" className="btn btn-quiet" onClick={onClose}>
               {arrival ? "Return to the map" : "Just look around instead"}

@@ -48,6 +48,7 @@ class ActorProjectionBundle:
     pass_type: str
     pass_expires_at: Optional[str]
     terms_accepted_at: Optional[str]
+    email_verified_at: Optional[str]
     profile_completed_at: Optional[str]
     home_shard: str
     current_shard: str
@@ -65,6 +66,7 @@ class ActorProjectionBundle:
             "pass_type": self.pass_type,
             "pass_expires_at": self.pass_expires_at,
             "terms_accepted_at": self.terms_accepted_at,
+            "email_verified_at": self.email_verified_at,
             "profile_completed_at": self.profile_completed_at,
             "home_shard": self.home_shard,
             "current_shard": self.current_shard,
@@ -91,6 +93,7 @@ class ActorProjectionBundle:
             pass_type=normalized_pass_type,
             pass_expires_at=_iso(normalized_pass_expires_at),
             terms_accepted_at=(str(payload.get("terms_accepted_at")).strip() if payload.get("terms_accepted_at") else None),
+            email_verified_at=(str(payload.get("email_verified_at")).strip() if payload.get("email_verified_at") else None),
             profile_completed_at=(str(payload.get("profile_completed_at")).strip() if payload.get("profile_completed_at") else None),
             home_shard=str(payload.get("home_shard") or "").strip(),
             current_shard=str(payload.get("current_shard") or "").strip(),
@@ -162,6 +165,7 @@ def _build_bundle(db: Session, actor_id: str) -> ActorProjectionBundle:
         pass_type=normalized_pass_type,
         pass_expires_at=_iso(normalized_pass_expires_at),
         terms_accepted_at=_iso(auth.terms_accepted_at),
+        email_verified_at=_iso(auth.email_verified_at),
         profile_completed_at=_iso(auth.profile_completed_at),
         home_shard=actor.home_shard,
         current_shard=actor.current_shard,
@@ -180,6 +184,7 @@ def register_human_actor_local(
     pass_type: str,
     terms_accepted: bool,
     profile_completed: bool = True,
+    email_verified: bool = True,
 ) -> ActorProjectionBundle:
     if db.query(FederationActorAuth).filter(FederationActorAuth.email == email).first():
         raise HTTPException(status_code=409, detail="email_taken")
@@ -208,6 +213,7 @@ def register_human_actor_local(
         pass_type=normalized_pass_type,
         pass_expires_at=normalized_pass_expires_at,
         terms_accepted_at=accepted_at,
+        email_verified_at=datetime.now(timezone.utc) if email_verified else None,
         profile_completed_at=datetime.now(timezone.utc) if profile_completed else None,
     )
     db.add(actor)
@@ -233,6 +239,53 @@ def login_human_actor_local(
 
 def _reset_token_hash(token: str) -> str:
     return sha256(str(token or "").encode("utf-8")).hexdigest()
+
+
+def request_email_verification_local(db: Session, *, actor_id: str) -> dict[str, Any]:
+    auth = db.get(FederationActorAuth, str(actor_id or "").strip())
+    if auth is None:
+        raise HTTPException(status_code=404, detail="actor_not_found")
+    if auth.email_verified_at is not None:
+        return {"ok": True, "already_verified": True}
+    now = datetime.now(timezone.utc)
+    sent_at = auth.email_verification_sent_at
+    if sent_at is not None:
+        if sent_at.tzinfo is None:
+            sent_at = sent_at.replace(tzinfo=timezone.utc)
+        if (now - sent_at).total_seconds() < 60:
+            return {"ok": True, "retry_later": True}
+    token = secrets.token_urlsafe(24)
+    auth.email_verification_token_hash = _reset_token_hash(token)
+    auth.email_verification_expires_at = now + timedelta(hours=24)
+    auth.email_verification_sent_at = now
+    db.commit()
+    actor = db.get(FederationActor, auth.actor_id)
+    return {
+        "ok": True,
+        "verification_token": token,
+        "email": auth.email,
+        "display_name": str(getattr(actor, "display_name", "") or "").strip() or "traveler",
+    }
+
+
+def verify_email_local(db: Session, *, token: str) -> ActorProjectionBundle:
+    hashed_token = _reset_token_hash(token)
+    auth = db.query(FederationActorAuth).filter(FederationActorAuth.email_verification_token_hash == hashed_token).first()
+    if auth is None:
+        raise HTTPException(status_code=401, detail="invalid_verification_token")
+    expires_at = auth.email_verification_expires_at
+    if expires_at is None:
+        raise HTTPException(status_code=401, detail="invalid_verification_token")
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) > expires_at:
+        raise HTTPException(status_code=401, detail="expired_verification_token")
+    auth.email_verified_at = datetime.now(timezone.utc)
+    auth.email_verification_token_hash = None
+    auth.email_verification_expires_at = None
+    auth.email_verification_sent_at = None
+    db.commit()
+    return _build_bundle(db, auth.actor_id)
 
 
 def request_password_reset_local(db: Session, *, identifier: str) -> dict[str, Any]:
@@ -395,6 +448,7 @@ def register_human_actor_remote(
     pass_type: str,
     terms_accepted: bool,
     profile_completed: bool = True,
+    email_verified: bool = True,
 ) -> ActorProjectionBundle:
     payload = _federation_request(
         "POST",
@@ -408,6 +462,7 @@ def register_human_actor_remote(
             "pass_type": pass_type,
             "terms_accepted": terms_accepted,
             "profile_completed": profile_completed,
+            "email_verified": email_verified,
         },
     )
     return ActorProjectionBundle.from_dict(payload)
@@ -435,6 +490,23 @@ def reset_password_remote(*, token: str, new_password: str) -> ActorProjectionBu
         "POST",
         "/api/federation/auth/reset-password",
         {"token": token, "new_password": new_password},
+    )
+    return ActorProjectionBundle.from_dict(payload)
+
+
+def request_email_verification_remote(*, actor_id: str) -> dict[str, Any]:
+    return _federation_request(
+        "POST",
+        "/api/federation/auth/resend-verification",
+        {"actor_id": actor_id},
+    )
+
+
+def verify_email_remote(*, token: str) -> ActorProjectionBundle:
+    payload = _federation_request(
+        "POST",
+        "/api/federation/auth/verify-email",
+        {"token": token},
     )
     return ActorProjectionBundle.from_dict(payload)
 
@@ -468,6 +540,7 @@ def register_human_actor(
     pass_type: str,
     terms_accepted: bool,
     profile_completed: bool = True,
+    email_verified: bool = True,
 ) -> ActorProjectionBundle:
     if settings.shard_type == "world" or not str(settings.federation_url or "").strip():
         return register_human_actor_local(
@@ -480,6 +553,7 @@ def register_human_actor(
             pass_type=pass_type,
             terms_accepted=terms_accepted,
             profile_completed=profile_completed,
+            email_verified=email_verified,
         )
     return register_human_actor_remote(
         origin_shard=origin_shard,
@@ -490,6 +564,7 @@ def register_human_actor(
         pass_type=pass_type,
         terms_accepted=terms_accepted,
         profile_completed=profile_completed,
+        email_verified=email_verified,
     )
 
 
@@ -523,6 +598,18 @@ def reset_password(db: Session, *, token: str, new_password: str) -> ActorProjec
         token=token,
         new_password=new_password,
     )
+
+
+def request_email_verification(db: Session, *, actor_id: str) -> dict[str, Any]:
+    if settings.shard_type == "world" or not str(settings.federation_url or "").strip():
+        return request_email_verification_local(db, actor_id=actor_id)
+    return request_email_verification_remote(actor_id=actor_id)
+
+
+def verify_email(db: Session, *, token: str) -> ActorProjectionBundle:
+    if settings.shard_type == "world" or not str(settings.federation_url or "").strip():
+        return verify_email_local(db, token=token)
+    return verify_email_remote(token=token)
 
 
 def get_actor_bundle(db: Session, actor_id: str) -> ActorProjectionBundle:
@@ -568,6 +655,7 @@ def ensure_local_player_projection(db: Session, bundle: ActorProjectionBundle) -
             pass_type=normalized_pass_type,
             pass_expires_at=normalized_pass_expires_at,
             terms_accepted_at=_parse_iso(bundle.terms_accepted_at),
+            email_verified_at=_parse_iso(bundle.email_verified_at),
             profile_completed_at=_parse_iso(bundle.profile_completed_at),
         )
         db.add(player)
@@ -580,6 +668,7 @@ def ensure_local_player_projection(db: Session, bundle: ActorProjectionBundle) -
         player.pass_type = normalized_pass_type
         player.pass_expires_at = normalized_pass_expires_at
         player.terms_accepted_at = _parse_iso(bundle.terms_accepted_at)
+        player.email_verified_at = _parse_iso(bundle.email_verified_at)
         player.profile_completed_at = _parse_iso(bundle.profile_completed_at)
     db.commit()
     db.refresh(player)

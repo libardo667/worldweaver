@@ -183,6 +183,14 @@ export function postResetPassword(token: string, newPassword: string): Promise<A
   return postJson("/api/auth/reset-password", { token, new_password: newPassword });
 }
 
+export function postVerifyEmail(token: string): Promise<AuthResponse> {
+  return postJson("/api/auth/verify-email", { token });
+}
+
+export function postResendVerification(): Promise<{ ok: boolean; sent: boolean; retry_later: boolean; already_verified: boolean }> {
+  return postJson("/api/auth/resend-verification", {});
+}
+
 export function postSessionBootstrap(sessionId: string, worldId: string, playerRole: string, entryLocation: string): Promise<{ success: boolean; session_id: string }> {
   return postJson("/api/session/bootstrap", {
     session_id: sessionId,

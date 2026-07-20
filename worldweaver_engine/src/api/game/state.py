@@ -293,6 +293,8 @@ def _require_ordinary_player_attachment(
     if not actor_id:
         raise HTTPException(status_code=409, detail="This player has no durable actor identity.")
     actor_auth = db.get(FederationActorAuth, actor_id)
+    if settings.require_email_verification and actor_auth is not None and actor_auth.email_verified_at is None:
+        raise HTTPException(status_code=409, detail="email_unverified")
     if actor_auth is not None and actor_auth.profile_completed_at is None:
         raise HTTPException(status_code=409, detail="profile_incomplete")
 

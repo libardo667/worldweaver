@@ -50,6 +50,25 @@ def test_missing_resident_inference_does_not_block_human_world_actions(monkeypat
     assert "Bounded resident runners verify their own key" in checks["agent_inference_key"]["message"]
 
 
+def test_required_email_verification_blocks_readiness_without_delivery(monkeypatch, client):
+    monkeypatch.setattr(settings, "jwt_secret", "test-secret")
+    monkeypatch.setattr(settings, "data_encryption_key", "enc-key")
+    monkeypatch.setattr(settings, "federation_url", "http://example.test")
+    monkeypatch.setattr(settings, "public_url", "http://shard.example.test")
+    monkeypatch.setattr(settings, "require_email_verification", True)
+    monkeypatch.setattr(settings, "resend_api_key", "")
+    monkeypatch.setattr(settings, "resend_from_email", "")
+
+    data = client.get("/api/settings/readiness").json()
+    checks = {check["code"]: check for check in data["checks"]}
+
+    assert data["startup_ready"] is False
+    assert "email_delivery" in data["runtime_missing"]
+    assert checks["email_delivery"]["label"] == "Email verification"
+    assert checks["email_delivery"]["severity"] == "error"
+    assert checks["email_delivery"]["ok"] is False
+
+
 def test_settings_readiness_complete(monkeypatch, client):
     """Test readiness when everything is set."""
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")

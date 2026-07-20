@@ -34,10 +34,12 @@ from ...services.federation_identity import (
     get_actor_bundle_local,
     login_human_actor_local,
     request_password_reset_local,
+    request_email_verification_local,
     register_human_actor_local,
     reset_password_local,
     sync_resident_actor_local,
     update_human_actor_display_name_local,
+    verify_email_local,
 )
 from ...services.federation_node_auth import (
     NODE_ID_HEADER,
@@ -208,6 +210,7 @@ class FederationRegisterHumanRequest(BaseModel):
     pass_type: str = "citizen"
     terms_accepted: bool
     profile_completed: bool = True
+    email_verified: bool = True
 
 
 class FederationLoginHumanRequest(BaseModel):
@@ -233,6 +236,14 @@ class FederationPasswordResetConfirmRequest(BaseModel):
 
 class FederationDisplayNameRequest(BaseModel):
     display_name: str = Field(min_length=1, max_length=120)
+
+
+class FederationEmailVerificationRequest(BaseModel):
+    token: str = Field(min_length=12, max_length=256)
+
+
+class FederationEmailVerificationResendRequest(BaseModel):
+    actor_id: str = Field(min_length=1, max_length=36)
 
 
 class StartTravelRequest(BaseModel):
@@ -398,6 +409,7 @@ def register_human_actor(
         pass_type=str(payload.pass_type).strip() or "citizen",
         terms_accepted=bool(payload.terms_accepted),
         profile_completed=bool(payload.profile_completed),
+        email_verified=bool(payload.email_verified),
     )
     return bundle.to_dict()
 
@@ -442,6 +454,24 @@ def reset_password_human_actor(
         new_password=payload.new_password,
     )
     return bundle.to_dict()
+
+
+@router.post("/auth/resend-verification")
+def resend_email_verification_human_actor(
+    payload: FederationEmailVerificationResendRequest,
+    db: Session = Depends(get_db),
+    _: AuthenticatedNode = Depends(_require_node),
+) -> Dict[str, Any]:
+    return request_email_verification_local(db, actor_id=payload.actor_id)
+
+
+@router.post("/auth/verify-email")
+def verify_email_human_actor(
+    payload: FederationEmailVerificationRequest,
+    db: Session = Depends(get_db),
+    _: AuthenticatedNode = Depends(_require_node),
+) -> Dict[str, Any]:
+    return verify_email_local(db, token=payload.token).to_dict()
 
 
 @router.patch("/auth/actors/{actor_id}/display-name")
