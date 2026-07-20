@@ -102,6 +102,22 @@ This matters independently of cost. Multiple read paths reconstruct “current s
 full cold history, 24-hour hot history, the last 10,000 projection events, last 200 packets, last ten felt
 lines, and side files. Each window needs an explicit semantic reason.
 
+## Bounded replay can delete open lifecycles
+
+The performance problem is also a correctness problem. On an ordinary complex projection event, the append
+path rebuilds active route, mail, research, packet, and intent state from only the newest 10,000 events. It
+does not seed those open lifecycles from the checkpoint. An opening event older than the window therefore
+vanishes without a closing event.
+
+A synthetic ledger reproduced this exactly: an active route followed by 10,000 neutral records was present in
+a valid checkpoint; one later `session_state_observed` append changed it to no active route while retaining the
+correct total event count. A separate fixture showed 200 newer observed packets evicting one older pending
+direct address because the packet cap ignores status.
+
+Open-state indexing, decaying hot windows, and terminal history limits must be separate. See
+[`ledger-replay-projections-and-durability.md`](ledger-replay-projections-and-durability.md) and active Major
+137.
+
 ## Lifecycle rule for repairs
 
 Every stateful item should declare one of these contracts:

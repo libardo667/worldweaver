@@ -78,6 +78,9 @@ variable represents lived experience.
 - [`failure-semantics-availability-and-observation.md`](failure-semantics-availability-and-observation.md)
   traces how scene, grounding, embedding, inference, continuation, and network-write failures become empty,
   stale, neutral, observed, or falsely definite state.
+- [`ledger-replay-projections-and-durability.md`](ledger-replay-projections-and-durability.md) separates the
+  useful event/reducer foundation from bounded replay that loses open work, dead materialized views,
+  non-deterministic reducer clocks, and silent ledger-tail corruption.
 - [`repair-and-ablation-order.md`](repair-and-ablation-order.md) puts software truth repairs before neutral
   reference runs and one-variable mechanism tests.
 - [`claim-ledger.md`](claim-ledger.md) lists terms and implied claims that require a decision.

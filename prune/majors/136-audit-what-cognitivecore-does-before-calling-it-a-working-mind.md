@@ -203,6 +203,15 @@ These are not acceptable experimental confounds. Observation must distinguish ab
 model backoff must not consume event delivery; only a validated final response may commit; and distributed
 writes need an explicit unknown outcome plus reconciliation.
 
+The ledger pass found that the reducer foundation is valuable but its current optimization is not safe.
+Complex events rebuild working state from only the newest 10,000 records, so an older open route, mail intent,
+research item, packet, or intent can disappear without a closing event. Newest-N packet caps also let handled
+noise evict a pending direct address. Synthetic fixtures reproduced both failures. A truncated JSONL tail can
+also swallow the next valid append while readers silently skip the damaged line. Every event currently rewrites
+several projection and compatibility files that have no production reader, while queue snapshots re-read the
+complete ledger three times. Active Major 137 now owns the storage, pure-replay, lifecycle-index, and reader
+convergence repair.
+
 Three bounded evidence reviews now cover prediction/ignition/arousal/quiet/social norms,
 action-feedback/embodiment/external supports, and clock cadence/sleep/interoception/semantic policy. They
 support plainer names, reliable event and consequence delivery, quiet and repetition as valid outcomes, and

@@ -8,6 +8,13 @@
 > full-ledger reads. `kept_memory.jsonl` also retains its obsolete “hard-capped ledger” rationale and acts as a
 > second durable memory authority. Active Major 136 owns verification and repair; the storage work below
 > remains complete, while runtime-reader convergence does not.
+>
+> **Second correction (2026-07-19):** The bounded checkpoint path is not merely inefficient at its remaining
+> readers. It can lose open state. A complex append reconstructs current routes, mail, research, packets, and
+> intents from only the newest 10,000 events; synthetic replay removed an active route whose open event fell
+> outside that tail. Newest-N projection caps can also evict unresolved work. The cold-log retention slice of
+> this archived major remains complete. Active Major 137 owns reliable incremental replay, lifecycle-aware
+> bounds, tail durability, and removal of unused materialized files.
 
 The ledger now keeps the complete history without making normal updates slower as that history grows.
 The implementation landed in these WorldWeaver slices:

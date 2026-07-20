@@ -10,7 +10,7 @@ The project now has:
 - one root development and CI surface;
 - one canonical typed world-event path;
 - one resident runtime across hearth and city;
-- append-only resident ledgers with bounded checkpoints;
+- complete append-only resident ledgers, with checkpoint correctness and durability now under active repair;
 - local speech, human/resident physical traces, elective resident information, and private prompt diagnostics;
 - citywide conversation available only through an elective information tool;
 - durable objects, making, giving, exchange, room access, and bounded object stoops;
@@ -40,7 +40,9 @@ attention. Trace what `CognitiveCore` actually computes, state what "working" co
 axes, and compare its scientific metaphors and design claims with supporting and critical work across
 neuroscience, biology, embodied cognition, philosophy, phenomenology, and plural contemplative traditions.
 Do not pathologize reading, solitude, silence, or slow action. Delay broad cadence tuning until the first
-causal map is complete; fixes for demonstrably lost or late exact-place signals may continue.
+causal map is complete; fixes for demonstrably lost or late exact-place signals may continue. Repair the
+ledger/checkpoint path before trusting more trials: open work must not disappear at arbitrary replay limits,
+malformed records must be visible, and normal readers should use one deterministic current-state surface.
 
 ### 3. Add the private-to-public making boundary
 

@@ -33,8 +33,11 @@ from being interpretable.
    Rename `felt_sense` internally as model self-report and govern each possible reader separately.
 8. **Choose one memory authority.** Treat kept-memory materialization as a rebuildable index or derive it from
    the append-only ledger.
-9. **Use the current checkpoint/projections for live reads.** Preserve complete cold history for audit without
-   repeatedly rebuilding it on every tick.
+9. **Make the ledger and checkpoint truthful before relying on them.** Preserve complete cold history, but stop
+   rebuilding open work from the newest 10,000 events and stop letting newest-N caps evict unresolved items.
+   Add a serialized, sequenced, tail-validating append; inject reducer time; advance the checkpoint
+   incrementally; move live readers to one current-state API; and remove materialized files with no consumer.
+   A malformed record must be visible rather than silently becoming missing history.
 10. **Correct the archived/current docs.** Do not claim valence, reverie-weighted drive, semantic constitution
    gating, or node-neighbor plasticity until the live path proves them.
 11. **Make the information episode contract true.** Stop calling a reach-enabled pulse one LLM call. Use a
