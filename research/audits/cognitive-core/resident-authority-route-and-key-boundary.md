@@ -132,6 +132,10 @@ verifies the request before creating the city session, activates the certificate
 binds that generation to the new session. The old unsigned bootstrap route remains available only as a
 temporary compatibility path for residents that have not been migrated.
 
+City and folder-local operators can now list or admit resident public identities through a non-HTTP setup
+command. An admission records the steward's reason and source label. The command never accepts a resident
+private key.
+
 This is not live route enforcement yet. No existing resident has been assigned a private identity key, no
 anonymous compatibility route has been closed, and Alderbank's resident sessions have not been migrated.
 That waits for an explicit synthetic admission path, resident-side signing, and controlled route rollout.

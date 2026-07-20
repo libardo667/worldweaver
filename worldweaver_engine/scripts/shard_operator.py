@@ -717,6 +717,37 @@ def command_node(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_resident_authority(args: argparse.Namespace) -> int:
+    if _read_env().get("SHARD_TYPE") == "world":
+        raise OperatorError("Resident identities are admitted by a city node, not a federation directory.")
+    if "backend" not in _services(running_only=True):
+        raise OperatorError("Start this city before managing admitted resident identities.")
+
+    command = [
+        "exec",
+        "-T",
+        "backend",
+        "python",
+        "scripts/resident_authorities.py",
+        args.resident_authority_action,
+    ]
+    if args.resident_authority_action == "admit":
+        command.extend(
+            [
+                "--actor-id",
+                args.actor_id,
+                "--hearth-shard-id",
+                args.hearth_shard_id,
+                "--identity-public-key",
+                args.identity_public_key,
+                "--reason",
+                args.reason,
+            ]
+        )
+    _compose(*command)
+    return 0
+
+
 def command_public_config(args: argparse.Namespace) -> int:
     env = _read_env()
     if env.get("SHARD_TYPE") != "world" and env.get("WW_ENABLE_DEV_RESET", "").lower() in {"1", "true", "yes"}:
@@ -828,6 +859,25 @@ def build_parser() -> argparse.ArgumentParser:
     recover.add_argument("descriptor")
     recover.add_argument("--reason", required=True)
     node.set_defaults(handler=command_node)
+
+    resident_authority = commands.add_parser(
+        "resident-authority",
+        help="manage resident public identities admitted by this city",
+    )
+    resident_authority_commands = resident_authority.add_subparsers(
+        dest="resident_authority_action",
+        required=True,
+    )
+    resident_authority_commands.add_parser("list", help="list admitted resident public identities")
+    admit_resident = resident_authority_commands.add_parser(
+        "admit",
+        help="admit one reviewed resident public identity",
+    )
+    admit_resident.add_argument("--actor-id", required=True)
+    admit_resident.add_argument("--hearth-shard-id", required=True)
+    admit_resident.add_argument("--identity-public-key", required=True)
+    admit_resident.add_argument("--reason", required=True)
+    resident_authority.set_defaults(handler=command_resident_authority)
 
     public = commands.add_parser("public-config", help="set reviewed HTTPS and browser-origin configuration")
     public.add_argument("--api-url", required=True, help="public HTTPS API address for this node")

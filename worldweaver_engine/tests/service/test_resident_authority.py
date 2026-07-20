@@ -143,6 +143,8 @@ def test_identity_binding_is_idempotent_but_cannot_be_silently_replaced(db_sessi
         actor_id=ACTOR_ID,
         hearth_shard_id=HEARTH_ID,
         identity_public_key=public_key,
+        admission_reason="Synthetic identity reviewed for the protocol test.",
+        admitted_by="test-steward",
     )
     second = bind_resident_identity(
         db_session,
@@ -152,6 +154,8 @@ def test_identity_binding_is_idempotent_but_cannot_be_silently_replaced(db_sessi
     )
 
     assert first is second
+    assert first.admission_reason == "Synthetic identity reviewed for the protocol test."
+    assert first.admitted_by == "test-steward"
     with pytest.raises(ResidentAuthorityError, match="different public continuity"):
         bind_resident_identity(
             db_session,
@@ -165,6 +169,14 @@ def test_identity_binding_is_idempotent_but_cannot_be_silently_replaced(db_sessi
             actor_id="actor-456",
             hearth_shard_id="hearth:actor-456",
             identity_public_key=public_key,
+        )
+    with pytest.raises(ResidentAuthorityError, match="record why"):
+        bind_resident_identity(
+            db_session,
+            actor_id="actor-789",
+            hearth_shard_id="hearth:actor-789",
+            identity_public_key=encoded_public_key(Ed25519PrivateKey.generate().public_key()),
+            admitted_by="local-steward",
         )
 
 

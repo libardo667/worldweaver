@@ -41,6 +41,8 @@ python ww.py status
 python ww.py update [--engine-image IMAGE] [--agent-image IMAGE]
 python ww.py map inspect BUILT_CITY_PACK
 python ww.py map publish BUILT_CITY_PACK --yes
+python ww.py resident-authority list
+python ww.py resident-authority admit --actor-id ACTOR --hearth-shard-id HEARTH --identity-public-key PUBLIC_KEY --reason "REVIEW"
 python ww.py backup [--output DIRECTORY]
 python ww.py restore BACKUP --yes
 python ww.py stop
@@ -82,6 +84,8 @@ host may lower it with `WW_REACH_CONTINUATION_MAX`; the default host maximum is 
 
 ```bash
 python dev.py space-policy --city CITY --location "Exact Place" --controller-resident NAME
+python dev.py resident-authority --city CITY list
+python dev.py resident-authority --city CITY admit --actor-id ACTOR --hearth-shard-id HEARTH --identity-public-key PUBLIC_KEY --reason "REVIEW"
 python dev.py conversation-health --city CITY --since-hours 24
 python dev.py run PATH [args...]
 ```

@@ -782,6 +782,62 @@ def _space_policy(args: list[str]) -> int:
     return _run(command, cwd=city_dir)
 
 
+def _resident_authority(args: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="python dev.py resident-authority",
+        description="List or admit resident public identities on exactly one city.",
+    )
+    parser.add_argument("--city", required=True, help="city shard directory name")
+    commands = parser.add_subparsers(dest="action", required=True)
+    commands.add_parser("list", help="list admitted resident public identities")
+    admit = commands.add_parser("admit", help="admit one reviewed resident public identity")
+    admit.add_argument("--actor-id", required=True)
+    admit.add_argument("--hearth-shard-id", required=True)
+    admit.add_argument("--identity-public-key", required=True)
+    admit.add_argument("--reason", required=True)
+    parsed = parser.parse_args(args)
+    if Path(parsed.city).name != parsed.city:
+        parser.error("--city must be a single directory name")
+
+    city_dir = ROOT / "shards" / parsed.city
+    compose_file = city_dir / "docker-compose.yml"
+    if not compose_file.is_file():
+        print(f"City shard not found: {parsed.city}", file=sys.stderr)
+        return 2
+    docker = shutil.which("docker")
+    if not docker:
+        print("Docker is required to reach the selected city's trusted setup seam.", file=sys.stderr)
+        return 2
+    command = [
+        docker,
+        "compose",
+        "-p",
+        parsed.city,
+        "-f",
+        str(compose_file),
+        "exec",
+        "-T",
+        "backend",
+        "python",
+        "scripts/resident_authorities.py",
+        parsed.action,
+    ]
+    if parsed.action == "admit":
+        command.extend(
+            [
+                "--actor-id",
+                parsed.actor_id,
+                "--hearth-shard-id",
+                parsed.hearth_shard_id,
+                "--identity-public-key",
+                parsed.identity_public_key,
+                "--reason",
+                parsed.reason,
+            ]
+        )
+    return _run(command, cwd=city_dir)
+
+
 def _help() -> None:
     print("""WorldWeaver workspace commands
 
@@ -812,6 +868,8 @@ def _help() -> None:
                                         aggregate public speech without printing it
   python dev.py space-policy --city CITY --location PLACE --controller-resident NAME
                                         assign one reviewed place without waking its controller
+  python dev.py resident-authority --city CITY list
+                                        inspect public resident identities admitted by one city
   python dev.py new-shard CITY [options]
                                         create an isolated, folder-operated node
   python dev.py city-draft create --city CITY
@@ -850,6 +908,8 @@ def main() -> int:
         return _conversation_health(rest)
     if command == "space-policy":
         return _space_policy(rest)
+    if command == "resident-authority":
+        return _resident_authority(rest)
     if command == "new-shard":
         return _run([sys.executable, "scripts/new_shard.py", *rest], cwd=ENGINE_DIR)
     if command == "city-draft":

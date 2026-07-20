@@ -64,6 +64,7 @@ python ww.py seed       # one time, for a new city
 python ww.py status
 python ww.py map inspect /path/to/built-city-pack
 python ww.py map publish /path/to/built-city-pack --yes
+python ww.py resident-authority list
 python ww.py backup
 python ww.py stop
 ```
@@ -75,6 +76,20 @@ references. `restore BACKUP --yes` restores only a backup with the same node ide
 `map inspect` verifies a generated drawing without changing the node. `map publish` is deliberately limited
 to that drawing: canonical city files must be byte-for-byte unchanged, resident agents must be stopped, and
 a full backup is made before the backend reloads it. It is not a general city-pack replacement command.
+
+`resident-authority list` shows the public resident identities this city has admitted, their active runtime
+generation, and any bound local session. Admission is an explicit steward action:
+
+```bash
+python ww.py resident-authority admit \
+  --actor-id ACTOR_ID \
+  --hearth-shard-id HEARTH_SHARD_ID \
+  --identity-public-key ED25519_PUBLIC_KEY \
+  --reason "How I checked this resident identity"
+```
+
+This command records only the public key and the steward's reason. It does not create, receive, or store the
+resident's private identity key.
 
 On a generated federation directory, receive a city's public `node.json` through a channel where you can
 confirm who sent it, then run:

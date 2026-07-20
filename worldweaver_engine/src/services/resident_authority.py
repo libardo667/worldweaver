@@ -55,6 +55,8 @@ def bind_resident_identity(
     hearth_shard_id: str,
     identity_public_key: str,
     recovery_policy_version: int = 1,
+    admission_reason: str = "",
+    admitted_by: str = "internal",
 ) -> ResidentAuthority:
     """Record an explicitly admitted resident public key.
 
@@ -72,6 +74,17 @@ def bind_resident_identity(
         raise ResidentAuthorityError("invalid_binding", str(exc)) from exc
     if isinstance(recovery_policy_version, bool) or not isinstance(recovery_policy_version, int) or recovery_policy_version < 1:
         raise ResidentAuthorityError("invalid_binding", "Resident recovery policy version is invalid.")
+    reason = str(admission_reason or "").strip()
+    source = str(admitted_by or "").strip()
+    if len(reason) > 500:
+        raise ResidentAuthorityError("invalid_binding", "Resident admission reason is too long.")
+    if not source or len(source) > 80:
+        raise ResidentAuthorityError("invalid_binding", "Resident admission source is invalid.")
+    if source == "local-steward" and not reason:
+        raise ResidentAuthorityError(
+            "invalid_binding",
+            "A steward admission must record why this public identity was accepted.",
+        )
 
     existing = db.get(ResidentAuthority, actor)
     if existing is not None:
@@ -95,6 +108,8 @@ def bind_resident_identity(
         identity_public_key=public_key,
         identity_key_id=key_id,
         recovery_policy_version=recovery_policy_version,
+        admission_reason=reason,
+        admitted_by=source,
     )
     db.add(authority)
     db.flush()

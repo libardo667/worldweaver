@@ -290,6 +290,7 @@ python ww.py seed   # new city nodes only; also closes the reset endpoint
 python ww.py status
 python ww.py map inspect /path/to/built-city-pack
 python ww.py map publish /path/to/built-city-pack --yes
+python ww.py resident-authority list  # city nodes only; public identity records
 python ww.py public-config --help  # reviewed HTTPS settings; does not publish DNS
 python ww.py start --agents  # city nodes only; wakes residents deliberately
 python ww.py backup
@@ -318,6 +319,10 @@ like the live folder.
 `map publish` accepts only that drawing layer, makes a full backup, refuses to run
 while resident agents are active, and restarts the backend without rewriting
 accounts, objects, marks, doors, places, or movement edges.
+
+`resident-authority list` shows public resident identity bindings admitted by a
+city steward. `resident-authority admit --help` records a reviewed public key and
+reason; it never receives the resident's private key.
 
 This folder does not need a Worldweaver source checkout or Python environment.
 It needs Docker Compose and a system Python interpreter to run `ww.py`.

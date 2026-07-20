@@ -75,6 +75,8 @@ class ResidentAuthority(Base):
     identity_key_id = Column(String(48), nullable=False, unique=True, index=True)
     active_runtime_generation = Column(Integer, nullable=True)
     recovery_policy_version = Column(Integer, nullable=False, default=1, server_default="1")
+    admission_reason = Column(String(500), nullable=False, default="", server_default="")
+    admitted_by = Column(String(80), nullable=False, default="internal", server_default="internal")
     bound_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
