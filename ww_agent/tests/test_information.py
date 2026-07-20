@@ -165,6 +165,24 @@ def test_information_access_is_private_ledger_evidence_not_a_world_act(tmp_path)
     assert events[0]["payload"]["record_refs"][0]["selection_mode"] == "neighborhood_match"
 
 
+def test_information_access_reuses_an_equivalent_fresh_read_without_calling_world(tmp_path):
+    world = _World()
+    access = InformationAccess(ww_client=world, memory_dir=tmp_path, freshness_seconds=30)
+
+    first = asyncio.run(access(Reach(kind="inspect", source="eats", query="North   Beach")))
+    second = asyncio.run(access(Reach(kind="INSPECT", source="EATS", query="north beach")))
+
+    assert first.get("deduplicated") is None
+    assert second["deduplicated"] is True
+    assert len(world.requests) == 1
+    events = load_runtime_events(tmp_path)
+    assert [event["event_type"] for event in events] == [
+        "information_accessed",
+        "information_access_deduplicated",
+    ]
+    assert set(events[1]["payload"]) == {"accessed", "cache_age_seconds"}
+
+
 def test_missing_information_boundary_fails_closed_and_records_attempt(tmp_path):
     access = InformationAccess(ww_client=object(), memory_dir=tmp_path)
 

@@ -64,6 +64,7 @@ def test_complete_cohort_always_runs_named_cleanup(tmp_path, monkeypatch):
         model=None,
         temperature=None,
         action_tendency=True,
+        reach_continuations=2,
         stagger=0.0,
         output_dir=str(output_dir),
         city="ww_test",

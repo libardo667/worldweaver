@@ -10,11 +10,16 @@ were still inside multi-call reading chains.
 The finding is recorded in
 [`research/runs/2026-07-19-alderbank-four-resident-baseline/FINDINGS.md`](../../research/runs/2026-07-19-alderbank-four-resident-baseline/FINDINGS.md).
 
+Implementation checkpoint (2026-07-19): the resident host now owns a default two-read ceiling, bounded-run
+commands may request a lower or higher value without exceeding that host ceiling, equivalent successful
+reads are reused for a short freshness window, and active pulses emit content-blind runtime summaries. The
+remaining work is a matched Alderbank run against the recorded baseline.
+
 ## Problem
 
 Elective information is the right architecture: a resident should be able to inspect a source instead of
-being force-fed a town-wide narration bundle. The current continuation contract nevertheless allows a pulse
-to keep reading until its reading window is exhausted. Each read is another inference call with another large
+being force-fed a town-wide narration bundle. The previous continuation contract nevertheless allowed a pulse
+to keep reading until its six-read window was exhausted. Each read was another inference call with another large
 prompt. In the Alderbank run, one initial pulse averaged more than five reads.
 
 This spends money and time without guaranteeing action, rest, or better grounding. It also stretches the
@@ -35,12 +40,11 @@ nominal pause is twenty seconds.
    calls per pulse, time in the pulse, and whether an outward act followed.
 6. Keep urgent embodied perception outside this budget. Hearing a person in the same room is not an elective
    information read; opening citywide chatter or an archive is.
-7. Compare the same Alderbank cohort with the old and bounded continuation contracts before changing the
-   default for long resident runs.
+7. Compare the same Alderbank cohort with the old and bounded continuation contracts before considering the
+   new default complete.
 
 ## Files affected
 
-- `ww_agent/src/runtime/pulse.py`
 - `ww_agent/src/runtime/pulse_engine.py`
 - `ww_agent/src/runtime/information.py`
 - `ww_agent/src/runtime/integrator.py`
@@ -48,18 +52,19 @@ nominal pause is twenty seconds.
 - `ww_agent/scripts/resident_once.py`
 - `ww_agent/scripts/resident_cohort.py`
 - `ww_agent/tests/`
-- `docs/reference/resident-runtime.md`
+- `docs/reference/architecture.md`
+- `docs/reference/commands.md`
 
 ## Acceptance criteria
 
-- [ ] A host-configured maximum bounds information continuations within one active pulse.
-- [ ] Reaching the budget closes the typed reading window without malformed retries or a forced outward act.
-- [ ] Repeating the same fresh source/query does not cause another model call.
-- [ ] Exact-place speech, visible co-presence, and other embodied perception do not spend elective read budget.
-- [ ] Structural receipts report calls, reads, deduplication, budget exhaustion, elapsed pulse time, and action
+- [x] A host-configured maximum bounds information continuations within one active pulse.
+- [x] Reaching the budget closes the typed reading window without malformed retries or a forced outward act.
+- [x] Repeating the same fresh source/query does not cause another model call.
+- [x] Exact-place speech, visible co-presence, and other embodied perception do not spend elective read budget.
+- [x] Structural receipts report calls, reads, deduplication, budget exhaustion, elapsed pulse time, and action
   outcome without recording private read content.
-- [ ] A synthetic source that always invites another read cannot exceed the configured cap.
-- [ ] Hearth travel, city travel, shutdown, and cleanup can interrupt a reading chain safely.
+- [x] A synthetic source that always invites another read cannot exceed the configured cap.
+- [x] Hearth travel, city travel, shutdown, and cleanup can interrupt a reading chain safely.
 - [ ] A matched Alderbank run materially reduces calls and prompt tokens per active pulse without reducing
   observed local speech or co-presence delivery.
 

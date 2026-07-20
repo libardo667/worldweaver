@@ -12,12 +12,14 @@ narrator. The source result returns only to the bounded continuation prompt.
 from __future__ import annotations
 
 import ast
+import copy
 import hashlib
 import inspect
 import json
 import logging
 import math
 import operator
+import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -383,11 +385,54 @@ def render_information_records(records: list[InformationRecord]) -> str:
 class InformationAccess:
     """Dispatch a typed reach to the current world's named source registry."""
 
-    def __init__(self, *, ww_client: WorldWeaverClient, memory_dir: Path) -> None:
+    def __init__(
+        self,
+        *,
+        ww_client: WorldWeaverClient,
+        memory_dir: Path,
+        freshness_seconds: float = 30.0,
+    ) -> None:
         self._ww = ww_client
         self._memory_dir = memory_dir
+        self._freshness_seconds = max(0.0, min(float(freshness_seconds), 300.0))
+        self._recent: dict[tuple[str, str, str], tuple[float, dict[str, Any]]] = {}
+
+    @staticmethod
+    def _cache_key(request: Reach) -> tuple[str, str, str]:
+        """Treat harmless casing and whitespace changes as the same private read."""
+        return (
+            str(request.kind or "").strip().casefold(),
+            str(request.source or "").strip().casefold(),
+            " ".join(str(request.query or "").split()).casefold(),
+        )
 
     async def __call__(self, request: Reach, *, now: Any = None) -> dict[str, Any]:
+        key = self._cache_key(request)
+        monotonic_now = time.monotonic()
+        expired = [
+            cached_key
+            for cached_key, (cached_at, _result) in self._recent.items()
+            if monotonic_now - cached_at > self._freshness_seconds
+        ]
+        for cached_key in expired:
+            self._recent.pop(cached_key, None)
+        cached = self._recent.get(key)
+        if cached is not None and monotonic_now - cached[0] <= self._freshness_seconds:
+            result = copy.deepcopy(cached[1])
+            result["deduplicated"] = True
+            result["cache_age_seconds"] = round(monotonic_now - cached[0], 3)
+            append_runtime_event(
+                self._memory_dir,
+                event_type="information_access_deduplicated",
+                payload={
+                    "accessed": bool(result.get("accessed")),
+                    "cache_age_seconds": result["cache_age_seconds"],
+                },
+            )
+            return result
+        if cached is not None:
+            self._recent.pop(key, None)
+
         access = getattr(self._ww, "access_information", None)
         if not callable(access):
             result = {
@@ -452,6 +497,9 @@ class InformationAccess:
                     "reason": "exception",
                     "detail": "The source did not answer.",
                 }
+
+        if bool(result.get("accessed")) and self._freshness_seconds > 0:
+            self._recent[key] = (time.monotonic(), copy.deepcopy(result))
 
         append_runtime_event(
             self._memory_dir,

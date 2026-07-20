@@ -82,6 +82,7 @@ class Resident:
         world_client_factory: Callable[[str], WorldWeaverClient] | None = None,
         travel_retry_seconds: float = 5.0,
         action_tendency: bool | None = None,
+        reach_continuation_limit: int | None = None,
     ):
         self._resident_dir = resident_dir
         self._ww = ww_client
@@ -102,6 +103,7 @@ class Resident:
         self._world_client_factory = world_client_factory or (lambda url: WorldWeaverClient(base_url=url))
         self._travel_retry_seconds = max(0.0, float(travel_retry_seconds))
         self._action_tendency = action_tendency
+        self._reach_continuation_limit = reach_continuation_limit
         self._owned_world_clients: list[WorldWeaverClient] = []
         self._tasks: list[asyncio.Task] = []
         self._packet_queue: StimulusPacketQueue | None = None
@@ -420,6 +422,7 @@ class Resident:
             anchor_gating=identity.tuning.anchor_gating,
             incubation=(self._attachment_kind == "city" and (identity.tuning.incubation_enabled or _env_flag("WW_INCUBATION_ENABLED"))),
             action_tendency=self._action_tendency,
+            reach_continuation_limit=self._reach_continuation_limit,
         )
 
     def _start_runtime_mirror(self) -> asyncio.Task | None:

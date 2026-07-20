@@ -799,8 +799,6 @@ Your felt_sense should reflect what you've just learned. Only keep facts worth r
 {contract}\
 """
 
-    REACH_LOOP_CAP = 6
-
     async def continue_reach(
         self,
         *,

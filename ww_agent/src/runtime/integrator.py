@@ -24,11 +24,13 @@ from __future__ import annotations
 import inspect
 import logging
 import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
 from src.runtime.pulse import Pulse, route_pulse
+from src.runtime.ledger import append_runtime_event
 from src.runtime.salience import (
     FERVOR_AROUSAL_FLOOR,
     check_fervor,
@@ -116,7 +118,8 @@ async def _reach_then_act(
     effector: Effector | None,
     information_access: Callable[..., Any] | None,
     now_iso: str,
-) -> tuple[Pulse, dict[str, Any] | None, list[dict[str, Any]], dict[str, Any] | None]:
+    reach_continuation_limit: int,
+) -> tuple[Pulse, dict[str, Any] | None, list[dict[str, Any]], dict[str, Any] | None, dict[str, Any]]:
     """Resolve private information reaches, then carry at most one outward act.
 
     Reaches continue inside this ignition and never pass through the world-action
@@ -124,20 +127,43 @@ async def _reach_then_act(
     outward act, or end with both fields null.
     """
     continue_fn = getattr(pulse_producer, "continue_reach", None)
-    cap = int(getattr(pulse_producer, "REACH_LOOP_CAP", 6))
+    cap = max(0, int(reach_continuation_limit))
     current = pulse
     accesses: list[dict[str, Any]] = []
     steps = 0
+    metrics = {
+        "read_budget": cap,
+        "information_requests": 0,
+        "information_reads_served": 0,
+        "duplicate_reads_avoided": 0,
+        "read_budget_exhausted": False,
+        "continuation_calls": 0,
+    }
+
+    if current.reach is not None and cap == 0:
+        metrics["information_requests"] = 1
+        metrics["read_budget_exhausted"] = True
+        current = Pulse.from_dict({**current.to_dict(), "reach": None})
+        return current, None, accesses, None, metrics
 
     while current.reach is not None and steps < cap:
+        metrics["information_requests"] += 1
         if information_access is None or continue_fn is None:
             accesses.append({"accessed": False, "source": current.reach.source, "reason": "reach_boundary_unavailable"})
-            return current, None, accesses, None
+            current = Pulse.from_dict({**current.to_dict(), "reach": None})
+            return current, None, accesses, None, metrics
         steps += 1
         access_result = await _maybe_await(information_access(current.reach, now=now_iso))
         normalized = dict(access_result or {}) if isinstance(access_result, dict) else {"detail": str(access_result or "")}
         accesses.append(normalized)
+        if bool(normalized.get("deduplicated")):
+            metrics["duplicate_reads_avoided"] += 1
+            current = Pulse.from_dict({**current.to_dict(), "reach": None})
+            return current, None, accesses, None, metrics
+        metrics["information_reads_served"] += int(bool(normalized.get("accessed")))
+        metrics["read_budget_exhausted"] = steps >= cap
         logger.debug("reach-loop step %d/%d: %s:%s", steps, cap, current.reach.kind, current.reach.source)
+        metrics["continuation_calls"] += 1
         next_pulse = await _maybe_await(
             continue_fn(
                 request=current.reach.to_dict(),
@@ -147,23 +173,66 @@ async def _reach_then_act(
             )
         )
         if next_pulse is None:
-            return current, None, accesses, None
+            current = Pulse.from_dict({**current.to_dict(), "reach": None})
+            return current, None, accesses, None, metrics
         current = next_pulse if isinstance(next_pulse, Pulse) else Pulse.from_dict(next_pulse)
         # The final continuation has already received the last available read.
         # If a producer nevertheless asks again, close that private request
         # instead of routing an unfulfillable reach as the pulse's final state.
         if steps >= cap and current.reach is not None:
+            metrics["information_requests"] += 1
             current = Pulse.from_dict({**current.to_dict(), "reach": None})
 
     if current.reach is not None:
+        metrics["information_requests"] += 1
+        metrics["read_budget_exhausted"] = True
         accesses.append({"accessed": False, "source": current.reach.source, "reason": "reach_cap"})
-        return current, None, accesses, None
+        current = Pulse.from_dict({**current.to_dict(), "reach": None})
+        return current, None, accesses, None, metrics
     if current.act is not None and effector is not None:
         context_fn = getattr(effector, "relational_context", None)
         act_context = dict(context_fn() or {}) if callable(context_fn) else None
         act_result = await _maybe_await(effector(current.act, now=now_iso))
-        return current, act_result, accesses, act_context
-    return current, None, accesses, None
+        return current, act_result, accesses, act_context, metrics
+    return current, None, accesses, None, metrics
+
+
+def _finish_pulse_metrics(
+    memory_dir: Path,
+    result: dict[str, Any],
+    metrics: dict[str, Any],
+    *,
+    started_at: float,
+    pulse: Pulse | None,
+) -> None:
+    """Attach and durably record a content-blind receipt for one model pulse."""
+    act_result = result.get("act_executed")
+    act_requested = bool(pulse is not None and pulse.act is not None)
+    if not act_requested:
+        action_outcome = "none"
+    elif isinstance(act_result, dict) and bool(act_result.get("executed")):
+        action_outcome = "executed"
+    elif act_result is None:
+        action_outcome = "unavailable"
+    else:
+        action_outcome = "not_executed"
+    summary = {
+        **metrics,
+        "model_calls": 1 + int(metrics.get("continuation_calls") or 0),
+        "elapsed_ms": round((time.monotonic() - started_at) * 1000, 3),
+        "outward_act_followed": act_requested,
+        "action_outcome": action_outcome,
+    }
+    result["pulse_metrics"] = summary
+    routed = result.get("pulse_routed") or {}
+    append_runtime_event(
+        memory_dir,
+        event_type="pulse_runtime_summary",
+        payload={
+            **summary,
+            "pulse_id": str(routed.get("pulse_id") or "") if isinstance(routed, dict) else "",
+        },
+    )
 
 
 async def tick(
@@ -183,6 +252,7 @@ async def tick(
     muted_senses: tuple[str, ...] = (),
     refractory_seconds: float | None = None,
     action_tendency: bool | None = None,
+    reach_continuation_limit: int = 2,
 ) -> dict[str, Any]:
     """Run one integration tick. Returns a summary of what happened.
 
@@ -228,6 +298,7 @@ async def tick(
         "pulse_routed": None,
         "act_executed": None,
         "information_accessed": [],
+        "pulse_metrics": None,
         "resting": False,
         "venture_gate": {
             "enabled": tendency_enabled,
@@ -290,26 +361,39 @@ async def tick(
         # Only forward a tendency when one fired — so producers that don't know about it
         # (and the entire flag-off path) are called exactly as before.
         extra = {"tendency": tendency} if tendency is not None else {}
+        pulse_started_at = time.monotonic()
         produced = await _safe_produce(pulse_producer, traces=igniting, stimulus=stimulus, arousal=decision["level"], mode=mode, **extra)
         # Taking the moment — restful or restless — spends it.
         record_idle(memory_dir, now=now_iso)
+        pulse = None
+        pulse_metrics = {
+            "read_budget": max(0, int(reach_continuation_limit)),
+            "information_requests": 0,
+            "information_reads_served": 0,
+            "duplicate_reads_avoided": 0,
+            "read_budget_exhausted": False,
+            "continuation_calls": 0,
+        }
         if produced is not None:
             pulse = produced if isinstance(produced, Pulse) else Pulse.from_dict(produced)
             act_context = None
             if effector is not None or information_access is not None:
-                pulse, act_result, access_results, act_context = await _reach_then_act(
+                pulse, act_result, access_results, act_context, pulse_metrics = await _reach_then_act(
                     pulse,
                     pulse_producer=pulse_producer,
                     effector=effector,
                     information_access=information_access,
                     now_iso=now_iso,
+                    reach_continuation_limit=reach_continuation_limit,
                 )
                 result["act_executed"] = act_result
                 result["information_accessed"] = access_results
             result["pulse_routed"] = route_pulse(memory_dir, pulse, now=now_iso, gate_contradiction_check=gate_contradiction_check, act_context=act_context)
+        _finish_pulse_metrics(memory_dir, result, pulse_metrics, started_at=pulse_started_at, pulse=pulse)
         return result
 
     traces = decision["traces"]
+    pulse_started_at = time.monotonic()
     produced = await _safe_produce(pulse_producer, traces=traces, stimulus=stimulus, arousal=decision["level"], mode="react")
 
     # Record the ignition regardless of producer success so arousal resets and
@@ -322,16 +406,26 @@ async def tick(
         trace_ids=[str(item.get("trace_id") or "") for item in traces],
     )
 
+    pulse = None
+    pulse_metrics = {
+        "read_budget": max(0, int(reach_continuation_limit)),
+        "information_requests": 0,
+        "information_reads_served": 0,
+        "duplicate_reads_avoided": 0,
+        "read_budget_exhausted": False,
+        "continuation_calls": 0,
+    }
     if produced is not None:
         pulse = produced if isinstance(produced, Pulse) else Pulse.from_dict(produced)
         act_context = None
         if effector is not None or information_access is not None:
-            pulse, act_result, access_results, act_context = await _reach_then_act(
+            pulse, act_result, access_results, act_context, pulse_metrics = await _reach_then_act(
                 pulse,
                 pulse_producer=pulse_producer,
                 effector=effector,
                 information_access=information_access,
                 now_iso=now_iso,
+                reach_continuation_limit=reach_continuation_limit,
             )
             result["act_executed"] = act_result
             result["information_accessed"] = access_results
@@ -342,4 +436,5 @@ async def tick(
             gate_contradiction_check=gate_contradiction_check,
             act_context=act_context,
         )
+    _finish_pulse_metrics(memory_dir, result, pulse_metrics, started_at=pulse_started_at, pulse=pulse)
     return result

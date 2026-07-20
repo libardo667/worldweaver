@@ -12,7 +12,8 @@
 - `runtime/prompt_trace.py` — private inference-boundary evidence, excluded from all substrate reducers.
 - `runtime/prompt_context.py` — typed available/selected/withheld source envelope and final prose renderer.
 - `runtime/information.py` — private elective source access plus the structured provider-record contract;
-  separate from outward effectors.
+  separate from outward effectors. It briefly reuses an equivalent successful read so repeated requests do
+  not reopen the same source or trigger another continuation model call.
 - `runtime/perception.py` — assigns source identity, emits encounters once, and renders still-pending
   speech and physical-trace encounters for prompts; `cognitive_core.py` marks prompt-included packets
   observed.
@@ -20,7 +21,8 @@
   action.
 - `runtime/pulse.py`, `pulse_engine.py`, `effectors.py` — form a pulse, distinguish private `reach` from
   outward `act`, and discharge only the latter through concrete effectors. The bounded reach continuation
-  closes its source catalog on the last allowed read and cannot route an unfulfillable extra request.
+  closes its source catalog on the last allowed read and cannot route an unfulfillable extra request. The
+  resident host owns the limit (two by default), while the integrator records content-blind cost and timing.
 - `runtime/travel.py` — classifies world travel separately from ordinary movement and derives unfinished
   city handoffs from ledger evidence; worlds signal intent and `resident.py` performs or resumes the
   lifecycle change without running cognition between nodes.

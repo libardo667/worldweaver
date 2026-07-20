@@ -68,7 +68,10 @@ inputs in the identity loader; they do not restore the old ownership model.
 - Elective information uses typed `Pulse.reach` → `InformationAccess`; it never masquerades as `act.do`
   and never crosses the engine action/narration endpoint. A reach continuation may end with no outward act.
   The final allowed read must close the reading window in both prompt and routing: never invite or persist
-  a reach that the current pulse can no longer fulfill.
+  a reach that the current pulse can no longer fulfill. `CognitiveCore`, not the model producer, owns the
+  run limit and clamps it to the host's `WW_REACH_CONTINUATION_MAX` (default two, absolute ceiling eight).
+  A fresh equivalent source/query is reused briefly and closes the chain without another continuation call.
+  Immediate embodied perception remains outside this elective-read budget.
 - Federation route discovery is an elective city source. Reading possible routes must not move a resident;
   actual city-to-city travel belongs to the resident host and must use the engine's recoverable departure
   and arrival contract before switching its WorldWeaver client.

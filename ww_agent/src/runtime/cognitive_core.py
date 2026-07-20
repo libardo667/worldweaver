@@ -70,6 +70,28 @@ ANCHOR_GATE_MATTERING = 0.5
 # Calibrated empirically on nomic-embed-text short phrases: rephrasings land ~0.68-0.87,
 # distinct concepts ~0.41-0.56 — 0.65 sits in the valley between them.
 ANCHOR_MATCH_THRESHOLD = 0.65
+DEFAULT_HOST_REACH_CONTINUATION_MAX = 2
+ABSOLUTE_REACH_CONTINUATION_MAX = 8
+
+
+def resolve_reach_continuation_limit(requested: int | None = None) -> int:
+    """Resolve a run's read limit without letting it exceed the host's maximum."""
+    try:
+        host_max = int(os.environ.get("WW_REACH_CONTINUATION_MAX", DEFAULT_HOST_REACH_CONTINUATION_MAX))
+    except (TypeError, ValueError):
+        host_max = DEFAULT_HOST_REACH_CONTINUATION_MAX
+    host_max = max(0, min(host_max, ABSOLUTE_REACH_CONTINUATION_MAX))
+    if requested is None:
+        return host_max
+    return min(max(0, int(requested)), host_max)
+
+
+def _information_freshness_seconds() -> float:
+    try:
+        value = float(os.environ.get("WW_INFORMATION_FRESHNESS_SECONDS", "30"))
+    except (TypeError, ValueError):
+        value = 30.0
+    return max(0.0, min(value, 300.0))
 
 
 def _embedder_from_env() -> Any:
@@ -108,6 +130,7 @@ class CognitiveCore:
         pulse_vision: bool = False,
         incubation: bool = False,
         action_tendency: bool | None = None,
+        reach_continuation_limit: int | None = None,
     ) -> None:
         self._identity = identity
         self._memory_dir = resident_dir / "memory"
@@ -124,6 +147,7 @@ class CognitiveCore:
         # A run-scoped override for the existing venture tendency. None retains
         # the shard environment default; True/False is explicit for this host.
         self._action_tendency = action_tendency
+        self._reach_continuation_limit = resolve_reach_continuation_limit(reach_continuation_limit)
         # Min gap between arousal-driven ignitions (None = substrate default). A direct
         # address always bypasses it; this only stops a hot talker echoing itself a
         # paraphrase every tick into the gap before the keeper replies. Per-familiar.
@@ -193,6 +217,7 @@ class CognitiveCore:
         self._information_access = InformationAccess(
             ww_client=ww_client,
             memory_dir=self._memory_dir,
+            freshness_seconds=_information_freshness_seconds(),
         )
 
     @property
@@ -329,6 +354,7 @@ class CognitiveCore:
             muted_senses=self._muted_senses,
             refractory_seconds=self._refractory_seconds,
             action_tendency=self._action_tendency,
+            reach_continuation_limit=self._reach_continuation_limit,
         )
         if bool((result.get("act_executed") or {}).get("identity_growth_adopted")):
             # The shared ResidentIdentity already gives the next prompt the adopted

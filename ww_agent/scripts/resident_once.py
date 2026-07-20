@@ -66,7 +66,16 @@ def _record_tick(stats: dict[str, Any], world: Any, result: dict[str, Any], tick
     stats["fervor_pulses"] += int(bool(result.get("fervor")))
     stats["venture_pulses"] += int(bool(result.get("venture")))
     stats["pulses_routed"] += int(bool(result.get("pulse_routed")))
-    stats["information_reads"] += len(result.get("information_accessed") or [])
+    pulse_metrics = dict(result.get("pulse_metrics") or {})
+    information_reads = int(pulse_metrics.get("information_reads_served") or 0)
+    information_requests = int(pulse_metrics.get("information_requests") or 0)
+    duplicates_avoided = int(pulse_metrics.get("duplicate_reads_avoided") or 0)
+    stats["information_requests"] += information_requests
+    stats["information_reads"] += information_reads
+    stats["duplicate_reads_avoided"] += duplicates_avoided
+    stats["read_budget_exhaustions"] += int(bool(pulse_metrics.get("read_budget_exhausted")))
+    stats["pulse_model_calls"] += int(pulse_metrics.get("model_calls") or 0)
+    stats["pulse_elapsed_ms"] += float(pulse_metrics.get("elapsed_ms") or 0.0)
     stats["acts_executed"] += int(act_executed)
     stats["resting_ticks"] += int(bool(result.get("resting")))
     venture_gate = result.get("venture_gate") or {}
@@ -83,7 +92,12 @@ def _record_tick(stats: dict[str, Any], world: Any, result: dict[str, Any], tick
         "attachment": attachment,
         "mode": mode,
         "pulse_routed": bool(result.get("pulse_routed")),
-        "information_reads": len(result.get("information_accessed") or []),
+        "information_requests": information_requests,
+        "information_reads": information_reads,
+        "duplicate_reads_avoided": duplicates_avoided,
+        "read_budget_exhausted": bool(pulse_metrics.get("read_budget_exhausted")),
+        "pulse_model_calls": int(pulse_metrics.get("model_calls") or 0),
+        "pulse_elapsed_ms": float(pulse_metrics.get("elapsed_ms") or 0.0),
         "act_executed": act_executed,
         "act_kind": act_kind or None,
         "venture_gate": {
@@ -325,7 +339,12 @@ async def _run(args: argparse.Namespace) -> int:
             "fervor_pulses": 0,
             "venture_pulses": 0,
             "pulses_routed": 0,
+            "information_requests": 0,
             "information_reads": 0,
+            "duplicate_reads_avoided": 0,
+            "read_budget_exhaustions": 0,
+            "pulse_model_calls": 0,
+            "pulse_elapsed_ms": 0.0,
             "acts_executed": 0,
             "resting_ticks": 0,
             "ticks_by_attachment": {},
@@ -343,6 +362,8 @@ async def _run(args: argparse.Namespace) -> int:
         resident_kwargs: dict[str, Any] = {"tick_observer": observe_tick}
         if args.action_tendency:
             resident_kwargs["action_tendency"] = True
+        if args.reach_continuations is not None:
+            resident_kwargs["reach_continuation_limit"] = args.reach_continuations
         if args.model:
             resident_kwargs["pulse_model"] = args.model
             # A temporary model swap uses that model's own sampling default
@@ -369,6 +390,7 @@ async def _run(args: argparse.Namespace) -> int:
                         "model": effective_model,
                         "temperature": (args.temperature if args.temperature is not None else ("model_default" if args.model else "resident_tuning")),
                         "action_tendency": bool(args.action_tendency),
+                        "requested_reach_continuations": args.reach_continuations,
                     },
                     sort_keys=True,
                 ),
@@ -400,6 +422,7 @@ async def _run(args: argparse.Namespace) -> int:
                         "completion_tokens": llm.total_completion_tokens,
                         "recovered_json_responses": llm.recovered_json_responses,
                         "action_tendency": bool(args.action_tendency),
+                        "requested_reach_continuations": args.reach_continuations,
                     },
                     sort_keys=True,
                 ),
@@ -456,6 +479,13 @@ def main(argv: list[str] | None = None) -> int:
         "--action-tendency",
         action="store_true",
         help=("for this run only, let sustained restless fervor become a venture " "toward a reachable place"),
+    )
+    parser.add_argument(
+        "--reach-continuations",
+        type=int,
+        choices=range(0, 9),
+        metavar="0-8",
+        help=("requested reads per active pulse; the host's WW_REACH_CONTINUATION_MAX may lower it"),
     )
     parser.add_argument(
         "--compact",

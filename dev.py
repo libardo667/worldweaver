@@ -340,6 +340,13 @@ def _resident(args: list[str]) -> int:
         action="store_true",
         help=("for this run only, let sustained restless fervor become a venture " "toward a reachable place"),
     )
+    parser.add_argument(
+        "--reach-continuations",
+        type=int,
+        choices=range(0, 9),
+        metavar="0-8",
+        help="requested reads per active pulse; the host maximum may lower it",
+    )
     parsed = parser.parse_args(args)
     if parsed.ticks is None and parsed.duration is None:
         parsed.ticks = 3
@@ -399,6 +406,8 @@ def _resident(args: list[str]) -> int:
         command.extend(["--temperature", str(parsed.temperature)])
     if parsed.action_tendency:
         command.append("--action-tendency")
+    if parsed.reach_continuations is not None:
+        command.extend(["--reach-continuations", str(parsed.reach_continuations)])
     if parsed.wake:
         command.append("--wake")
     if parsed.park:
@@ -440,6 +449,13 @@ def _cohort(args: list[str]) -> int:
         "--action-tendency",
         action="store_true",
         help="let sustained restless fervor become a venture toward a reachable place",
+    )
+    parser.add_argument(
+        "--reach-continuations",
+        type=int,
+        choices=range(0, 9),
+        metavar="0-8",
+        help="requested reads per active pulse; the resident host may lower it",
     )
     parser.add_argument(
         "--output-dir",
@@ -496,6 +512,8 @@ def _cohort(args: list[str]) -> int:
         command.extend(["--temperature", str(parsed.temperature)])
     if parsed.action_tendency:
         command.append("--action-tendency")
+    if parsed.reach_continuations is not None:
+        command.extend(["--reach-continuations", str(parsed.reach_continuations)])
     if parsed.output_dir:
         command.extend(["--output-dir", parsed.output_dir])
     return _run(command, env=runtime_env)

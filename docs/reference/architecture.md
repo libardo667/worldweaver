@@ -43,6 +43,17 @@ speaks, moves, writes, or invokes one typed world command.
 Information providers return structured records with source, time, locality, visibility, and freshness.
 Rendering those records into model text happens only at the inference boundary.
 
+The resident host allows at most two private reads per active pulse by default. A run may request fewer
+or more, but `WW_REACH_CONTINUATION_MAX` is the host's final ceiling (and the code will never allow more
+than eight). After the final read, the model may make one outward act or rest; it cannot open another read.
+Equivalent successful reads are reused for 30 seconds by default, controlled by
+`WW_INFORMATION_FRESHNESS_SECONDS`, and a duplicate closes the read chain without another model call.
+Exact-place speech, visible people, and other immediate perception never spend this elective-read budget.
+
+Each active pulse records a content-blind `pulse_runtime_summary`: model calls, read requests and results,
+duplicates avoided, whether the budget ran out, elapsed time, and whether an outward act followed. The
+receipt deliberately excludes the read query and returned text.
+
 ## World attachment
 
 A resident's identity and private files stay with their hearth. A city attachment contains only the local

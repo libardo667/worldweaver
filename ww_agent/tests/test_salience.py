@@ -893,8 +893,6 @@ def test_explicit_action_tendency_override_wins_over_environment(tmp_path, monke
 
 def test_private_reach_continues_inside_one_ignition_and_may_end_without_world_act(tmp_path):
     class Producer:
-        REACH_LOOP_CAP = 3
-
         def __init__(self):
             self.continuations = []
 
@@ -931,6 +929,7 @@ def test_private_reach_continues_inside_one_ignition_and_may_end_without_world_a
             stimulus={},
             now=T0.isoformat(),
             force_ignite=True,
+            reach_continuation_limit=3,
         )
     )
 
@@ -944,8 +943,6 @@ def test_private_reach_continues_inside_one_ignition_and_may_end_without_world_a
 
 def test_private_reach_can_resolve_to_one_outward_act(tmp_path):
     class Producer:
-        REACH_LOOP_CAP = 3
-
         async def __call__(self, **kwargs):
             return Pulse.from_dict({"reach": {"kind": "inspect", "source": "places", "query": "Mission"}})
 
@@ -979,8 +976,6 @@ def test_private_reach_can_resolve_to_one_outward_act(tmp_path):
 
 def test_private_reach_cap_closes_an_extra_request_instead_of_routing_it(tmp_path):
     class Producer:
-        REACH_LOOP_CAP = 1
-
         async def __call__(self, **kwargs):
             return Pulse.from_dict({"reach": {"kind": "inspect", "source": "places", "query": "first"}})
 
@@ -1002,11 +997,103 @@ def test_private_reach_cap_closes_an_extra_request_instead_of_routing_it(tmp_pat
             stimulus={},
             now=T0.isoformat(),
             force_ignite=True,
+            reach_continuation_limit=1,
         )
     )
 
     assert reached == ["places"]
     assert len(result["information_accessed"]) == 1
+    assert result["pulse_metrics"]["information_requests"] == 2
+    assert result["pulse_metrics"]["information_reads_served"] == 1
+    assert result["pulse_metrics"]["read_budget_exhausted"] is True
+    assert result["pulse_metrics"]["model_calls"] == 2
     pulses = _events_by_type(tmp_path, "pulse_emitted")
     assert pulses[0]["payload"]["pulse"]["reach"] is None
     assert _events_by_type(tmp_path, "pulse_reach_emitted") == []
+    summary = _events_by_type(tmp_path, "pulse_runtime_summary")[0]["payload"]
+    assert summary["information_reads_served"] == 1
+    assert not ({"query", "source", "detail"} & set(summary))
+
+
+def test_duplicate_private_reach_stops_without_another_continuation_call(tmp_path):
+    class Producer:
+        def __init__(self):
+            self.continuations = 0
+
+        async def __call__(self, **kwargs):
+            return Pulse.from_dict({"reach": {"kind": "inspect", "source": "places", "query": "bank"}})
+
+        async def continue_reach(self, **kwargs):
+            self.continuations += 1
+            return Pulse.from_dict({"reach": {"kind": "inspect", "source": "places", "query": "bank"}})
+
+    producer = Producer()
+    calls = 0
+
+    async def information_access(request, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return {"accessed": True, "detail": "the bank"}
+        return {"accessed": True, "detail": "the bank", "deduplicated": True}
+
+    result = asyncio.run(
+        tick(
+            tmp_path,
+            pulse_producer=producer,
+            information_access=information_access,
+            stimulus={},
+            now=T0.isoformat(),
+            force_ignite=True,
+            reach_continuation_limit=3,
+        )
+    )
+
+    assert calls == 2
+    assert producer.continuations == 1
+    assert result["pulse_metrics"]["duplicate_reads_avoided"] == 1
+    assert result["pulse_metrics"]["model_calls"] == 2
+
+
+def test_embodied_perception_does_not_spend_private_read_budget(tmp_path):
+    async def producer(**kwargs):
+        return Pulse.from_dict({"felt_sense": "I notice who is here", "act": None})
+
+    result = asyncio.run(
+        tick(
+            tmp_path,
+            pulse_producer=producer,
+            stimulus={"social": {"co_presence": 0.8}},
+            now=T0.isoformat(),
+            force_ignite=True,
+            reach_continuation_limit=2,
+        )
+    )
+
+    assert result["pulse_metrics"]["information_requests"] == 0
+    assert result["pulse_metrics"]["information_reads_served"] == 0
+    assert result["pulse_metrics"]["read_budget_exhausted"] is False
+
+
+def test_private_read_chain_remains_cancellable(tmp_path):
+    class Producer:
+        async def __call__(self, **kwargs):
+            return Pulse.from_dict({"reach": {"kind": "inspect", "source": "places", "query": "bank"}})
+
+        async def continue_reach(self, **kwargs):
+            raise AssertionError("continuation must not run after cancellation")
+
+    async def information_access(request, **kwargs):
+        raise asyncio.CancelledError
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(
+            tick(
+                tmp_path,
+                pulse_producer=Producer(),
+                information_access=information_access,
+                stimulus={},
+                now=T0.isoformat(),
+                force_ignite=True,
+            )
+        )

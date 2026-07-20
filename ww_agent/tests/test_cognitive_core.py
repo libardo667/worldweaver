@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 from src.identity.loader import LoopTuning, ResidentIdentity
 from src.inference.client import InferenceError
-from src.runtime.cognitive_core import CognitiveCore
+from src.runtime.cognitive_core import CognitiveCore, resolve_reach_continuation_limit
 from src.runtime.effectors import WorldEffector
 from src.runtime.ledger import derive_packets, load_runtime_events
 from src.runtime.perception import perceive
@@ -17,6 +17,15 @@ from src.runtime.salience import stimulus_from_substrate
 from src.runtime.signals import StimulusPacketQueue
 
 T0 = datetime(2026, 6, 2, 12, 0, 0, tzinfo=timezone.utc)
+
+
+def test_host_maximum_bounds_requested_reach_continuations(monkeypatch):
+    monkeypatch.setenv("WW_REACH_CONTINUATION_MAX", "2")
+
+    assert resolve_reach_continuation_limit() == 2
+    assert resolve_reach_continuation_limit(7) == 2
+    assert resolve_reach_continuation_limit(1) == 1
+    assert resolve_reach_continuation_limit(0) == 0
 
 
 def _identity(name: str = "sun_li") -> ResidentIdentity:
