@@ -76,6 +76,8 @@ is to run the documented sequence in a clean exported checkout with Docker.
 
 Severity: **blocker for invited playtest and public service**
 
+Remediation status: **resolved in source on 2026-07-20; live deployment pending**
+
 Evidence:
 
 The live `https://world-weaver.org` response includes `/@vite/client`, React refresh injection, and source
@@ -84,8 +86,11 @@ replacement of the development client server as unfinished.
 
 Disposition:
 
-Serve a built `client-public/dist` from a small static server or reverse proxy with immutable assets and a
-documented deployment version. Keep development hot reload local.
+The Compose client now uses a multi-stage image: Vite and TypeScript build static assets, then a dependency-free
+Node server serves them and proxies the configured shards at runtime. Development hot reload remains available
+only through the explicit local client command. A disposable container proved static assets, deep-link fallback,
+runtime shard selection, backend health proxying, and the absence of Vite development modules. The live client
+container still needs to be recreated from this source.
 
 ### PR-03 — Public account expectations are not complete
 

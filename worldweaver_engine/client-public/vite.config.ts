@@ -37,6 +37,11 @@ const shardProxyEntries = Object.fromEntries(
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      external: ["/runtime-config.js"],
+    },
+  },
   server: {
     port: 5174,
     allowedHosts: true,

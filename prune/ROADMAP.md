@@ -81,10 +81,10 @@ creating resources or travel duplicating it.
 ### 4. Finish the public-node proof
 
 Independent node identities, signed requests, HTTPS ingress, and the first `world-weaver.org` directory/node
-are live on one computer. The checked-in shard backends now bind to loopback by default, and the public
-readiness response no longer exposes internal federation addresses or resident-inference configuration.
-Replace the development client server, test an encrypted off-device restore, add folder-local resident
-operation, and prove entry and travel between two computers.
+are live on one computer. The checked-in shard backends now bind to loopback by default, the public readiness
+response no longer exposes internal federation addresses or resident-inference configuration, and the Compose
+client now serves built static assets rather than Vite development mode. Deploy that client, test an encrypted
+off-device restore, add folder-local resident operation, and prove entry and travel between two computers.
 
 ## Next
 

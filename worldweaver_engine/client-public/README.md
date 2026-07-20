@@ -34,15 +34,18 @@ sites ask the traveler to sign in again.
 ## Run
 
 ```bash
-python dev.py client                   # from the repo root; Vite on :5174
+python dev.py client                   # from the repo root; local Vite development on :5174
 python dev.py client-public            # explicit alias
 VITE_PROXY_TARGET=http://localhost:8004 npm run dev   # point at a specific shard
 ```
 
-The dev proxy sends `/api` + `/health` to `VITE_PROXY_TARGET` (default
+The local dev proxy sends `/api` + `/health` to `VITE_PROXY_TARGET` (default
 `:8000`) and `/ww-world/*` to the federation root (`VITE_WW_WORLD_URL`,
 default `:9000`). Build with `npm run build` (tsc + vite; also part of
 `python dev.py check`).
+
+The Compose service builds the static client and serves it with `server.mjs`. That small production server
+provides the same runtime proxy routes without Vite source transforms, hot reload, or development modules.
 
 ## Boundaries (vision, not implementation detail)
 

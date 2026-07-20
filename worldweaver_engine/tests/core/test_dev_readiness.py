@@ -160,12 +160,15 @@ def test_client_routes_keep_browser_traffic_off_runtime_only_node_urls(tmp_path)
 
 def test_default_client_compose_runs_the_public_surface():
     compose = dev.CLIENT_COMPOSE_FILE.read_text(encoding="utf-8")
+    dockerfile = (dev.ROOT / "client-public" / "Dockerfile").read_text(encoding="utf-8")
 
     assert "dockerfile: client-public/Dockerfile" in compose
-    assert "./client-public:/app/client-public" in compose
-    assert "public_client_node_modules:/app/client-public/node_modules" in compose
-    assert '"5174:5174"' in compose
+    assert "npm run dev" not in compose
+    assert "./client-public:/app/client-public" not in compose
+    assert '"127.0.0.1:5174:5174"' in compose
     assert "client/Dockerfile" not in compose
+    assert "RUN npm run build" in dockerfile
+    assert 'CMD ["node", "server.mjs"]' in dockerfile
 
 
 def test_weave_client_runs_public_client_against_selected_shard(tmp_path, monkeypatch):

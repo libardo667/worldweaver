@@ -18,6 +18,9 @@ export function localShardPath(path: string): string {
 
 export function currentShardScope(): string {
   const base = currentShardBase();
-  const configuredDefault = String(import.meta.env.VITE_DEFAULT_SHARD_PREFIX || "").trim();
+  const runtimeDefault = window.__WORLDWEAVER_RUNTIME__?.defaultShardPrefix;
+  const configuredDefault = String(
+    runtimeDefault ?? import.meta.env.VITE_DEFAULT_SHARD_PREFIX ?? "",
+  ).trim();
   return base || configuredDefault || "/default";
 }
