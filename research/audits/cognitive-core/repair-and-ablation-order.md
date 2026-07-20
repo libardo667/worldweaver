@@ -24,8 +24,10 @@ from being interpretable.
 5. **Give direct address a lossless attention path.** A newly addressed event must reach attention even when
    an aggregate social node is saturated, without forcing a reply or an outward act.
 6. **Write empty current snapshots.** A calm scene must clear old ambient pressure.
-7. **Make the pulse contract true.** Correct the description of `felt_sense`; remove dead fields from the live
-   schema or give them an explicit, justified consumer.
+7. **Shrink the pulse contract to live authority.** Remove `drive_nudges`, `new_reverie`, `goal_update`, and
+   `trace_verdicts` from the live schema, routing, reducers, and tests. Separate provisional read requests from
+   the one final response that may commit an action, memory, prediction, self-report, or identity proposal.
+   Rename `felt_sense` internally as model self-report and govern each possible reader separately.
 8. **Choose one memory authority.** Treat kept-memory materialization as a rebuildable index or derive it from
    the append-only ledger.
 9. **Use the current checkpoint/projections for live reads.** Preserve complete cold history for audit without
@@ -81,6 +83,15 @@ from being interpretable.
    evidence that a self formed.
 30. **Remove the anti-repetition verdict.** Keep semantic concentration as an offline measure while testing;
    do not tell a resident its pleasure is spent or order novelty based on cosine similarity.
+31. **Make workshop continuity resident-controlled and bounded.** Stop placing excerpts from every private
+   Markdown artifact in every prompt. Provide a bounded project index, an elective workshop source, and an
+   explicit active-project choice without rescanning full files each tick.
+32. **Finish the identity-growth lifecycle without automating it.** Preserve exact inspection and adoption;
+   add decline, supersession, correction, reversal, compaction, and durable open-candidate indexing. Do not
+   call semantic similarity a contradiction or maturity test.
+33. **Keep voice feedback as a declared experiment.** Replace comma-split seed text with a structured format,
+   keep seed and recent-output arms separate, and record the active policy. Do not silently feed drifted
+   speech back as system-level identity.
 
 ## Second: establish a neutral reference runtime
 

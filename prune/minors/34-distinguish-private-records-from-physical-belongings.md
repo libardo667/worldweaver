@@ -23,6 +23,8 @@ than a proven cause.
 - Once a canonical hearth object exists, retain its exact hearth placement when the resident leaves unless
   the resident deliberately selects it to carry.
 - Describe workshop entries as private records available across attachments, not as current-room inventory.
+- Stop placing the latest excerpt from every private workshop artifact into every waking prompt. Show a small
+  project index and let the resident inspect or explicitly select an active project when it wants the content.
 - When physical inventory has not been inspected, say it is unknown rather than empty or missing.
 - Permit a claim of loss or theft only when a canonical object receipt or a direct observed change supports
   it. Otherwise keep the model free to wonder privately but do not present the suspicion as world fact.
@@ -40,6 +42,8 @@ than a proven cause.
 ## Acceptance criteria
 
 - [ ] Prompt context labels private workshop records separately from physical inventory.
+- [ ] Private project contents are elective or explicitly selected context rather than automatic narration.
+- [ ] Workshop context uses bounded indexes and does not rescan every complete artifact on every tick.
 - [ ] An unread physical inventory is represented as unknown, not empty or missing.
 - [ ] A private notebook project does not appear as a carried notebook object.
 - [ ] A privately imagined hearth possession remains a belief until an explicit, policy-accepted making

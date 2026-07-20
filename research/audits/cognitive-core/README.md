@@ -72,6 +72,9 @@ variable represents lived experience.
 - [`private-state-data-custody-and-operator-boundary.md`](private-state-data-custody-and-operator-boundary.md)
   traces where private resident data actually goes, including default prompt capture, local file permissions,
   the city runtime mirror, unauthenticated state mutation, and portable-hearth limits.
+- [`model-authorship-self-feedback-and-dead-schema.md`](model-authorship-self-feedback-and-dead-schema.md)
+  separates model outputs that act, schedule, remember, or change identity from dead fields and automatic
+  feedback loops through felt reports, workshop context, and optional voice samples.
 - [`repair-and-ablation-order.md`](repair-and-ablation-order.md) puts software truth repairs before neutral
   reference runs and one-variable mechanism tests.
 - [`claim-ledger.md`](claim-ledger.md) lists terms and implied claims that require a decision.

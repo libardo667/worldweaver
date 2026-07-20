@@ -176,6 +176,20 @@ travel also have no resident/host credential; their ownership checks protect hum
 control of resident sessions. This makes both the privacy promise and the causal integrity of a public run false
 until authorization and data custody are repaired.
 
+The model-authorship pass found that one pulse JSON object combines an outward act, private read, prediction,
+self-report, memory choice, identity proposal, proposed goals and reveries, temporary drives, and judgements
+about attention traces. These outputs have radically different authority. Drive nudges, goals, reveries, and
+trace verdicts are recorded but have no production consumer. Initial durable-looking fields are also discarded
+whenever the response chooses a private read, because only the final continuation pulse is routed.
+
+The same pass identified three automatic self-feedback paths. Model self-reports are mined into later anchors;
+all Markdown workshop excerpts are placed into every later prompt; and the optional voice-register arm feeds
+recent public speech back as system-level style instruction. The workshop also rescans complete files each tick,
+and its anti-repetition sample covers only the journal and drawing titles while claiming to judge all recent
+making. Identity growth is the exception worth preserving: exact proposal, private inspection, and exact hearth
+adoption are genuinely separate steps. It still needs decline, supersession, correction, compaction, and a
+durable open-candidate index.
+
 Three bounded evidence reviews now cover prediction/ignition/arousal/quiet/social norms,
 action-feedback/embodiment/external supports, and clock cadence/sleep/interoception/semantic policy. They
 support plainer names, reliable event and consequence delivery, quiet and repetition as valid outcomes, and
