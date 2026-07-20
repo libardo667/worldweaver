@@ -2,14 +2,14 @@
 
 - `main.py` — process entry point, configuration, resident discovery, shared clients, and task startup.
 - `resident.py` — shared resident host and lifecycle: one home, one core, and one exclusive city or hearth
-  attachment. It owns mirror quiescence, confirmed city departure, core rebuild, fresh city return,
+  attachment. It owns confirmed city departure, core rebuild, fresh city return,
   keeper-whisper wake signals, and optional tick-count or elapsed-time bounds and read-only observers used
   by operational surfaces. A time-bound host run changes no cognitive clock; the core keeps its own cadence.
 - `runtime/cognitive_core.py` — authoritative perceive → integrate → ignite → pulse → act path.
 - `runtime/ledger.py` — append-only event history and a versioned current-state checkpoint. Major 137 is
   repairing bounded replay that can lose older open work, silent malformed-record handling, dead projection
   files, and remaining full-history readers. It also derives the small relationship view from prompt-delivery
-  and reply edges; `mirror.py` exposes that derived runtime state.
+  and reply edges. These private projections stay in the hearth and are not copied into city session storage.
 - `runtime/prompt_trace.py` — private inference-boundary evidence, excluded from all substrate reducers.
 - `runtime/prompt_context.py` — typed available/selected/withheld source envelope and final prose renderer.
 - `runtime/information.py` — private elective source access plus the structured provider-record contract;

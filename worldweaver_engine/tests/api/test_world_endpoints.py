@@ -3,6 +3,15 @@
 from datetime import datetime, timedelta, timezone
 
 from src.models import DirectMessage, LocationChat, SessionVars, WorldEvent, WorldFact, WorldNode, WorldProjection
+from src.services.session_service import get_state_manager, save_state
+
+
+def _set_session_vars(db_session, session_id: str, **values) -> None:
+    """Arrange internal test state without reopening the removed public backdoor."""
+    state = get_state_manager(session_id, db_session)
+    for key, value in values.items():
+        state.set_variable(key, value)
+    save_state(state, db_session)
 
 
 class TestWorldHistoryEndpoint:
@@ -477,142 +486,10 @@ class TestRosterDirectoryEndpoint:
 
 
 class TestWorldRestMetricsEndpoint:
-    def test_rest_metrics_reports_substrate_derived_rest(self, seeded_client):
-        resting_sid = "test_resident-20260316-120000"
-        seeded_client.post("/api/next", json={"session_id": resting_sid, "vars": {}})
-
-        now = datetime.now(timezone.utc)
-        rest_response = seeded_client.post(
-            f"/api/state/{resting_sid}/vars",
-            json={
-                "vars": {
-                    "location": "Tea House",
-                    "_resident_rest": {
-                        "schema_version": 1,
-                        "resting": True,
-                        "since": (now - timedelta(minutes=10)).isoformat(),
-                        "wakefulness": 0.28,
-                        "effective_arousal": 0.04,
-                        "reason": "deep_night_lull",
-                    },
-                }
-            },
-        )
-        assert rest_response.status_code == 200
-
+    def test_private_rest_metrics_are_not_public(self, seeded_client):
         response = seeded_client.get("/api/world/rest-metrics")
-        assert response.status_code == 200
-        payload = response.json()
-
-        assert payload["counts"]["total"] >= 1
-        assert payload["counts"]["resting"] == 1
-        assert payload["fractions"]["resting"] > 0
-        assert "rest_config" not in payload
-
-        sessions = {entry["session_id"]: entry for entry in payload["sessions"]}
-        assert sessions[resting_sid]["status"] == "resting"
-        assert sessions[resting_sid]["entity_type"] == "agent"
-        assert sessions[resting_sid]["rest_reason"] == "deep_night_lull"
-        assert sessions[resting_sid]["rest_derived"] is True
-        assert sessions[resting_sid]["wakefulness"] == 0.28
-        assert sessions[resting_sid]["effective_arousal"] == 0.04
-        assert sessions[resting_sid]["rest_started_at"] is not None
-        assert sessions[resting_sid]["rest_until"] is None
-
-    def test_rest_metrics_can_include_active_sessions(self, seeded_client, db_session):
-        session_id = "active-rest-metrics"
-        db_session.add(
-            SessionVars(
-                session_id=session_id,
-                vars={"location": "Commons Bank", "player_role": "Visitor"},
-                updated_at=datetime.now(timezone.utc).replace(tzinfo=None),
-            )
-        )
-        db_session.commit()
-
-        response = seeded_client.get("/api/world/rest-metrics?include_active=true")
-        assert response.status_code == 200
-        payload = response.json()
-
-        sessions = {entry["session_id"]: entry for entry in payload["sessions"]}
-        assert sessions[session_id]["status"] == "active"
-
-    def test_rest_metrics_excludes_stale_human_sessions(self, client, db_session):
-        recent_human_sid = "ww-recent-human"
-        stale_human_sid = "ww-stale-human"
-        agent_sid = "test_resident-20260316-120000"
-        now = datetime.now(timezone.utc)
-
-        db_session.add_all(
-            [
-                SessionVars(
-                    session_id=recent_human_sid,
-                    vars={"player_role": "Levi — recent visitor", "location": "Tea House"},
-                    updated_at=now - timedelta(minutes=10),
-                ),
-                SessionVars(
-                    session_id=stale_human_sid,
-                    vars={"player_role": "Levi — stale visitor", "location": "Tea House"},
-                    updated_at=now - timedelta(hours=6),
-                ),
-                SessionVars(
-                    session_id=agent_sid,
-                    vars={"location": "Tea House"},
-                    updated_at=now - timedelta(hours=6),
-                ),
-            ]
-        )
-        db_session.commit()
-
-        response = client.get("/api/world/rest-metrics?include_active=true")
-        assert response.status_code == 200
-        payload = response.json()
-
-        sessions = {entry["session_id"]: entry for entry in payload["sessions"]}
-        assert recent_human_sid in sessions
-        assert stale_human_sid not in sessions
-        assert agent_sid in sessions
-        assert payload["counts"]["total"] == 2
-
-    def test_rest_metrics_dedupes_agent_identity_to_freshest_session(self, client, db_session):
-        now = datetime.now(timezone.utc)
-        db_session.add_all(
-            [
-                SessionVars(
-                    session_id="maya_chen-20260317-172249",
-                    vars={"location": "Burlingame"},
-                    updated_at=now - timedelta(hours=6),
-                ),
-                SessionVars(
-                    session_id="maya_chen-20260318-000120",
-                    vars={"location": "Cascade Southeast"},
-                    updated_at=now - timedelta(minutes=2),
-                ),
-                SessionVars(
-                    session_id="ruth_chen-20260317-172249",
-                    vars={"location": "Arnold Creek"},
-                    updated_at=now - timedelta(hours=6),
-                ),
-                SessionVars(
-                    session_id="ruth_chen-20260317-235855",
-                    vars={"location": "Arnada"},
-                    updated_at=now - timedelta(minutes=1),
-                ),
-            ]
-        )
-        db_session.commit()
-
-        response = client.get("/api/world/rest-metrics?include_active=true")
-        assert response.status_code == 200
-        payload = response.json()
-
-        sessions = {entry["session_id"]: entry for entry in payload["sessions"]}
-        assert "maya_chen-20260318-000120" in sessions
-        assert "maya_chen-20260317-172249" not in sessions
-        assert sessions["maya_chen-20260318-000120"]["location"] == "Cascade Southeast"
-        assert "ruth_chen-20260317-235855" in sessions
-        assert "ruth_chen-20260317-172249" not in sessions
-        assert payload["counts"]["total"] == 2
+        assert response.status_code == 404
+        assert "/api/world/rest-metrics" not in seeded_client.get("/openapi.json").json()["paths"]
 
 
 class TestNeighborhoodVitalityEndpoint:
@@ -660,7 +537,7 @@ class TestNeighborhoodVitalityEndpoint:
         assert chinatown["unique_chat_speakers_recent"] >= 1
         assert chinatown["recent_event_count"] >= 1
 
-    def test_vitality_counts_resting_residents_in_total_occupancy(self, client, db_session):
+    def test_vitality_ignores_legacy_private_rest_flags(self, client, db_session):
         now = datetime.now(timezone.utc).replace(tzinfo=None)
         db_session.add_all(
             [
@@ -686,7 +563,7 @@ class TestNeighborhoodVitalityEndpoint:
 
         neighborhoods = {item["name"]: item for item in payload["neighborhoods"]}
         chinatown = neighborhoods["Chinatown"]
-        assert chinatown["current_agents"] == 0
+        assert chinatown["current_agents"] == 1
         assert chinatown["total_agents"] == 1
         assert chinatown["total_present"] == 1
         assert chinatown["needs_residents"] is False
@@ -1038,11 +915,12 @@ class TestWorldEventLedgerEndpoints:
             ],
         )
 
-        state_response = client.post(
-            "/api/state/mover/vars",
-            json={"vars": {"location": "Tea House", "player_role": "Levi — tester"}},
+        _set_session_vars(
+            db_session,
+            "mover",
+            location="Tea House",
+            player_role="Levi — tester",
         )
-        assert state_response.status_code == 200
 
         move_response = client.post(
             "/api/game/move",
@@ -1105,9 +983,11 @@ class TestWorldEventLedgerEndpoints:
         )
         db_session.commit()
 
-        client.post(
-            "/api/state/mover/vars",
-            json={"vars": {"location": "Inner Richmond", "player_role": "Levi — tester"}},
+        _set_session_vars(
+            db_session,
+            "mover",
+            location="Inner Richmond",
+            player_role="Levi — tester",
         )
 
         response = client.post(
@@ -1135,14 +1015,11 @@ class TestWorldEventLedgerEndpoints:
                 {"name": "Hayes Valley"},
             ],
         )
-        client.post(
-            "/api/state/resident-one/vars",
-            json={
-                "vars": {
-                    "location": "Western Addition",
-                    "player_role": "Resident One — neighbor",
-                }
-            },
+        _set_session_vars(
+            db_session,
+            "resident-one",
+            location="Western Addition",
+            player_role="Resident One — neighbor",
         )
 
         refused = client.post(
@@ -1193,9 +1070,10 @@ class TestWorldEventLedgerEndpoints:
             db_session,
             [{"name": "Western Addition"}, {"name": "Hayes Valley"}],
         )
-        client.post(
-            "/api/state/resident-one/vars",
-            json={"vars": {"location": "Western Addition"}},
+        _set_session_vars(
+            db_session,
+            "resident-one",
+            location="Western Addition",
         )
 
         created = client.post(
@@ -1281,11 +1159,12 @@ class TestWorldEventLedgerEndpoints:
         db_session.commit()
         world_memory_module._LOCATION_GRAPH_CACHE.clear()
 
-        state_response = client.post(
-            "/api/state/mover/vars",
-            json={"vars": {"location": "Quiet Park", "player_role": "Levi — tester"}},
+        _set_session_vars(
+            db_session,
+            "mover",
+            location="Quiet Park",
+            player_role="Levi — tester",
         )
-        assert state_response.status_code == 200
 
         response = client.post(
             "/api/game/move",

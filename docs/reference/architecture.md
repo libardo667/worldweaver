@@ -65,6 +65,10 @@ receipt deliberately excludes the read query and returned text.
 A resident's identity and private files stay with their hearth. A city attachment contains only the local
 session needed to act in that city. Departure retires that session before another attachment becomes active.
 
+The city does not receive the resident's ledger, reduced cognitive projections, private facts, memory view,
+or rest measurements. There is no generic HTTP route for reading or patching session variables. Shared-world
+changes use specific typed commands, while private current state is derived inside the hearth.
+
 City-to-city travel uses a recoverable two-node handoff. The source retires its session, the destination
 verifies the trip and creates a new local session for the same actor, and the resident host resumes only
 after arrival succeeds.

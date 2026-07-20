@@ -13,7 +13,6 @@ import {
   postLocationChat,
   postMapMove,
   queryWorldMap,
-  getRestMetrics,
   getAuthMe,
   hasMixedContentApiBase,
   isApiRequestError,
@@ -22,7 +21,6 @@ import {
   type DMThread,
   type LocationChatEntry,
   type WorldMapQueryResponse,
-  type RestMetricsResponse,
 } from "./api/wwClient";
 import {
   clearOnboardedSession,
@@ -193,7 +191,6 @@ export default function App() {
   const [, setPlayerInfoState] = useState<PlayerInfo | null>(() => getPlayerInfo());
   const [authRecoveryMessage, setAuthRecoveryMessage] = useState<string | null>(null);
   const [startupRecoveryMessage, setStartupRecoveryMessage] = useState<string | null>(null);
-  const [restMetrics, setRestMetrics] = useState<RestMetricsResponse | null>(null);
   const {
     setParticipationMode,
     observerMode,
@@ -422,15 +419,6 @@ export default function App() {
       pushToast("Readiness check failed", String(err));
     }
   }, [pushToast]);
-
-  const refreshRestMetrics = useCallback(async () => {
-    try {
-      const payload = await getRestMetrics(true);
-      setRestMetrics(payload);
-    } catch {
-      // silent: presence metrics are additive operator context
-    }
-  }, []);
 
   const refreshDigest = useCallback(async () => {
     try {
@@ -696,10 +684,9 @@ export default function App() {
   useEffect(() => {
     if (!apiBaseReady) return;
     void refreshReadiness();
-    void refreshRestMetrics();
     void refreshDigest();
     void refreshInbox(sessionId);
-  }, [apiBaseReady, refreshReadiness, refreshRestMetrics, refreshDigest, refreshInbox, sessionId]);
+  }, [apiBaseReady, refreshReadiness, refreshDigest, refreshInbox, sessionId]);
 
   const handleRuntimeInteractionError = useCallback((err: unknown, fallbackTitle: string) => {
     if (isApiRequestError(err)) {
@@ -755,12 +742,11 @@ export default function App() {
   useEffect(() => {
     if (!apiBaseReady) return;
     const interval = window.setInterval(() => {
-      void refreshRestMetrics();
       void refreshDigest();
       void refreshInbox(sessionId);
     }, 30_000);
     return () => window.clearInterval(interval);
-  }, [apiBaseReady, refreshRestMetrics, refreshDigest, refreshInbox, sessionId]);
+  }, [apiBaseReady, refreshDigest, refreshInbox, sessionId]);
 
   useEffect(() => {
     narrativeEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -1231,8 +1217,7 @@ export default function App() {
   const worldTotalCount = (digest?.location_population
     ? Object.values(digest.location_population).reduce((sum, count) => sum + count, 0)
     : 0) + (digest?.location_graph?.nodes.reduce((sum, n) => sum + (n.agent_count ?? 0), 0) ?? 0);
-  const worldPresenceCount = restMetrics?.counts.total ?? worldTotalCount;
-  const restingPresenceCount = restMetrics?.counts.resting ?? 0;
+  const worldPresenceCount = worldTotalCount;
 
   const mapNodes = useMemo(
     () => (mapQueryResult?.nodes ?? nodes).filter((n) => n.lat != null && n.lon != null),
@@ -1264,8 +1249,6 @@ export default function App() {
         digestLoaded={Boolean(digest)}
         sceneTotalCount={sceneTotalCount}
         worldPresenceCount={worldPresenceCount}
-        restMetricsLoaded={Boolean(restMetrics)}
-        restingPresenceCount={restingPresenceCount}
         observerMode={observerMode}
         sessionId={sessionId}
         shortSession={shortSession}
@@ -1357,7 +1340,6 @@ export default function App() {
             startupRecoveryMessage={startupRecoveryMessage}
             onRetrySync={() => {
               void refreshReadiness();
-              void refreshRestMetrics();
               void refreshDigest();
               void refreshInbox(sessionId);
             }}
@@ -1440,8 +1422,6 @@ export default function App() {
             clearPendingDest={() => setPendingDest(null)}
             pendingPath={pendingPath}
             setMapViewport={setMapViewport}
-            restMetrics={restMetrics}
-            refreshRestMetrics={() => void refreshRestMetrics()}
             playerNotes={playerNotes}
             setPlayerNotes={setPlayerNotes}
           />

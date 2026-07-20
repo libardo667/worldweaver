@@ -20,7 +20,6 @@ class _FakeCityClient:
         *,
         leave_success: bool = True,
         base_url: str = "https://source.example",
-        growth_text: str = "",
     ) -> None:
         self.leave_success = leave_success
         self.base_url = base_url
@@ -28,8 +27,6 @@ class _FakeCityClient:
         self.bootstrapped: list[dict] = []
         self.departures: list[dict] = []
         self.arrivals: list[dict] = []
-        self.growth_text = growth_text
-        self.growth_reads = 0
         self.closed = False
 
     async def leave_session(self, session_id: str) -> dict:
@@ -56,13 +53,6 @@ class _FakeCityClient:
     async def arrive_session_from_travel(self, **payload) -> dict:
         self.arrivals.append(payload)
         return {"success": True, "handoff": {"status": "arrived"}}
-
-    async def get_identity_growth(self, _session_id: str) -> dict:
-        self.growth_reads += 1
-        return {
-            "growth_text": self.growth_text,
-            "growth_metadata": {"legacy": True},
-        }
 
     async def close(self) -> None:
         self.closed = True
@@ -100,48 +90,6 @@ def _event_types(resident: Resident) -> list[str]:
     return [str(event.get("event_type") or "") for event in load_runtime_events(resident._resident_dir / "memory")]
 
 
-def _write_identity_files(resident: Resident, *, growth: str = "") -> None:
-    identity_dir = resident._resident_dir / "identity"
-    identity_dir.mkdir(parents=True, exist_ok=True)
-    (identity_dir / "SOUL.canonical.md").write_text(
-        "You are Test Resident.\n",
-        encoding="utf-8",
-    )
-    (identity_dir / "SOUL.md").write_text(
-        "You are Test Resident.\n",
-        encoding="utf-8",
-    )
-    if growth:
-        (identity_dir / "soul_growth.md").write_text(f"{growth}\n", encoding="utf-8")
-
-
-def test_legacy_city_growth_migrates_once_into_the_hearth(tmp_path):
-    client = _FakeCityClient(growth_text="I learned to leave room for an answer.")
-    resident = _resident(tmp_path, client)
-    _write_identity_files(resident)
-
-    asyncio.run(resident._migrate_legacy_city_growth())
-
-    growth_path = resident._resident_dir / "identity" / "soul_growth.md"
-    assert growth_path.read_text(encoding="utf-8") == "I learned to leave room for an answer.\n"
-    assert resident._identity.growth_soul == "I learned to leave room for an answer."
-    assert client.growth_reads == 1
-    assert _event_types(resident)[-1] == "identity_growth_migrated_to_hearth"
-
-
-def test_hearth_growth_is_not_replaced_by_a_city(tmp_path):
-    client = _FakeCityClient(growth_text="The city supplied a different identity.")
-    resident = _resident(tmp_path, client)
-    resident._identity.growth_soul = "The resident's existing growth."
-    _write_identity_files(resident, growth=resident._identity.growth_soul)
-
-    asyncio.run(resident._migrate_legacy_city_growth())
-
-    growth_path = resident._resident_dir / "identity" / "soul_growth.md"
-    assert growth_path.read_text(encoding="utf-8") == "The resident's existing growth.\n"
-    assert client.growth_reads == 0
-
-
 def test_confirmed_city_departure_enters_private_hearth_with_same_home(tmp_path):
     client = _FakeCityClient()
     resident = _resident(tmp_path, client)
@@ -168,7 +116,6 @@ def test_confirmed_city_departure_enters_private_hearth_with_same_home(tmp_path)
 def test_bounded_stop_parks_city_session_at_hearth(tmp_path):
     client = _FakeCityClient()
     resident = _resident(tmp_path, client)
-    resident._start_runtime_mirror = lambda: None
 
     class _Core:
         tick_seconds = 0.0
@@ -532,7 +479,6 @@ def test_host_replaces_the_core_after_travel_instead_of_running_two(tmp_path):
         world,
         resident._attachment_kind,
     )
-    resident._start_runtime_mirror = lambda: None
 
     async def _run_until_hearth():
         try:
@@ -580,7 +526,6 @@ def test_host_tick_observer_uses_the_same_core_loop(tmp_path):
             return {"ignited": force_ignite}
 
     resident._build_core = lambda world, session_id: _Core()
-    resident._start_runtime_mirror = lambda: None
 
     asyncio.run(resident.run(max_ticks=2, pause_seconds=0.0))
 
@@ -605,7 +550,6 @@ def test_duration_bound_uses_elapsed_time_instead_of_a_tick_limit(tmp_path):
             return {"ignited": force_ignite}
 
     resident._build_core = lambda world, session_id: _Core()
-    resident._start_runtime_mirror = lambda: None
 
     asyncio.run(resident.run(max_duration_seconds=0.02))
 

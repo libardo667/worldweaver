@@ -20,6 +20,5 @@ router.include_router(action.router)
 router.include_router(settings_api.router)
 router.include_router(metrics.router)
 
-# Minimal compatibility exports retained for shared tests/fixtures.
+# Shared cache export retained for test fixtures.
 _state_managers = session_service._state_managers
-cleanup_old_sessions = state.cleanup_old_sessions

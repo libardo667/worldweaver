@@ -2,9 +2,7 @@
 // Copyright (C) 2026 Levi Banks
 
 import type {
-  DevHardResetResponse,
   LeaveSessionResponse,
-  ResetSessionResponse,
   WorldFactsResponse,
   WorldHistoryResponse,
   SettingsReadinessResponse,
@@ -683,22 +681,10 @@ export function getWorldFacts(
   return requestJson<WorldFactsResponse>(`/api/world/facts?${params.toString()}`);
 }
 
-export function postResetSession(): Promise<ResetSessionResponse> {
-  return requestJson<ResetSessionResponse>("/api/reset-session", {
-    method: "POST",
-  });
-}
-
 export function postLeaveSession(sessionId: string): Promise<LeaveSessionResponse> {
   return requestJson<LeaveSessionResponse>("/api/session/leave", {
     method: "POST",
     body: JSON.stringify({ session_id: sessionId }),
-  });
-}
-
-export function postDevHardReset(): Promise<DevHardResetResponse> {
-  return requestJson<DevHardResetResponse>("/api/dev/hard-reset", {
-    method: "POST",
   });
 }
 
@@ -713,7 +699,6 @@ export type DigestRosterEntry = {
   player_name: string | null;
   display_name: string | null;
   entity_type?: "agent" | "human" | string | null;
-  status?: "active" | "resting" | "returning" | string | null;
 };
 
 export type DigestTimelineEntry = {
@@ -772,64 +757,10 @@ export type WorldDigestResponse = {
   location_chat?: LocationChatEntry[];
 };
 
-export type RestMetricsSession = {
-  session_id: string;
-  display_name: string;
-  player_name: string | null;
-  entity_type: "agent" | "human" | string;
-  location: string;
-  last_updated_at: string | null;
-  status: "active" | "resting" | "returning" | string;
-  rest_reason: string | null;
-  rest_derived: boolean;
-  wakefulness: number | null;
-  effective_arousal: number | null;
-  rest_location: string | null;
-  rest_started_at: string | null;
-  rest_until: string | null;
-  remaining_minutes: number | null;
-  pending_reason: string | null;
-  pending_location: string | null;
-  pending_since: string | null;
-  pending_hits: number;
-  last_completed_at: string | null;
-};
-
-export type RestMetricsResponse = {
-  generated_at: string;
-  shard: {
-    shard_id: string;
-    city_id: string | null;
-    shard_type: string;
-  };
-  counts: {
-    total: number;
-    active: number;
-    resting: number;
-    returning: number;
-    pending_confirmation: number;
-  };
-  fractions: {
-    active: number;
-    resting: number;
-    pending_confirmation: number;
-  };
-  sessions: RestMetricsSession[];
-};
-
 export function getWorldDigest(sessionId?: string, eventsLimit = 20): Promise<WorldDigestResponse> {
   const params = new URLSearchParams({ events_limit: String(eventsLimit) });
   if (sessionId) params.set("session_id", sessionId);
   return requestJson<WorldDigestResponse>(`/api/world/digest?${params.toString()}`);
-}
-
-export function getRestMetrics(includeActive = true): Promise<RestMetricsResponse> {
-  const params = new URLSearchParams();
-  if (includeActive) {
-    params.set("include_active", "true");
-  }
-  const query = params.toString();
-  return requestJson<RestMetricsResponse>(`/api/world/rest-metrics${query ? `?${query}` : ""}`);
 }
 
 export type EntryCard = {

@@ -7,7 +7,7 @@ This file narrows that guidance for `ww_agent/`.
 
 1. `src/resident.py` — one resident's composition root.
 2. `src/runtime/cognitive_core.py` — the current perceive → integrate → ignite → pulse → act path.
-3. `src/runtime/ledger.py` and `src/runtime/mirror.py` — durable evidence and derived runtime state.
+3. `src/runtime/ledger.py` — durable evidence and private derived runtime state.
 4. `src/runtime/{perception,integrator,pulse_engine,effectors}.py` — the principal seams.
 5. Tests matching the surface being changed.
 
@@ -18,8 +18,8 @@ inputs in the identity loader; they do not restore the old ownership model.
 ## Runtime invariants
 
 - A resident has one `CognitiveCore`; independent behavior schedulers must not compete with it.
-- `src/resident.py` owns one resident across city and hearth attachments. It stops the city mirror,
-  confirms public session retirement, and only then rebuilds the core against the private hearth. A
+- `src/resident.py` owns one resident across city and hearth attachments. It confirms public session
+  retirement and only then rebuilds the core against the private hearth. A
   failed departure must leave the resident in the city; never run two cores or two active attachments.
 - A resident host holds `runtime.lock` for the whole waking lifetime. Homes with a hearth manifest must
   also have a matching active generation record; dormant imports and retired sources must fail before
@@ -31,7 +31,7 @@ inputs in the identity loader; they do not restore the old ownership model.
 - `scripts/familiar.py` is an operational adapter around `src.resident.Resident`, not another composition
   root. Portraits and smoke runners may observe ticks but must not instantiate their own `CognitiveCore`.
 - Durable observations and actions enter the append-only ledger. Runtime views are projections, not a
-  second source of truth.
+  second source of truth, and they stay in the hearth rather than being copied into city session storage.
 - The doula writes a new resident's immutable `resident_seeded` record before booting them. Shared
   spawn settings are written once per doula process in its administrative ledger; do not reconstruct
   either from run notes or turn them into resident cognition. A manual fixed batch is the one supported

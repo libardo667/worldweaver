@@ -40,14 +40,6 @@ export type SettingsReadinessResponse = {
   shard: ShardReadinessSummary;
 };
 
-export type ResetSessionResponse = {
-  success: boolean;
-  message: string;
-  deleted: VarsRecord;
-};
-
-export type DevHardResetResponse = ResetSessionResponse;
-
 export type LeaveSessionResponse = {
   success: boolean;
   message: string;

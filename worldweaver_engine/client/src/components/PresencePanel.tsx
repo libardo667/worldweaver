@@ -1,158 +1,46 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Levi Banks
 
-import type { RestMetricsResponse, RestMetricsSession } from "../api/wwClient";
-
-type PresencePanelProps = {
-  metrics: RestMetricsResponse | null;
-  sessionId: string;
-  onRefresh: () => void;
+type PresenceEntry = {
+  session_id: string;
+  location: string;
+  display_name?: string | null;
+  player_name?: string | null;
 };
 
-function presenceStatusLabel(status: string): string {
-  switch (status) {
-    case "resting":
-      return "Resting";
-    case "returning":
-      return "Returning";
-    default:
-      return "Active";
-  }
-}
-
-function formatRemainingMinutes(minutes: number | null): string | null {
-  if (minutes == null) return null;
-  if (minutes >= 120) {
-    return `${Math.round((minutes / 60) * 10) / 10}h left`;
-  }
-  if (minutes >= 1) {
-    return `${Math.round(minutes)}m left`;
-  }
-  return "waking now";
-}
-
-function formatTimestamp(raw: string | null): string | null {
-  if (!raw) return null;
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return parsed.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-}
-
-function PresenceSection({
-  title,
-  sessions,
-  sessionId,
-}: {
-  title: string;
-  sessions: RestMetricsSession[];
+type PresencePanelProps = {
+  roster: PresenceEntry[];
   sessionId: string;
-}) {
-  if (sessions.length === 0) {
+};
+
+export function PresencePanel({ roster, sessionId }: PresencePanelProps) {
+  if (roster.length === 0) {
     return (
-      <section className="ww-presence-section">
-        <div className="ww-presence-section-head">
-          <h4 className="ww-info-section-title">{title}</h4>
-        </div>
-        <p className="ww-digest-empty">No one in this state right now.</p>
-      </section>
+      <div className="ww-presence-tab">
+        <p className="ww-digest-empty">No one is publicly present right now.</p>
+      </div>
     );
   }
 
   return (
-    <section className="ww-presence-section">
-      <div className="ww-presence-section-head">
-        <h4 className="ww-info-section-title">
-          {title} <span className="ww-presence-count">({sessions.length})</span>
-        </h4>
-      </div>
+    <div className="ww-presence-tab">
+      <p className="ww-digest-empty">Public presence only: who is here and where they are.</p>
       <ul className="ww-presence-list">
-        {sessions.map((entry) => {
-          const remaining = formatRemainingMinutes(entry.remaining_minutes);
-          const untilLabel = formatTimestamp(entry.rest_until);
+        {roster.map((entry) => {
+          const name = entry.display_name || entry.player_name || entry.session_id.slice(0, 12);
           return (
-            <li
-              key={entry.session_id}
-              className={`ww-presence-entry${entry.session_id === sessionId ? " ww-presence-entry--you" : ""}`}
-            >
+            <li key={entry.session_id} className="ww-presence-entry">
               <div className="ww-presence-line">
                 <span className="ww-roster-name">
-                  {entry.display_name}
+                  {name}
                   {entry.session_id === sessionId && <span className="ww-roster-you"> (you)</span>}
                 </span>
-                <div className="ww-presence-chips">
-                  <span className={`ww-presence-pill ww-presence-pill--${entry.status}`}>
-                    {presenceStatusLabel(entry.status)}
-                  </span>
-                  {entry.pending_hits > 0 && (
-                    <span className="ww-presence-pill ww-presence-pill--pending">
-                      Settling {entry.pending_hits}
-                    </span>
-                  )}
-                </div>
               </div>
-              <div className="ww-presence-meta">
-                <span>{entry.location.replace(/_/g, " ")}</span>
-                {remaining && <span>{remaining}</span>}
-                {untilLabel && <span>until {untilLabel}</span>}
-              </div>
-              {(entry.rest_reason || entry.pending_reason) && (
-                <div className="ww-presence-note">
-                  {entry.rest_reason || entry.pending_reason}
-                </div>
-              )}
+              <div className="ww-presence-meta">{entry.location.replace(/_/g, " ")}</div>
             </li>
           );
         })}
       </ul>
-    </section>
-  );
-}
-
-export function PresencePanel({ metrics, sessionId, onRefresh }: PresencePanelProps) {
-  if (!metrics) {
-    return (
-      <div className="ww-presence-tab">
-        <div className="ww-presence-empty">
-          <p className="ww-digest-empty">Loading shard presence…</p>
-          <button className="ww-presence-refresh" onClick={onRefresh}>
-            Refresh
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const active = metrics.sessions.filter((entry) => entry.status === "active");
-  const resting = metrics.sessions.filter((entry) => entry.status === "resting");
-  const returning = metrics.sessions.filter((entry) => entry.status === "returning");
-  const cityLabel = (metrics.shard.city_id || metrics.shard.shard_id).replace(/_/g, " ");
-
-  return (
-    <div className="ww-presence-tab">
-      <section className="ww-presence-summary">
-        <div className="ww-presence-summary-copy">
-          <p className="ww-presence-eyebrow">Shard Presence</p>
-          <h3 className="ww-presence-title">{cityLabel}</h3>
-          <p className="ww-presence-subtitle">
-            {metrics.counts.total} present across the shard
-          </p>
-          <p className="ww-presence-subtitle">Rest is derived from each resident's circadian state and arousal.</p>
-        </div>
-        <button className="ww-presence-refresh" onClick={onRefresh}>
-          Refresh
-        </button>
-      </section>
-
-      <div className="ww-presence-chip-row">
-        <span className="ww-presence-chip">Active {metrics.counts.active}</span>
-        <span className="ww-presence-chip">Resting {metrics.counts.resting}</span>
-        <span className="ww-presence-chip">Returning {metrics.counts.returning}</span>
-        <span className="ww-presence-chip">Queued {metrics.counts.pending_confirmation}</span>
-      </div>
-
-      <PresenceSection title="Active" sessions={active} sessionId={sessionId} />
-      <PresenceSection title="Resting" sessions={resting} sessionId={sessionId} />
-      <PresenceSection title="Returning" sessions={returning} sessionId={sessionId} />
     </div>
   );
 }

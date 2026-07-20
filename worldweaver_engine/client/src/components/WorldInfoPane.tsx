@@ -3,7 +3,7 @@
 
 import { useMemo, type ReactNode, type RefObject } from "react";
 
-import type { DMRecipient, DMThread, InboxDM, LocationChatEntry, LocationGraphNode, RestMetricsResponse } from "../api/wwClient";
+import type { DMRecipient, DMThread, InboxDM, LocationChatEntry, LocationGraphNode } from "../api/wwClient";
 import type { InfoTab } from "../hooks/useChatState";
 import { LetterCompose } from "./LetterCompose";
 import { LocationMap } from "./LocationMap";
@@ -33,7 +33,6 @@ type WorldInfoPaneProps = {
       location: string;
       display_name?: string | null;
       player_name?: string | null;
-      status?: string | null;
     }>;
     active_sessions: number;
   } | null;
@@ -86,8 +85,6 @@ type WorldInfoPaneProps = {
   clearPendingDest: () => void;
   pendingPath: string[];
   setMapViewport: (viewport: { north: number; south: number; east: number; west: number }) => void;
-  restMetrics: RestMetricsResponse | null;
-  refreshRestMetrics: () => void;
   playerNotes: string;
   setPlayerNotes: (value: string) => void;
 };
@@ -159,8 +156,6 @@ export function WorldInfoPane({
   clearPendingDest,
   pendingPath,
   setMapViewport,
-  restMetrics,
-  refreshRestMetrics,
   playerNotes,
   setPlayerNotes,
 }: WorldInfoPaneProps) {
@@ -274,13 +269,6 @@ export function WorldInfoPane({
                                 {r.display_name ?? r.player_name ?? r.session_id.slice(0, 12)}
                                 {r.session_id === sessionId && <span className="ww-roster-you"> (you)</span>}
                               </span>
-                              <div className="ww-presence-chips">
-                                {r.status && (
-                                  <span className={`ww-presence-pill ww-presence-pill--${r.status}`}>
-                                    {r.status === "resting" ? "Resting" : r.status === "returning" ? "Returning" : "Active"}
-                                  </span>
-                                )}
-                              </div>
                             </div>
                           </li>
                         ))}
@@ -551,7 +539,7 @@ export function WorldInfoPane({
           </div>
 
         {infoTab === "presence" && (
-          <PresencePanel metrics={restMetrics} sessionId={sessionId} onRefresh={() => void refreshRestMetrics()} />
+          <PresencePanel roster={rosterDigest?.roster ?? []} sessionId={sessionId} />
         )}
 
         {infoTab === "notes" && (

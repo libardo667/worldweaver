@@ -9,13 +9,17 @@ authenticated product with a written privacy boundary.
 The old “semi-public observatory” and “player shadow” proposals are rejected. Read-only surveillance is
 still surveillance, and a federation-held AI copy of a human is not part of the current resident model.
 
-The 2026-07-19 CognitiveCore audit found a more urgent backend contradiction. Every city resident currently
-copies full reduced private state into city session variables once a minute. General game routes then allow an
-unauthenticated caller to read or arbitrarily patch those variables; public world routes reveal the needed
-session IDs. Legacy identity growth, session cleanup, duplicate pruning, and whole-world reset are also exposed
-without the intended player, resident, node, or steward authority. Exact prompt capture is default-on and
-unbounded. Agent bootstrap, leave, and travel likewise have no resident/host credential: checks that protect a
-human-owned session accept an anonymous request when the session belongs to a resident. See
+The 2026-07-19 CognitiveCore audit found a more urgent backend contradiction. The source repair landed on
+2026-07-20: residents no longer copy their reduced private state into city session variables; the generic state
+read/write, city-held growth, rest-metrics, cleanup, pruning, and whole-world reset routes are gone; development
+reset and seeding default off; and a database migration removes old mirror fields from existing sessions. The
+old combined client now shows only public roster presence rather than private rest and cognitive measurements.
+
+That closes the worst disclosure and arbitrary-mutation path in source, but does not finish this work item.
+Exact prompt capture is still default-on and unbounded. Agent bootstrap, leave, messaging, and travel still
+need a resident/host credential: checks that protect a human-owned session can accept an anonymous request when
+the session belongs to a resident. The public Alderbank image also remains unsafe until this repair is built,
+deployed, and checked against its live OpenAPI document. See
 [`private-state-data-custody-and-operator-boundary.md`](../../research/audits/cognitive-core/private-state-data-custody-and-operator-boundary.md).
 
 This is now a precondition rather than a later UI task: remove the private mirror and secure the underlying API
@@ -53,6 +57,10 @@ procedure rather than a permanent dashboard field.
 
 ## Acceptance criteria
 
+- [x] A resident's private reduced state is not copied into a visited city's session storage.
+- [x] Generic public state read/write, legacy city-growth, rest-metrics, cleanup, pruning, and reset routes do
+  not exist; old mirrored fields are removed during database migration.
+- [ ] Resident bootstrap, leave, messages, and travel require an actor-scoped resident/host capability.
 - [ ] A reviewed access table defines every steward-visible field and its retention.
 - [ ] The surface is separately authenticated and unavailable to ordinary participants and observers.
 - [ ] A steward can diagnose node health, storage, migrations, federation, inference, backups, and failed

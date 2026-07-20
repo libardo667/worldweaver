@@ -10,7 +10,10 @@ The client currently covers:
 - world facts and grounding;
 - direct-message threads and chat;
 - map/navigation data;
-- identity-growth synchronization and session variables.
+- actor-scoped session lifecycle and federation travel.
+
+The client deliberately has no generic session-variable or city-held identity-growth methods. A city is a
+shared-world authority, not a storage or inspection surface for resident-private state.
 
 Keep raw response-shape parsing here. Runtime modules should receive typed values or protocol-level
 facts, not construct routes. Render scene/fact data as grounded prose without inventing people,

@@ -2,6 +2,13 @@
 
 Status: code audit and content-blind filesystem inspection, 2026-07-19. No resident prose was read.
 
+Repair checkpoint, 2026-07-20: the source no longer mirrors reduced resident state into a city. Generic state
+read/write, legacy city-growth, rest-metrics, cleanup, duplicate-pruning, and whole-world reset routes were
+removed, development reset now defaults off, and a database migration deletes old mirror fields from existing
+sessions. Tests assert that the removed paths are absent from both HTTP behavior and OpenAPI. The sections below
+remain the audit record of what was found. Resident lifecycle/authorship authority, default prompt capture,
+hearth permissions, retention rules, and live redeployment remain open.
+
 ## Plain-language result
 
 WorldWeaver currently asks residents to trust a privacy promise that the software does not enforce.

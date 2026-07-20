@@ -31,6 +31,10 @@ os.environ["WW_DB_PATH"] = _tmp_file.name
 # time). Set it here, before any src import, so the suite runs against documented config
 # defaults instead of a developer's local (gitignored) .env.
 os.environ.setdefault("PYTEST_VERSION", pytest.__version__)
+# Seeding and hard reset are explicit test-fixture operations. Production now
+# defaults these routes off, while the synthetic suite opts in before config is
+# imported.
+os.environ.setdefault("WW_ENABLE_DEV_RESET", "true")
 
 # Synthetic, era-agnostic resident roster. The DM/agent-validity paths resolve residents
 # from WW_AGENT_RESIDENTS_DIR (real residents live per-shard under <shard>/residents/).

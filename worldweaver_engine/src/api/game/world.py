@@ -119,19 +119,6 @@ def _parse_session_updated_at(value: Any) -> Optional[datetime]:
     return parsed.astimezone(timezone.utc)
 
 
-def _runtime_status_from_vars(vars_payload: Dict[str, Any]) -> str:
-    resident_rest = vars_payload.get("_resident_rest")
-    if isinstance(resident_rest, dict) and bool(resident_rest.get("resting")):
-        return "resting"
-    rest_state = str(vars_payload.get("_rest_state") or "").strip().lower()
-    dormant_state = str(vars_payload.get("_dormant_state") or "").strip().lower()
-    if rest_state == "returning":
-        return "returning"
-    if rest_state == "resting" or dormant_state == "dormant":
-        return "resting"
-    return "active"
-
-
 def _session_variables_payload(raw_payload: Any) -> Dict[str, Any]:
     if not isinstance(raw_payload, dict):
         return {}
@@ -139,34 +126,6 @@ def _session_variables_payload(raw_payload: Any) -> Dict[str, Any]:
     if raw_payload.get("_v") == 2 and isinstance(nested_vars, dict):
         return cast(Dict[str, Any], nested_vars)
     return cast(Dict[str, Any], raw_payload)
-
-
-def _session_runtime_snapshot_from_vars(vars_payload: Dict[str, Any]) -> Dict[str, Any]:
-    resident_rest = vars_payload.get("_resident_rest")
-    derived = resident_rest if isinstance(resident_rest, dict) else {}
-    rest_until = _parse_session_updated_at(vars_payload.get("_rest_until"))
-    rest_started_at = _parse_session_updated_at(derived.get("since") if derived.get("resting") else vars_payload.get("_rest_started_at"))
-    pending_since = _parse_session_updated_at(vars_payload.get("_rest_pending_since"))
-    pending_hits_raw = vars_payload.get("_rest_pending_hits")
-    try:
-        pending_hits = int(pending_hits_raw or 0)
-    except (TypeError, ValueError):
-        pending_hits = 0
-    return {
-        "status": _runtime_status_from_vars(vars_payload),
-        "rest_until": rest_until,
-        "rest_started_at": rest_started_at,
-        "rest_location": str(vars_payload.get("_rest_location") or "").strip(),
-        "rest_reason": str((derived.get("reason") if derived.get("resting") else vars_payload.get("_rest_reason")) or "").strip(),
-        "wakefulness": derived.get("wakefulness"),
-        "effective_arousal": derived.get("effective_arousal"),
-        "rest_derived": bool(derived),
-        "pending_since": pending_since,
-        "pending_reason": str(vars_payload.get("_rest_pending_reason") or "").strip(),
-        "pending_location": str(vars_payload.get("_rest_pending_location") or "").strip(),
-        "pending_hits": pending_hits,
-        "last_completed_at": _parse_session_updated_at(vars_payload.get("_rest_last_completed_at")),
-    }
 
 
 def _session_display_details(session_id: str, vars_payload: Dict[str, Any]) -> tuple[Optional[str], str]:
@@ -239,13 +198,6 @@ def _load_recent_session_rows(
     return query.all()
 
 
-def _session_runtime_status(db: Session, session_id: str) -> str:
-    row = db.get(SessionVars, session_id)
-    if row is None:
-        return "active"
-    return _runtime_status_from_vars(_session_variables_payload(row.vars))
-
-
 def _clean_event_summary(summary: str) -> str:
     cleaned = str(summary or "")
     if "Observed:" in cleaned:
@@ -305,7 +257,6 @@ def _roster_directory_entries(
                 "recipient_type": recipient_type,
                 "recipient_key": recipient_key,
                 "location": _session_location_from_vars(vars_payload),
-                "status": _runtime_status_from_vars(vars_payload),
                 "updated_at": session_row.updated_at.isoformat() if session_row.updated_at else None,
             }
         )
@@ -650,10 +601,6 @@ def _load_live_presence_maps(
         vars_payload = _session_variables_payload(row.vars)
         location = str(vars_payload.get("location") or "").strip()
         if not location or location == "unknown":
-            continue
-
-        status = _runtime_status_from_vars(vars_payload)
-        if status == "resting":
             continue
 
         if sid == requested_session_id:
@@ -1149,7 +1096,6 @@ def get_world_digest(
                 "player_name": player_name,
                 "display_name": display_name,
                 "entity_type": _session_entity_type(sid),
-                "status": _runtime_status_from_vars(vars_payload),
             }
         )
     full_roster.sort(key=lambda r: r["last_seen"] or "", reverse=True)
@@ -1176,8 +1122,6 @@ def get_world_digest(
     # including them here would double-count them in the map tooltip.
     location_counts: Dict[str, int] = {}
     for r in full_roster:
-        if r.get("status") == "resting":
-            continue
         if _slug_display_name(r["session_id"]):
             continue  # agent session — skip, counted in agent_location_counts
         loc = r["location"]
@@ -1334,9 +1278,6 @@ def get_world_digest(
     agent_location_counts: Dict[str, int] = {}
     agent_location_names: Dict[str, List[str]] = {}
     for agent_name, loc in agent_last_location.items():
-        agent_entry = next((r for r in full_roster if r["display_name"].lower() == agent_name.lower()), None)
-        if agent_entry and agent_entry.get("status") == "resting":
-            continue
         agent_location_counts[loc] = agent_location_counts.get(loc, 0) + 1
         display = agent_name.replace("_", " ").title()
         agent_location_names.setdefault(loc, []).append(display)
@@ -1344,8 +1285,6 @@ def get_world_digest(
     # Human player display names per location
     player_location_names: Dict[str, List[str]] = {}
     for r in full_roster:
-        if r.get("status") == "resting":
-            continue
         if _slug_display_name(r["session_id"]):
             continue  # agent session — skip
         loc = r["location"]
@@ -1427,7 +1366,7 @@ def get_world_digest(
     return {
         "world_id": world_id or None,
         "seeded": bool(world_id),
-        "active_sessions": sum(1 for r in roster if r.get("status") != "resting"),
+        "active_sessions": len(roster),
         "roster": roster,
         "location_population": location_counts,
         "location_graph": location_graph,
@@ -1450,107 +1389,6 @@ def get_world_roster_directory(
     return {
         "roster": entries,
         "count": len(entries),
-    }
-
-
-@router.get("/world/rest-metrics")
-def get_world_rest_metrics(
-    include_active: bool = Query(default=False),
-    db: Session = Depends(get_db),
-):
-    """Operator-facing snapshot of rest/dormancy state across the shard."""
-    now = datetime.now(timezone.utc)
-    active_human_session_ids = _load_active_human_session_ids(db)
-    deduped_sessions: Dict[tuple[str, str], Dict[str, Any]] = {}
-
-    rows = db.query(SessionVars).all()
-    for row in rows:
-        session_id = str(row.session_id or "").strip()
-        if not _is_player_session(session_id):
-            continue
-        if not _slug_display_name(session_id) and session_id not in active_human_session_ids:
-            continue
-        vars_payload = _session_variables_payload(row.vars)
-        snapshot = _session_runtime_snapshot_from_vars(vars_payload)
-        status = str(snapshot["status"])
-
-        if not include_active and status == "active" and int(snapshot["pending_hits"] or 0) <= 0:
-            continue
-
-        player_name, display_name = _session_display_details(session_id, vars_payload)
-        entity_type = _session_entity_type(session_id)
-        parsed_updated_at = _parse_session_updated_at(row.updated_at)
-        rest_until = cast(Optional[datetime], snapshot["rest_until"])
-        rest_started_at = cast(Optional[datetime], snapshot["rest_started_at"])
-        remaining_minutes: Optional[float] = None
-        if rest_until is not None:
-            remaining_minutes = max(0.0, round((rest_until - now).total_seconds() / 60.0, 1))
-
-        entry = {
-            "session_id": session_id,
-            "display_name": display_name,
-            "player_name": player_name,
-            "entity_type": entity_type,
-            "location": str(vars_payload.get("location") or snapshot["rest_location"] or "unknown"),
-            "last_updated_at": row.updated_at.isoformat() if row.updated_at else None,
-            "status": status,
-            "rest_reason": snapshot["rest_reason"] or None,
-            "rest_derived": bool(snapshot["rest_derived"]),
-            "wakefulness": snapshot["wakefulness"],
-            "effective_arousal": snapshot["effective_arousal"],
-            "rest_location": snapshot["rest_location"] or None,
-            "rest_started_at": rest_started_at.isoformat() if rest_started_at else None,
-            "rest_until": rest_until.isoformat() if rest_until else None,
-            "remaining_minutes": remaining_minutes,
-            "pending_reason": snapshot["pending_reason"] or None,
-            "pending_location": snapshot["pending_location"] or None,
-            "pending_since": snapshot["pending_since"].isoformat() if snapshot["pending_since"] else None,
-            "pending_hits": int(snapshot["pending_hits"] or 0),
-            "last_completed_at": snapshot["last_completed_at"].isoformat() if snapshot["last_completed_at"] else None,
-            "_updated_sort": parsed_updated_at.isoformat() if parsed_updated_at else "",
-        }
-
-        dedupe_key = (
-            (
-                "agent",
-                display_name.lower(),
-            )
-            if entity_type == "agent"
-            else ("human", session_id)
-        )
-        existing = deduped_sessions.get(dedupe_key)
-        if existing is None or str(entry["_updated_sort"]) >= str(existing.get("_updated_sort") or ""):
-            deduped_sessions[dedupe_key] = entry
-
-    sessions = list(deduped_sessions.values())
-    counts = {
-        "total": len(sessions),
-        "active": sum(1 for item in sessions if str(item.get("status") or "") == "active"),
-        "resting": sum(1 for item in sessions if str(item.get("status") or "") == "resting"),
-        "returning": sum(1 for item in sessions if str(item.get("status") or "") == "returning"),
-        "pending_confirmation": sum(1 for item in sessions if int(item.get("pending_hits") or 0) > 0),
-    }
-
-    sessions.sort(
-        key=lambda item: (
-            {"resting": 0, "returning": 1, "active": 2}.get(str(item.get("status") or "active"), 3),
-            str(item.get("display_name") or item.get("session_id") or ""),
-        )
-    )
-    for item in sessions:
-        item.pop("_updated_sort", None)
-
-    total = max(1, int(counts["total"]))
-    return {
-        "generated_at": now.isoformat(),
-        "shard": _shard_identity_payload(),
-        "counts": counts,
-        "fractions": {
-            "active": round(float(counts["active"]) / total, 4),
-            "resting": round(float(counts["resting"]) / total, 4),
-            "pending_confirmation": round(float(counts["pending_confirmation"]) / total, 4),
-        },
-        "sessions": sessions,
     }
 
 
@@ -1606,18 +1444,16 @@ def get_neighborhood_vitality(
             continue
         entry = by_name[neighborhood_name]
         is_agent = bool(_slug_display_name(session_id))
-        is_resting = _runtime_status_from_vars(vars_payload) == "resting"
         entry["total_present"] += 1
         if is_agent:
             entry["total_agents"] += 1
         else:
             entry["total_humans"] += 1
-        if not is_resting:
-            entry["current_present"] += 1
-            if is_agent:
-                entry["current_agents"] += 1
-            else:
-                entry["current_humans"] += 1
+        entry["current_present"] += 1
+        if is_agent:
+            entry["current_agents"] += 1
+        else:
+            entry["current_humans"] += 1
 
     since_naive = (datetime.now(timezone.utc) - timedelta(hours=hours)).replace(tzinfo=None)
 
@@ -2753,8 +2589,6 @@ def get_agent_scene(session_id: str, db: Session = Depends(get_db)):
             continue
 
         row_vars = _session_variables_payload(session_row.vars)
-        if _runtime_status_from_vars(row_vars) == "resting":
-            continue
         if _session_location_from_vars(row_vars) != location:
             continue
 

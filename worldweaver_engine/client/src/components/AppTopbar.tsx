@@ -11,8 +11,6 @@ type AppTopbarProps = {
   digestLoaded: boolean;
   sceneTotalCount: number;
   worldPresenceCount: number;
-  restMetricsLoaded: boolean;
-  restingPresenceCount: number;
   observerMode: boolean;
   sessionId: string;
   shortSession: string;
@@ -36,8 +34,6 @@ export function AppTopbar({
   digestLoaded,
   sceneTotalCount,
   worldPresenceCount,
-  restMetricsLoaded,
-  restingPresenceCount,
   observerMode,
   sessionId,
   shortSession,
@@ -82,11 +78,6 @@ export function AppTopbar({
             <span className="ww-world-stat" title="People currently present across the shard">
               world: {worldPresenceCount} present
             </span>
-            {restMetricsLoaded && (
-              <span className="ww-world-stat" title="Residents currently resting across the shard">
-                resting: {restingPresenceCount}
-              </span>
-            )}
           </>
         )}
         <button

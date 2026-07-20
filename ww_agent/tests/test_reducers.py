@@ -1,17 +1,14 @@
 from __future__ import annotations
 
-import asyncio
 import json
 from typing import Any
 
 from src.identity.loader import LoopTuning, ResidentIdentity
 from src.runtime.ledger import (
     append_runtime_event,
-    build_runtime_mirror_payload,
     load_runtime_events,
     reduce_runtime_events,
 )
-from src.runtime.mirror import ResidentRuntimeMirror
 from src.runtime.signals import IntentQueue, StimulusPacketQueue, write_runtime_snapshot
 
 
@@ -19,19 +16,11 @@ class _DummyWorldClient:
     def __init__(self):
         self.replies: list[tuple[str, str, str]] = []
         self.votes: list[tuple[str, str, str]] = []
-        self.session_var_updates: list[tuple[str, dict]] = []
         self.location_chats: list[tuple[str, str, str, str | None]] = []
         self.actions: list[tuple[str, str]] = []
         self.letters_sent: list[dict[str, Any]] = []
-        self.session_vars_payload: dict[str, Any] = {"vars": {}}
         self.roster_display_names: list[str] = ["Levi", "Sun Li"]
         self.roster_recipients: list[dict[str, str]] = []
-        self.identity_growth_payload: dict[str, Any] = {
-            "growth_text": "",
-            "growth_metadata": {},
-            "note_records": [],
-            "growth_proposals": [],
-        }
 
     async def reply_letter(self, from_agent: str, to_session_id: str, body: str):
         self.replies.append((from_agent, to_session_id, body))
@@ -60,35 +49,6 @@ class _DummyWorldClient:
             }
         )
         return {"ok": True}
-
-    async def update_session_vars(self, session_id: str, vars: dict[str, Any]):
-        self.session_var_updates.append((session_id, dict(vars)))
-        return {"session_id": session_id, "vars": vars}
-
-    async def get_session_vars(self, session_id: str, prefix: str | None = None):
-        return dict(self.session_vars_payload)
-
-    async def get_identity_growth(self, session_id: str):
-        return dict(self.identity_growth_payload)
-
-    async def update_identity_growth(
-        self,
-        session_id: str,
-        *,
-        growth_text: str | None = None,
-        growth_metadata: dict[str, Any] | None = None,
-        note_records: list[dict[str, Any]] | None = None,
-        growth_proposals: list[dict[str, Any]] | None = None,
-    ):
-        if growth_text is not None:
-            self.identity_growth_payload["growth_text"] = str(growth_text)
-        if growth_metadata is not None:
-            self.identity_growth_payload["growth_metadata"] = dict(growth_metadata)
-        if note_records is not None:
-            self.identity_growth_payload["note_records"] = list(note_records)
-        if growth_proposals is not None:
-            self.identity_growth_payload["growth_proposals"] = list(growth_proposals)
-        return dict(self.identity_growth_payload)
 
     async def post_location_chat(self, location: str, session_id: str, message: str, display_name: str | None = None):
         self.location_chats.append((location, session_id, message, display_name))
@@ -387,8 +347,6 @@ def test_relationship_projection_requires_prompt_delivery_and_exact_reply_edge()
         "evidence_event_ids": ["evt-perceived", "evt-replied"],
         "source": "relationship_projection_v1",
     }
-    mirrored = build_runtime_mirror_payload(reduced)
-    assert mirrored["_resident_subjective_projection"]["relationship_projection"] == reduced.subjective_projection["relationship_projection"]
 
 
 def test_later_perception_supersedes_current_relationship_claim():
@@ -437,40 +395,6 @@ def test_later_perception_supersedes_current_relationship_claim():
     assert claim["predicate"] == "has_perceived_utterance_from"
     assert claim["revision"] == 3
     assert claim["supersedes_revision"] == 2
-
-
-def test_runtime_mirror_syncs_reduced_state_to_session_vars(tmp_path):
-    resident_dir = tmp_path / "sun_li"
-    memory_dir = resident_dir / "memory"
-    world = _DummyWorldClient()
-    packet_queue = StimulusPacketQueue(memory_dir / "stimulus_packets.json")
-
-    packet_queue.emit(
-        packet_type="chat_heard",
-        source_loop="fast",
-        dedupe_key="chat-levi-mirror",
-        location="Chinatown",
-        payload={"speaker": "Levi", "message": "Tea's ready."},
-    )
-    _queue_research(memory_dir, "Chinatown tea houses", priority="high", source="fast_ground_intent")
-
-    mirror = ResidentRuntimeMirror(
-        resident_dir=resident_dir,
-        ww_client=world,
-        session_id="sun_li-20260316-120000",
-        interval_seconds=30.0,
-    )
-
-    asyncio.run(mirror.sync_once())
-
-    assert len(world.session_var_updates) == 1
-    session_id, payload = world.session_var_updates[0]
-    assert session_id == "sun_li-20260316-120000"
-    assert payload["_resident_ledger_event_count"] >= 2
-    assert payload["_resident_runtime_projection"]["ledger_event_count"] >= 2
-    assert payload["_resident_subjective_facts"]["facts"]
-    assert payload["_resident_rest"]["resting"] is False
-    assert payload["_resident_rest"]["reason"] == "no_circadian_observation"
 
 
 def test_dialogue_state_derives_open_questions_and_reply_pressure(tmp_path):

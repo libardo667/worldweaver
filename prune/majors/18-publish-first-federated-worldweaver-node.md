@@ -6,12 +6,12 @@ The `world-weaver.org` domain now serves a single-computer public test, but no s
 online yet. The old proposal for a public observatory is rejected: the public interface should show places
 and local participation, not resident timelines or operating data.
 
-Critical 2026-07-19 blocker: the CognitiveCore privacy audit found that the deployed Alderbank OpenAPI still
-exposes the old unauthenticated full-state, arbitrary session-variable write, and whole-world reset routes.
-Resident bootstrap, leave, and travel also lack a resident/host credential even where optional human bearer
-checks appear. The public tunnel must not be treated as a safe resident deployment until these routes are
-secured and the private runtime mirror is removed. The earlier statement that reset was disabled covered only
-`/api/dev/hard-reset`, not `/api/reset-session`.
+The 2026-07-19 CognitiveCore privacy audit found that the deployed Alderbank OpenAPI exposed unauthenticated
+full-state, arbitrary session-variable write, and whole-world reset routes. Source was repaired on 2026-07-20:
+those routes and the private runtime mirror are gone, development reset defaults off, tests assert that the old
+paths are absent, and a migration removes stale mirror fields. This repair is not yet the deployed Alderbank
+image. Resident bootstrap, leave, messages, and travel also still need an actor-scoped resident/host credential.
+The public tunnel must not host residents until both pieces are deployed and verified live.
 
 The development shard generator now gives each new folder its own strong JWT and data-encryption secrets,
 private `.env` permissions, stable Compose project identity, node signing key, and public descriptor. Signed
@@ -105,9 +105,9 @@ it does not mount or build from a neighboring source checkout.
 
 ## Build next
 
-1. Disable public ingress while the old state/reset routes remain exposed. Remove arbitrary state mutation,
-   require the right player/resident/node/steward authority on every sensitive route, remove the private runtime
-   mirror, add anonymous/wrong-owner tests, publish new images, and verify the deployed OpenAPI and behavior.
+1. Keep public residents stopped. Publish the source privacy repair, run its database scrub, and verify the live
+   OpenAPI no longer contains the removed state, growth, rest, cleanup, pruning, or reset paths. Then add the
+   actor-scoped resident/host capability and wrong-owner tests for bootstrap, leave, messages, and travel.
 2. Verify the image publisher and pull the SHA-tagged images on a clean second computer or clean trust domain.
 3. Create two folders there and prove distinct ports, projects, credentials, volumes, and signing identities.
 4. Replace the Vite development server with a small production client gateway while preserving the same-origin

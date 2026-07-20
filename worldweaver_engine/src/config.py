@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     enable_world_graph_extraction: bool = True
     enable_world_projection: bool = True
     enable_dev_reset: bool = Field(
-        default=True,
+        default=False,
         validation_alias="WW_ENABLE_DEV_RESET",
     )
 

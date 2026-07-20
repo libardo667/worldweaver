@@ -68,6 +68,10 @@ from being interpretable.
    session but must grant no control. Default exact prompt capture off, expire declared diagnostic captures,
    enforce owner-only hearth permissions, and write the field-by-field custody/retention table before another
    public resident run.
+
+   **2026-07-20 checkpoint:** the mirror and generic state/growth/rest/cleanup/prune/reset routes are removed,
+   old mirror fields are scrubbed by migration, and development reset defaults off. Actor-scoped resident
+   authority, prompt-trace policy, hearth permission repair, and the custody table remain.
 2. **Stop false prediction error.** Accept expectations only for sensed scopes, or represent an unobserved
    scope as unknown rather than zero.
 3. **Make time semantics true.** Remove poll-rate dependence from repeated evidence, give replays a virtual

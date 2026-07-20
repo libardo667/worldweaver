@@ -26,7 +26,6 @@ from src.identity.loader import IdentityLoader, ResidentIdentity
 from src.inference.client import InferenceClient
 from src.runtime.cognitive_core import CognitiveCore
 from src.runtime.ledger import append_runtime_event, load_runtime_events
-from src.runtime.mirror import ResidentRuntimeMirror
 from src.runtime.naming import slugify_resident_name
 from src.runtime.signals import StimulusPacketQueue
 from src.runtime.travel import (
@@ -193,7 +192,6 @@ class Resident:
         else:
             self._session_id = await self._get_or_create_session(self._world_id)
             logger.info("[%s] session: %s", self.name, self._session_id)
-            await self._migrate_legacy_city_growth()
             await self._refresh_city_profile()
 
     async def run(
@@ -250,9 +248,8 @@ class Resident:
         pause_seconds: float | None = None,
     ) -> None:
         """
-        Run the resident mind: one cognitive core (substrate + pulse) and the
-        runtime mirror. Returns when they stop (or any raises an unhandled
-        exception).
+        Run the resident mind: one cognitive core (substrate + pulse). Returns
+        when they stop (or any task raises an unhandled exception).
 
         The fast/slow/mail/ground/wander loops are gone (Major 49): cognition is
         the ignition-fired pulse over the ledger-derived substrate, perception is
@@ -292,61 +289,52 @@ class Resident:
             while True:
                 session_id = self._active_session_id()
                 core = self._build_core(world, session_id)
-                mirror_task = self._start_runtime_mirror()
-                try:
-                    while True:
-                        if tick_count > 0 and deadline is not None and loop.time() >= deadline:
-                            return
-                        result: dict[str, Any] | None = None
-                        try:
-                            force_ignite = self._take_force_ignite(world)
-                            result = await core.tick_once(force_ignite=force_ignite)
-                        except asyncio.CancelledError:
-                            raise
-                        except Exception as exc:
-                            logger.exception(
-                                "[%s] cognitive tick error: %s",
-                                self.name,
-                                exc,
-                            )
-                            await asyncio.sleep(10.0)
+                while True:
+                    if tick_count > 0 and deadline is not None and loop.time() >= deadline:
+                        return
+                    result: dict[str, Any] | None = None
+                    try:
+                        force_ignite = self._take_force_ignite(world)
+                        result = await core.tick_once(force_ignite=force_ignite)
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as exc:
+                        logger.exception(
+                            "[%s] cognitive tick error: %s",
+                            self.name,
+                            exc,
+                        )
+                        await asyncio.sleep(10.0)
 
-                        if result is not None:
-                            tick_count += 1
-                            await self._notify_tick(
-                                world,
-                                core,
-                                result,
-                                tick_count,
-                            )
-                        stop_after_tick = max_ticks > 0 and tick_count >= max_ticks
-                        stop_after_duration = deadline is not None and loop.time() >= deadline
+                    if result is not None:
+                        tick_count += 1
+                        await self._notify_tick(
+                            world,
+                            core,
+                            result,
+                            tick_count,
+                        )
+                    stop_after_tick = max_ticks > 0 and tick_count >= max_ticks
+                    stop_after_duration = deadline is not None and loop.time() >= deadline
 
-                        take_pending = getattr(world, "take_pending_travel", None)
-                        request = take_pending() if callable(take_pending) else None
-                        if request is not None:
-                            # A late mirror write could recreate city presence after
-                            # departure, so quiesce it before changing worlds.
-                            await self._cancel_task(mirror_task)
-                            mirror_task = None
-                            next_world = await self._apply_travel_request(
-                                world,
-                                request,
-                            )
-                            if next_world is not world:
-                                world = next_world
-                                if stop_after_tick or stop_after_duration:
-                                    return
-                                break
-                            mirror_task = self._start_runtime_mirror()
-                        if stop_after_tick or stop_after_duration:
-                            return
-                        delay = core.tick_seconds if pause_seconds is None else max(0.0, float(pause_seconds))
-                        if deadline is not None:
-                            delay = min(delay, max(0.0, deadline - loop.time()))
-                        await asyncio.sleep(delay)
-                finally:
-                    await self._cancel_task(mirror_task)
+                    take_pending = getattr(world, "take_pending_travel", None)
+                    request = take_pending() if callable(take_pending) else None
+                    if request is not None:
+                        next_world = await self._apply_travel_request(
+                            world,
+                            request,
+                        )
+                        if next_world is not world:
+                            world = next_world
+                            if stop_after_tick or stop_after_duration:
+                                return
+                            break
+                    if stop_after_tick or stop_after_duration:
+                        return
+                    delay = core.tick_seconds if pause_seconds is None else max(0.0, float(pause_seconds))
+                    if deadline is not None:
+                        delay = min(delay, max(0.0, deadline - loop.time()))
+                    await asyncio.sleep(delay)
         except asyncio.CancelledError:
             logger.info("[%s] resident cancelled", self.name)
             raise
@@ -423,19 +411,6 @@ class Resident:
             incubation=(self._attachment_kind == "city" and (identity.tuning.incubation_enabled or _env_flag("WW_INCUBATION_ENABLED"))),
             action_tendency=self._action_tendency,
             reach_continuation_limit=self._reach_continuation_limit,
-        )
-
-    def _start_runtime_mirror(self) -> asyncio.Task | None:
-        if self._attachment_kind != "city" or not self._session_id:
-            return None
-        mirror = ResidentRuntimeMirror(
-            resident_dir=self._resident_dir,
-            ww_client=self._ww,
-            session_id=self._session_id,
-        )
-        return asyncio.create_task(
-            mirror.run(),
-            name=f"resident:{self.name}:mirror",
         )
 
     async def _apply_travel_request(
@@ -555,7 +530,6 @@ class Resident:
         await hearth_world.close()
         self._session_id = city_session_id
         self._attachment_kind = "city"
-        await self._migrate_legacy_city_growth()
         await self._refresh_city_profile()
         city = self._build_city_world(city_session_id)
         self._record_transition(
@@ -695,7 +669,6 @@ class Resident:
                     self._session_id = pending.destination_session_id
                     self._attachment_kind = "city"
                     (self._resident_dir / "session_id.txt").write_text(self._session_id, encoding="utf-8")
-                    await self._migrate_legacy_city_growth()
                     await self._refresh_city_profile()
                     self._record_transition(
                         "inter_shard_travel_arrived",
@@ -856,16 +829,6 @@ class Resident:
             raise RuntimeError("resident identity is not loaded")
         return self._identity
 
-    @staticmethod
-    async def _cancel_task(task: asyncio.Task | None) -> None:
-        if task is None:
-            return
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
-
     # ------------------------------------------------------------------
     # Session management
     # ------------------------------------------------------------------
@@ -931,52 +894,3 @@ class Resident:
         ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         name_slug = slugify_resident_name(self._require_identity().name)
         return f"{name_slug}-{ts}-{uuid.uuid4().hex[:8]}"
-
-    async def _migrate_legacy_city_growth(self) -> None:
-        """Move old city-hosted growth into the hearth once.
-
-        A city may still carry identity-growth rows written by older WorldWeaver
-        versions. They are compatibility input only. Once a hearth has its own
-        growth layer, no city is consulted and travel cannot replace it.
-        """
-        if not self._identity or not self._session_id:
-            return
-        if str(self._identity.growth_soul or "").strip():
-            return
-        try:
-            payload = await self._ww.get_identity_growth(self._session_id)
-        except Exception as exc:
-            logger.debug("[%s] legacy identity growth lookup failed: %s", self.name, exc)
-            return
-        growth_text = str(payload.get("growth_text") or "").strip()
-        if not growth_text:
-            return
-        source_url = self._client_url(self._ww)
-        metadata = dict(payload.get("growth_metadata") or {})
-        metadata.update(
-            {
-                "authority": "hearth",
-                "migrated_at": datetime.now(timezone.utc).isoformat(),
-                "migrated_from_city": source_url,
-            }
-        )
-        IdentityLoader.save_growth_soul(
-            self._resident_dir,
-            growth_text,
-            metadata=metadata,
-        )
-        self._identity.growth_soul = growth_text
-        self._identity.soul = IdentityLoader.composed_soul(
-            self._identity.canonical_soul,
-            growth_text,
-        )
-        append_runtime_event(
-            self._resident_dir / "memory",
-            event_type="identity_growth_migrated_to_hearth",
-            payload={
-                "actor_id": self._identity.actor_id,
-                "source_city_url": source_url,
-                "source": "legacy_city_identity_growth",
-            },
-        )
-        logger.info("[%s] migrated legacy city identity growth into the hearth", self.name)

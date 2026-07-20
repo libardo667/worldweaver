@@ -7,7 +7,7 @@ import logging
 import os
 import re
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -28,7 +28,6 @@ from ...models import (
     MaterialPool,
     ObjectExchange,
     Player,
-    ResidentIdentityGrowth,
     SessionVars,
     ShardTravelHandoff,
     SpaceAccessGrant,
@@ -60,7 +59,6 @@ from ...services.session_service import (
     save_state,
     get_state_manager,
 )
-from ...services.growth_service import append_growth_proposals
 from ...services.federation_identity import current_shard_id
 from ...services.world_context import build_world_context_header
 from ...services.world_memory import (
@@ -76,12 +74,6 @@ _state_managers = session_service._state_managers
 
 # Compatibility aliases for existing imports/tests while keeping internals in services.
 save_state_to_db = save_state
-
-
-class SessionVarPatchRequest(BaseModel):
-    """Merge a small runtime var payload into a session."""
-
-    vars: Dict[str, Any] = Field(default_factory=dict)
 
 
 class SessionLeaveRequest(BaseModel):
@@ -105,136 +97,6 @@ class SessionTravelArrivalRequest(BaseModel):
 
     travel_id: str = Field(min_length=1, max_length=64)
     session_id: SessionId
-
-
-class DuplicateAgentPruneRequest(BaseModel):
-    """Prune stale duplicate agent incarnations, optionally narrowed to one name."""
-
-    display_name: Optional[str] = Field(default=None, min_length=1, max_length=120)
-
-
-class ResidentIdentityGrowthPatchRequest(BaseModel):
-    """Compatibility payload for identity data written by older residents."""
-
-    growth_text: Optional[str] = None
-    growth_metadata: Optional[Dict[str, Any]] = None
-    note_records: Optional[list[Dict[str, Any]]] = None
-    growth_proposals: Optional[list[Dict[str, Any]]] = None
-
-
-def _resolve_actor_id_for_session(db: Session, session_id: str) -> str:
-    sv = db.get(SessionVars, str(session_id or "").strip())
-    actor_id = str(getattr(sv, "actor_id", "") or "").strip()
-    if not actor_id:
-        raise HTTPException(status_code=404, detail="Session has no actor-scoped identity.")
-    return actor_id
-
-
-@router.get("/state/{session_id}")
-def get_state_summary(session_id: SessionId, db: Session = Depends(get_db)):
-    """Get a comprehensive summary of the session state."""
-    state_manager = get_state_manager(session_id, db)
-    return state_manager.get_state_summary()
-
-
-@router.get("/state/{session_id}/vars")
-def get_state_vars(
-    session_id: SessionId,
-    prefix: Optional[str] = None,
-    db: Session = Depends(get_db),
-):
-    """Get raw session vars, optionally filtered by prefix."""
-    state_manager = get_state_manager(session_id, db)
-    vars_payload = dict(state_manager.get_contextual_variables())
-    if prefix:
-        vars_payload = {key: value for key, value in vars_payload.items() if str(key).startswith(prefix)}
-    return {"session_id": session_id, "vars": vars_payload}
-
-
-@router.post("/state/{session_id}/vars")
-def patch_state_vars(
-    session_id: SessionId,
-    payload: SessionVarPatchRequest,
-    db: Session = Depends(get_db),
-):
-    """Merge runtime vars into a session and persist immediately."""
-    updates = dict(payload.vars or {})
-    if not updates:
-        raise HTTPException(status_code=422, detail="No session vars provided.")
-    state_manager = get_state_manager(session_id, db)
-    applied: Dict[str, Any] = {}
-    for key, value in updates.items():
-        normalized_key = str(key or "").strip()
-        if not normalized_key:
-            continue
-        state_manager.set_variable(normalized_key, value)
-        applied[normalized_key] = state_manager.get_variable(normalized_key)
-    if not applied:
-        raise HTTPException(status_code=422, detail="No valid session vars provided.")
-    save_state_to_db(state_manager, db)
-    return {"session_id": session_id, "vars": applied}
-
-
-@router.get("/state/{session_id}/identity-growth")
-def get_identity_growth_state(
-    session_id: SessionId,
-    db: Session = Depends(get_db),
-):
-    actor_id = _resolve_actor_id_for_session(db, session_id)
-    row = db.get(ResidentIdentityGrowth, actor_id)
-    return {
-        "session_id": session_id,
-        "actor_id": actor_id,
-        "growth_text": str(getattr(row, "growth_text", "") or ""),
-        "growth_metadata": dict(getattr(row, "growth_metadata", {}) or {}),
-        "note_records": list(getattr(row, "note_records", []) or []),
-        "growth_proposals": list(getattr(row, "growth_proposals", []) or []),
-    }
-
-
-@router.post("/state/{session_id}/identity-growth")
-def patch_identity_growth_state(
-    session_id: SessionId,
-    payload: ResidentIdentityGrowthPatchRequest,
-    db: Session = Depends(get_db),
-):
-    actor_id = _resolve_actor_id_for_session(db, session_id)
-    row = db.get(ResidentIdentityGrowth, actor_id)
-    if row is None:
-        row = ResidentIdentityGrowth(
-            actor_id=actor_id,
-            growth_text="",
-            growth_metadata={},
-            note_records=[],
-            growth_proposals=[],
-        )
-        db.add(row)
-    if any(
-        value is not None
-        for value in (
-            payload.growth_text,
-            payload.growth_metadata,
-            payload.note_records,
-        )
-    ):
-        raise HTTPException(
-            status_code=409,
-            detail=("Resident identity is hearth-owned. This city retains old growth " "only so a resident can migrate it."),
-        )
-    if payload.growth_proposals is not None:
-        # Compatibility for older resident runners. New runners keep self-edit
-        # proposals in their private ledgers and do not send them to a city.
-        append_growth_proposals(row, list(payload.growth_proposals or []))
-    db.commit()
-    return {
-        "session_id": session_id,
-        "actor_id": actor_id,
-        "growth_text": str(row.growth_text or ""),
-        "growth_metadata": dict(row.growth_metadata or {}),
-        "note_records": list(row.note_records or []),
-        "growth_proposals": list(row.growth_proposals or []),
-        "promotion": {"status": "resident_owned", "promoted": 0},
-    }
 
 
 def _clear_runtime_caches() -> None:
@@ -1063,87 +925,6 @@ def bootstrap_session_world(
         db.rollback()
         logging.error("Session bootstrap failed: %s", exc)
         raise HTTPException(status_code=500, detail=f"Session bootstrap failed: {str(exc)}")
-
-
-@router.post("/cleanup-sessions")
-def cleanup_old_sessions(db: Session = Depends(get_db)):
-    """Clean up sessions older than 24 hours."""
-    try:
-        cutoff_time = (datetime.now(timezone.utc) - timedelta(hours=24)).replace(tzinfo=None)
-
-        sessions_to_delete_result = db.execute(
-            text("SELECT session_id FROM session_vars WHERE updated_at < :cutoff"),
-            {"cutoff": cutoff_time},
-        ).fetchall()
-
-        deleted_session_ids = [row[0] for row in sessions_to_delete_result]
-        sessions_to_delete_count = len(deleted_session_ids)
-
-        db.execute(
-            text("DELETE FROM session_vars WHERE updated_at < :cutoff"),
-            {"cutoff": cutoff_time},
-        )
-        db.commit()
-
-        removed_from_cache = remove_cached_sessions(deleted_session_ids)
-        logging.info(
-            "Cleaned up %s old sessions (%s removed from cache)",
-            sessions_to_delete_count,
-            removed_from_cache,
-        )
-
-        return {
-            "success": True,
-            "sessions_removed": sessions_to_delete_count,
-            "cache_entries_removed": removed_from_cache,
-            "message": f"Cleaned up {sessions_to_delete_count} sessions older than 24 hours",
-        }
-    except Exception as exc:
-        db.rollback()
-        logging.error("Session cleanup failed: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Session cleanup failed: {str(exc)}")
-
-
-@router.post("/session/prune-duplicate-agents")
-def prune_duplicate_agent_sessions(
-    payload: DuplicateAgentPruneRequest,
-    db: Session = Depends(get_db),
-):
-    """Remove stale duplicate agent sessions, keeping the freshest incarnation per name."""
-    try:
-        result = _prune_duplicate_agent_sessions(
-            db,
-            display_name=payload.display_name,
-        )
-        return {
-            "success": True,
-            **result,
-        }
-    except Exception as exc:
-        db.rollback()
-        logging.error("Duplicate agent prune failed: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Duplicate agent prune failed: {str(exc)}")
-
-
-@router.post("/reset-session")
-def reset_session_world(
-    db: Session = Depends(get_db),
-):
-    """Hard-reset world/session data."""
-    try:
-        deleted = _delete_all_world_rows(db)
-
-        _clear_runtime_caches()
-
-        return {
-            "success": True,
-            "message": "World reset complete.",
-            "deleted": deleted,
-        }
-    except Exception as exc:
-        db.rollback()
-        logging.error("Session reset failed: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Session reset failed: {str(exc)}")
 
 
 @router.post("/session/leave")

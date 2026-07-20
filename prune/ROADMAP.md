@@ -21,6 +21,8 @@ The project now has:
 - one completed one-hour, four-resident Alderbank baseline with clean hearth parking;
 - stopped hearth export, import, and generation fencing;
 - hearth-owned identity growth with private inspect-then-adopt decisions and complete provenance.
+- no city copy of a resident's reduced private runtime; old raw-state, rest telemetry, and public maintenance
+  routes are removed, with stale mirror fields scrubbed during migration.
 
 ## Now
 
@@ -50,6 +52,9 @@ continuity, elective information, identity-growth boundary, travel, and federati
 cognitive mechanisms as migration material and experimental candidates. Move the one real entrypoint only
 after the minimal kernel can perceive current local facts, read electively, choose action or quiet, and receive
 truthful outcomes. Reintroduce optional mechanisms one at a time through paired tests.
+
+Before another public resident run, finish the actor-scoped resident/host capability, default prompt tracing
+off, repair hearth permissions, deploy the privacy migration, and verify the live OpenAPI surface.
 
 ### 3. Add the private-to-public making boundary
 
