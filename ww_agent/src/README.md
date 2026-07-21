@@ -13,7 +13,9 @@
   rebuilt core loads a bounded typed view of its own recently confirmed actions from the private checkpoint;
   it also restores one explicitly continued private activity under its stable ID and can finish it explicitly.
   A continuation sets a bounded return time and selects whether local speech may offer an earlier activation.
-  It does not restore prompts, completions, or action prose.
+  Each activation records content-light observation/process versions and rechecks both after final inference;
+  a stale action or activity update is discarded and schedules a durable retry. It does not restore prompts,
+  completions, or action prose.
 - `runtime/process_state.py` — small versioned resident-process fields that can be shared by the reference
   adapter and later model adapters. It defines confirmed-action receipts, their exact renderer, and the
   deterministic one-open-activity transition used by ledger replay and normal checkpoint advancement.
@@ -30,7 +32,8 @@
   confirmed-action receipts so a restart can recover exact bookkeeping without replaying or summarizing a
   resident's life. It also keeps at most one versioned open private activity; stale completion IDs and old
   unversioned continuation events cannot change that state. The last versioned reference activation and an
-  atomically consumed scheduled return prevent restart from repeating a recent model turn.
+  atomically consumed scheduled return prevent restart from repeating a recent model turn. A content-blind
+  stale-choice event keeps reconsideration pending across restart until the next activation begins.
 - `runtime/prompt_trace.py` — legacy-core diagnostic code; it is not wired into the production reference loop.
 - `runtime/prompt_context.py` — typed available/selected/withheld source envelope and final prose renderer.
 - `runtime/information.py` — private elective source access plus the structured provider-record contract;

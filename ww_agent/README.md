@@ -38,6 +38,14 @@ baseline. Speech is still delivered and acknowledged when early activation is di
 not turn delivery into a forced inference call. A due return is consumed and its activation time checkpointed
 in one transition, so restarting cannot repeatedly spend the same scheduled opportunity.
 
+Each model activation is also tied to structural versions of what the resident was shown and the private
+checkpoint state it began from. After the final model response, the adapter checks the current place and
+checkpoint again. A changed location, presence set, new speech ID, trace set, route, source declaration, or
+private activity structure prevents an outward action or private activity update from using the old answer.
+The discarded choice is not stored; the checkpoint records only the activation ID, versions, change classes,
+and a pending retry. A quiet `wait` remains harmless, while the new facts still receive another opportunity.
+Typed engine endpoints continue to decide whether a mechanically current action succeeds.
+
 The checkpoint now also retains the newest twelve confirmed reference-loop actions as typed receipts. A newly
 built reference core loads them and may show the newest five as exact kind, place, target, time, and stable
 world identifiers. This lets a resident recover ordinary facts such as having recently left a mark without

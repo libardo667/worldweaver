@@ -110,6 +110,33 @@ scheduled turn. That is an explicit limit, not a claim that the resident remembe
 missed-event or recall design must use bounded typed references and deliberate retrieval rather than quietly
 building an unlimited transcript into the private checkpoint.
 
+## Fourth slice — fence choices made from stale input (2026-07-20)
+
+Each activation now has a random ID, a content-light version of the model-visible structural observation, and
+a version of the bounded private process fields. The observation version uses availability, location,
+co-presence identities, speech and trace IDs, reachable destinations, and source declarations—not their
+speech, trace, or activity prose. The process version uses open-activity structure, confirmed-action event
+IDs, and pending retry state.
+
+After the final inference, including the final call after an elective read, the adapter reads the current
+scene, new speech IDs, and private checkpoint fields again. If they changed, an `act`, `continue`, or `finish`
+choice is discarded before an effector or activity reducer sees it. A `wait` remains safe because it mutates
+nothing. Either disposition writes a content-blind stale record and a checkpoint-backed reconsideration flag;
+the next activation clears that flag when it begins. A core rebuilt between those events still offers the
+retry.
+
+Adversarial synthetic tests add speech, add a person, and replace private activity state from inside the fake
+model call. They prove stale actions and competing activity updates do not commit, unchanged actions still
+reach the effector, both inference phases are fenced, a stale wait performs no action, and the retry survives
+checkpoint rebuild. The record contains versions and named change classes but no prompt, response, speech, or
+discarded action body.
+
+This fence covers facts visible to the reference adapter and exact checkpoint fields. It does not pretend the
+whole shard has one transaction number. Typed engine endpoints remain responsible for current location,
+custody, access, object revisions, and other mechanical preconditions after the recheck. New elective-source
+precondition contracts should carry their own stable record revisions rather than broadening this fence into
+a prose comparison.
+
 ## Files Affected
 
 - `ww_agent/src/resident.py`
@@ -133,7 +160,7 @@ building an unlimited transcript into the private checkpoint.
 - [x] A resident can schedule a later opportunity to think and can separately name event classes that may
   offer an earlier activation.
 - [x] Receiving an interrupt never forces a reply, action, or cancellation of the current activity.
-- [ ] A choice produced from stale world/process state cannot silently commit as if no intervening event
+- [x] A choice produced from stale world/process state cannot silently commit as if no intervening event
   occurred.
 - [ ] Two residents sharing one base model cannot read or receive each other's hidden state, caches, adapters,
   private memory, or timers.

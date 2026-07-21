@@ -17,6 +17,7 @@ import fcntl
 
 from src.runtime.relations import RELATIONAL_EVENT_SCHEMA_VERSION
 from src.runtime.process_state import (
+    REFERENCE_ACTIVATION_STATE_VERSION,
     advance_open_private_activity,
     project_confirmed_action_receipt,
     project_reference_activation_at,
@@ -36,9 +37,9 @@ _LEGACY_DERIVED_FILENAMES = {
 }
 
 CHECKPOINT_FORMAT_VERSION = 2
-REDUCER_FORMAT_VERSION = 7
+REDUCER_FORMAT_VERSION = 8
 PROJECTION_FORMAT_VERSIONS = {
-    "runtime": 4,
+    "runtime": 5,
     "subjective": 1,
     "memory": 1,
     "subjective_facts": 1,
@@ -842,6 +843,7 @@ def _build_runtime_projection(
     recent_confirmed_actions: list[dict[str, Any]] = []
     open_private_activity: dict[str, Any] | None = None
     last_reference_activation_at: str | None = None
+    reference_reconsideration_pending = False
 
     for event in events:
         event_type = str(event.get("event_type") or "").strip()
@@ -898,6 +900,11 @@ def _build_runtime_projection(
         activation_at = project_reference_activation_at(event)
         if activation_at is not None:
             last_reference_activation_at = activation_at
+        if payload.get("process_state_version") == REFERENCE_ACTIVATION_STATE_VERSION:
+            if event_type == "reference_activation_started":
+                reference_reconsideration_pending = False
+            elif event_type == "reference_choice_stale":
+                reference_reconsideration_pending = True
 
     return {
         "updated_at": as_of,
@@ -924,6 +931,7 @@ def _build_runtime_projection(
         ],
         "open_private_activity": open_private_activity,
         "last_reference_activation_at": last_reference_activation_at,
+        "reference_reconsideration_pending": reference_reconsideration_pending,
         "last_grounding": last_grounding,
         "last_movement": last_movement,
         "last_mail": last_mail,
@@ -2271,6 +2279,14 @@ def _advance_runtime_projection(
         event,
     )
     activation_at = project_reference_activation_at(event)
+    reference_reconsideration_pending = bool(
+        runtime_projection.get("reference_reconsideration_pending")
+    )
+    if payload.get("process_state_version") == REFERENCE_ACTIVATION_STATE_VERSION:
+        if event_type == "reference_activation_started":
+            reference_reconsideration_pending = False
+        elif event_type == "reference_choice_stale":
+            reference_reconsideration_pending = True
     runtime_projection.update(
         {
             "updated_at": _replay_as_of_iso([event]),
@@ -2290,6 +2306,7 @@ def _advance_runtime_projection(
                 if activation_at is not None
                 else runtime_projection.get("last_reference_activation_at")
             ),
+            "reference_reconsideration_pending": reference_reconsideration_pending,
         }
     )
     if event_type in {"grounding_observed", "ground_intent_executed"}:
@@ -2358,6 +2375,35 @@ def load_last_reference_activation_at(memory_dir: Path) -> str | None:
     state = load_current_runtime_state(memory_dir)
     value = str(state.runtime_projection.get("last_reference_activation_at") or "")
     return value.strip() or None
+
+
+def load_reference_process_revision_fields(memory_dir: Path) -> dict[str, Any]:
+    """Load only structural fields used to fence one reference activation."""
+
+    state = load_current_runtime_state(memory_dir)
+    runtime = state.runtime_projection
+    activity = (
+        dict(runtime["open_private_activity"])
+        if isinstance(runtime.get("open_private_activity"), dict)
+        else {}
+    )
+    action_ids = tuple(
+        str(item.get("event_id") or "").strip()
+        for item in list(runtime.get("recent_confirmed_actions") or [])
+        if isinstance(item, dict) and str(item.get("event_id") or "").strip()
+    )
+    return {
+        "activity_id": str(activity.get("activity_id") or "").strip(),
+        "activity_updated_at": str(activity.get("updated_at") or "").strip(),
+        "activity_return_at": str(activity.get("return_at") or "").strip(),
+        "activity_wake_on": tuple(
+            str(value or "").strip() for value in list(activity.get("wake_on") or [])
+        ),
+        "confirmed_action_event_ids": action_ids,
+        "reconsideration_pending": bool(
+            runtime.get("reference_reconsideration_pending")
+        ),
+    }
 
 
 def _advance_lifecycle_state(state: dict[str, Any], event: dict[str, Any]) -> tuple[

@@ -11,6 +11,8 @@ existing typed world effector.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import uuid
 from dataclasses import dataclass, replace
@@ -25,6 +27,7 @@ from src.runtime.ledger import (
     load_last_reference_activation_at,
     load_open_private_activity,
     load_recent_confirmed_actions,
+    load_reference_process_revision_fields,
 )
 from src.runtime.process_state import (
     PRIVATE_ACTIVITY_STATE_VERSION,
@@ -202,6 +205,7 @@ class ReferenceObservation:
     local_speech_ids: tuple[str, ...] = ()
     heard: tuple[tuple[str, str, str], ...] = ()
     traces: tuple[str, ...] = ()
+    trace_ids: tuple[str, ...] = ()
     reachable: tuple[str, ...] = ()
     sources: tuple[ReferenceSource, ...] = ()
     recent_confirmed_actions: tuple[ConfirmedActionReceipt, ...] = ()
@@ -210,6 +214,127 @@ class ReferenceObservation:
     @property
     def source_names(self) -> set[str]:
         return {source.name for source in self.sources}
+
+
+@dataclass(frozen=True, slots=True)
+class ReferenceActivationBasis:
+    """Content-light versions of the facts and private state behind one choice."""
+
+    activation_id: str
+    started_at: datetime
+    observation: ReferenceObservation
+    observation_version: str
+    process_version: str
+
+
+def _structural_version(label: str, payload: Any) -> str:
+    encoded = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    ).encode("utf-8")
+    return f"{label}-v1-{hashlib.sha256(encoded).hexdigest()[:24]}"
+
+
+def reference_observation_version(observation: ReferenceObservation) -> str:
+    """Version model-visible facts without retaining speech or trace prose."""
+
+    return _structural_version(
+        "observation",
+        {
+            "availability": dict(observation.availability),
+            "location": observation.location,
+            "co_present": sorted(observation.co_present),
+            "local_speech_ids": sorted(observation.local_speech_ids),
+            "trace_ids": sorted(observation.trace_ids),
+            "reachable": sorted(observation.reachable),
+            "sources": sorted(
+                (
+                    source.name,
+                    source.description,
+                    source.egress,
+                    source.provenance,
+                    source.freshness,
+                    source.locality,
+                    source.visibility,
+                )
+                for source in observation.sources
+            ),
+        },
+    )
+
+
+def reference_process_version(fields: dict[str, Any]) -> str:
+    """Version bounded private structure without hashing activity prose."""
+
+    return _structural_version(
+        "process",
+        {
+            "activity_id": str(fields.get("activity_id") or ""),
+            "activity_updated_at": str(fields.get("activity_updated_at") or ""),
+            "activity_return_at": str(fields.get("activity_return_at") or ""),
+            "activity_wake_on": tuple(fields.get("activity_wake_on") or ()),
+            "confirmed_action_event_ids": tuple(
+                fields.get("confirmed_action_event_ids") or ()
+            ),
+            "reconsideration_pending": bool(fields.get("reconsideration_pending")),
+        },
+    )
+
+
+def reference_observation_changes(
+    before: ReferenceObservation,
+    after: ReferenceObservation,
+) -> tuple[str, ...]:
+    """Name structural differences relevant to a choice, never their prose."""
+
+    changes: set[str] = set()
+    if after.availability.get("scene") != "available":
+        changes.add("scene_unavailable")
+    elif before.availability.get("scene") != "available":
+        changes.add("scene_availability")
+    if before.location != after.location:
+        changes.add("location")
+    if set(before.co_present) != set(after.co_present):
+        changes.add("presence")
+    if set(after.local_speech_ids) - set(before.local_speech_ids):
+        changes.add("local_speech")
+    if before.availability.get("local_speech") != after.availability.get(
+        "local_speech"
+    ):
+        changes.add("local_speech_availability")
+    if set(before.trace_ids) != set(after.trace_ids):
+        changes.add("traces")
+    if set(before.reachable) != set(after.reachable):
+        changes.add("routes")
+    before_sources = {
+        (
+            source.name,
+            source.description,
+            source.egress,
+            source.provenance,
+            source.freshness,
+            source.locality,
+            source.visibility,
+        )
+        for source in before.sources
+    }
+    after_sources = {
+        (
+            source.name,
+            source.description,
+            source.egress,
+            source.provenance,
+            source.freshness,
+            source.locality,
+            source.visibility,
+        )
+        for source in after.sources
+    }
+    if before_sources != after_sources:
+        changes.add("sources")
+    return tuple(sorted(changes))
 
 
 def _reachable_destinations(location: str, graph: Any) -> tuple[str, ...]:
@@ -288,14 +413,24 @@ async def observe_reference_world(
         for person in other_people
         if str(getattr(person, "name", "") or "").strip()
     )
+    visible_trace_items = [
+        item
+        for item in list(getattr(scene, "traces_here", []) or [])[:8]
+        if str(getattr(item, "body", "") or "").strip()
+    ]
     traces = tuple(
         (
             f"{author}: {body}"
             if (author := str(getattr(item, "author_name", "") or "").strip())
             else body
         )
-        for item in list(getattr(scene, "traces_here", []) or [])[:8]
+        for item in visible_trace_items
         if (body := str(getattr(item, "body", "") or "").strip())
+    )
+    trace_ids = tuple(
+        str(getattr(item, "trace_id", "") or "").strip()
+        for item in visible_trace_items
+        if str(getattr(item, "trace_id", "") or "").strip()
     )
     sources = tuple(
         ReferenceSource(
@@ -393,6 +528,7 @@ async def observe_reference_world(
         local_speech_ids=local_speech_ids,
         heard=heard,
         traces=traces,
+        trace_ids=trace_ids,
         reachable=_reachable_destinations(
             location, getattr(scene, "location_graph", {})
         ),
@@ -536,6 +672,9 @@ class ReferenceResidentCore:
         self._acknowledged_live_signal_ids: tuple[int, ...] = ()
         self._recent_confirmed_actions = self._load_confirmed_actions()
         self._open_private_activity = self._load_open_activity()
+        self._reconsideration_pending = bool(
+            self._load_process_revision_fields().get("reconsideration_pending")
+        )
         self.latest_observation: ReferenceObservation | None = None
 
     @property
@@ -576,6 +715,29 @@ class ReferenceResidentCore:
     def _load_open_activity(self) -> OpenPrivateActivity | None:
         raw = load_open_private_activity(self._memory_dir)
         return OpenPrivateActivity.from_dict(raw) if raw is not None else None
+
+    def _load_process_revision_fields(self) -> dict[str, Any]:
+        return load_reference_process_revision_fields(self._memory_dir)
+
+    def _cached_process_revision_fields(self) -> dict[str, Any]:
+        activity = self._open_private_activity
+        return {
+            "activity_id": activity.activity_id if activity is not None else "",
+            "activity_updated_at": activity.updated_at if activity is not None else "",
+            "activity_return_at": activity.return_at if activity is not None else "",
+            "activity_wake_on": activity.wake_on if activity is not None else (),
+            "confirmed_action_event_ids": tuple(
+                receipt.event_id for receipt in self._recent_confirmed_actions
+            ),
+            "reconsideration_pending": self._reconsideration_pending,
+        }
+
+    def _refresh_process_state(self) -> None:
+        self._recent_confirmed_actions = self._load_confirmed_actions()
+        self._open_private_activity = self._load_open_activity()
+        self._reconsideration_pending = bool(
+            self._load_process_revision_fields().get("reconsideration_pending")
+        )
 
     def _load_last_activation_at(self) -> datetime | None:
         raw = load_last_reference_activation_at(self._memory_dir)
@@ -683,6 +845,77 @@ class ReferenceResidentCore:
         )
         return decision
 
+    async def _revalidate_choice(
+        self,
+        decision: ReferenceDecision,
+        *,
+        basis: ReferenceActivationBasis,
+    ) -> dict[str, Any] | None:
+        current_observation = await observe_reference_world(
+            self._world,
+            session_id=self._session_id,
+            identity=self._identity,
+            local_speech_since=basis.started_at,
+        )
+        observation_changes = reference_observation_changes(
+            basis.observation,
+            current_observation,
+        )
+        current_process_version = reference_process_version(
+            self._load_process_revision_fields()
+        )
+        versioned_current_observation = replace(
+            current_observation,
+            local_speech_ids=tuple(
+                sorted(
+                    set(basis.observation.local_speech_ids)
+                    | set(current_observation.local_speech_ids)
+                )
+            ),
+        )
+        current_observation_version = reference_observation_version(
+            versioned_current_observation
+        )
+        process_changed = current_process_version != basis.process_version
+        if not observation_changes and not process_changed:
+            return None
+
+        disposition = (
+            "accepted_no_mutation" if decision.choice == "wait" else "discarded"
+        )
+        append_runtime_event(
+            self._memory_dir,
+            event_type="reference_choice_stale",
+            payload={
+                "process_state_version": REFERENCE_ACTIVATION_STATE_VERSION,
+                "activation_id": basis.activation_id,
+                "choice": decision.choice,
+                "disposition": disposition,
+                "observation_changes": list(observation_changes),
+                "process_changed": process_changed,
+                "observation_version": basis.observation_version,
+                "process_version": basis.process_version,
+                "current_observation_version": current_observation_version,
+                "current_process_version": current_process_version,
+            },
+        )
+        self._refresh_process_state()
+        if decision.choice == "wait":
+            return {
+                "status": "completed",
+                "choice": "wait",
+                "stale_observation": True,
+                "observation_changes": list(observation_changes),
+                "process_changed": process_changed,
+            }
+        return {
+            "status": "stale_choice_discarded",
+            "choice": "none",
+            "discarded_choice": decision.choice,
+            "observation_changes": list(observation_changes),
+            "process_changed": process_changed,
+        }
+
     async def tick_once(
         self,
         *,
@@ -762,6 +995,7 @@ class ReferenceResidentCore:
             or eligible_local_signal
             or scheduled_return_due
             or baseline_due
+            or self._reconsideration_pending
         ):
             return {
                 "status": "idle",
@@ -799,11 +1033,25 @@ class ReferenceResidentCore:
                 ts=effective_now,
             )
             self._open_private_activity = self._load_open_activity()
+        self._reconsideration_pending = False
+        activation_id = f"activation-{uuid.uuid4().hex}"
+        basis = ReferenceActivationBasis(
+            activation_id=activation_id,
+            started_at=effective_now,
+            observation=prompt_observation,
+            observation_version=reference_observation_version(prompt_observation),
+            process_version=reference_process_version(
+                self._cached_process_revision_fields()
+            ),
+        )
         append_runtime_event(
             self._memory_dir,
             event_type="reference_activation_started",
             payload={
                 "process_state_version": REFERENCE_ACTIVATION_STATE_VERSION,
+                "activation_id": activation_id,
+                "observation_version": basis.observation_version,
+                "process_version": basis.process_version,
                 "as_of": (
                     effective_now.isoformat()
                     if isinstance(effective_now, datetime)
@@ -898,6 +1146,17 @@ class ReferenceResidentCore:
                     "reads": reads,
                     "error": type(exc).__name__,
                 }
+
+        stale_result = await self._revalidate_choice(decision, basis=basis)
+        if stale_result is not None:
+            if decision.choice == "wait":
+                append_runtime_event(
+                    self._memory_dir,
+                    event_type="reference_activation_outcome",
+                    payload={"outcome": "no_action", "stale_observation": True},
+                )
+            stale_result["reads"] = reads
+            return stale_result
 
         if decision.choice == "act" and decision.act is not None:
             try:

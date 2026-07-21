@@ -47,6 +47,15 @@ inputs in the identity loader; they do not restore the old ownership model.
   baseline while that activity is open. The return-consumed event also records the activation time in one
   checkpoint advance, so a crash cannot repeatedly offer the same due return. An early or explicit activation
   does not consume a future return unless the resident replaces or finishes the activity.
+- Every reference activation carries a generated activation ID plus content-light observation and private
+  process versions. After the final inference, re-read current structural facts and checkpoint fields. If
+  location, presence, new speech IDs, trace IDs, routes, source declarations, scene availability, open
+  activity structure, confirmed-action IDs, or pending-reconsideration state changed, do not execute an
+  `act`, `continue`, or `finish` choice from the old basis. Record only change classes and versions, schedule
+  a checkpoint-backed reconsideration, and let a `wait` remain a no-mutation choice. Never store the prompt,
+  completion, speech, trace prose, or discarded action body in the fence record. Engine effectors still own
+  final mechanical validation; this recheck does not invent a universal shard transaction or replace object
+  and access revisions.
 - Normal resident creation is model-free and one-at-a-time. It writes a chosen name, stable ID, dormant
   hearth manifest, public identity card, and host-sealed signing key while leaving the private ledger empty.
   City admission, activation, and waking are separate operator acts. The old Doula and its model-written

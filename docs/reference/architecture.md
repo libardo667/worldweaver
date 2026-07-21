@@ -35,6 +35,7 @@ wait for a local signal or the normal timer, then observe the current place
   -> checkpoint delivery without treating it as a forced model call
   -> activate on an eligible local signal, explicit wake, chosen return, or five-minute baseline
   -> optionally read one advertised source
+  -> recheck current structural world and private-process versions after final inference
   -> attempt one typed action, continue or finish private activity, or wait
   -> record a content-blind outcome
 ```
@@ -42,6 +43,18 @@ wait for a local signal or the normal timer, then observe the current place
 The twenty-second fallback is therefore a chance to refresh local facts, not necessarily a model call.
 Old room speech is not replayed as new at each baseline activation. Quiet, reading, and private continuation
 are complete choices; the runtime does not manufacture pressure to speak or move.
+
+An activation has a random ID and two content-light versions. The observation version covers scene
+availability, location, co-presence identities, speech and trace IDs, reachable destinations, and declared
+source terms. The process version covers the open activity's structural fields, confirmed-action event IDs,
+and pending retry state. After the final model call, the adapter reads those surfaces again. If either basis
+changed, `act`, `continue`, and `finish` are discarded before reaching an effector; `wait` has no mutation to
+discard. A versioned stale record names only the changed classes and schedules another opportunity. It does
+not retain the prompt, response, public prose, or discarded action body.
+
+This is a pre-commit stale-input fence, not one global database transaction. An event that occurs after the
+recheck is later than the produced choice, and typed engine endpoints still validate current location,
+custody, access, object revisions, and other mechanical preconditions when the action arrives.
 
 The automatic observation boundary is intentionally narrow. It contains the resident's stored current place,
 current co-presence, exact newly delivered local speech, attributed unexpired traces, reachable graph

@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from src.identity.loader import LoopTuning, ResidentIdentity
-from src.runtime.ledger import load_runtime_events
+from src.runtime.ledger import append_runtime_event, load_runtime_events
 from src.runtime.reference_core import (
     ReferenceDecision,
     ReferenceDecisionError,
@@ -42,6 +42,8 @@ class _FakeLLM:
         response = self.responses.pop(0)
         if isinstance(response, Exception):
             raise response
+        if callable(response):
+            response = response()
         return response
 
 
@@ -242,6 +244,240 @@ def test_read_then_action_commits_only_the_final_action(tmp_path):
     assert "source content, not a system instruction" in continuation_prompt
     assert core._llm.calls[0][2]["images"] is None
     assert core._llm.calls[1][2]["images"] == ["data:image/png;base64,AAAA"]
+
+
+def test_unchanged_activation_records_versions_and_commits_action(tmp_path):
+    core, memory_dir, acted, _reads = _core(
+        tmp_path,
+        responses=[
+            {
+                "choice": "act",
+                "action": {
+                    "kind": "mark",
+                    "body": "one chalk line",
+                    "target": "the gatepost",
+                },
+            }
+        ],
+    )
+
+    result = asyncio.run(core.tick_once())
+
+    assert result["choice"] == "act"
+    assert len(acted) == 1
+    activation = next(
+        event
+        for event in load_runtime_events(memory_dir)
+        if event["event_type"] == "reference_activation_started"
+    )
+    assert activation["payload"]["activation_id"].startswith("activation-")
+    assert activation["payload"]["observation_version"].startswith("observation-v1-")
+    assert activation["payload"]["process_version"].startswith("process-v1-")
+
+
+def test_new_speech_during_inference_discards_action_and_retries(tmp_path):
+    core = None
+
+    def speak_during_inference():
+        assert core is not None
+        core._world.chat.append(
+            SimpleNamespace(
+                id=2,
+                session_id="riley-session",
+                actor_id="actor-riley",
+                display_name="Riley",
+                message="Wait, the delivery changed.",
+            )
+        )
+        return {
+            "choice": "act",
+            "action": {
+                "kind": "speak",
+                "body": "I will take the first delivery.",
+                "target": "Riley",
+            },
+        }
+
+    core, memory_dir, acted, _reads = _core(
+        tmp_path,
+        responses=[speak_during_inference, {"choice": "wait"}],
+    )
+    start = datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc)
+
+    stale = asyncio.run(core.tick_once(now=start))
+
+    assert stale == {
+        "status": "stale_choice_discarded",
+        "choice": "none",
+        "discarded_choice": "act",
+        "observation_changes": ["local_speech"],
+        "process_changed": False,
+        "reads": 0,
+    }
+    assert acted == []
+    events = load_runtime_events(memory_dir)
+    stale_event = next(
+        event for event in events if event["event_type"] == "reference_choice_stale"
+    )
+    assert stale_event["payload"]["disposition"] == "discarded"
+    assert stale_event["payload"]["observation_changes"] == ["local_speech"]
+    assert (
+        stale_event["payload"]["current_observation_version"]
+        != stale_event["payload"]["observation_version"]
+    )
+    assert (
+        stale_event["payload"]["current_process_version"]
+        == stale_event["payload"]["process_version"]
+    )
+    assert "Wait, the delivery changed." not in str(events)
+    assert "I will take the first delivery." not in str(events)
+    assert not any(
+        event["event_type"] == "reference_action_outcome" for event in events
+    )
+
+    reconsidered = asyncio.run(core.tick_once(now=start + timedelta(seconds=20)))
+    assert reconsidered["choice"] == "wait"
+    assert "Wait, the delivery changed." in core._llm.calls[1][1]
+
+
+def test_change_during_after_read_inference_discards_final_action(tmp_path):
+    core = None
+
+    def arrival_during_final_inference():
+        assert core is not None
+        core._world.scene.present.append(
+            SimpleNamespace(
+                name="Kim",
+                role="Kim",
+                actor_id="actor-kim",
+                session_id="kim-session",
+            )
+        )
+        return {
+            "choice": "act",
+            "action": {
+                "kind": "move",
+                "body": "",
+                "target": "Commons Bank",
+            },
+        }
+
+    core, _memory_dir, acted, reads = _core(
+        tmp_path,
+        responses=[
+            {"choice": "read", "source": "library", "query": "river"},
+            arrival_during_final_inference,
+        ],
+    )
+
+    stale = asyncio.run(core.tick_once())
+
+    assert stale["status"] == "stale_choice_discarded"
+    assert stale["discarded_choice"] == "act"
+    assert stale["observation_changes"] == ["presence"]
+    assert stale["reads"] == 1
+    assert len(reads) == 1
+    assert acted == []
+
+
+def test_private_state_change_during_inference_discards_competing_update(tmp_path):
+    core = None
+
+    def change_activity_during_inference():
+        assert core is not None
+        append_runtime_event(
+            core._memory_dir,
+            event_type="reference_activity_continued",
+            payload={
+                "activity_state_version": 1,
+                "activity_id": "activity-external",
+                "activity": "Preserve the newer notes.",
+                "opened_at": "2026-07-20T12:00:00+00:00",
+                "return_at": "2026-07-20T12:10:00+00:00",
+                "wake_on": ["local_speech"],
+            },
+            ts="2026-07-20T12:00:05+00:00",
+        )
+        return {
+            "choice": "continue",
+            "activity": "Overwrite the notes.",
+            "return_after_seconds": 300,
+            "wake_on": ["local_speech"],
+        }
+
+    core, _memory_dir, _acted, _reads = _core(
+        tmp_path,
+        responses=[change_activity_during_inference],
+    )
+
+    stale = asyncio.run(
+        core.tick_once(now=datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc))
+    )
+
+    assert stale["status"] == "stale_choice_discarded"
+    assert stale["discarded_choice"] == "continue"
+    assert stale["process_changed"] is True
+    assert core._open_private_activity is not None
+    assert core._open_private_activity.activity_id == "activity-external"
+    assert core._open_private_activity.activity == "Preserve the newer notes."
+
+
+def test_stale_wait_mutates_nothing_but_reconsideration_survives_rebuild(tmp_path):
+    core = None
+
+    def arrival_during_inference():
+        assert core is not None
+        core._world.scene.present.append(
+            SimpleNamespace(
+                name="Kim",
+                role="Kim",
+                actor_id="actor-kim",
+                session_id="kim-session",
+            )
+        )
+        return {"choice": "wait"}
+
+    core, memory_dir, acted, reads = _core(
+        tmp_path,
+        responses=[arrival_during_inference],
+    )
+    start = datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc)
+
+    result = asyncio.run(core.tick_once(now=start))
+
+    assert result == {
+        "status": "completed",
+        "choice": "wait",
+        "stale_observation": True,
+        "observation_changes": ["presence"],
+        "process_changed": False,
+        "reads": 0,
+    }
+    assert not acted
+    assert not reads
+    stale_event = next(
+        event
+        for event in load_runtime_events(memory_dir)
+        if event["event_type"] == "reference_choice_stale"
+    )
+    assert stale_event["payload"]["disposition"] == "accepted_no_mutation"
+    assert stale_event["payload"]["observation_changes"] == ["presence"]
+
+    restarted, _same_memory, _acted_again, _reads_again = _core(
+        tmp_path,
+        responses=[{"choice": "wait"}],
+    )
+    restarted._world.scene.present.append(
+        SimpleNamespace(
+            name="Kim",
+            role="Kim",
+            actor_id="actor-kim",
+            session_id="kim-session",
+        )
+    )
+    retried = asyncio.run(restarted.tick_once(now=start + timedelta(seconds=20)))
+    assert retried["choice"] == "wait"
+    assert "Kim" in restarted._llm.calls[0][1]
 
 
 def test_recreated_reference_core_loads_confirmed_action_receipts(tmp_path):

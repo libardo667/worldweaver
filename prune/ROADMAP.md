@@ -122,8 +122,11 @@ The second slice gives one explicitly continued private activity a stable ID, ex
 description, deterministic checkpoint replay, and explicit completion. It survives a rebuilt core without
 being reconstructed from recent prose and stays isolated to its hearth. The third slice adds a chosen return
 between one minute and seven days, an optional `local_speech` early-wake class, restart-safe activation timing,
-and a host boundary where delivery is no longer a forced model call. Next, version each activation against
-the world and process state it began from so a stale model result cannot commit silently.
+and a host boundary where delivery is no longer a forced model call. The fourth slice versions the structural
+observation and private process behind every activation, discards stale state-changing choices after a final
+recheck, and keeps the retry pending across restart. Next, finish the explicit process-checkpoint envelope—
+resident, hearth generation, attachment, adapter/model version, cursor, and bounded model-state format—before
+plugging in an open-weight recurrent prototype.
 
 ### 4. Add the private-to-public making boundary
 

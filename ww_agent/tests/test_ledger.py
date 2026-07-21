@@ -811,7 +811,6 @@ def test_open_private_activity_is_versioned_checkpoint_state(tmp_path) -> None:
         payload={"activity": "An old unversioned activity."},
     )
     assert ledger.load_open_private_activity(tmp_path) is None
-
     ledger.append_runtime_event(
         tmp_path,
         event_type="reference_activity_continued",
@@ -868,6 +867,68 @@ def test_open_private_activity_is_versioned_checkpoint_state(tmp_path) -> None:
         },
     )
     assert ledger.load_open_private_activity(tmp_path) is None
+
+
+def test_stale_choice_reconsideration_is_checkpointed_until_next_activation(
+    tmp_path, monkeypatch
+) -> None:
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="reference_activation_started",
+        payload={
+            "process_state_version": 1,
+            "activation_id": "activation-one",
+            "as_of": "2026-07-20T12:00:00+00:00",
+        },
+    )
+    assert (
+        ledger.load_reference_process_revision_fields(tmp_path)[
+            "reconsideration_pending"
+        ]
+        is False
+    )
+
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="reference_choice_stale",
+        payload={
+            "process_state_version": 1,
+            "activation_id": "activation-one",
+            "choice": "act",
+            "disposition": "discarded",
+            "observation_changes": ["presence"],
+            "process_changed": False,
+        },
+    )
+    pending = ledger.load_reference_process_revision_fields(tmp_path)
+    assert pending["reconsideration_pending"] is True
+
+    def reject_cold_load(_memory_dir):
+        raise AssertionError("reconsideration must load from the current checkpoint")
+
+    original_load = ledger._load_events
+    monkeypatch.setattr(ledger, "_load_events", reject_cold_load)
+    assert ledger.load_reference_process_revision_fields(tmp_path) == pending
+
+    monkeypatch.setattr(ledger, "_load_events", original_load)
+    ledger.rebuild_runtime_artifacts(tmp_path)
+    assert ledger.load_reference_process_revision_fields(tmp_path) == pending
+
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="reference_activation_started",
+        payload={
+            "process_state_version": 1,
+            "activation_id": "activation-two",
+            "as_of": "2026-07-20T12:00:20+00:00",
+        },
+    )
+    assert (
+        ledger.load_reference_process_revision_fields(tmp_path)[
+            "reconsideration_pending"
+        ]
+        is False
+    )
 
 
 def test_normal_append_writes_only_the_ledger_and_checkpoint(tmp_path) -> None:

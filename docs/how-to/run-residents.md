@@ -55,6 +55,11 @@ place and trace ID. It also restores one explicitly continued private activity, 
 and early-wake preference. It does not restore a hidden model conversation or copy action prose into the next
 prompt.
 
+If the current place or private checkpoint changes while the model is answering, a state-changing answer is
+discarded before it reaches the world. The run summary reports a stale choice and its structural change class,
+then the checkpoint offers the resident another turn. The stale record does not contain the model response or
+the speech, trace, or activity prose that changed.
+
 ## Run a bounded cohort
 
 Preflight everyone first:
