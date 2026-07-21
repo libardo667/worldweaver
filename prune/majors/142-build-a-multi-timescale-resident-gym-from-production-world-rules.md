@@ -257,9 +257,21 @@ transition and one stored receipt, `LocalWorld` is reached once, the final proce
 the synthetic city has no remaining presence for the actor. The response-loss case observes the same receipt
 on both successful HTTP dispatches. Retirement receipt chronology is included in the controlled-time audit.
 
-The next bounded slice should repeat a selected path against a listening server or container. Optional
-constructive-game capabilities and federation require their own explicit scenarios. Do not grow a parallel
-list of gym-only world abilities in the meantime.
+The process protocol now fails closed on child death, invalid JSON, unknown message types, duplicate request
+IDs, and malformed parent responses, and it reaps the failed child. The transition also passes through an
+ephemeral Uvicorn server on IPv4 loopback, where the ordinary `WorldWeaverClient` uses real network HTTP while
+the same isolated database, clock, signing, host, core, and attachment owners remain in place.
+
+One real `google/gemini-3-flash-preview` call then ran in that isolated loopback episode. The model chose
+`finish` after one inference and remained in Willow Court. The runner now recognizes that as a legitimate
+suspended city result with one live city attachment and no retirement receipt; it no longer misclassifies
+every non-hearth model choice as interrupted travel. No prompt, completion, or private source prose entered the
+trajectory, and no live-town resident ran. Episode schema version 9 records the selected transport and the
+attachment fidelity actually achieved.
+
+The next bounded infrastructure slice is a container repeat. Optional constructive-game capabilities and
+federation require their own explicit scenarios. Do not grow a parallel list of gym-only world abilities in
+the meantime.
 
 The controlled-time HTTP prerequisite is now closed for the routes exercised by the model appointment. Live
 requests receive `SystemClock`; the isolated gym overrides the same FastAPI dependency with its controlled

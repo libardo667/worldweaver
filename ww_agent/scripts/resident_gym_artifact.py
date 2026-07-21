@@ -255,6 +255,50 @@ def _write_protocol(payload: dict[str, Any]) -> None:
     print(json.dumps(payload, sort_keys=True), flush=True)
 
 
+def _inject_transport_fault(mode: str, *, session_id: str) -> None:
+    """Exercise parent/child framing failures before resident startup."""
+
+    if not mode or mode == "malformed_response":
+        return
+    if mode == "child_exit":
+        os._exit(86)
+    if mode == "malformed_json":
+        print("{malformed-child-message", flush=True)
+        sys.stdin.readline()
+        return
+    if mode == "malformed_message":
+        _write_protocol(
+            {
+                "protocol": _GYM_ADAPTER_PROTOCOL,
+                "protocol_version": _GYM_ADAPTER_PROTOCOL_VERSION,
+                "type": "unexpected",
+            }
+        )
+        sys.stdin.readline()
+        return
+    if mode == "replayed_request":
+        request = {
+            "protocol": _GYM_ADAPTER_PROTOCOL,
+            "protocol_version": _GYM_ADAPTER_PROTOCOL_VERSION,
+            "type": "request",
+            "request_id": "fault-request-replayed",
+            "session_id": session_id,
+            "operation": "http",
+            "payload": {
+                "method": "GET",
+                "target": "/health",
+                "headers": {},
+                "body_base64": "",
+            },
+        }
+        _write_protocol(request)
+        sys.stdin.readline()
+        _write_protocol(request)
+        sys.stdin.readline()
+        return
+    raise ValueError("unsupported transport fault")
+
+
 class _StdioHTTPTransport(httpx.AsyncBaseTransport):
     """Carry ordinary ``WorldWeaverClient`` HTTP requests to the parent app."""
 
@@ -426,9 +470,17 @@ async def _run_model_return(args: argparse.Namespace) -> dict[str, Any]:
             timeout=float(os.environ.get("WW_INFERENCE_TIMEOUT", "200")),
         )
     model = _ObservedModel(raw_model, model_id=model_id)
-    transport = _StdioHTTPTransport(expected_process.session_id)
+    transport = (
+        _StdioHTTPTransport(expected_process.session_id)
+        if args.transport_mode == "stdio"
+        else None
+    )
     client: WorldWeaverClient | None = None
     controlled_clock = FixedWorldClock(_parse_time(args.now))
+    _inject_transport_fault(
+        str(args.transport_fault or ""),
+        session_id=expected_process.session_id,
+    )
 
     async def observe_host_tick(_identity, world, _core, _result, _tick_count):
         if isinstance(world, LocalWorld):
@@ -496,7 +548,7 @@ async def _run_model_return(args: argparse.Namespace) -> dict[str, Any]:
 
     try:
         client = await WorldWeaverClient.for_resident(
-            "http://worldweaver-gym.local",
+            str(args.base_url or "").strip(),
             home,
             host_transport_private_key_path=args.host_key.resolve(),
             transport=transport,
@@ -700,9 +752,33 @@ def _parser() -> argparse.ArgumentParser:
     model_return.add_argument("--model", default="")
     model_return.add_argument("--host-key", type=Path, required=True)
     model_return.add_argument(
+        "--transport-mode",
+        choices=("stdio", "loopback"),
+        default="stdio",
+        help=argparse.SUPPRESS,
+    )
+    model_return.add_argument(
+        "--base-url",
+        default="http://worldweaver-gym.local",
+        help=argparse.SUPPRESS,
+    )
+    model_return.add_argument(
         "--model-mode",
         choices=("live", "scripted-read-home", "scripted-read-move"),
         default="live",
+        help=argparse.SUPPRESS,
+    )
+    model_return.add_argument(
+        "--transport-fault",
+        choices=(
+            "",
+            "child_exit",
+            "malformed_json",
+            "malformed_message",
+            "replayed_request",
+            "malformed_response",
+        ),
+        default="",
         help=argparse.SUPPRESS,
     )
     hearth_observation = subparsers.add_parser(
@@ -715,9 +791,33 @@ def _parser() -> argparse.ArgumentParser:
     hearth_observation.add_argument("--model", default="")
     hearth_observation.add_argument("--host-key", type=Path, required=True)
     hearth_observation.add_argument(
+        "--transport-mode",
+        choices=("stdio", "loopback"),
+        default="stdio",
+        help=argparse.SUPPRESS,
+    )
+    hearth_observation.add_argument(
+        "--base-url",
+        default="http://worldweaver-gym.local",
+        help=argparse.SUPPRESS,
+    )
+    hearth_observation.add_argument(
         "--model-mode",
         choices=("live", "scripted-read-home", "scripted-read-move"),
         default="live",
+        help=argparse.SUPPRESS,
+    )
+    hearth_observation.add_argument(
+        "--transport-fault",
+        choices=(
+            "",
+            "child_exit",
+            "malformed_json",
+            "malformed_message",
+            "replayed_request",
+            "malformed_response",
+        ),
+        default="",
         help=argparse.SUPPRESS,
     )
     return parser

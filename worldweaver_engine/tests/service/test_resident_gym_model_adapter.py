@@ -38,7 +38,7 @@ def test_two_way_model_adapter_reads_then_returns_home_through_production_rules(
     payload = json.loads(completed.stdout.split("\nVisual episode:", 1)[0])
     records = payload["records"]
 
-    assert payload["schema_version"] == 8
+    assert payload["schema_version"] == 9
     assert payload["final_locations"]["Mara"] == "the hearth"
     assert payload["fidelity"] == {
         "engine_rules": "production_fastapi_routes_and_services",
@@ -241,3 +241,149 @@ def test_model_resident_departure_recovers_once_across_each_failure_boundary(
         "active_city_session_count": 0,
     }
     assert output.is_file()
+
+
+@pytest.mark.parametrize(
+    ("fault", "error_fragment"),
+    (
+        ("child_exit", "resident adapter stopped without a result"),
+        ("malformed_json", "resident adapter emitted invalid JSON"),
+        ("malformed_message", "resident adapter emitted an unknown message"),
+        ("replayed_request", "resident adapter replayed or omitted a request ID"),
+        ("malformed_response", "gym adapter returned invalid JSON"),
+    ),
+)
+def test_model_adapter_fails_closed_on_child_and_transport_faults(
+    tmp_path,
+    fault,
+    error_fragment,
+):
+    engine_root = Path(__file__).resolve().parents[2]
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/resident_gym.py",
+            "--episode",
+            "resident-model",
+            "--model",
+            "test/gym-read-home-v1",
+            "--model-mode",
+            "scripted-read-home",
+            "--transport-fault",
+            fault,
+            "--json",
+            "--output",
+            str(tmp_path / f"transport-{fault}.html"),
+        ],
+        cwd=engine_root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert completed.returncode != 0
+    assert error_fragment in completed.stderr
+    assert not (tmp_path / f"transport-{fault}.html").exists()
+
+
+def test_model_resident_transition_crosses_a_real_loopback_server(tmp_path):
+    engine_root = Path(__file__).resolve().parents[2]
+    output = tmp_path / "model-appointment-loopback.html"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/resident_gym.py",
+            "--episode",
+            "resident-model",
+            "--model",
+            "test/gym-read-home-v1",
+            "--model-mode",
+            "scripted-read-home",
+            "--transport-mode",
+            "loopback",
+            "--json",
+            "--output",
+            str(output),
+        ],
+        cwd=engine_root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(completed.stdout.split("\nVisual episode:", 1)[0])
+    records = payload["records"]
+    kinds = [record["kind"] for record in records]
+
+    assert payload["fidelity"]["participant_transport"] == (
+        "worldweaver_client_http_via_loopback"
+    )
+    assert payload["final_locations"]["Mara"] == "the hearth"
+    assert kinds.count("resident_loopback_transport_started") == 1
+    assert kinds.count("resident_inference_started") == 2
+    assert kinds.count("resident_attachment_checkpointed") == 1
+    assert kinds.count("resident_hearth_observed") == 1
+    assert kinds.count("resident_departure_receipt") == 1
+    leave = next(
+        record
+        for record in records
+        if record["kind"] == "participant_http"
+        and record["detail"]["path"] == "/api/session/leave"
+    )
+    assert leave["detail"] == {
+        "method": "POST",
+        "path": "/api/session/leave",
+        "status_code": 200,
+        "resident_proof": True,
+    }
+    verified = next(
+        record for record in records if record["kind"] == "resident_attachment_verified"
+    )
+    assert verified["detail"]["active_city_session_count"] == 0
+    assert verified["detail"]["process_hosting_state"] == "suspended"
+    assert output.is_file()
+
+
+def test_model_runner_accepts_a_valid_suspended_city_outcome(tmp_path):
+    engine_root = Path(__file__).resolve().parents[2]
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/resident_gym.py",
+            "--episode",
+            "resident-model",
+            "--model",
+            "test/gym-read-move-v1",
+            "--model-mode",
+            "scripted-read-move",
+            "--transport-mode",
+            "loopback",
+            "--json",
+            "--output",
+            str(tmp_path / "model-city-outcome.html"),
+        ],
+        cwd=engine_root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(completed.stdout.split("\nVisual episode:", 1)[0])
+    verified = next(
+        record
+        for record in payload["records"]
+        if record["kind"] == "resident_attachment_verified"
+    )
+    assert payload["final_locations"]["Mara"] == "Footbridge"
+    assert payload["fidelity"]["city_sources"] == "node_published_city_registry"
+    assert payload["fidelity"]["hearth_attachment"] == "city_attachment_retained"
+    assert verified["detail"] == {
+        "attachment": "city",
+        "process_hosting_state": "suspended",
+        "active_city_session_count": 1,
+    }
+    assert all(
+        record["kind"] != "resident_departure_receipt" for record in payload["records"]
+    )

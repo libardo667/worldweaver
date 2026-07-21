@@ -204,6 +204,22 @@ retirement row, one hearth checkpoint, one `LocalWorld` observation, zero retry 
 session, and a suspended hearth-bound process. In the response-loss case, both successful HTTP deliveries
 carry the same stored receipt. Operational certificate and nonce checks continue to use real time.
 
+The transport boundary now has its own fail-closed matrix. Tests stop the child without a result, send invalid
+JSON, send an unknown message type, replay one already-dispatched request ID, and return a malformed parent
+response. Every case refuses the episode, writes no report, and reaps the child. Request IDs are single-use for
+the lifetime of one adapter process.
+
+The same scripted city-to-hearth transition also runs through an ephemeral Uvicorn server bound to
+`127.0.0.1`. In that mode the ordinary `WorldWeaverClient` uses a real HTTP connection rather than carrying
+HTTP bytes over stdio. The isolated database, controlled clock, host-sealed identity, runtime certificate,
+resident host, core, and hearth remain unchanged. The structural record does not include the chosen port.
+
+One external `google/gemini-3-flash-preview` activation was then run against that loopback episode on July 21,
+2026. It made one call, chose the valid `finish` outcome, and remained in Willow Court. The runner preserved
+that result as one suspended city attachment with no retirement receipt instead of treating every city outcome
+as a failed hearth transition. Prompts, completions, and private source content were not recorded. This was a
+disposable synthetic resident, not a live-town run.
+
 The earlier Tansy run in Alderbank was a bounded live-town smoke run caused by interpreting the next step too
 broadly. It is not resident-gym evidence, did not exercise this adapter, and must not be repeated as part of
 Major 142. No further live-town resident runs are needed before the isolated model path has its intended
@@ -219,19 +235,20 @@ being reported as a full temporary shard. For the current model episode it says 
 | Engine rules | Actual FastAPI routes and production service functions |
 | World state | Synthetic SQLite database |
 | Resident composition | Normal `Resident` host and its shared production reference core |
-| Participant transport | Ordinary `WorldWeaverClient` HTTP carried over generic stdio bytes |
+| Participant transport | Ordinary `WorldWeaverClient` HTTP carried over generic stdio bytes, or a real ephemeral IPv4 loopback connection |
 | Resident authorization | Host-sealed identity, signed runtime certificate, bound generation/session, and normal request verification |
-| Information sources | City registry is built from the node-published identity and capabilities, then replaced by the actual `LocalWorld` registry after confirmed departure |
+| Information sources | City registry is built from the node-published identity and capabilities; it is replaced by the actual `LocalWorld` registry only after confirmed departure |
 | World time | One controlled instant governs exercised engine routes and persistence plus reference-core and `LocalWorld` observation; live engine and resident hosts default to system UTC |
-| Hearth | Real `LocalWorld` attachment, city-to-hearth transition, stopped checkpoint, and separate-process hearth restart |
+| Hearth | Reports either the proven `LocalWorld` transition/restart or the model's retained suspended city attachment |
 | Federation | Not exercised |
 
 The model gym now enters through the same `Resident` owner as an ordinary host. Identity loading, hearth
 activation and exclusive custody, session resume, public city-profile discovery, source construction, process
 binding, core composition, and clean suspension are production host paths. The HTTP API and resident
 authorization path are production paths too. The generic stdio hop remains process transport rather than a
-listening network socket. The episode now enters the real `LocalWorld`, but it still does not activate optional
-game capabilities or contact federation.
+second world API. The loopback mode serves the same app through a real local socket. An episode may enter the
+real `LocalWorld` after confirmed departure or remain suspended at its valid city attachment; it still does not
+activate optional game capabilities or contact federation.
 
 The model episode now builds its direct activation scene and its signed HTTP scene at the same controlled
 instant. Their content-safe place, route, presence, and trace counts must match; at the two-day deadline the
@@ -239,7 +256,7 @@ expired willow bench is absent from both. The same dependency governs sublocatio
 movement, and an API acceptance test proves that an expired child place is simultaneously absent from scene
 and listing and cannot be entered.
 
-Episode schema version 8 closes the engine and resident application-time gap exercised here. Session arrival,
+Episode schema version 8 closed the engine and resident application-time gap exercised here. Session arrival,
 location chat, world events, derived fact validity, and projection updates now persist the same explicit world
 instant used by the route and scene. The model episode performs a structural chronology audit over those rows;
 it fails if a timestamp is missing, comes from wall time, or is not one of the episode's recorded controlled
@@ -254,8 +271,11 @@ outside this claim because federation itself is explicitly not exercised. Author
 nonces, rate limits, cache TTLs, process locks, model duration, and runtime metrics intentionally stay on real
 or monotonic operational time.
 
-The next trustworthiness slice is a narrow repeat through a listening server or container. Federation and
-optional constructive-game capability episodes remain later slices.
+Episode schema version 9 adds the loopback transport record and makes city-versus-hearth fidelity conditional
+on the attachment the model actually checkpointed.
+
+The next infrastructure slice is a container repeat. Federation and optional constructive-game capability
+episodes remain later slices.
 
 The database snapshot supports SQLite only and may restore only into an empty synthetic database. Its hash
 detects damage and internal mismatches; it is not a signature and does not make an envelope from an untrusted
@@ -275,7 +295,7 @@ apparatus tells the truth about what happened.
 
 | Boundary | Current proof | Remaining proof |
 | --- | --- | --- |
-| Production-rule parity | Footbridge episode matches an authenticated in-process HTTP replay; model direct and signed-HTTP scenes agree at one controlled instant | Repeat selected paths against a running container |
+| Production-rule parity | Footbridge episode matches an authenticated in-process HTTP replay; model direct and signed-HTTP scenes agree at one controlled instant; the full transition also passes through a real loopback Uvicorn server | Repeat selected paths against a running container |
 | Identity and authorization | Model resident uses its host-sealed identity and normal signed runtime certificate for protected scene and session-retirement routes; anonymous signal access is refused; correspondence uses durable actor IDs | Cover every gym action and other proof/failure types |
 | Exact-place perception | Speech follows location and a durable cursor | Reconnect, cursor gaps, and concurrent arrival/speech ordering |
 | Delayed work | Stable scheduled IDs, controlled UTC across exercised routes and persistent chronology, explicit acknowledgement, expired-place movement refusal, and idempotent private-return retry | Add other state-changing scenario handlers and prove failed-handler retry |
@@ -284,7 +304,7 @@ apparatus tells the truth about what happened.
 | Access and custody | Production services exist outside the gym | Refusal, making, carrying, giving, exchange, and stoop episodes |
 | Travel | Signed city retirement uses a stable transition and durable actor/generation receipt; the normal city-to-hearth attachment transition survives request, commit, response, and post-checkpoint failures | Hearth-to-city return plus recoverable federated travel episodes |
 | Stale information | Structural version fence exists in the reference resident | Change the world during a gym decision and prove safe reconsideration |
-| Fault recovery | Model episodes inject failure before request, before commit, after committed response loss, and after the hearth checkpoint; restart proves one receipt, attachment, observation, and inference sequence | Listening-server or container repeat, then broader action faults |
+| Fault recovery | Model episodes inject failure before request, before commit, after committed response loss, and after the hearth checkpoint; malformed, replayed, and dead-child transports fail closed | Container repeat, then broader action faults |
 
 The command-line runner exposes these records as a live, flushed stream while retaining the final HTML and JSON
 reports. The separate-process return and model episodes emit content-safe observation and activation boundaries, making

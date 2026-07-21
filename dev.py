@@ -67,6 +67,18 @@ def _city_runtime_env(city_dir: Path) -> dict[str, str]:
     return runtime_env
 
 
+def _agent_runtime_env() -> dict[str, str]:
+    """Layer the ordinary resident inference defaults onto this process."""
+
+    from dotenv import dotenv_values
+
+    runtime_env = os.environ.copy()
+    for key, value in dotenv_values(AGENT_DIR / ".env").items():
+        if value is not None and key not in runtime_env:
+            runtime_env[key] = value
+    return runtime_env
+
+
 def _run(
     command: list[str],
     *,
@@ -1376,7 +1388,11 @@ def main() -> int:
     if command == "city-studio":
         return _run([sys.executable, "scripts/city_studio.py", *rest], cwd=ENGINE_DIR)
     if command == "gym":
-        return _run([sys.executable, "scripts/resident_gym.py", *rest], cwd=ENGINE_DIR)
+        return _run(
+            [sys.executable, "scripts/resident_gym.py", *rest],
+            cwd=ENGINE_DIR,
+            env=_agent_runtime_env(),
+        )
     if command == "agent":
         return _run([sys.executable, "-m", "src.main", *rest], cwd=AGENT_DIR)
     if command == "engine":

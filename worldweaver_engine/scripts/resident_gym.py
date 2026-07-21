@@ -9,12 +9,15 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 import json
 import os
+import socket
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -22,6 +25,7 @@ import httpx
 from sqlalchemy import create_engine, event as sqlalchemy_event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+import uvicorn
 
 ENGINE_ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE_ROOT = ENGINE_ROOT.parent
@@ -80,8 +84,8 @@ _GYM_ADAPTER_PROTOCOL_VERSION = 2
 
 
 @contextmanager
-def _temporary_gym_api(db, *, world_clock: Clock):
-    """Serve the production FastAPI app over one isolated gym database."""
+def _temporary_gym_dependencies(db, *, world_clock: Clock):
+    """Bind the production app to one isolated database and world clock."""
 
     previous_database_override = app.dependency_overrides.get(get_db)
     previous_clock_override = app.dependency_overrides.get(get_world_clock)
@@ -95,7 +99,7 @@ def _temporary_gym_api(db, *, world_clock: Clock):
     app.dependency_overrides[get_db] = override_database
     app.dependency_overrides[get_world_clock] = override_world_clock
     try:
-        yield _GymAPIClient(db)
+        yield
     finally:
         if previous_database_override is None:
             app.dependency_overrides.pop(get_db, None)
@@ -105,6 +109,14 @@ def _temporary_gym_api(db, *, world_clock: Clock):
             app.dependency_overrides.pop(get_world_clock, None)
         else:
             app.dependency_overrides[get_world_clock] = previous_clock_override
+
+
+@contextmanager
+def _temporary_gym_api(db, *, world_clock: Clock):
+    """Serve the production FastAPI app through an in-process ASGI transport."""
+
+    with _temporary_gym_dependencies(db, world_clock=world_clock):
+        yield _GymAPIClient(db)
 
 
 class _GymAPIClient:
@@ -147,8 +159,142 @@ class _GymAPIClient:
                 sqlalchemy_event.remove(self._db, "before_commit", fail_second_commit)
 
 
+class _ObservedLoopbackApp:
+    """Record content-safe HTTP receipts around the real loopback ASGI server."""
+
+    def __init__(self, gym: ProductionRuleGym, participant_session_id: str) -> None:
+        self._gym = gym
+        self._participant_session_id = participant_session_id
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope.get("type") != "http":
+            await app(scope, receive, send)
+            return
+        status_code = 500
+        response_parts: list[bytes] = []
+
+        async def observe_send(message) -> None:
+            nonlocal status_code
+            if message.get("type") == "http.response.start":
+                status_code = int(message.get("status") or 500)
+            elif message.get("type") == "http.response.body":
+                response_parts.append(bytes(message.get("body") or b""))
+            await send(message)
+
+        await app(scope, receive, observe_send)
+        raw_path = scope.get("raw_path") or str(scope.get("path") or "").encode("ascii")
+        raw_query = scope.get("query_string") or b""
+        target = bytes(raw_path).decode("ascii")
+        if raw_query:
+            target = f"{target}?{bytes(raw_query).decode('ascii')}"
+        headers = {
+            bytes(key).decode("latin1").lower(): bytes(value).decode("latin1")
+            for key, value in scope.get("headers") or []
+        }
+        try:
+            response_payload = json.loads(b"".join(response_parts))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            response_payload = None
+        self._gym.record_participant_http(
+            self._participant_session_id,
+            method=str(scope.get("method") or ""),
+            target=target,
+            status_code=status_code,
+            resident_proof=all(
+                str(headers.get(name.lower()) or "").strip()
+                for name in (
+                    "X-WW-Resident-Certificate",
+                    "X-WW-Resident-Timestamp",
+                    "X-WW-Resident-Nonce",
+                    "X-WW-Resident-Signature",
+                )
+            ),
+            response_payload=response_payload,
+        )
+        if (
+            str(scope.get("method") or "").upper() == "POST"
+            and target.partition("?")[0] == "/api/session/leave"
+            and 200 <= status_code < 300
+            and isinstance(response_payload, dict)
+        ):
+            self._gym.record_resident_departure_receipt(
+                self._participant_session_id,
+                response_payload,
+            )
+
+
+@contextmanager
+def _temporary_gym_loopback(
+    db,
+    *,
+    world_clock: Clock,
+    gym: ProductionRuleGym,
+    participant_session_id: str,
+):
+    """Serve the production app on a real ephemeral IPv4 loopback socket."""
+
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(128)
+    host, port = listener.getsockname()[:2]
+    observed_app = _ObservedLoopbackApp(gym, participant_session_id)
+    config = uvicorn.Config(
+        observed_app,
+        host=host,
+        port=port,
+        log_level="warning",
+        access_log=False,
+        lifespan="off",
+    )
+    server = uvicorn.Server(config)
+    thread = threading.Thread(
+        target=server.run,
+        kwargs={"sockets": [listener]},
+        name="worldweaver-gym-loopback",
+        daemon=True,
+    )
+    with _temporary_gym_dependencies(db, world_clock=world_clock):
+        thread.start()
+        deadline = time.monotonic() + 10.0
+        while not server.started and thread.is_alive() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        if not server.started:
+            server.should_exit = True
+            thread.join(timeout=5)
+            raise RuntimeError("gym loopback server did not start")
+        gym.record_resident_transport(
+            participant_session_id,
+            transport="loopback_http",
+        )
+        try:
+            yield f"http://{host}:{port}"
+        finally:
+            server.should_exit = True
+            thread.join(timeout=10)
+            if thread.is_alive():
+                server.force_exit = True
+                thread.join(timeout=5)
+            with suppress(OSError):
+                listener.close()
+            if thread.is_alive():
+                raise RuntimeError("gym loopback server did not stop")
+
+
 class _InjectedResidentCrash(RuntimeError):
     """The gym intentionally stopped a resident at one durable boundary."""
+
+
+def _stop_adapter_process(process: subprocess.Popen[str]) -> None:
+    """Terminate and reap one failed adapter child without leaving a zombie."""
+
+    if process.poll() is None:
+        process.kill()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
 
 
 @contextmanager
@@ -175,7 +321,7 @@ def _temporary_gym_node_configuration():
 def _model_adapter_command(
     gym: ProductionRuleGym,
     *,
-    api_client: _GymAPIClient,
+    api_client: _GymAPIClient | None,
     home: Path,
     host_key: Path,
     process_path: Path,
@@ -187,6 +333,9 @@ def _model_adapter_command(
     command: str = "handle-return-model",
     event_id: str = "",
     departure_fault: str = "",
+    transport_fault: str = "",
+    transport_mode: str = "stdio",
+    base_url: str = "http://worldweaver-gym.local",
 ) -> dict:
     """Run one child resident while serving its bounded world requests."""
 
@@ -206,6 +355,12 @@ def _model_adapter_command(
         model_id,
         "--model-mode",
         model_mode,
+        "--transport-fault",
+        transport_fault,
+        "--transport-mode",
+        transport_mode,
+        "--base-url",
+        base_url,
     ]
     if event_id:
         arguments.extend(("--event-id", event_id))
@@ -246,31 +401,36 @@ def _model_adapter_command(
 
     result: dict | None = None
     leave_fault_injected = False
+    seen_request_ids: set[str] = set()
     for line in process.stdout:
         try:
             message = json.loads(line)
         except json.JSONDecodeError as exc:
-            process.kill()
+            _stop_adapter_process(process)
             raise RuntimeError("resident adapter emitted invalid JSON") from exc
         if (
             not isinstance(message, dict)
             or message.get("protocol") != _GYM_ADAPTER_PROTOCOL
             or message.get("protocol_version") != _GYM_ADAPTER_PROTOCOL_VERSION
         ):
-            process.kill()
+            _stop_adapter_process(process)
             raise RuntimeError("resident adapter protocol binding is invalid")
         message_type = str(message.get("type") or "")
         if message_type == "event":
             event_kind = str(message.get("event") or "")
-            gym.record_resident_boundary(
-                expected_participant_session_id,
-                kind=event_kind,
-                detail=(
-                    dict(message.get("detail") or {})
-                    if isinstance(message.get("detail"), dict)
-                    else {}
-                ),
-            )
+            try:
+                gym.record_resident_boundary(
+                    expected_participant_session_id,
+                    kind=event_kind,
+                    detail=(
+                        dict(message.get("detail") or {})
+                        if isinstance(message.get("detail"), dict)
+                        else {}
+                    ),
+                )
+            except Exception:
+                _stop_adapter_process(process)
+                raise
             if (
                 departure_fault == "after_hearth_checkpoint"
                 and event_kind == "resident_attachment_checkpointed"
@@ -279,8 +439,7 @@ def _model_adapter_command(
                     expected_participant_session_id,
                     mode=departure_fault,
                 )
-                process.kill()
-                process.wait()
+                _stop_adapter_process(process)
                 raise _InjectedResidentCrash(
                     "resident stopped after durable hearth checkpoint"
                 )
@@ -288,29 +447,32 @@ def _model_adapter_command(
         if message_type == "result":
             candidate = message.get("result")
             if not isinstance(candidate, dict):
-                process.kill()
+                _stop_adapter_process(process)
                 raise RuntimeError("resident adapter result must be an object")
             result = candidate
             break
         if message_type == "error":
+            _stop_adapter_process(process)
             raise RuntimeError(str(message.get("error") or "resident adapter failed"))
         if message_type != "request":
-            process.kill()
+            _stop_adapter_process(process)
             raise RuntimeError("resident adapter emitted an unknown message")
         request_id = str(message.get("request_id") or "")
         session_id = str(message.get("session_id") or "")
         operation = str(message.get("operation") or "")
         payload = message.get("payload")
-        if (
-            not request_id
-            or session_id != expected_protocol_session_id
-            or not isinstance(payload, dict)
-        ):
-            respond(request_id, ok=False, error="request binding is invalid")
-            continue
+        if not request_id or request_id in seen_request_ids:
+            _stop_adapter_process(process)
+            raise RuntimeError("resident adapter replayed or omitted a request ID")
+        seen_request_ids.add(request_id)
+        if session_id != expected_protocol_session_id or not isinstance(payload, dict):
+            _stop_adapter_process(process)
+            raise RuntimeError("resident adapter request binding is invalid")
         try:
             if operation != "http":
                 raise ValueError("unsupported gym participant operation")
+            if api_client is None:
+                raise ValueError("loopback resident may not use stdio HTTP dispatch")
             method = str(payload.get("method") or "").strip().upper()
             target = str(payload.get("target") or "").strip()
             headers = payload.get("headers")
@@ -332,6 +494,11 @@ def _model_adapter_command(
                     mode=departure_fault,
                 )
                 respond(request_id, ok=False, error="injected failure before request")
+                continue
+            if transport_fault == "malformed_response":
+                process.stdin.write("{malformed-response\n")
+                process.stdin.flush()
+                transport_fault = ""
                 continue
             api_response = api_client.request(
                 method,
@@ -534,6 +701,8 @@ def _run_model_resident_return(
     model_id: str,
     model_mode: str = "live",
     departure_fault: str = "",
+    transport_fault: str = "",
+    transport_mode: str = "stdio",
 ):
     """Run one bounded model activation entirely inside the synthetic gym."""
 
@@ -639,7 +808,31 @@ def _run_model_resident_return(
         due = gym.offer_next_scheduled()[0]
 
         participant_session_id = "gym-afternoon-mara"
-        with _temporary_gym_api(db, world_clock=gym.clock) as api_client:
+        if transport_mode == "stdio":
+            transport_context = _temporary_gym_api(db, world_clock=gym.clock)
+        elif transport_mode == "loopback":
+            if departure_fault or transport_fault:
+                raise ValueError("loopback transport does not accept stdio fault modes")
+            transport_context = _temporary_gym_loopback(
+                db,
+                world_clock=gym.clock,
+                gym=gym,
+                participant_session_id=participant_session_id,
+            )
+        else:
+            raise ValueError("unsupported model gym transport")
+
+        with transport_context as transport_endpoint:
+            api_client = (
+                transport_endpoint
+                if isinstance(transport_endpoint, _GymAPIClient)
+                else None
+            )
+            base_url = (
+                "http://worldweaver-gym.local"
+                if api_client is not None
+                else str(transport_endpoint)
+            )
 
             def deliver(*, fault: str = "") -> dict:
                 current_process = json.loads(process_path.read_text(encoding="utf-8"))
@@ -660,6 +853,9 @@ def _run_model_resident_return(
                         model_mode=model_mode,
                         event_id=str(event.payload["resident_event_id"]),
                         departure_fault=fault,
+                        transport_fault=transport_fault,
+                        transport_mode=transport_mode,
+                        base_url=base_url,
                     )
 
                 return gym.deliver_resident_return(due, handle_return)
@@ -690,13 +886,20 @@ def _run_model_resident_return(
                 raise RuntimeError("model resident omitted its attachment checkpoint")
 
             if current_attachment.get("kind") == "city":
-                retry_result = deliver()
-                if int(retry_result.get("model_call_count") or 0) != 0:
-                    raise RuntimeError("departure recovery repeated model inference")
-                final_process = retry_result.get("process")
-                if not isinstance(final_process, dict):
-                    raise RuntimeError("departure retry omitted its process checkpoint")
-                process_path.write_text(json.dumps(final_process), encoding="utf-8")
+                if departure_fault:
+                    retry_result = deliver()
+                    if int(retry_result.get("model_call_count") or 0) != 0:
+                        raise RuntimeError(
+                            "departure recovery repeated model inference"
+                        )
+                    final_process = retry_result.get("process")
+                    if not isinstance(final_process, dict):
+                        raise RuntimeError(
+                            "departure retry omitted its process checkpoint"
+                        )
+                    process_path.write_text(json.dumps(final_process), encoding="utf-8")
+                else:
+                    final_process = current_process
             elif current_attachment.get("kind") == "hearth":
                 final_process = current_process
             else:
@@ -705,12 +908,15 @@ def _run_model_resident_return(
             if not isinstance(final_process, dict):
                 raise RuntimeError("model resident omitted its process checkpoint")
             attachment = final_process.get("attachment")
-            if not isinstance(attachment, dict) or attachment.get("kind") != "hearth":
-                raise RuntimeError(
-                    "model resident did not checkpoint its private hearth"
-                )
+            if not isinstance(attachment, dict) or attachment.get("kind") not in {
+                "city",
+                "hearth",
+            }:
+                raise RuntimeError("model resident checkpointed an invalid attachment")
+            if departure_fault and attachment.get("kind") != "hearth":
+                raise RuntimeError("departure recovery did not reach the hearth")
             process_path.write_text(json.dumps(final_process), encoding="utf-8")
-            needs_hearth_restart = (
+            needs_hearth_restart = attachment.get("kind") == "hearth" and (
                 not departure_fault or departure_fault == "after_hearth_checkpoint"
             )
             if needs_hearth_restart:
@@ -726,6 +932,8 @@ def _run_model_resident_return(
                     model_id=model_id,
                     model_mode=model_mode,
                     command="observe-hearth-model",
+                    transport_mode=transport_mode,
+                    base_url=base_url,
                 )
                 restarted_process = hearth_result.get("process")
                 restarted_attachment = (
@@ -755,31 +963,42 @@ def _run_model_resident_return(
 
             final_attachment = final_process.get("attachment")
             final_hosting = final_process.get("hosting")
+            expected_attachment = (
+                str(final_attachment.get("kind") or "")
+                if isinstance(final_attachment, dict)
+                else ""
+            )
+            expected_session_id = (
+                "gym-afternoon-actor-mara-hearth"
+                if expected_attachment == "hearth"
+                else "gym-afternoon-mara"
+            )
             if (
                 not isinstance(final_attachment, dict)
-                or final_attachment.get("kind") != "hearth"
-                or str(final_attachment.get("session_id") or "")
-                != "gym-afternoon-actor-mara-hearth"
+                or expected_attachment not in {"city", "hearth"}
+                or str(final_attachment.get("session_id") or "") != expected_session_id
                 or not isinstance(final_hosting, dict)
                 or final_hosting.get("state") != "suspended"
             ):
                 raise RuntimeError(
-                    "model resident did not finish suspended at its private hearth"
+                    "model resident did not finish suspended at its checkpointed attachment"
                 )
             active_city_sessions = (
                 db.query(SessionVars)
                 .filter(SessionVars.actor_id == "gym-afternoon-actor-mara")
                 .count()
             )
-            if active_city_sessions != 0:
-                raise RuntimeError("hearth restart opened a second city attachment")
-            if db.query(ResidentSessionRetirementReceipt).count() != 1:
+            expected_city_sessions = 0 if expected_attachment == "hearth" else 1
+            expected_receipts = 1 if expected_attachment == "hearth" else 0
+            if active_city_sessions != expected_city_sessions:
+                raise RuntimeError("model resident attachment count is inconsistent")
+            if db.query(ResidentSessionRetirementReceipt).count() != expected_receipts:
                 raise RuntimeError(
-                    "resident departure did not retain exactly one receipt"
+                    "model resident retirement receipt count is inconsistent"
                 )
             gym.record_resident_attachment_verified(
                 participant_session_id,
-                attachment="hearth",
+                attachment=expected_attachment,
                 process_hosting_state="suspended",
                 active_city_session_count=active_city_sessions,
             )
@@ -846,6 +1065,25 @@ def main() -> int:
         help=argparse.SUPPRESS,
     )
     parser.add_argument(
+        "--transport-mode",
+        choices=("stdio", "loopback"),
+        default="stdio",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--transport-fault",
+        choices=(
+            "",
+            "child_exit",
+            "malformed_json",
+            "malformed_message",
+            "replayed_request",
+            "malformed_response",
+        ),
+        default="",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
         "--departure-fault",
         choices=(
             "",
@@ -904,6 +1142,8 @@ def main() -> int:
                     model_id=model_id,
                     model_mode=args.model_mode,
                     departure_fault=args.departure_fault,
+                    transport_fault=args.transport_fault,
+                    transport_mode=args.transport_mode,
                 )
             else:
                 result = runners[args.episode](

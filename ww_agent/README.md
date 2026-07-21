@@ -93,8 +93,15 @@ return method on `Resident` owns the exact appointment, process interval, attach
 release. The model gym exercises normal HTTP resident proof, including shard discovery,
 runtime-certificate signing, city admission, generation/session binding, verification, and nonce consumption.
 It now exercises both the node-published commons source registry and its replacement by the private hearth
-registry after confirmed departure. It still does not enable optional constructive-game capabilities, contact
-federation, or cross a listening network socket; its episode fidelity metadata names those gaps.
+registry after confirmed departure. It still does not enable optional constructive-game capabilities or
+contact federation. The default transport does not cross a listening socket; its episode fidelity metadata
+names the selected transport.
+
+A second conformance mode replaces the stdio HTTP hop with an ephemeral Uvicorn server bound to IPv4 loopback.
+The child then uses the ordinary network transport in `WorldWeaverClient`; only content-safe lifecycle events
+remain on stdio. Duplicate request IDs, malformed messages or responses, and unexpected child death are
+rejected and the child is reaped. A real external model may legitimately finish in the city rather than travel
+home, so the result reports the attachment actually checkpointed instead of inventing a hearth transition.
 
 Resident world time is explicit at the host boundary. Production hosts default to real UTC. A controlled gym
 activation injects the same world instant into normal reference-core ticks and `LocalWorld` grounding, whisper

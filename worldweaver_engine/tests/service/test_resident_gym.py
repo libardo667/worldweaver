@@ -97,7 +97,7 @@ def test_first_gym_conversation_uses_exact_place_production_signals(db_session):
     result = run_first_conversation(db_session)
 
     assert result.schema == "worldweaver.resident-gym.episode"
-    assert result.schema_version == 8
+    assert result.schema_version == 9
     assert result.fidelity.engine_rules == "production_services"
     assert result.fidelity.resident_composition == "not_exercised"
     assert result.fidelity.participant_transport == "direct_scenario_calls"
@@ -209,7 +209,7 @@ def test_waiting_letter_view_has_a_fact_backed_post_trail(db_session):
 def test_quiet_interval_mixes_live_speech_with_a_two_day_rule(db_session):
     result = run_quiet_interval(db_session)
 
-    assert result.schema_version == 8
+    assert result.schema_version == 9
     assert [
         record.kind
         for record in result.records

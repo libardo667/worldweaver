@@ -67,9 +67,7 @@ TickObserver = Callable[
     [ResidentIdentity, CityWorld | LocalWorld, ResidentCore, dict[str, Any], int],
     Awaitable[None] | None,
 ]
-AttachmentCheckpointObserver = Callable[
-    [ResidentIdentity, str], Awaitable[None] | None
-]
+AttachmentCheckpointObserver = Callable[[ResidentIdentity, str], Awaitable[None] | None]
 
 
 @dataclass(frozen=True, slots=True)
@@ -939,7 +937,9 @@ class Resident:
         pending: PendingHearthDeparture | None = None,
     ) -> CityWorld | LocalWorld:
         transition_id = (
-            pending.transition_id if pending is not None else f"travel-{uuid.uuid4().hex}"
+            pending.transition_id
+            if pending is not None
+            else f"travel-{uuid.uuid4().hex}"
         )
         city_session_id = (
             pending.session_id if pending is not None else self._active_session_id()

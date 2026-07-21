@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
+import threading
 from typing import Any, Callable, Iterable
 
 from sqlalchemy.orm import Session
@@ -289,6 +290,7 @@ class ProductionRuleGym:
         self._participant_checkpoints: dict[str, GymParticipantCheckpoint] = {}
         self._cursors: dict[str, _SignalCursor] = {}
         self._records: list[GymRecord] = []
+        self._record_lock = threading.RLock()
         self._record_observer = record_observer
 
     def _record(
@@ -299,17 +301,18 @@ class ProductionRuleGym:
         location: str | None = None,
         detail: dict[str, Any] | None = None,
     ) -> None:
-        record = GymRecord(
-            sequence=len(self._records) + 1,
-            occurred_at=self.clock.now().isoformat(),
-            kind=kind,
-            actor=participant.display_name if participant is not None else None,
-            location=location,
-            detail=dict(detail or {}),
-        )
-        self._records.append(record)
-        if self._record_observer is not None:
-            self._record_observer(record)
+        with self._record_lock:
+            record = GymRecord(
+                sequence=len(self._records) + 1,
+                occurred_at=self.clock.now().isoformat(),
+                kind=kind,
+                actor=participant.display_name if participant is not None else None,
+                location=location,
+                detail=dict(detail or {}),
+            )
+            self._records.append(record)
+            if self._record_observer is not None:
+                self._record_observer(record)
 
     def _scheduled_queue(self) -> ScheduledEventQueue:
         if self._scheduled is None:
@@ -1005,6 +1008,24 @@ class ProductionRuleGym:
             detail={"mode": mode},
         )
 
+    def record_resident_transport(
+        self,
+        session_id: str,
+        *,
+        transport: str,
+    ) -> None:
+        """Record selection of a real but still isolated participant transport."""
+
+        if transport != "loopback_http":
+            raise ValueError("unsupported resident gym transport")
+        participant = self._participant(session_id)
+        self._record(
+            "resident_loopback_transport_started",
+            participant=participant,
+            location=self._participant_location(session_id),
+            detail={"network": "ipv4_loopback", "scheme": "http"},
+        )
+
     def record_resident_departure_receipt(
         self,
         session_id: str,
@@ -1047,19 +1068,22 @@ class ProductionRuleGym:
         process_hosting_state: str,
         active_city_session_count: int,
     ) -> None:
-        """Record engine and private-checkpoint agreement after city retirement."""
+        """Record engine and private-checkpoint agreement after a model run."""
 
         participant = self._participant(session_id)
-        if (
-            attachment != "hearth"
-            or process_hosting_state != "suspended"
-            or active_city_session_count != 0
+        expected_city_sessions = {"city": 1, "hearth": 0}
+        if process_hosting_state != "suspended" or active_city_session_count != (
+            expected_city_sessions.get(attachment)
         ):
             raise ValueError("resident attachment verification failed")
         self._record(
             "resident_attachment_verified",
             participant=participant,
-            location="the hearth",
+            location=(
+                "the hearth"
+                if attachment == "hearth"
+                else self._participant_location(session_id)
+            ),
             detail={
                 "attachment": attachment,
                 "process_hosting_state": process_hosting_state,
@@ -1600,13 +1624,22 @@ class ProductionRuleGym:
             participant.implementation for participant in self._participants.values()
         }
         model_resident = "reference_resident_model" in implementations
+        loopback_model_transport = any(
+            record.kind == "resident_loopback_transport_started"
+            for record in self._records
+        )
+        hearth_model_attachment = any(
+            record.kind == "resident_attachment_verified"
+            and record.detail.get("attachment") == "hearth"
+            for record in self._records
+        )
         reference_resident = model_resident or any(
             implementation.startswith("reference_resident_")
             for implementation in implementations
         )
         return GymEpisodeResult(
             schema="worldweaver.resident-gym.episode",
-            schema_version=8,
+            schema_version=9,
             episode=self.episode,
             world_id=self.world_id,
             locations=self._locations,
@@ -1628,7 +1661,11 @@ class ProductionRuleGym:
                     )
                 ),
                 participant_transport=(
-                    "worldweaver_client_http_via_stdio"
+                    (
+                        "worldweaver_client_http_via_loopback"
+                        if loopback_model_transport
+                        else "worldweaver_client_http_via_stdio"
+                    )
                     if model_resident
                     else "direct_scenario_calls"
                 ),
@@ -1636,7 +1673,11 @@ class ProductionRuleGym:
                     "signed_runtime_certificate" if model_resident else "not_exercised"
                 ),
                 city_sources=(
-                    "node_published_then_local_world_registry"
+                    (
+                        "node_published_then_local_world_registry"
+                        if hearth_model_attachment
+                        else "node_published_city_registry"
+                    )
                     if model_resident
                     else "not_exercised"
                 ),
@@ -1650,7 +1691,11 @@ class ProductionRuleGym:
                     )
                 ),
                 hearth_attachment=(
-                    "local_world_city_to_hearth_restart"
+                    (
+                        "local_world_city_to_hearth_restart"
+                        if hearth_model_attachment
+                        else "city_attachment_retained"
+                    )
                     if model_resident
                     else (
                         "portable_artifact_only"

@@ -40,6 +40,10 @@ inputs in the identity loader; they do not restore the old ownership model.
   engine may retain only its content-safe descriptor, never its path or bytes. Agent-side restore must verify
   the descriptor before extraction, rebuild derived state from the ledger in staging, check the exact process
   binding, and install only after success. This proof does not authorize cloning or waking a live resident.
+- The separate-process gym protocol treats request IDs as single-use. Child death, invalid framing, unknown
+  message types, request replay, and mismatched responses must fail closed and reap the child. The loopback
+  variant changes only HTTP transport; identity custody, `Resident`, `WorldWeaverClient`, and the reference
+  core remain the same owners.
 - A waking host interval has one random run ID and explicit `hosted`/`suspended` checkpoint transitions. A
   clean stop records its time; the next start may record the measured suspended interval. If the previous
   record still says `hosted`, classify the stop as unclean or unknown and leave elapsed downtime unset. Never
