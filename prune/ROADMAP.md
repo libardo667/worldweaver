@@ -181,8 +181,13 @@ and final locations. That proves in-process HTTP parity, not container or networ
 The repaired correspondence boundary is now covered by `python dev.py gym --episode waiting-letter`. Mail uses
 durable actor IDs and exact authentication, survives a temporary session change, remains pending across repeated
 reads, and is consumed only by explicit acknowledgement after processing. The reference resident follows the
-same delivery rule. Cross-shard mail and a human correspondence interface remain open. The next gym slice is an
-injected production clock and one mixed-time episode; accelerated model calls still come later.
+same delivery rule. Cross-shard mail and a human correspondence interface remain open. Accelerated model calls
+still come later.
+
+That first clock slice now runs with `python dev.py gym --episode quiet-interval`. It combines a live room
+exchange with a production child-place lifetime, jumps 47 hours and then 2 more without sleeping, and observes
+the same rule before and after expiry. This proves the basic controlled UTC clock, not a general scheduler. A
+durable event queue and one scheduled resident return are next.
 
 ### 8. Train several resident model families
 

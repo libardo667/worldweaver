@@ -21,9 +21,15 @@ Run the delayed-correspondence episode:
 python dev.py gym --episode waiting-letter
 ```
 
+Run the first mixed-time episode:
+
+```bash
+python dev.py gym --episode quiet-interval
+```
+
 Each command prints a compact timeline and writes a self-contained visual report under `.runs/gym/`
-(`footbridge-hello.html` or `waiting-letter.html`). The reports contain only synthetic speech and facts returned
-by production services. Their icons and layout do not add a narrator's interpretation.
+(`footbridge-hello.html`, `waiting-letter.html`, or `long-afternoon.html`). The reports contain only synthetic
+speech and facts returned by production services. Their icons and layout do not add a narrator's interpretation.
 
 ## What the first episode proves
 
@@ -71,6 +77,19 @@ The correspondence API requires exact human or signed-resident proof and address
 name- and session-addressed DM routes now return `410 Gone` rather than guess or accept an unauthenticated
 sender. This slice is local to one shard. Federated delivery, a public human correspondence interface,
 controlled time, checkpoint forks, model adapters, and training data remain later work.
+
+## What the mixed-time episode proves
+
+`The Long Afternoon` starts with ordinary exact-place speech. Mara then creates a real ephemeral sublocation,
+the willow bench, with a two-day lifetime. A controlled UTC clock jumps forward 47 hours and the production
+lifetime rule still reports the bench active. It jumps two more hours and the same rule reports the bench
+expired. The terminal and browser views show exact timestamps and mark those jumps with a sun-and-moon trail.
+
+This is the first explicit clock seam, not the completed time system. The live default remains an aware UTC
+system clock, while tests and gym episodes may use a controlled clock that cannot move backward. The episode
+passes that time into an existing production rule; it does not patch global time or sleep. A durable scheduled
+event queue, resident private-activity returns, restartable time state, and measured real-time comparisons are
+still required before the gym can claim general multi-timescale coverage.
 
 Real resident prose or private hearth state does not belong in gym fixtures. Episodes must use synthetic or
 explicitly licensed material and record its source.

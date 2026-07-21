@@ -115,9 +115,17 @@ same waiting letter, explicit acknowledgement consumes it, and the final read is
 the service states as a small animated post trail; the animation adds no world event. Cross-shard delivery and
 the human correspondence interface remain open.
 
-Next, introduce one injected clock below the production time-dependent rules and use it for a mixed-time
-episode. Do not add checkpoint forks, model calls, or training records until the controlled clock can skip a
-quiet interval without changing ordinary live-shard behavior.
+The first clock slice is now executable. `python dev.py gym --episode quiet-interval` begins with normal
+exact-place speech, creates a production ephemeral sublocation with a two-day lifetime, advances a controlled
+aware-UTC clock by 47 hours, verifies the place remains active, advances two more hours, and verifies expiry.
+The clock refuses backward movement, the live default remains real UTC, and no process sleeps through the
+interval. The report marks exact timestamps and clock jumps without inventing an event.
+
+This is deliberately narrower than the completed time architecture. The scenario passes its clock into an
+existing lazy lifetime rule. It does not yet provide a durable scheduled-event queue, resume scheduled private
+activities, persist the controlled clock across restarts, or compare accelerated and measured real-time runs.
+Build the queue and one scheduled resident return next. Do not add checkpoint forks, model calls, or training
+records until that scheduled path is replayable.
 
 ## Files Affected
 
