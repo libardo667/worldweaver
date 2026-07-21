@@ -12,7 +12,7 @@ This page is a readable map of the important runtime boundaries in WorldWeaver. 
 every file and import. That kind of graph is useful for machine-assisted investigation, but it becomes too
 dense to explain the system to a person.
 
-The map was checked against the live source tree at commit `70b7255` on July 20, 2026. The `.ua` graph was used
+The map was checked against the live source tree at commit `55dcc84` on July 20, 2026. The `.ua` graph was used
 to suggest places to inspect, but not as current truth: it describes commit `85f55f5`, from before several
 days of architectural work.
 
@@ -95,10 +95,15 @@ resident checkpoint.
 
 The engine is only partly ready to be reused this way.
 
-Object custody, making, access, exchange, and stoops already have service modules below the HTTP layer. Their
-routes mostly translate a request, call a service, and return a result. Movement, local speech, travel, and
-session lifecycle are different: substantial rule and transaction logic still lives inside two large route
-files, `src/api/game/world.py` and `src/api/game/state.py`.
+Object custody, making, access, exchange, stoops, and now movement have service modules below the HTTP layer.
+Their routes mostly translate a request, call a service, and return a result. Movement was the first family
+extracted during this audit: canonical graph anchoring now lives in `location_routes.py`, while route choice,
+entry checks, session mutation, and movement-event construction live in `movement.py`.
+
+Local speech, travel, and session lifecycle are still different: substantial rule and transaction logic lives
+inside two large route files, `src/api/game/world.py` and `src/api/game/state.py`. Movement also exposes one
+separate follow-up: it currently persists session state before recording the movement event, so that pair is
+not yet one atomic database operation.
 
 The gym must not call those route functions in process, duplicate their logic, or write directly to the
 database. The next architectural move is to extract those rules into typed domain services used by both:
@@ -123,8 +128,8 @@ than a slogan.
 | Resident decision loop | `ww_agent/src/runtime/reference_core.py` | Live reference adapter |
 | Resident private continuity | `ww_agent/src/runtime/ledger.py` and `process_state.py` | Live ledger and working checkpoint |
 | Resident city boundary | `ww_agent/src/world/client.py` and engine resident protocol services | Live signed request path |
-| Reusable world services | `consequence_objects.py`, `material_making.py`, `space_access.py`, `object_exchange.py`, `world_stoops.py` | Live and closest to the needed gym seam |
-| Crowded HTTP-owned rules | `src/api/game/world.py` and `state.py` | Live, but needs extraction before gym reuse |
+| Reusable world services | `consequence_objects.py`, `material_making.py`, `space_access.py`, `object_exchange.py`, `world_stoops.py`, `location_routes.py`, and `movement.py` | Live and closest to the needed gym seam |
+| Crowded HTTP-owned rules | `src/api/game/world.py` and `state.py` | Live; local speech, travel, and session lifecycle still need extraction |
 | Canonical event path | `event_submission.py` → `rules/reducer.py` → state/database/event services | Live; audit and simplify, do not casually delete |
 | Federation | `src/api/federation/routes.py` and federation services | Live directory, trust, discovery, and travel path |
 | Shard deployment | `shards/ww_world/` and `shards/ww_alderbank/` | Current local reference deployment |

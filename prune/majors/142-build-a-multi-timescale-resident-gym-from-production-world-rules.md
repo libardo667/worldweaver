@@ -39,15 +39,20 @@ periods by advancing an injected clock directly to the next scheduled event.
 9. Publish a held-out benchmark with unseen cities, paraphrased observations, renamed internal fields,
    different event orderings, and repeated trials. Keep the training scenarios separate.
 
-### Current boundary finding — July 20, 2026
+### Current boundary finding and first extraction — July 20, 2026
 
 The first source audit found an uneven production seam. Object custody, making, access, exchange, and stoops
-already put most business rules in service modules below HTTP. Movement, local speech, travel, and session
-lifecycle still keep substantial rule and transaction logic in `src/api/game/world.py` and
-`src/api/game/state.py`.
+already put most business rules in service modules below HTTP. The first extraction moved canonical place
+anchoring into `services/location_routes.py` and the complete movement rule path into `services/movement.py`.
+The live HTTP endpoint now authenticates, calls that service, and translates its typed receipt or refusal.
+
+Local speech, travel, and session lifecycle still keep substantial rule and transaction logic in
+`src/api/game/world.py` and `src/api/game/state.py`. Movement also revealed that its session-state save and
+movement-event write are separate commits today. Preserve that behavior during extraction, then repair and
+test atomicity as its own change rather than hiding new transaction semantics inside a file move.
 
 Do not start the fast gym by calling route functions, copying those rules, or writing synthetic state directly.
-First extract typed production services for the behaviors a first episode needs. Live routes and the gym can
+Continue extracting typed production services for the behaviors a first episode needs. Live routes and the gym can
 then call the same services, while a slower containerized conformance run checks that HTTP and in-process
 receipts still agree. The maintained dependency atlas and the plain-language episode design live in
 `docs/reference/dependency-atlas.mdx`.

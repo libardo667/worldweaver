@@ -15,8 +15,10 @@ WorldWeaver has three main runtime parts.
 
 ## One command path for world changes
 
-Movement, speech, objects, making, exchange, access, traces, and travel use typed services. Each accepted
-command changes canonical state and records an event in one transaction.
+Movement, speech, objects, making, exchange, access, traces, and travel use typed commands or services. The
+engine, rather than participant prose, decides whether each attempt changes canonical state and records an
+event. The transaction boundary is not yet uniform: movement currently persists session state before it records
+the movement event. Treat atomic state-and-event persistence as active repair work, not a finished guarantee.
 
 The old freeform action narrator is retired. `/api/action` remains only as a `410 Gone` tombstone so old
 callers fail honestly.
