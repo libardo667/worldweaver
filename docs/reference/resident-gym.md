@@ -36,7 +36,7 @@ python dev.py gym --episode resident-return
 Run one real model-backed activation inside the isolated gym:
 
 ```bash
-export WW_INFERENCE_KEY=... WW_INFERENCE_MODEL=google/gemini-3-flash-preview
+export WW_INFERENCE_KEY=... WW_INFERENCE_MODEL=google/gemini-3.5-flash
 python dev.py gym --episode resident-model
 ```
 

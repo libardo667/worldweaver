@@ -34,7 +34,7 @@ class InferenceClient:
         self,
         base_url: str,
         api_key: str,
-        default_model: str = "google/gemini-flash-1.5",
+        default_model: str = "google/gemini-3.5-flash",
         timeout: float = 60.0,
     ):
         self._base_url = base_url.rstrip("/")

@@ -218,7 +218,7 @@ query, result, prompts, completions, and activity prose do not enter the structu
 Run a real configured model without starting a live town:
 
 ```bash
-export WW_INFERENCE_KEY=... WW_INFERENCE_MODEL=google/gemini-3-flash-preview
+export WW_INFERENCE_KEY=... WW_INFERENCE_MODEL=google/gemini-3.5-flash
 python dev.py gym --episode resident-model
 ```
 

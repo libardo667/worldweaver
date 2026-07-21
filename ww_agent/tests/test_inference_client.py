@@ -7,6 +7,18 @@ import pytest
 from src.inference.client import InferenceClient, InferenceError
 
 
+def test_default_model_is_current_stable_flash():
+    client = InferenceClient(
+        base_url="https://inference.example/v1",
+        api_key="test-key",
+    )
+
+    try:
+        assert client.default_model_id == "google/gemini-3.5-flash"
+    finally:
+        asyncio.run(client.close())
+
+
 def test_complete_omits_optional_temperature_when_model_uses_its_default():
     client = InferenceClient(
         base_url="https://inference.example/v1",

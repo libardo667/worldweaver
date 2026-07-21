@@ -120,7 +120,7 @@ async def main() -> None:
     ww_url = os.environ.get("WW_SERVER_URL", "http://localhost:8000")
     llm_url = os.environ.get("WW_INFERENCE_URL", "https://openrouter.ai/api/v1")
     llm_key = os.environ.get("WW_INFERENCE_KEY", "")
-    llm_model = os.environ.get("WW_INFERENCE_MODEL", "google/gemini-3-flash-preview")
+    llm_model = os.environ.get("WW_INFERENCE_MODEL", "google/gemini-3.5-flash")
     residents_dir = Path(os.environ.get("WW_RESIDENTS_DIR", "residents"))
     doula_enabled = os.environ.get("WW_DOULA", "").lower() in ("1", "true", "yes")
     doula_model = os.environ.get("WW_DOULA_MODEL") or None
