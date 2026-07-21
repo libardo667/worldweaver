@@ -40,7 +40,9 @@
   atomically consumed scheduled return prevent restart from repeating a recent model turn. A content-blind
   stale-choice event keeps reconsideration pending across restart until the next activation begins.
   The same projection holds the versioned resident-process envelope and exact-session local-speech cursor;
-  both incremental checkpoint advancement and complete ledger replay use the same reducer.
+  both incremental checkpoint advancement and complete ledger replay use the same reducer. Versioned host-run
+  events distinguish currently hosted state, a clean suspension, a measured restore interval, and an unknown
+  crash interval without claiming that private computation continued while stopped.
 - `runtime/prompt_trace.py` — legacy-core diagnostic code; it is not wired into the production reference loop.
 - `runtime/prompt_context.py` — typed available/selected/withheld source envelope and final prose renderer.
 - `runtime/information.py` — private elective source access plus the structured provider-record contract;

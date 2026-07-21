@@ -38,9 +38,9 @@ _LEGACY_DERIVED_FILENAMES = {
 }
 
 CHECKPOINT_FORMAT_VERSION = 2
-REDUCER_FORMAT_VERSION = 10
+REDUCER_FORMAT_VERSION = 11
 PROJECTION_FORMAT_VERSIONS = {
-    "runtime": 7,
+    "runtime": 8,
     "subjective": 1,
     "memory": 1,
     "subjective_facts": 1,

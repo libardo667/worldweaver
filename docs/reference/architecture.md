@@ -93,6 +93,12 @@ It gives a later recurrent adapter a versioned place to declare a real bounded s
 that one exists today. The selected provider model ID is useful operational evidence but may still be a
 provider-managed alias; reproducible local-model work must bind an immutable model revision.
 
+Hosting is another explicit part of the envelope. A run-start event creates a random host-run ID. A clean
+shutdown writes a matching suspension time before releasing the hearth lock. The next start can therefore
+record the exact elapsed stopped interval. If the old state still says `hosted`, the process probably stopped
+without writing its final record; the new start labels that interval `unclean_or_unknown` and leaves elapsed
+time empty. The engine does not turn server downtime into imagined resident computation.
+
 The first persistent-process slice uses that existing checkpoint rather than adding another memory file. A
 confirmed reference-loop action adds a versioned receipt containing its kind, place, target, time, resident
 ledger event ID, and any stable world identifier returned by the typed action. The checkpoint retains the

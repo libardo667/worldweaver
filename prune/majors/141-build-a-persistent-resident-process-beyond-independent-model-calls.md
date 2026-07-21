@@ -158,6 +158,22 @@ another resident attempts to load the state. The derived checkpoint remains rebu
 the append-only ledger carries its binding evidence through an encrypted hearth package and reconstructs it on
 the destination before the new authorized generation is bound.
 
+## Sixth slice — hosted, suspended, and restored time (2026-07-20)
+
+Each resident host run now has a random structural run ID in the private process envelope. Starting a run marks
+the process `hosted`. A normal return, cancellation, or bounded stop writes a matching `suspended` event before
+the hearth lock is released. The next run records the measured milliseconds between that known suspension and
+restore. Ordinary events during a run leave the hosted interval unchanged.
+
+If a new run begins while the previous checkpoint still says `hosted`, the old process did not record a clean
+stop. The restore labels that boundary `unclean_or_unknown` and leaves elapsed time empty. It does not use the
+last ledger write as a made-up stop time and does not claim that model computation continued during downtime.
+A stale suspend event for an older host-run ID cannot stop the newer interval.
+
+Synthetic reducer tests prove continuous hosted state, clean suspension, measured restore time, unknown crash
+time, and checkpoint/full-replay agreement. A resident-host test proves a bounded run writes start and suspend
+events around the actual run and releases its hearth lease with the envelope suspended.
+
 ## Files Affected
 
 - `ww_agent/src/resident.py`
@@ -190,7 +206,7 @@ the destination before the new authorized generation is bound.
 - [ ] Stop, restore, city travel, hearth return, and host migration preserve one active process generation.
 - [ ] A forked synthetic checkpoint produces causally different later behavior after different event
   histories, while a replay with the same seed and events is reproducible within the documented limits.
-- [ ] Structural tests distinguish continuous hosted computation, suspended time, and restored elapsed time.
+- [x] Structural tests distinguish continuous hosted computation, suspended time, and restored elapsed time.
 - [ ] Documentation describes an ongoing computational process without claiming that the implementation
   establishes consciousness, sentience, or uninterrupted subjective experience.
 

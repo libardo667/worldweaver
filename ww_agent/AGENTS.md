@@ -33,6 +33,11 @@ inputs in the identity loader; they do not restore the old ownership model.
   actor/hearth mismatch or generation regression; do not silently transplant state between residents. The
   current API-backed adapter declares model state as `none` with a zero-byte bound. A later adapter must add
   an explicit format and size limit rather than hiding continuity in prompts, caches, or an unbounded blob.
+- A waking host interval has one random run ID and explicit `hosted`/`suspended` checkpoint transitions. A
+  clean stop records its time; the next start may record the measured suspended interval. If the previous
+  record still says `hosted`, classify the stop as unclean or unknown and leave elapsed downtime unset. Never
+  infer that computation or experience continued while the host was off, and ignore a suspend event whose run
+  ID does not match the currently hosted interval.
 - A bounded one-resident run must retire its public city session and return to the hearth before releasing
   `runtime.lock`. Operational cleanup may park an existing session without running cognition; never leave
   a stopped process looking alive in the city roster.

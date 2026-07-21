@@ -39,6 +39,12 @@ backward to an older generation, fails instead of quietly reusing the state. The
 no portable hidden state, so the envelope says exactly that: format `none`, zero bytes. It does not pretend a
 chat completion is an uninterrupted process. A later recurrent adapter must declare its own bounded format.
 
+The envelope also distinguishes a running host interval from a cleanly suspended process. Each run gets a
+random structural ID. A clean stop records when hosting ended, and the next start records the measured stopped
+interval. If a process restarts without a matching clean-stop record, the prior stop time is marked unknown and
+no elapsed downtime is invented. These records describe software operation, not continuous thought or
+experience while the computer was off.
+
 Each continuation also chooses a return between one minute and seven days and whether exact-place speech may
 offer an earlier model turn. While that return is in the future, it replaces the ordinary five-minute model
 baseline. Speech is still delivered and acknowledged when early activation is disabled; the host simply does

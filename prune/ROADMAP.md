@@ -129,8 +129,10 @@ resident, hearth generation, attachment, adapter/model version, cursor, and boun
 fifth slice is now complete. The current adapter honestly binds a zero-byte `none` model state, while the same
 checkpoint restores its activity, return, action receipts, retry flag, cadence, and exact-session event cursor.
 Wrong-resident and wrong-hearth loads or generation regressions fail closed. The portable ledger rebuilds the
-derived checkpoint after host transfer. Next, define and measure the smallest bounded recurrent adapter state
-before plugging in an open-weight prototype; do not substitute a provider chat transcript or unlimited cache.
+derived checkpoint after host transfer. A sixth slice now records hosted and cleanly suspended intervals, the
+measured gap on restore, and an explicitly unknown gap after an unclean stop. Next, define and measure the
+smallest bounded recurrent adapter state before plugging in an open-weight prototype; do not substitute a
+provider chat transcript or unlimited cache.
 
 ### 4. Add the private-to-public making boundary
 

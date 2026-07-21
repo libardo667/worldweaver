@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any, Protocol
 
 CONFIRMED_ACTION_RECEIPT_VERSION = 1
@@ -19,6 +19,7 @@ REFERENCE_ADAPTER_ID = "worldweaver.reference-resident"
 REFERENCE_ADAPTER_VERSION = 1
 STATELESS_MODEL_STATE_FORMAT = "none"
 STATELESS_MODEL_STATE_FORMAT_VERSION = 1
+PROCESS_HOST_LIFECYCLE_VERSION = 1
 
 
 class ActionChoice(Protocol):
@@ -178,7 +179,21 @@ def advance_resident_process_envelope(
             projected["event_cursor"] = dict(current["event_cursor"])
         else:
             projected["event_cursor"] = None
+        if (
+            isinstance(current, dict)
+            and current.get("actor_id") == projected["actor_id"]
+            and isinstance(current.get("hosting"), dict)
+        ):
+            projected["hosting"] = dict(current["hosting"])
+        else:
+            projected["hosting"] = None
         return projected
+
+    if event_type in {
+        "reference_process_host_started",
+        "reference_process_host_suspended",
+    }:
+        return _advance_process_hosting(current, event)
 
     if event_type != "live_signal_cursor_advanced" or not isinstance(current, dict):
         return current
@@ -207,6 +222,90 @@ def advance_resident_process_envelope(
         "location": location,
         "after_id": after_id,
     }
+    return projected
+
+
+def _parse_process_time(value: Any) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc)
+
+
+def _advance_process_hosting(
+    current: dict[str, Any] | None,
+    event: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Advance explicit hosted/suspended state from structural lifecycle events."""
+
+    if not isinstance(current, dict):
+        return current
+    payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+    if payload.get("process_lifecycle_version") != PROCESS_HOST_LIFECYCLE_VERSION:
+        return current
+    payload_generation = payload.get("runtime_generation")
+    if isinstance(payload_generation, bool) or not isinstance(payload_generation, int):
+        return current
+    hearth = current.get("hearth") if isinstance(current.get("hearth"), dict) else {}
+    if (
+        str(payload.get("actor_id") or "").strip()
+        != str(current.get("actor_id") or "").strip()
+        or str(payload.get("hearth_shard_id") or "").strip()
+        != str(hearth.get("shard_id") or "").strip()
+        or payload_generation != hearth.get("runtime_generation")
+    ):
+        return current
+    run_id = str(payload.get("host_run_id") or "").strip()
+    event_at = _parse_process_time(event.get("ts"))
+    if not run_id or event_at is None:
+        return current
+
+    event_type = str(event.get("event_type") or "").strip()
+    previous = (
+        current.get("hosting") if isinstance(current.get("hosting"), dict) else {}
+    )
+    projected = dict(current)
+    if event_type == "reference_process_host_started":
+        previous_state = str(previous.get("state") or "").strip()
+        suspended_at = _parse_process_time(previous.get("suspended_at"))
+        if previous_state == "suspended" and suspended_at is not None:
+            elapsed = max(timedelta(0), event_at - suspended_at)
+            restored_elapsed_ms: int | None = elapsed // timedelta(milliseconds=1)
+            previous_stop = "clean"
+        elif previous_state == "hosted":
+            restored_elapsed_ms = None
+            previous_stop = "unclean_or_unknown"
+        else:
+            restored_elapsed_ms = None
+            previous_stop = "first_start"
+        projected["hosting"] = {
+            "lifecycle_version": PROCESS_HOST_LIFECYCLE_VERSION,
+            "state": "hosted",
+            "host_run_id": run_id,
+            "hosted_at": event_at.isoformat(),
+            "suspended_at": (
+                suspended_at.isoformat() if suspended_at is not None else None
+            ),
+            "previous_stop": previous_stop,
+            "restored_elapsed_ms": restored_elapsed_ms,
+        }
+        return projected
+
+    if (
+        event_type == "reference_process_host_suspended"
+        and previous.get("state") == "hosted"
+        and str(previous.get("host_run_id") or "").strip() == run_id
+    ):
+        hosting = dict(previous)
+        hosting["state"] = "suspended"
+        hosting["suspended_at"] = event_at.isoformat()
+        projected["hosting"] = hosting
     return projected
 
 

@@ -980,6 +980,37 @@ def test_duration_bound_uses_elapsed_time_instead_of_a_tick_limit(tmp_path):
     assert observed == list(range(1, len(observed) + 1))
 
 
+def test_bounded_resident_run_records_a_clean_process_suspension(tmp_path):
+    resident = _resident(tmp_path, _FakeCityClient())
+
+    class _Core:
+        tick_seconds = 0.0
+
+        async def tick_once(self, *, force_ignite=False):
+            return {"status": "completed"}
+
+    resident._build_core = lambda _world, _session_id: _Core()
+
+    asyncio.run(resident.run(max_ticks=1, pause_seconds=0.0))
+
+    lifecycle_types = [
+        event_type
+        for event_type in _event_types(resident)
+        if event_type.startswith("reference_process_host_")
+    ]
+    assert lifecycle_types == [
+        "reference_process_host_started",
+        "reference_process_host_suspended",
+    ]
+    hosting = load_resident_process_envelope(resident._resident_dir / "memory")[
+        "hosting"
+    ]
+    assert hosting["state"] == "suspended"
+    assert hosting["host_run_id"].startswith("host-")
+    assert hosting["suspended_at"]
+    assert resident._runtime_lease is None
+
+
 def test_model_override_can_omit_temperature_without_rewriting_identity(
     tmp_path,
     monkeypatch,

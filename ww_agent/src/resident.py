@@ -34,7 +34,10 @@ from src.runtime.ledger import (
     load_runtime_events,
 )
 from src.runtime.naming import slugify_resident_name
-from src.runtime.process_state import ResidentProcessBinding
+from src.runtime.process_state import (
+    PROCESS_HOST_LIFECYCLE_VERSION,
+    ResidentProcessBinding,
+)
 from src.runtime.reference_core import ReferenceResidentCore
 from src.runtime.travel import (
     PendingShardTravel,
@@ -117,6 +120,7 @@ class Resident:
         self._hearth_shard_id = ""
         self._runtime_generation = 0
         self._travel_id = ""
+        self._host_run_id: str | None = None
 
     @property
     def name(self) -> str:
@@ -235,7 +239,10 @@ class Resident:
                 if park_at_hearth_on_stop:
                     await self._park_current_city_at_hearth()
             finally:
-                self._release_runtime_lease()
+                try:
+                    self._suspend_process_hosting()
+                finally:
+                    self._release_runtime_lease()
 
     async def park_at_hearth_and_stop(self) -> None:
         """Retire a started resident's city session without running cognition."""
@@ -275,6 +282,7 @@ class Resident:
             raise RuntimeError(f"Resident {self.name} not started — call start() first")
         if max_ticks > 0 and max_duration_seconds is not None:
             raise ValueError("choose either max_ticks or max_duration_seconds")
+        self._begin_process_hosting()
         duration = (
             None
             if max_duration_seconds is None
@@ -734,6 +742,45 @@ class Resident:
             event_type="reference_process_bound",
             payload=candidate,
         )
+
+    def _process_lifecycle_payload(self, host_run_id: str) -> dict[str, Any]:
+        identity = self._require_identity()
+        return {
+            "process_lifecycle_version": PROCESS_HOST_LIFECYCLE_VERSION,
+            "actor_id": identity.actor_id,
+            "hearth_shard_id": self._hearth_shard_id,
+            "runtime_generation": self._runtime_generation,
+            "host_run_id": host_run_id,
+        }
+
+    def _begin_process_hosting(self) -> None:
+        """Record one running host interval after binding the current attachment."""
+
+        if self._host_run_id is not None:
+            return
+        self._bind_current_reference_process()
+        host_run_id = f"host-{uuid.uuid4().hex}"
+        append_runtime_event(
+            self._resident_dir / "memory",
+            event_type="reference_process_host_started",
+            payload=self._process_lifecycle_payload(host_run_id),
+        )
+        self._host_run_id = host_run_id
+
+    def _suspend_process_hosting(self) -> None:
+        """Record a clean stop; absence of this event leaves stop time unknown."""
+
+        host_run_id = self._host_run_id
+        if host_run_id is None:
+            return
+        try:
+            append_runtime_event(
+                self._resident_dir / "memory",
+                event_type="reference_process_host_suspended",
+                payload=self._process_lifecycle_payload(host_run_id),
+            )
+        finally:
+            self._host_run_id = None
 
     async def _apply_travel_request(
         self,

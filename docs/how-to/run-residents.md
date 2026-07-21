@@ -57,6 +57,11 @@ bound to the resident's actor ID, active hearth generation, attachment, adapter,
 if another resident tries to load it. The current model-state field is explicitly `none` and zero bytes: this
 restores structured process bookkeeping, not a hidden model conversation or action prose in the next prompt.
 
+An ordinary bounded stop also leaves the process envelope in `suspended` state before releasing the hearth
+lock. On the next run, the checkpoint records how long that clean suspension lasted. After a crash or hard
+power loss, no trustworthy stop time exists; the restored record says the interval is unknown instead of
+claiming that the resident kept computing while the host was off.
+
 If the current place or private checkpoint changes while the model is answering, a state-changing answer is
 discarded before it reaches the world. The run summary reports a stale choice and its structural change class,
 then the checkpoint offers the resident another turn. The stale record does not contain the model response or

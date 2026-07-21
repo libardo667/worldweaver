@@ -268,6 +268,133 @@ def test_resident_process_envelope_matches_full_ledger_replay(tmp_path) -> None:
     }
 
 
+def test_resident_process_checkpoint_distinguishes_hosted_suspended_and_restored(
+    tmp_path,
+) -> None:
+    binding = ResidentProcessBinding(
+        actor_id="actor-test",
+        hearth_shard_id="hearth:actor-test",
+        runtime_generation=3,
+        attachment_kind="hearth",
+        world_id="world-test",
+        city_id="",
+        session_id="actor-test-hearth",
+        model_id="test/model-v1",
+    )
+    lifecycle = {
+        "process_lifecycle_version": 1,
+        "actor_id": "actor-test",
+        "hearth_shard_id": "hearth:actor-test",
+        "runtime_generation": 3,
+    }
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="reference_process_bound",
+        payload=binding.as_dict(),
+        ts="2026-07-20T10:00:00+00:00",
+    )
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="reference_process_host_started",
+        payload={**lifecycle, "host_run_id": "host-one"},
+        ts="2026-07-20T10:01:00+00:00",
+    )
+
+    hosted = ledger.load_resident_process_envelope(tmp_path)["hosting"]
+    assert hosted == {
+        "lifecycle_version": 1,
+        "state": "hosted",
+        "host_run_id": "host-one",
+        "hosted_at": "2026-07-20T10:01:00+00:00",
+        "suspended_at": None,
+        "previous_stop": "first_start",
+        "restored_elapsed_ms": None,
+    }
+
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="sample_while_hosted",
+        payload={},
+        ts="2026-07-20T10:03:00+00:00",
+    )
+    assert ledger.load_resident_process_envelope(tmp_path)["hosting"] == hosted
+
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="reference_process_host_suspended",
+        payload={**lifecycle, "host_run_id": "host-one"},
+        ts="2026-07-20T10:05:00+00:00",
+    )
+    suspended = ledger.load_resident_process_envelope(tmp_path)["hosting"]
+    assert suspended["state"] == "suspended"
+    assert suspended["suspended_at"] == "2026-07-20T10:05:00+00:00"
+
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="reference_process_host_started",
+        payload={**lifecycle, "host_run_id": "host-two"},
+        ts="2026-07-20T10:15:00+00:00",
+    )
+    restored = ledger.load_resident_process_envelope(tmp_path)["hosting"]
+    assert restored["state"] == "hosted"
+    assert restored["previous_stop"] == "clean"
+    assert restored["restored_elapsed_ms"] == 600_000
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="reference_process_host_suspended",
+        payload={**lifecycle, "host_run_id": "host-one"},
+        ts="2026-07-20T10:16:00+00:00",
+    )
+    assert ledger.load_resident_process_envelope(tmp_path)["hosting"] == restored
+    replayed = ledger.reduce_runtime_events(
+        ledger.load_runtime_events(tmp_path)
+    ).runtime_projection["resident_process"]
+    assert replayed == ledger.load_resident_process_envelope(tmp_path)
+
+
+def test_resident_process_does_not_invent_downtime_after_an_unclean_stop(
+    tmp_path,
+) -> None:
+    binding = ResidentProcessBinding(
+        actor_id="actor-test",
+        hearth_shard_id="hearth:actor-test",
+        runtime_generation=3,
+        attachment_kind="hearth",
+        world_id="world-test",
+        city_id="",
+        session_id="actor-test-hearth",
+        model_id="test/model-v1",
+    )
+    lifecycle = {
+        "process_lifecycle_version": 1,
+        "actor_id": "actor-test",
+        "hearth_shard_id": "hearth:actor-test",
+        "runtime_generation": 3,
+    }
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="reference_process_bound",
+        payload=binding.as_dict(),
+        ts="2026-07-20T10:00:00+00:00",
+    )
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="reference_process_host_started",
+        payload={**lifecycle, "host_run_id": "host-before-crash"},
+        ts="2026-07-20T10:01:00+00:00",
+    )
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="reference_process_host_started",
+        payload={**lifecycle, "host_run_id": "host-after-crash"},
+        ts="2026-07-20T11:01:00+00:00",
+    )
+
+    restored = ledger.load_resident_process_envelope(tmp_path)["hosting"]
+    assert restored["previous_stop"] == "unclean_or_unknown"
+    assert restored["restored_elapsed_ms"] is None
+
+
 def test_new_events_have_monotonic_sequences(tmp_path) -> None:
     first = ledger.append_runtime_event(tmp_path, event_type="first", payload={})
     second = ledger.append_runtime_event(tmp_path, event_type="second", payload={})
