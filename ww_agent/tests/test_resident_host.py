@@ -634,6 +634,40 @@ def test_city_host_wakes_early_for_cursor_delivered_speech(tmp_path):
     assert waits[1][0] == cursor
     assert waits[1][1] > 0
     assert waits[2][0] == cursor
+    cursor_events = [
+        event
+        for event in load_runtime_events(resident._resident_dir / "memory")
+        if event["event_type"] == "live_signal_cursor_advanced"
+    ]
+    assert cursor_events[-1]["payload"] == {
+        "version": 1,
+        "session_id": "test-resident-city-session",
+        "shard_id": "alderbank",
+        "location": "Alderbank Commons",
+        "after_id": 5,
+        "status": "acknowledged",
+        "delivered_count": 1,
+    }
+
+
+def test_live_signal_cursor_restores_only_for_the_same_city_session(tmp_path):
+    resident = _resident(tmp_path, _FakeCityClient())
+    cursor = LiveSignalCursor(
+        shard_id="alderbank", location="Alderbank Commons", after_id=19
+    )
+    resident._record_live_signal_cursor(
+        previous=None,
+        current=cursor,
+        session_id="test-resident-city-session",
+        status="acknowledged",
+        delivered_count=2,
+    )
+
+    restored = resident._restore_live_signal_cursor("test-resident-city-session")
+    new_attachment = resident._restore_live_signal_cursor("new-city-session")
+
+    assert restored == cursor
+    assert new_attachment is None
 
 
 def test_duration_bound_uses_elapsed_time_instead_of_a_tick_limit(tmp_path):

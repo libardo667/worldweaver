@@ -47,8 +47,11 @@ session's exact place on the server, advances over the existing append-only loca
 caller's own speech, and explicitly resets when the shard or place changes. Establishing a cursor does not
 replay archived room chat. The reference host long-polls this cursor between ordinary observations and offers
 a returned speech batch directly to the core. It advances the in-memory cursor only after that observation is
-acknowledged. A timeout or unavailable signal endpoint falls back to the normal timer. Cursor restoration
-across process restart remains unfinished.
+acknowledged, then records the structural cursor position—not the speech text—in the private ledger. A restart
+restores it only for the same city session. A new attachment after hearth or cross-city travel establishes a
+fresh cursor, so speech from while the resident was away is not replayed as present hearing. A timeout or
+unavailable signal endpoint falls back to the normal timer. Delivery is currently at-least-once: a crash in
+the small window between observation and cursor recording may offer the same speech again, but does not lose it.
 
 The complete ledger file is append-only and is intended to be the resident's durable event authority. A
 versioned checkpoint is intended to hold current working state so normal ticks do not replay the entire life

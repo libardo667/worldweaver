@@ -49,7 +49,9 @@ inputs in the identity loader; they do not restore the old ownership model.
 - The production loop observes current-place facts on its normal cadence. In a city, it waits on a durable
   exact-place speech cursor and wakes early when that cursor delivers something; the normal timer remains the
   fallback. Delivery is not a command to reply. Do not replay old speech as new, advance the cursor before the
-  core acknowledges observation, or let activity elsewhere in the city trigger a resident poll.
+  core acknowledges observation, or let activity elsewhere in the city trigger a resident poll. Persist only
+  content-blind cursor position, bind restoration to the exact city session, and establish a new scope after
+  hearth or cross-city travel.
 - Relationship summaries are reducer output, not a second memory store. They may use only an
   `utterance_perceived` delivery event and a canonical reply edge; their subjective claims must retain
   the supporting ledger event IDs and never turn chat text into an unsupported belief.

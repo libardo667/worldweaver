@@ -8,11 +8,16 @@ ticks, 224 active pulses, and 1,362 model calls under the old CognitiveCore runt
 comparison evidence, not as the target architecture. See
 [`research/runs/2026-07-19-alderbank-four-resident-baseline/FINDINGS.md`](../../research/runs/2026-07-19-alderbank-four-resident-baseline/FINDINGS.md).
 
-The small reference loop has since replaced CognitiveCore in production. It polls every 20 seconds, usually
-activates only for new exact-place speech or a five-minute baseline, and remains free to act, continue
-privately, or wait. Levi's first plain run noticed three live human messages within one polling interval and
-parked cleanly. That is a good control result. It does not yet provide durable event delivery: a host still
-has to ask repeatedly whether anything changed.
+The small reference loop has since replaced CognitiveCore in production. Its normal refresh is every 20
+seconds, it usually activates only for new exact-place speech or a five-minute baseline, and it remains free
+to act, continue privately, or wait. Levi's first plain run noticed three live human messages within one
+refresh interval and parked cleanly. That is a good control result.
+
+Implementation checkpoint (2026-07-20): the engine now exposes an authenticated cursor over append-only
+exact-place speech IDs. The resident host long-polls it between normal observations, supplies returned speech
+directly to the reference core, and advances the cursor only after observation acknowledges the whole batch.
+The content-blind cursor position is recorded in the private ledger and restored only for the same city
+session. Hearth return and cross-city travel establish a fresh scope. The old timer remains the fallback.
 
 ## Problem
 
@@ -99,3 +104,26 @@ An event path can create notification storms, leak one place's activity to anoth
 social contact into a coercive engagement system. Start with local structural events, strict actor and runtime
 generation checks, bounded retention, and synthetic fault tests. If ordering or isolation fails, disable early
 wakeups and return to the reference poll while retaining explicit cursor diagnostics.
+
+## Progress
+
+### 2026-07-20 — exact-place speech cursor and interruptible wait
+
+The first signal family is live local public speech. The server derives location from the authorized session,
+excludes the caller's own actor and session, returns at most ten ordered messages to the resident host, and
+explicitly reports cursor establishment, place/shard change, or a database reset. Archived speech is skipped
+when a cursor is established. A process-local notification ends long polls early; the database cursor remains
+authoritative, so a missed or cross-process notification becomes latency rather than event loss.
+
+The host does not treat notification as observation. It offers the returned batch directly to the reference
+core and records the cursor only after every message in that batch is accepted into the current-place
+observation. Restart restores only a cursor bound to the same city session; a new attachment starts at the
+current high-water mark. Delivery is at-least-once across a crash between observation and cursor recording.
+Tests cover ordering, own/distant-speech exclusion, place reset, retention-gap reporting, long-poll timeout and
+wake, direct batch observation, acknowledgement, unrelated notification filtering, restart, and new-session
+isolation.
+
+Still open: actor arrival/departure and direct-correspondence signal families; explicit pause and engine-restart
+fault tests; content-blind latency/duplicate/gap metrics; notification backpressure under a busy place; and a
+post-fix live Alderbank run. These should extend the cursor contract rather than introduce prose-based urgency
+or a second event log.

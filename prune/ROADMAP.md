@@ -78,7 +78,9 @@ or earn re-entry, not tune the new loop toward sociability, movement, or a prefe
 First, separate event delivery from the resident's decision to respond. Add durable cursors and an
 interruptible wait for exact-place events, resident-set timers, pause, reconnect, and travel. Direct speech
 may offer an earlier activation; it may not force one public action. Keep the current poll as the control until
-the event path proves ordering, retention, isolation, and cleanup. Major 132 owns this boundary.
+the event path proves ordering, retention, isolation, and cleanup. The first exact-place speech cursor,
+interruptible wait, observation acknowledgement, timer fallback, and same-session restart record are now in
+place. Major 132 owns the remaining signal families, fault measurements, and broader cleanup proof.
 
 Then implement Major 141's smallest local, checkpointable resident process. Carry bounded resident-specific
 state from one activation to the next, support open private activities and resident-chosen return times, and

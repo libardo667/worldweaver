@@ -289,7 +289,11 @@ class Resident:
             while True:
                 session_id = self._active_session_id()
                 core = self._build_core(world, session_id)
-                signal_cursor: LiveSignalCursor | None = None
+                signal_cursor = (
+                    self._restore_live_signal_cursor(session_id)
+                    if self._attachment_kind == "city"
+                    else None
+                )
                 pending_signals: LiveSignalBatch | None = None
                 live_signal_wake = False
                 while True:
@@ -339,6 +343,13 @@ class Resident:
                         )
                         expected = {event.id for event in pending_signals.events}
                         if expected and expected <= acknowledged:
+                            self._record_live_signal_cursor(
+                                previous=signal_cursor,
+                                current=pending_signals.cursor,
+                                session_id=session_id,
+                                status="acknowledged",
+                                delivered_count=len(expected),
+                            )
                             signal_cursor = pending_signals.cursor
                             pending_signals = None
                     stop_after_tick = max_ticks > 0 and tick_count >= max_ticks
@@ -382,6 +393,13 @@ class Resident:
                     if pending_signals is not None:
                         has_seen = getattr(core, "has_seen_live_signals", None)
                         if callable(has_seen) and has_seen(pending_signals.events):
+                            self._record_live_signal_cursor(
+                                previous=signal_cursor,
+                                current=pending_signals.cursor,
+                                session_id=session_id,
+                                status="reconciled",
+                                delivered_count=len(pending_signals.events),
+                            )
                             signal_cursor = pending_signals.cursor
                             pending_signals = None
                             live_signal_wake = False
@@ -438,23 +456,27 @@ class Resident:
                     "scope_changed",
                     "retention_gap",
                 }:
+                    previous_cursor = current_cursor
                     current_cursor = batch.cursor
+                    self._record_live_signal_cursor(
+                        previous=previous_cursor,
+                        current=current_cursor,
+                        session_id=session_id,
+                        status=batch.cursor_status,
+                    )
                     if batch.cursor_status == "retention_gap":
-                        append_runtime_event(
-                            self._resident_dir / "memory",
-                            event_type="live_signal_retention_gap",
-                            payload={
-                                "shard_id": batch.cursor.shard_id,
-                                "location": batch.cursor.location,
-                                "after_id": batch.cursor.after_id,
-                            },
-                        )
                         return current_cursor, None, True
                     if loop.time() < deadline:
                         continue
                     return current_cursor, None, False
                 if batch.events:
                     return current_cursor, batch, True
+                self._record_live_signal_cursor(
+                    previous=current_cursor,
+                    current=batch.cursor,
+                    session_id=session_id,
+                    status="current",
+                )
                 current_cursor = batch.cursor
                 if loop.time() < deadline:
                     continue
@@ -466,6 +488,60 @@ class Resident:
             remaining = max(0.0, deadline - loop.time())
             await asyncio.sleep(remaining)
             return current_cursor, None, False
+
+    def _restore_live_signal_cursor(self, session_id: str) -> LiveSignalCursor | None:
+        """Restore only the cursor belonging to this exact city attachment."""
+
+        normalized_session_id = str(session_id or "").strip()
+        events = load_runtime_events(self._resident_dir / "memory")
+        for event in reversed(events):
+            if str(event.get("event_type") or "") != "live_signal_cursor_advanced":
+                continue
+            payload = event.get("payload")
+            if not isinstance(payload, dict):
+                continue
+            if str(payload.get("session_id") or "").strip() != normalized_session_id:
+                continue
+            try:
+                shard_id = str(payload["shard_id"]).strip()
+                location = str(payload["location"]).strip()
+                after_id = int(payload["after_id"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if shard_id and location and after_id >= 0:
+                return LiveSignalCursor(
+                    shard_id=shard_id,
+                    location=location,
+                    after_id=after_id,
+                )
+        return None
+
+    def _record_live_signal_cursor(
+        self,
+        *,
+        previous: LiveSignalCursor | None,
+        current: LiveSignalCursor,
+        session_id: str,
+        status: str,
+        delivered_count: int = 0,
+    ) -> None:
+        """Persist an acknowledged cursor without copying public speech text."""
+
+        if previous == current and status not in {"retention_gap", "scope_changed"}:
+            return
+        append_runtime_event(
+            self._resident_dir / "memory",
+            event_type="live_signal_cursor_advanced",
+            payload={
+                "version": 1,
+                "session_id": str(session_id or "").strip(),
+                "shard_id": current.shard_id,
+                "location": current.location,
+                "after_id": current.after_id,
+                "status": status,
+                "delivered_count": max(0, int(delivered_count)),
+            },
+        )
 
     def _build_current_world(self) -> CityWorld | LocalWorld:
         if self._attachment_kind == "hearth":
