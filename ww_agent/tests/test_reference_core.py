@@ -342,28 +342,18 @@ def test_unavoidable_hearing_excludes_archived_room_chat():
     assert observation.heard == (("Riley", "2", "chat:Alderbank Commons:2"),)
 
 
-def test_unavoidable_observation_excludes_archived_speech_event_copy():
-    world = _FakeWorld()
-    world.scene.recent_events_here = [
-        SimpleNamespace(
-            event_type="utterance",
-            summary="Old Speaker said: A conversation from two days ago.",
-        ),
-        SimpleNamespace(
-            event_type="object_transferred",
-            summary="A cup changed hands.",
-        ),
-    ]
-
-    observation = asyncio.run(
-        observe_reference_world(
-            world,
-            session_id="test-session",
-            identity=_identity(),
-        )
+def test_automatic_prompt_excludes_ambient_narration_and_event_summaries(tmp_path):
+    core, _memory_dir, _acted, _reads = _core(
+        tmp_path,
+        responses=[{"choice": "wait"}],
     )
 
-    assert observation.recent_events == ("A cup changed hands.",)
+    asyncio.run(core.tick_once())
+
+    prompt = core._llm.calls[0][1]
+    assert "Rain ticks on the awning" not in prompt
+    assert "A cup changed hands" not in prompt
+    assert "Visible marks: Riley: a chalk arrow" in prompt
 
 
 def test_local_direct_speech_is_in_the_unavoidable_observation():

@@ -177,60 +177,6 @@ class LiveSignalBatch:
 _AGENT_SLUG_RE = re.compile(r"^([a-z][a-z0-9_]*)[-_]\d{8}")
 
 
-# ---------------------------------------------------------------------------
-# Prose rendering — SceneData → natural language for LLM prompts
-# The agent never sees raw API fields.
-# ---------------------------------------------------------------------------
-
-
-def scene_to_prose(scene: SceneData, character_name: str) -> str:
-    """
-    Transform structured scene data into natural prose for LLM context.
-    No JSON field names, no API vocabulary, no raw arrays.
-
-    Example output:
-        You are in the Deeper Corridor. Casper is nearby — he set something
-        down a few minutes ago and hasn't moved since. Elias left a while back.
-
-        Recently here: A low hum started somewhere in the ceiling.
-    """
-    parts: list[str] = []
-
-    # Location
-    parts.append(f"You are in {scene.location}.")
-
-    # Who's present (excluding self)
-    others = [p for p in scene.present if p.name.lower() != character_name.lower()]
-    if others:
-        presence_parts = []
-        for p in others:
-            # Prefer role (character/player name) over name (session slug)
-            display = p.role if p.role and p.role != p.name else p.name
-            if p.last_action:
-                presence_parts.append(
-                    f"{display} is here — {p.last_action.rstrip('.')}"
-                )
-            else:
-                presence_parts.append(f"{display} is here")
-        parts.append(" ".join(presence_parts) + ".")
-    else:
-        parts.append("No one else is here right now.")
-
-    if scene.ambient_presence:
-        labels = [
-            item.label.rstrip(".") for item in scene.ambient_presence[:3] if item.label
-        ]
-        if labels:
-            parts.append("Around the edges: " + ". ".join(labels) + ".")
-
-    # Recent events at this location
-    if scene.recent_events_here:
-        event_lines = [e.summary.rstrip(".") for e in scene.recent_events_here[:5]]
-        parts.append("Recently: " + ". ".join(event_lines) + ".")
-
-    return " ".join(parts)
-
-
 def world_facts_to_prose(facts: list[WorldFact], limit: int = 5) -> str:
     """
     Render retrieved world facts as prose for slow loop context.

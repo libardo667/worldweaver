@@ -442,312 +442,6 @@ def _resolve_neighborhood_name_for_location(location: str) -> Optional[str]:
     return name or None
 
 
-def _resolve_neighborhood_record_for_location(location: str) -> Dict[str, Any]:
-    from ...services.city_pack_service import find_neighborhood_record_for_location
-
-    neighborhood = find_neighborhood_record_for_location(location, settings.city_id)
-    if isinstance(neighborhood, dict):
-        return neighborhood
-    return {}
-
-
-def _neighborhood_salience(vibe: str) -> Optional[tuple[str, str, str]]:
-    """Major 64 (plural salience): the place's own intrinsic loud feature.
-
-    The convergence trials showed the world makes *one* thing loud to everyone at
-    once (the shared weather / decaying environment), so a deliberately diverse cast
-    collapses onto it. The cure is **dilution, not removal** — keep the weather, but
-    make sure it is never the *only* loud thing. This keys a place-character salience
-    off the city-pack ``vibe`` so different neighborhoods are loud about *different*
-    things, and two residents in two neighborhoods perceive two different second
-    saliences. Law-safe by construction: it varies what the world *offers* and targets
-    no resident's output (the world has no soul to shape).
-
-    Returns ``(archetype, label, sensory_note)`` or ``None`` for a featureless place.
-    """
-    v = (vibe or "").strip().lower()
-    if not v:
-        return None
-
-    def has(*tokens: str) -> bool:
-        return any(token in v for token in tokens)
-
-    # Most specific / most environmentally dominant archetype first.
-    if has(
-        "ferry",
-        "pier",
-        "wharf",
-        "waterfront",
-        "foghorn",
-        "promenade",
-        "bay bridge",
-        "sea lion",
-        "alcatraz",
-        "shipyard",
-        "dock",
-        "marina",
-    ):
-        return (
-            "maritime",
-            "The working waterfront sets the tempo here — the water's edge is the loud thing.",
-            "Gulls, the slap of the bay, a foghorn somewhere, brine and diesel on the air.",
-        )
-    if has(
-        "government",
-        "city hall",
-        "symphony",
-        "civic",
-        "un plaza",
-        "homeless services",
-        "courts",
-        "federal",
-        "municipal",
-    ):
-        return (
-            "civic",
-            "This is institutional ground — the machinery of the city is what's loud here.",
-            "Official facades, people with somewhere formal to be, the hum of queues and services.",
-        )
-    if has(
-        "lgbtq",
-        "rainbow",
-        "harvey milk",
-        "jazz",
-        "music venues",
-        "arts",
-        "hippie",
-        "vintage",
-        "head shop",
-        "opera",
-        "summer of love",
-        "design-conscious",
-        "galleries",
-    ):
-        return (
-            "culture",
-            "The neighborhood's cultural signature is the loud thing — its scene worn in the open.",
-            "Murals and signage, music spilling from a doorway, the legible pride of a place that knows itself.",
-        )
-    if has(
-        "industrial",
-        "warehouse",
-        "design studio",
-        "brewer",
-        "redevelopment",
-        "t-third",
-        "naval",
-    ):
-        return (
-            "industrial",
-            "Working, industrial bones give this place its texture — labor and material, not leisure.",
-            "Roll-up doors, the ring of work, old buildings repurposed, the grain of a place that makes things.",
-        )
-    if has(
-        "dim sum",
-        "herbalist",
-        "market",
-        "shops",
-        "restaurant",
-        "crab stand",
-        "grant avenue",
-        "stockton",
-        "union street",
-        "fillmore street",
-        "boutique",
-        "wine bar",
-        "cafe",
-        "burrito",
-    ):
-        return (
-            "commerce",
-            "The street's commerce is its loudest feature — vendors, counters, the trade of the block.",
-            "Goods changing hands, the smell of cooking, someone calling a price down the row.",
-        )
-    if has("tourist", "postcard", "painted ladies", "epicenter", "ghirardelli"):
-        return (
-            "tourism",
-            "Tourism is the loud current here — the place performs itself for visitors.",
-            "Cameras and queues, vendors angled at strangers, the friction of a place that is also a postcard.",
-        )
-    if has(
-        "residential",
-        "village",
-        "canyon",
-        "family-oriented",
-        "quiet",
-        "dog park",
-        "tight-knit",
-        "hilltop",
-        "calm",
-        "working-class",
-    ):
-        return (
-            "domestic",
-            "This is quiet domestic ground — ordinary home life is the loud thing here.",
-            "Dog walkers, a kid's voice somewhere, the low rhythm of a neighborhood that keeps to itself.",
-        )
-    # Vibe present but unclassified — surface the place's own note as its loud feature.
-    return (
-        "local",
-        "This block has a particular character of its own that sets it apart.",
-        vibe,
-    )
-
-
-def _derive_scene_ambient_presence(
-    *,
-    location: str,
-    neighborhood: Dict[str, Any],
-    current_present: int,
-    time_of_day: str,
-    weather_description: str,
-) -> List[Dict[str, Any]]:
-    vibe = str(neighborhood.get("vibe") or "").strip()
-    lowered_vibe = vibe.lower()
-    items: List[Dict[str, Any]] = []
-
-    def _add(
-        *,
-        kind: str,
-        label: str,
-        intensity: float,
-        pressure_tags: List[str],
-        sensory_note: str = "",
-        ttl_seconds: int = 1800,
-        source: str = "scene_synthesis",
-    ) -> None:
-        key = (kind, label)
-        if any(
-            (str(existing.get("kind") or ""), str(existing.get("label") or "")) == key
-            for existing in items
-        ):
-            return
-        items.append(
-            {
-                "id": f"{kind}:{abs(hash((location, label))) % 1000000}",
-                "kind": kind,
-                "label": label,
-                "source": source,
-                "intensity": round(max(0.0, min(float(intensity), 1.0)), 3),
-                "ttl_seconds": int(ttl_seconds),
-                "pressure_tags": list(
-                    dict.fromkeys(tag for tag in pressure_tags if tag)
-                ),
-                "sensory_note": sensory_note[:180] if sensory_note else "",
-            }
-        )
-
-    weather_lower = weather_description.lower().strip()
-    food_vibe = any(
-        token in lowered_vibe
-        for token in (
-            "bakery",
-            "cafe",
-            "coffee",
-            "dim sum",
-            "market",
-            "restaurant",
-            "herbalist",
-        )
-    )
-    transit_vibe = any(
-        token in lowered_vibe
-        for token in (
-            "promenade",
-            "transit",
-            "workers",
-            "government",
-            "streetcar",
-            "ferry",
-            "tourism",
-        )
-    )
-
-    if any(
-        token in weather_lower
-        for token in ("rain", "drizzle", "shower", "fog", "wind", "storm")
-    ):
-        note = "Umbrellas, damp sleeves, and people lingering wherever the block offers a little cover."
-        if "fog" in weather_lower:
-            note = "Muted outlines, damp air, and people keeping close to whatever light and shelter they can find."
-        _add(
-            kind="weather_shelter_cluster",
-            label="People keep collecting in the sheltered edges of the block.",
-            intensity=0.66 if current_present >= 2 else 0.54,
-            pressure_tags=["bad_weather", "shelter"],
-            sensory_note=note,
-            ttl_seconds=1500,
-            source="grounding",
-        )
-
-    # Major 64 — the place's own intrinsic loud feature, always present (headcount-
-    # independent) and weather-competitive, so the shared weather is never the sole
-    # salient thing and different neighborhoods are loud about different things.
-    place = _neighborhood_salience(vibe)
-    if place:
-        archetype, place_label, place_note = place
-        _add(
-            kind="place_character",
-            label=place_label,
-            intensity=0.6,
-            pressure_tags=["place_character", archetype],
-            sensory_note=place_note,
-            ttl_seconds=2400,
-            source="neighborhood",
-        )
-
-    if current_present >= 7:
-        _add(
-            kind="passerby_cluster",
-            label="A thick pedestrian flow keeps brushing past the edges of things here.",
-            intensity=min(0.92, 0.45 + (0.05 * current_present)),
-            pressure_tags=["crowding", "movement"],
-            sensory_note="Snatches of conversation, shifting foot traffic, and the sense that nobody holds still for long.",
-        )
-    elif current_present >= 4:
-        label = (
-            "A loose line keeps forming and dissolving nearby."
-            if food_vibe
-            else "Small clusters keep lingering and then moving on."
-        )
-        kind = "queue" if food_vibe else "lingerers"
-        _add(
-            kind=kind,
-            label=label,
-            intensity=0.58,
-            pressure_tags=["crowding"] if food_vibe else ["social_noise"],
-            sensory_note="There is just enough ordinary public life here to keep the place from settling completely.",
-        )
-    elif current_present <= 1 and time_of_day == "night":
-        _add(
-            kind="night_presence",
-            label="Only a thin late-night presence is holding the block open.",
-            intensity=0.52,
-            pressure_tags=["quiet", "night"],
-            sensory_note="A few lit windows and the occasional silhouette keep the place from going fully empty.",
-            ttl_seconds=2100,
-            source="time_of_day_routine",
-        )
-
-    if time_of_day == "morning" and (food_vibe or transit_vibe):
-        label = (
-            "The neighborhood carries a morning errand-and-work rush."
-            if transit_vibe
-            else "There is the beginning of a morning line and work rhythm here."
-        )
-        _add(
-            kind="commuter_flow" if transit_vibe else "worker",
-            label=label,
-            intensity=0.56,
-            pressure_tags=["routine", "morning"],
-            sensory_note="The hour gives people somewhere to be, and it shows in the pace of the place.",
-            ttl_seconds=1800,
-            source="time_of_day_routine",
-        )
-
-    return items[:3]
-
-
 def _normalize_search_text(value: str) -> str:
     return " ".join(str(value or "").strip().lower().split())
 
@@ -835,9 +529,7 @@ def _load_live_presence_maps(
         dedupe_key = (
             ("agent", display_name.lower())
             if is_agent
-            else ("human", actor_id)
-            if actor_id
-            else ("human", sid)
+            else ("human", actor_id) if actor_id else ("human", sid)
         )
         entry = {
             "entity_type": "agent" if is_agent else "human",
@@ -3124,12 +2816,11 @@ def get_agent_scene(
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
 ):
-    """Local scene snapshot for agents — who is here, what just happened, what can I do next.
+    """Return current, directly reportable local state for a participant.
 
-    Called by agents before submitting an action. Returns a focused, location-scoped
-    picture of the world: co-located characters and their last actions, recent events
-    at this location, and the known location graph so the agent can reason about movement.
-    No LLM — pure aggregation. Fast.
+    Historical event summaries and inferred scenery are not current perception. They
+    remain available through explicit history queries instead of being mixed into this
+    scene snapshot.
     """
     if not _SAFE_SESSION_RE.match(session_id):
         raise HTTPException(status_code=400, detail="Invalid session_id format.")
@@ -3147,12 +2838,7 @@ def get_agent_scene(
     )
     session_rows = _load_recent_session_rows(db, requested_session_id=session_id)
     graph_anchor = _resolve_route_anchor(db, location) if location else ""
-    neighborhood = (
-        _resolve_neighborhood_record_for_location(graph_anchor) if graph_anchor else {}
-    )
-
     present_by_sid: Dict[str, Dict[str, Any]] = {}
-    display_name_by_sid: Dict[str, str] = {}
     for session_row in session_rows:
         sid = str(session_row.session_id or "").strip()
         if not sid or sid == session_id or not _is_player_session(sid):
@@ -3166,7 +2852,6 @@ def get_agent_scene(
 
         _, display_name = _session_display_details(sid, row_vars)
         role = _session_role_label(row_vars, display_name)
-        display_name_by_sid[sid] = display_name
         present_by_sid[sid] = {
             "actor_id": str(
                 session_row.actor_id or row_vars.get("actor_id") or ""
@@ -3179,36 +2864,6 @@ def get_agent_scene(
                 session_row.updated_at.isoformat() if session_row.updated_at else None
             ),
         }
-
-    recent_events = _recent_world_events_rows(db, limit=300)
-    local_events = []
-    for event in recent_events:
-        sid = str(event.session_id or "").strip()
-        if sid and sid in present_by_sid and not present_by_sid[sid].get("last_action"):
-            present_by_sid[sid]["last_action"] = _clean_event_summary(
-                str(event.summary or "")
-            )[:200]
-
-        delta = (
-            event.world_state_delta if isinstance(event.world_state_delta, dict) else {}
-        )
-        event_origin = _event_origin_location(delta)
-        event_destination = _event_destination_location(delta)
-        if event_origin != location and event_destination != location:
-            continue
-
-        who = display_name_by_sid.get(sid) or _slug_display_name(sid) or sid[:12]
-        local_events.append(
-            {
-                "event_id": str(event.id),
-                "event_type": str(event.event_type or ""),
-                "who": who,
-                "summary": _clean_event_summary(str(event.summary or ""))[:300],
-                "ts": event.created_at.isoformat() if event.created_at else None,
-            }
-        )
-        if len(local_events) >= 10:
-            break
 
     # ── Location graph (for movement decisions) ───────────────────────────────
     graph = get_location_graph(db)
@@ -3235,18 +2890,6 @@ def get_agent_scene(
         location_name=location,
         anchor_name=graph_anchor,
     )
-    from ...services.grounding import get_city_time_context
-
-    grounding = get_city_time_context(settings.city_id)
-    ambient_presence = _derive_scene_ambient_presence(
-        location=location,
-        neighborhood=neighborhood,
-        current_present=len(present_by_sid) + (1 if location else 0),
-        time_of_day=str(grounding.get("time_of_day") or "").strip(),
-        weather_description=str(
-            grounding.get("weather_description") or grounding.get("weather") or ""
-        ).strip(),
-    )
     traces_here = _active_world_traces(
         db, location=location, viewer_session_id=session_id
     )
@@ -3256,9 +2899,14 @@ def get_agent_scene(
         "location": location,
         "role": player_role,
         "present": list(present_by_sid.values()),
-        "ambient_presence": ambient_presence,
+        # Reserved for source-labelled environmental facts.  Do not turn
+        # weather, headcount, event count, or city-pack prose into authored
+        # social scenery and present it as direct perception.
+        "ambient_presence": [],
         "traces_here": traces_here,
-        "recent_events_here": local_events,
+        # Kept empty for response-shape compatibility. Historical events are
+        # available through explicit history and fact-query endpoints.
+        "recent_events_here": [],
         "location_graph": scene_graph,
     }
 
@@ -3545,11 +3193,13 @@ def get_location_chat(
             if str(row.session_id or "").strip()
         }
         actor_ids_by_session = {
-            str(row.session_id or "").strip(): str(
+            str(row.session_id or "")
+            .strip(): str(
                 row.actor_id
                 or (_session_variables_payload(row.vars).get("actor_id"))
                 or ""
-            ).strip()
+            )
+            .strip()
             for row in db.query(SessionVars)
             .filter(SessionVars.session_id.in_(session_ids))
             .all()

@@ -126,8 +126,6 @@ class ReferenceObservation:
     location: str = ""
     present: tuple[str, ...] = ()
     co_present: tuple[tuple[str, str, str], ...] = ()
-    ambient: tuple[str, ...] = ()
-    recent_events: tuple[str, ...] = ()
     local_speech: tuple[str, ...] = ()
     local_speech_ids: tuple[str, ...] = ()
     heard: tuple[tuple[str, str, str], ...] = ()
@@ -216,31 +214,14 @@ async def observe_reference_world(
         for person in other_people
         if str(getattr(person, "name", "") or "").strip()
     )
-    ambient = tuple(
-        str(getattr(item, "label", "") or "").strip()
-        for item in list(getattr(scene, "ambient_presence", []) or [])[:5]
-        if str(getattr(item, "label", "") or "").strip()
-    )
-    # Public speech is also projected into the world event log.  The live-speech
-    # path owns hearing, including its time and cursor rules; including utterance
-    # events here would replay archived room chat through a second prompt route.
-    recent_events = tuple(
-        str(getattr(item, "summary", "") or "").strip()
-        for item in list(getattr(scene, "recent_events_here", []) or [])[:8]
-        if str(getattr(item, "summary", "") or "").strip()
-        and str(getattr(item, "event_type", "") or "").strip() != "utterance"
-    )
     traces = tuple(
-        " ".join(
-            part
-            for part in (
-                str(getattr(item, "author_name", "") or "").strip(),
-                str(getattr(item, "body", "") or "").strip(),
-            )
-            if part
+        (
+            f"{author}: {body}"
+            if (author := str(getattr(item, "author_name", "") or "").strip())
+            else body
         )
         for item in list(getattr(scene, "traces_here", []) or [])[:8]
-        if str(getattr(item, "body", "") or "").strip()
+        if (body := str(getattr(item, "body", "") or "").strip())
     )
     sources = tuple(
         (
@@ -329,8 +310,6 @@ async def observe_reference_world(
         location=location,
         present=tuple(item for item in present if item),
         co_present=co_present,
-        ambient=ambient,
-        recent_events=recent_events,
         local_speech=local_speech,
         local_speech_ids=local_speech_ids,
         heard=heard,
@@ -372,14 +351,10 @@ def render_reference_observation(observation: ReferenceObservation) -> str:
         if observation.present
         else "No one else is reported here."
     )
-    if observation.ambient:
-        lines.append("Around you: " + "; ".join(observation.ambient) + ".")
     if observation.local_speech:
         lines.append("Recently said here:\n" + "\n".join(observation.local_speech))
     elif observation.availability.get("local_speech") == "unavailable":
         lines.append("Local speech is unavailable; do not treat it as silence.")
-    if observation.recent_events:
-        lines.append("Recent public events: " + "; ".join(observation.recent_events))
     if observation.traces:
         lines.append("Visible marks: " + "; ".join(observation.traces))
     if observation.reachable:

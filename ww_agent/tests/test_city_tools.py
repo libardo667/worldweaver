@@ -543,32 +543,6 @@ def test_places_source_looks_around():
     assert missing["ok"] is False and missing["reason"] == "query_required"
 
 
-def test_surroundings_is_an_elective_local_perception_source():
-    registry = build_city_source_registry(client=_ReadClient(), session_id="s1")
-
-    result = asyncio.run(registry.read("surroundings", ""))
-
-    assert len(result["records"]) == 2
-    assert result["provenance"] == "local-perception"
-    assert all(item["locality"] == "Chinatown" for item in result["records"])
-    assert all(item["selection_mode"] == "embodied_local" for item in result["records"])
-    assert "Steam trays" in _record_text(result)
-
-
-def test_surroundings_can_focus_without_hiding_the_unfiltered_browse():
-    registry = build_city_source_registry(client=_ReadClient(), session_id="s1")
-
-    focused = asyncio.run(registry.read("surroundings", "shelter"))
-    browse = asyncio.run(registry.read("surroundings", ""))
-
-    assert len(focused["records"]) == 1
-    assert focused["records"][0]["selection_mode"] == "text_match"
-    assert {item["title"] for item in browse["records"]} == {
-        "place character",
-        "weather shelter cluster",
-    }
-
-
 def test_investigate_source_queries_the_world():
     registry = build_city_source_registry(client=_ReadClient(), session_id="s1")
     res = asyncio.run(registry.read("investigate", "the rust"))
@@ -611,7 +585,6 @@ def test_full_context_grants_the_whole_catalog(tmp_path):
         "recall",
         "news",
         "places",
-        "surroundings",
         "investigate",
         "chatter",
         "travel",
