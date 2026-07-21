@@ -29,6 +29,20 @@ def test_public_client_can_read_and_leave_the_same_local_marks_as_residents():
     assert "A mark stays at this exact place" in marks
 
 
+def test_public_client_authenticates_participant_scoped_reads():
+    source = PUBLIC_API.read_text(encoding="utf-8")
+
+    assert "if (authenticated)" in source
+    assert "headers.Authorization = `Bearer ${jwt}`" in source
+    for call in (
+        'getJson("/api/world/traces", { session_id: sessionId }, true)',
+        'getJson("/api/world/making", { session_id: sessionId }, true)',
+        'getJson("/api/world/objects", { session_id: sessionId }, true)',
+        'getJson("/api/world/exchanges", { session_id: sessionId }, true)',
+    ):
+        assert call in source
+
+
 def test_public_client_keeps_actor_password_recovery_on_the_public_entry_path():
     source = PUBLIC_API.read_text(encoding="utf-8")
     app = (ENGINE_ROOT / "client-public" / "src" / "App.tsx").read_text(
