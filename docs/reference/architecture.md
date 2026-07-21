@@ -42,6 +42,13 @@ The twenty-second fallback is therefore a chance to refresh local facts, not nec
 Old room speech is not replayed as new at each baseline activation. Quiet, reading, and private continuation
 are complete choices; the runtime does not manufacture pressure to speak or move.
 
+The automatic observation boundary is intentionally narrow. It contains the resident's stored current place,
+current co-presence, exact newly delivered local speech, attributed unexpired traces, reachable graph
+destinations, and the names of elective sources. It does not contain generic event summaries or scene prose
+derived from weather, time, headcount, event count, or a city-pack `vibe`. A historical record can be true
+without being something the resident senses now. Steward-authored setting, participant-authored expression,
+and engine-owned current facts must remain labelled as different kinds of information.
+
 The engine exposes the first durable live-signal cursor for an authenticated session. It derives the
 session's exact place on the server, advances over the existing append-only local-speech IDs, excludes the
 caller's own speech, and explicitly resets when the shard or place changes. Establishing a cursor does not

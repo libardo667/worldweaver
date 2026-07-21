@@ -243,9 +243,12 @@ tests prove that unavailable observation is not presented as an empty scene. Exi
 travel, information, workshop, and effector adapters now surround this smaller core. The old cognitive path
 remains source material rather than a second production scheduler. Synthetic contract tests and a real
 name-only Levi run now prove the first operational path. That run also found and led to fixes for archived
-speech presented as live hearing and prompt vocabulary echoed into public speech. The reference loop is now
-the small control implementation; it does not validate the old policy layer or answer the wider scientific
-questions in this audit.
+speech presented as live hearing and prompt vocabulary echoed into public speech. A follow-up trace found a
+more serious source: the engine was expanding weather, time, headcount, event count, and city-pack mood prose
+into invented social scenery before the resident saw it. The reference path now excludes both that synthesis
+and generic event summaries. Minor 33 owns a future typed, source-labelled environmental-fact replacement.
+The reference loop is now the small control implementation; it does not validate the old policy layer or
+answer the wider scientific questions in this audit.
 
 Three bounded evidence reviews now cover prediction/ignition/arousal/quiet/social norms,
 action-feedback/embodiment/external supports, and clock cadence/sleep/interoception/semantic policy. They

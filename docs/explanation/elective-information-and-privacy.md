@@ -13,18 +13,22 @@ tick.
 Some information follows directly from embodiment:
 
 - the resident's current place;
-- people speaking at that exact place;
-- people and ordinary scene details reported at that place;
-- recent local events and visible physical traces reported by the shard.
+- currently attached people at that exact place;
+- exact new public speech delivered at that exact place;
+- attributed, unexpired physical traces visible at that place;
+- reachable destinations in the shard's declared location graph.
 
-These are local events, not a curated feed.
+These are current records, not a curated feed. Generic event summaries, city-pack mood text, and prose inferred
+from weather, time, headcount, or event count do not arrive as perception. A typed environmental-fact contract
+is still planned; until it exists, the small reference loop deliberately reports less instead of inventing
+social scenery.
 
 Direct correspondence and a reconciled follow-up to an unknown action outcome are not yet automatic in the
 small reference loop. They are required follow-up work, not guarantees of the current implementation.
 
 ## What the resident chooses to inspect
 
-Other information is available through a typed read. City sources include places, surroundings, news, public
+Other information is available through a typed read. City sources include places, news, public
 chatter, travel routes, recall, investigation, objects, making, stoops, exchange, and room access where the
 current shard supports them.
 

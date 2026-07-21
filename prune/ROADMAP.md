@@ -65,10 +65,16 @@ host-sealed key.
 
 That first run is now complete. Levi used an empty ledger and name-only identity, responded promptly to live
 human speech, and parked cleanly. It also exposed two prompt-pipeline leaks: archived room chat was treated as
-live hearing on entry, and the system prompt's word “attention” echoed into repeated public speech. Both are
-now removed and pinned by synthetic tests. Repeat a post-fix live run as regression evidence, but do not make
-visible activity the pass condition. Keep this loop available as the simple comparison and rollback path while
-the next resident process is built.
+live hearing on entry, and the prompt pipeline supplied attention-themed language that echoed into public
+speech. Both are now removed and pinned by synthetic tests. A second fresh resident, Rowan, then proved the
+durable live-speech path with two signed messages, prompt activation within 0.02 seconds, acknowledgement after
+observation, no self-reply loop, timer fallback, and clean parking. That run found one remaining archive leak:
+speech also entered the prompt as a copied world event. A deeper scene audit then found that the engine itself
+turned weather, time, headcount, event count, and city-pack mood prose into invented social scenery. Its
+event-count rule supplied Rowan's exact phrase “ripples of attention.” Those automatic history and narration
+routes are now removed. Minor 33 owns a later typed environmental-fact replacement. Rowan's wording is not a
+clean post-fix language sample. Keep this loop available as the simple comparison and rollback path while the
+next resident process is built; do not make visible activity the pass condition.
 
 Continue the research audit as a separate evidence lane. It should explain why old mechanisms remain removed
 or earn re-entry, not tune the new loop toward sociability, movement, or a preferred personality.

@@ -219,3 +219,10 @@ immediately supplied civic-planning language to a clean resident. It also found 
 “available to your attention” echoed as repeated “ripples of attention” in public replies. Unavoidable hearing
 now includes only speech since the previous poll, while historical room chat remains elective. The prompt now
 uses ordinary language and does not name attention machinery. Both boundaries have synthetic tests.
+
+A later live-signal control found that this was not only model echo. The engine's scene builder also turned
+event count into the exact phrase “ripples of attention,” and expanded weather, time, headcount, and city-pack
+`vibe` text into invented glances, queues, conversations, silhouettes, and social pressure. The production
+reference loop now accepts only current stored place and presence, exact new local speech, attributed visible
+traces, reachable graph destinations, and elective-source names. Generic event summaries and synthesized
+ambient prose are excluded. This narrows the control; it does not yet implement typed environmental facts.

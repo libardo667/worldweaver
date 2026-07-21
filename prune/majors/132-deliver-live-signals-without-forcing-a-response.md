@@ -19,6 +19,13 @@ directly to the reference core, and advances the cursor only after observation a
 The content-blind cursor position is recorded in the private ledger and restored only for the same city
 session. Hearth return and cross-city travel establish a fresh scope. The old timer remains the fallback.
 
+A live control now proves that path in Alderbank. Two signed exact-place messages began resident activations
+within 0.02 seconds, produced optional public responses in about 1.5 seconds, and received durable
+acknowledgements in about 1.9 seconds. Own replies did not wake the resident again; five minutes of silence
+returned control to the ordinary timer; both participants left cleanly. The first attempt also caught a real
+version-2 session-location mismatch, fixed in `90f3467`. See
+[`research/runs/2026-07-20-reference-loop-live-signal-control/FINDINGS.md`](../../research/runs/2026-07-20-reference-loop-live-signal-control/FINDINGS.md).
+
 ## Problem
 
 A person entering a room cannot choose not to see the room or hear speech that occurs beside them. A resident
@@ -124,6 +131,7 @@ wake, direct batch observation, acknowledgement, unrelated notification filterin
 isolation.
 
 Still open: actor arrival/departure and direct-correspondence signal families; engine-restart and disconnected
-server-wait fault tests; content-blind latency/duplicate/gap metrics; notification backpressure under a busy
-place; and a post-fix live Alderbank run. These should extend the cursor contract rather than introduce
-prose-based urgency or a second event log.
+server-wait fault tests; broader content-blind duplicate/gap and resource metrics; and notification
+backpressure under a busy place. The live Alderbank control establishes a one-resident speech baseline but
+does not close these broader cases. These should extend the cursor contract rather than introduce prose-based
+urgency or a second event log.
