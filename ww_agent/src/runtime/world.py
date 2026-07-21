@@ -25,6 +25,14 @@ class WorldClient(Protocol):
     async def get_location_chat(
         self, location: str, since: Any = None, session_id: str | None = None
     ) -> list[Any]: ...
+    async def wait_for_live_signals(
+        self,
+        session_id: str,
+        *,
+        cursor: Any = None,
+        wait_seconds: float = 0.0,
+        limit: int = 10,
+    ) -> Any: ...
     async def get_inbox(self, agent_name: str) -> list[Any]: ...
     async def access_information(
         self, *, kind: str, source: str, query: str = ""

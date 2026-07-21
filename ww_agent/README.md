@@ -7,7 +7,7 @@ engine decides shared world facts and whether actions succeed.
 ## Runtime
 
 ```text
-poll current place and local speech
+wait for local speech or the normal timer, then observe the current place
       ↓ when first started, newly addressed, explicitly woken, or baseline is due
 one model choice → optional single source read → final choice → typed effector or quiet
 ```
@@ -50,8 +50,9 @@ After reviewing the preflight, a bounded wake is explicit:
 python dev.py resident --city ww_alderbank --resident NAME --wake --ticks 3
 ```
 
-Use `--duration 15m` for natural wall-clock timing. The resident polls every twenty seconds but normally calls
-the model only on its first poll, new local speech, an explicit wake, or the five-minute baseline. The bounded
+Use `--duration 15m` for natural wall-clock timing. In a city, the resident waits up to twenty seconds for new
+exact-place speech before its normal refresh, but normally calls the model only on first start, new local speech,
+an explicit wake, or the five-minute baseline. The bounded
 runner disables the doula and parks the resident at their hearth afterward. `--park` performs cleanup without
 cognition after an interrupted run.
 

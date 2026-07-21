@@ -146,6 +146,34 @@ class ChatMessage:
     location: str = ""
 
 
+@dataclass(frozen=True, slots=True)
+class LiveSignalCursor:
+    shard_id: str
+    location: str
+    after_id: int
+
+
+@dataclass(frozen=True, slots=True)
+class LiveSignal:
+    id: int
+    kind: str
+    location: str
+    session_id: str
+    actor_id: str
+    display_name: str
+    message: str
+    occurred_at: str
+
+
+@dataclass(frozen=True, slots=True)
+class LiveSignalBatch:
+    cursor: LiveSignalCursor
+    cursor_status: str
+    retention: str
+    events: tuple[LiveSignal, ...]
+    has_more: bool
+
+
 _AGENT_SLUG_RE = re.compile(r"^([a-z][a-z0-9_]*)[-_]\d{8}")
 
 
@@ -1238,6 +1266,77 @@ class WorldWeaverClient:
             )
             for m in data.get("messages", [])
         ]
+
+    async def wait_for_live_signals(
+        self,
+        session_id: str,
+        *,
+        cursor: LiveSignalCursor | None = None,
+        wait_seconds: float = 0.0,
+        limit: int = 10,
+    ) -> LiveSignalBatch:
+        """Establish or advance the durable exact-place signal cursor."""
+
+        bounded_wait = max(0.0, min(25.0, float(wait_seconds)))
+        params: dict[str, Any] = {
+            "limit": max(1, min(100, int(limit))),
+            "wait_seconds": bounded_wait,
+        }
+        if cursor is not None:
+            params.update(
+                {
+                    "after": cursor.after_id,
+                    "cursor_shard": cursor.shard_id,
+                    "cursor_location": cursor.location,
+                }
+            )
+        resp = await self._get(
+            f"/api/world/session/{session_id}/signals",
+            params=params,
+            timeout=bounded_wait + 5.0,
+        )
+        data = resp.json()
+        raw_cursor = data.get("cursor") if isinstance(data, dict) else None
+        if not isinstance(raw_cursor, dict):
+            raise WorldClientError("live signal response omitted its cursor")
+        try:
+            parsed_cursor = LiveSignalCursor(
+                shard_id=str(raw_cursor["shard_id"]),
+                location=str(raw_cursor["location"]),
+                after_id=int(raw_cursor["after_id"]),
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise WorldClientError(
+                "live signal response had an invalid cursor"
+            ) from exc
+        events: list[LiveSignal] = []
+        for raw in list(data.get("events") or []):
+            if not isinstance(raw, dict):
+                raise WorldClientError("live signal response had an invalid event")
+            try:
+                events.append(
+                    LiveSignal(
+                        id=int(raw["id"]),
+                        kind=str(raw["type"]),
+                        location=str(raw["location"]),
+                        session_id=str(raw.get("session_id") or ""),
+                        actor_id=str(raw.get("actor_id") or ""),
+                        display_name=str(raw.get("display_name") or ""),
+                        message=str(raw.get("message") or ""),
+                        occurred_at=str(raw.get("occurred_at") or ""),
+                    )
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                raise WorldClientError(
+                    "live signal response had an invalid event"
+                ) from exc
+        return LiveSignalBatch(
+            cursor=parsed_cursor,
+            cursor_status=str(data.get("cursor_status") or ""),
+            retention=str(data.get("retention") or ""),
+            events=tuple(events),
+            has_more=bool(data.get("has_more")),
+        )
 
     async def post_location_chat(
         self,

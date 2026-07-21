@@ -3,11 +3,11 @@
 - `main.py` — process entry point, configuration, resident discovery, shared clients, and task startup.
 - `resident.py` — shared resident host and lifecycle: one home, one reference core, and one exclusive city or hearth
   attachment. It owns confirmed city departure, core rebuild, fresh city return,
-  keeper-whisper wake signals, and optional tick-count or elapsed-time bounds and read-only observers used
+  durable city-signal waiting, keeper-whisper wake signals, and optional tick-count or elapsed-time bounds and read-only observers used
   by operational surfaces. A time-bound host run changes no cognitive clock; the core keeps its own cadence.
-- `runtime/reference_core.py` — production resident loop. It polls current-place facts and local speech,
-  activates on a new local signal or slow baseline, permits one elective read, and accepts one final action,
-  private continuation, or wait choice.
+- `runtime/reference_core.py` — production resident loop. It observes current-place facts, accepts a cursor-delivered
+  local-speech batch without fetching it again, activates on a new local signal or slow baseline, permits one
+  elective read, and accepts one final action, private continuation, or wait choice.
 - `runtime/cognitive_core.py` — audited predecessor. It is not constructed by the resident host; keep it only
   as comparison and selective migration material until its remaining useful contracts are separated.
 - `runtime/ledger.py` — append-only event history and a versioned current-state checkpoint. Major 137 is
@@ -41,7 +41,7 @@
   inside a resident's prose remain part of that entry. The normal creation path writes only a chosen name,
   structural hearth identity, and a host-sealed signing key, leaving the ledger empty and the hearth dormant.
   The old Doula remains comparison and migration code; its model-written batch apply command is disabled.
-- `world/client.py` — async WorldWeaver HTTP client, including exact request signing for an injected
+- `world/client.py` — async WorldWeaver HTTP client, including durable exact-place signal cursors and exact request signing for an injected
   resident runtime certificate and the engine's recoverable inter-shard travel
   calls; `city_world.py` and `city_tools.py` adapt the named city source registry to runtime protocols.
   Possible routes and live nodes are available through the elective `travel` source, not ambient scene

@@ -22,6 +22,7 @@ from src.inference.client import InferenceClient
 from src.runtime.ledger import append_runtime_event
 from src.runtime.pulse import Act, PulseValidationError, Reach
 from src.runtime.relations import chat_utterance_id
+from src.world.client import LiveSignal
 
 logger = logging.getLogger(__name__)
 
@@ -178,6 +179,7 @@ async def observe_reference_world(
     session_id: str,
     identity: ResidentIdentity,
     local_speech_since: datetime | None = None,
+    delivered_local_speech: tuple[LiveSignal, ...] | None = None,
 ) -> ReferenceObservation:
     """Read current-place facts while preserving unavailable as a real state."""
 
@@ -252,14 +254,22 @@ async def observe_reference_world(
         availability["local_speech"] = "not_applicable"
     else:
         try:
-            messages = await world.get_location_chat(location, session_id=session_id)
+            messages = (
+                list(delivered_local_speech)
+                if delivered_local_speech is not None
+                else await world.get_location_chat(location, session_id=session_id)
+            )
             visible_messages = [
                 item
-                for item in list(messages or [])[-10:]
-                if str(getattr(item, "message", "") or "").strip()
-                and _speech_is_current(
-                    getattr(item, "ts", None), since=local_speech_since
+                for item in list(messages or [])
+                if (
+                    delivered_local_speech is not None
+                    or _speech_is_current(
+                        getattr(item, "ts", None), since=local_speech_since
+                    )
                 )
+                and str(getattr(item, "message", "") or "").strip()
+                and str(getattr(item, "location", location) or "").strip() == location
                 and str(getattr(item, "session_id", "") or "").strip() != session_id
                 and not (
                     str(getattr(item, "actor_id", "") or "").strip()
@@ -288,7 +298,14 @@ async def observe_reference_world(
                         + ":".join(
                             (
                                 location,
-                                str(getattr(item, "ts", "") or "").strip(),
+                                str(
+                                    getattr(
+                                        item,
+                                        "ts",
+                                        getattr(item, "occurred_at", ""),
+                                    )
+                                    or ""
+                                ).strip(),
                                 str(getattr(item, "session_id", "") or "").strip(),
                             )
                         )
@@ -429,6 +446,8 @@ class ReferenceResidentCore:
         self._last_activation_at: datetime | None = None
         self._last_poll_at: datetime | None = None
         self._seen_local_speech_ids: set[str] = set()
+        self._offered_live_signals: tuple[LiveSignal, ...] = ()
+        self._acknowledged_live_signal_ids: tuple[int, ...] = ()
         self.latest_observation: ReferenceObservation | None = None
 
     @property
@@ -438,6 +457,27 @@ class ReferenceResidentCore:
     @property
     def tick_seconds(self) -> float:
         return self._tick_seconds
+
+    def offer_live_signals(self, events: tuple[LiveSignal, ...]) -> None:
+        """Offer one cursor batch to the next observation without acknowledging it."""
+
+        self._offered_live_signals = tuple(
+            event for event in events if event.kind == "local_speech"
+        )
+        self._acknowledged_live_signal_ids = ()
+
+    def has_seen_live_signals(self, events: tuple[LiveSignal, ...]) -> bool:
+        source_ids = {
+            chat_utterance_id(event.location, event.id)
+            for event in events
+            if event.kind == "local_speech"
+        }
+        return bool(source_ids) and source_ids <= self._seen_local_speech_ids
+
+    def take_acknowledged_live_signal_ids(self) -> tuple[int, ...]:
+        acknowledged = self._acknowledged_live_signal_ids
+        self._acknowledged_live_signal_ids = ()
+        return acknowledged
 
     def _system_prompt(self, *, allow_read: bool) -> str:
         identity_text = str(
@@ -525,7 +565,18 @@ class ReferenceResidentCore:
             session_id=self._session_id,
             identity=self._identity,
             local_speech_since=speech_since,
+            delivered_local_speech=(self._offered_live_signals or None),
         )
+        if self._offered_live_signals:
+            observed_source_ids = set(observation.local_speech_ids)
+            acknowledged = tuple(
+                event.id
+                for event in self._offered_live_signals
+                if chat_utterance_id(event.location, event.id) in observed_source_ids
+            )
+            self._acknowledged_live_signal_ids = acknowledged
+            if len(acknowledged) == len(self._offered_live_signals):
+                self._offered_live_signals = ()
         self._last_poll_at = effective_now
         self.latest_observation = observation
         if hasattr(self._effector, "location"):

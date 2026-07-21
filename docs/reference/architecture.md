@@ -28,25 +28,27 @@ hearth, and at most one active shared-world attachment. `CognitiveCore` and its 
 drive, incubation, and mixed-pulse machinery remain in the source tree for comparison and selective salvage;
 they are not the production resident path.
 
-The live loop separates cheap polling from model activation:
+The live loop separates cheap waiting and observation from model activation:
 
 ```text
-poll current place and local speech
+wait for a local signal or the normal timer, then observe the current place
   -> activate on first start, new local speech, explicit wake, or a five-minute baseline
   -> optionally read one advertised source
   -> attempt one typed action, continue privately, or wait
   -> record a content-blind outcome
 ```
 
-The twenty-second tick is therefore a chance to notice a new local signal, not necessarily a model call.
+The twenty-second fallback is therefore a chance to refresh local facts, not necessarily a model call.
 Old room speech is not replayed as new at each baseline activation. Quiet, reading, and private continuation
 are complete choices; the runtime does not manufacture pressure to speak or move.
 
-The engine also exposes the first durable live-signal cursor for an authenticated session. It derives the
+The engine exposes the first durable live-signal cursor for an authenticated session. It derives the
 session's exact place on the server, advances over the existing append-only local-speech IDs, excludes the
 caller's own speech, and explicitly resets when the shard or place changes. Establishing a cursor does not
-replay archived room chat. The reference host does not yet wait on this cursor; its twenty-second poll remains
-the production control until interruption, reconnect, and travel cleanup are tested.
+replay archived room chat. The reference host long-polls this cursor between ordinary observations and offers
+a returned speech batch directly to the core. It advances the in-memory cursor only after that observation is
+acknowledged. A timeout or unavailable signal endpoint falls back to the normal timer. Cursor restoration
+across process restart remains unfinished.
 
 The complete ledger file is append-only and is intended to be the resident's durable event authority. A
 versioned checkpoint is intended to hold current working state so normal ticks do not replay the entire life

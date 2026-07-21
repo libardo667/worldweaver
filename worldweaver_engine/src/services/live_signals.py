@@ -11,6 +11,7 @@ cursor over that sequence instead of copying speech into a second queue.
 from __future__ import annotations
 
 import json
+import threading
 from dataclasses import dataclass
 from typing import Any
 
@@ -19,6 +20,34 @@ from sqlalchemy.orm import Session
 
 from ..models import LocationChat, SessionVars
 from .federation_identity import current_shard_id
+
+_signal_condition = threading.Condition()
+_signal_revision = 0
+
+
+def current_live_signal_revision() -> int:
+    with _signal_condition:
+        return _signal_revision
+
+
+def notify_live_signal() -> None:
+    """Wake local waiters; the database cursor remains the source of truth."""
+
+    global _signal_revision
+    with _signal_condition:
+        _signal_revision += 1
+        _signal_condition.notify_all()
+
+
+def wait_for_live_signal_change(*, after_revision: int, timeout: float) -> bool:
+    """Wait for any local signal write and report whether the revision changed."""
+
+    bounded_timeout = max(0.0, min(25.0, float(timeout)))
+    with _signal_condition:
+        return _signal_condition.wait_for(
+            lambda: _signal_revision != after_revision,
+            timeout=bounded_timeout,
+        )
 
 
 @dataclass(frozen=True, slots=True)

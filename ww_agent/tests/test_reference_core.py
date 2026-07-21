@@ -15,6 +15,7 @@ from src.runtime.reference_core import (
     classify_action_outcome,
     observe_reference_world,
 )
+from src.world.client import LiveSignal
 
 
 def _identity() -> ResidentIdentity:
@@ -356,6 +357,34 @@ def test_local_direct_speech_is_in_the_unavoidable_observation():
     assert observation.reachable == ("Commons Bank",)
     assert observation.source_names == {"library"}
     assert observation.heard == (("Riley", "1", "chat:Alderbank Commons:1"),)
+
+
+def test_cursor_delivered_speech_is_observed_and_acknowledged_without_refetch(
+    tmp_path,
+):
+    core, _memory_dir, _acted, _reads = _core(
+        tmp_path,
+        responses=[{"choice": "wait"}],
+    )
+    core._world.chat_error = AssertionError("cursor delivery should avoid chat fetch")
+    signal = LiveSignal(
+        id=7,
+        kind="local_speech",
+        location="Alderbank Commons",
+        session_id="riley-session",
+        actor_id="actor-riley",
+        display_name="Riley",
+        message="Test Resident, the kettle is ready.",
+        occurred_at="2026-07-20T12:00:05",
+    )
+    core.offer_live_signals((signal,))
+
+    result = asyncio.run(core.tick_once(force_ignite=True))
+
+    assert result["choice"] == "wait"
+    assert "Riley: Test Resident, the kettle is ready." in core._llm.calls[0][1]
+    assert core.take_acknowledged_live_signal_ids() == (7,)
+    assert core.has_seen_live_signals((signal,)) is True
 
 
 def test_reference_prompt_does_not_name_attention_machinery(tmp_path):

@@ -1560,6 +1560,29 @@ class TestWorldEventLedgerEndpoints:
         assert response.status_code == 409
         assert response.json()["detail"]["code"] == "incomplete_cursor"
 
+    def test_live_signal_wait_times_out_without_changing_the_cursor(
+        self, client, db_session
+    ):
+        db_session.add(
+            SessionVars(session_id="signal-reader", vars={"location": "Cafe"})
+        )
+        db_session.commit()
+        cursor = client.get("/api/world/session/signal-reader/signals").json()["cursor"]
+
+        response = client.get(
+            "/api/world/session/signal-reader/signals",
+            params={
+                "after": cursor["after_id"],
+                "cursor_shard": cursor["shard_id"],
+                "cursor_location": cursor["location"],
+                "wait_seconds": 0.01,
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json()["events"] == []
+        assert response.json()["cursor"] == cursor
+
     def test_player_dm_stays_private_and_does_not_touch_public_ledger(
         self, client, db_session
     ):

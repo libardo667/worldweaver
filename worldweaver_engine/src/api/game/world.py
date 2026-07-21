@@ -36,7 +36,13 @@ from ...models.schemas import (
 )
 from ...services.event_submission import WorldEventCommand, submit_world_event
 from ...services.federation_identity import current_shard_id
-from ...services.live_signals import LiveSignalError, read_live_signals
+from ...services.live_signals import (
+    LiveSignalError,
+    current_live_signal_revision,
+    notify_live_signal,
+    read_live_signals,
+    wait_for_live_signal_change,
+)
 from ...services.actor_authority import (
     ActorAuthorizationError,
     RequestActorCredentials,
@@ -3459,6 +3465,7 @@ def get_live_signals(
     cursor_shard: Optional[str] = Query(default=None, max_length=80),
     cursor_location: Optional[str] = Query(default=None, max_length=200),
     limit: int = Query(default=50, ge=1, le=100),
+    wait_seconds: float = Query(default=0.0, ge=0.0, le=25.0),
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
 ):
@@ -3471,7 +3478,8 @@ def get_live_signals(
 
     _authorize_bound_actor_or_http(db, credentials=credentials, session_id=session_id)
     try:
-        return read_live_signals(
+        revision = current_live_signal_revision()
+        result = read_live_signals(
             db,
             session_id=session_id,
             after_id=after,
@@ -3479,6 +3487,26 @@ def get_live_signals(
             cursor_location=str(cursor_location or "").strip() or None,
             limit=limit,
         )
+        if (
+            wait_seconds > 0
+            and result["cursor_status"] == "current"
+            and not result["events"]
+            and not result["has_more"]
+        ):
+            wait_for_live_signal_change(
+                after_revision=revision,
+                timeout=wait_seconds,
+            )
+            db.expire_all()
+            result = read_live_signals(
+                db,
+                session_id=session_id,
+                after_id=after,
+                cursor_shard=str(cursor_shard or "").strip() or None,
+                cursor_location=str(cursor_location or "").strip() or None,
+                limit=limit,
+            )
+        return result
     except LiveSignalError as exc:
         status_code = 404 if exc.code == "session_not_found" else 409
         raise HTTPException(
@@ -3619,6 +3647,7 @@ def post_location_chat(
     db.add(row)
     db.commit()
     db.refresh(row)
+    notify_live_signal()
 
     # Also record as a lightweight utterance WorldEvent so speech becomes part of
     # world memory: resident perception can recognize the same utterance as one

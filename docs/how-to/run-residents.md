@@ -42,8 +42,9 @@ resident behavior.
 python dev.py resident --city ww_alderbank --resident NAME --wake --duration 15m
 ```
 
-The resident polls its exact place every twenty seconds. A poll calls the model only on first start, new local
-speech, an explicit wake signal, or the slow five-minute baseline. The summary separates polls from activations
+In a city, the resident waits up to twenty seconds for new exact-place speech and otherwise refreshes its place
+on that normal timer. A refresh calls the model only on first start, new local speech, an explicit wake signal,
+or the slow five-minute baseline. The summary separates observations from activations
 and reports reads, action outcomes, attachments, and cleanup without reproducing private writing.
 
 ## Run a bounded cohort

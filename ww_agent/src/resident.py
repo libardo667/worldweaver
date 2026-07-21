@@ -37,7 +37,7 @@ from src.runtime.travel import (
 from src.runtime.workshop import Workshop
 from src.world.city_tools import build_city_source_registry
 from src.world.city_world import CityWorld
-from src.world.client import WorldWeaverClient
+from src.world.client import LiveSignalBatch, LiveSignalCursor, WorldWeaverClient
 
 logger = logging.getLogger(__name__)
 
@@ -289,6 +289,9 @@ class Resident:
             while True:
                 session_id = self._active_session_id()
                 core = self._build_core(world, session_id)
+                signal_cursor: LiveSignalCursor | None = None
+                pending_signals: LiveSignalBatch | None = None
+                live_signal_wake = False
                 while True:
                     if (
                         tick_count > 0
@@ -298,7 +301,14 @@ class Resident:
                         return
                     result: dict[str, Any] | None = None
                     try:
-                        force_ignite = self._take_force_ignite(world)
+                        if pending_signals is not None:
+                            offer_signals = getattr(core, "offer_live_signals", None)
+                            if callable(offer_signals):
+                                offer_signals(pending_signals.events)
+                        force_ignite = (
+                            self._take_force_ignite(world) or live_signal_wake
+                        )
+                        live_signal_wake = False
                         result = await core.tick_once(force_ignite=force_ignite)
                     except asyncio.CancelledError:
                         raise
@@ -318,6 +328,19 @@ class Resident:
                             result,
                             tick_count,
                         )
+                    if pending_signals is not None:
+                        take_acknowledged = getattr(
+                            core, "take_acknowledged_live_signal_ids", None
+                        )
+                        acknowledged = (
+                            set(take_acknowledged())
+                            if callable(take_acknowledged)
+                            else set()
+                        )
+                        expected = {event.id for event in pending_signals.events}
+                        if expected and expected <= acknowledged:
+                            signal_cursor = pending_signals.cursor
+                            pending_signals = None
                     stop_after_tick = max_ticks > 0 and tick_count >= max_ticks
                     stop_after_duration = (
                         deadline is not None and loop.time() >= deadline
@@ -344,7 +367,24 @@ class Resident:
                     )
                     if deadline is not None:
                         delay = min(delay, max(0.0, deadline - loop.time()))
-                    await asyncio.sleep(delay)
+                    if pending_signals is not None:
+                        await asyncio.sleep(delay)
+                        live_signal_wake = True
+                        continue
+                    signal_cursor, pending_signals, live_signal_wake = (
+                        await self._wait_for_live_signals(
+                            world,
+                            session_id=session_id,
+                            cursor=signal_cursor,
+                            delay=delay,
+                        )
+                    )
+                    if pending_signals is not None:
+                        has_seen = getattr(core, "has_seen_live_signals", None)
+                        if callable(has_seen) and has_seen(pending_signals.events):
+                            signal_cursor = pending_signals.cursor
+                            pending_signals = None
+                            live_signal_wake = False
         except asyncio.CancelledError:
             logger.info("[%s] resident cancelled", self.name)
             raise
@@ -365,6 +405,67 @@ class Resident:
                 secure_hearth_permissions(self._resident_dir)
             finally:
                 lease.release()
+
+    async def _wait_for_live_signals(
+        self,
+        world: CityWorld | LocalWorld,
+        *,
+        session_id: str,
+        cursor: LiveSignalCursor | None,
+        delay: float,
+    ) -> tuple[LiveSignalCursor | None, LiveSignalBatch | None, bool]:
+        """Wait cheaply for city signals, falling back to the normal timer."""
+
+        wait_for_signals = getattr(world, "wait_for_live_signals", None)
+        if not callable(wait_for_signals) or delay <= 0:
+            await asyncio.sleep(max(0.0, delay))
+            return cursor, None, False
+
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + delay
+        current_cursor = cursor
+        try:
+            while True:
+                remaining = max(0.0, deadline - loop.time())
+                batch = await wait_for_signals(
+                    session_id,
+                    cursor=current_cursor,
+                    wait_seconds=(remaining if current_cursor is not None else 0.0),
+                    limit=10,
+                )
+                if batch.cursor_status in {
+                    "established",
+                    "scope_changed",
+                    "retention_gap",
+                }:
+                    current_cursor = batch.cursor
+                    if batch.cursor_status == "retention_gap":
+                        append_runtime_event(
+                            self._resident_dir / "memory",
+                            event_type="live_signal_retention_gap",
+                            payload={
+                                "shard_id": batch.cursor.shard_id,
+                                "location": batch.cursor.location,
+                                "after_id": batch.cursor.after_id,
+                            },
+                        )
+                        return current_cursor, None, True
+                    if loop.time() < deadline:
+                        continue
+                    return current_cursor, None, False
+                if batch.events:
+                    return current_cursor, batch, True
+                current_cursor = batch.cursor
+                if loop.time() < deadline:
+                    continue
+                return current_cursor, None, False
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.info("[%s] live signal wait unavailable: %s", self.name, exc)
+            remaining = max(0.0, deadline - loop.time())
+            await asyncio.sleep(remaining)
+            return current_cursor, None, False
 
     def _build_current_world(self) -> CityWorld | LocalWorld:
         if self._attachment_kind == "hearth":

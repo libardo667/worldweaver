@@ -13,6 +13,7 @@ from src.runtime.ledger import load_runtime_events
 from src.runtime.reference_core import ReferenceResidentCore
 from src.runtime.travel import PendingShardTravel, TravelRequest
 from src.world.city_world import CityWorld
+from src.world.client import LiveSignal, LiveSignalBatch, LiveSignalCursor
 
 
 class _FakeCityClient:
@@ -568,6 +569,71 @@ def test_host_tick_observer_uses_the_same_core_loop(tmp_path):
     asyncio.run(resident.run(max_ticks=2, pause_seconds=0.0))
 
     assert observed == [("test_resident", 1), ("test_resident", 2)]
+
+
+def test_city_host_wakes_early_for_cursor_delivered_speech(tmp_path):
+    client = _FakeCityClient()
+    cursor = LiveSignalCursor(
+        shard_id="alderbank", location="Alderbank Commons", after_id=4
+    )
+    advanced = LiveSignalCursor(
+        shard_id="alderbank", location="Alderbank Commons", after_id=5
+    )
+    signal = LiveSignal(
+        id=5,
+        kind="local_speech",
+        location="Alderbank Commons",
+        session_id="riley-session",
+        actor_id="actor-riley",
+        display_name="Riley",
+        message="Hello, Test Resident.",
+        occurred_at="2026-07-20T12:00:00",
+    )
+    batches = [
+        LiveSignalBatch(cursor, "established", "complete", (), False),
+        LiveSignalBatch(cursor, "current", "complete", (), False),
+        LiveSignalBatch(advanced, "current", "complete", (signal,), False),
+    ]
+    waits: list[tuple[LiveSignalCursor | None, float]] = []
+
+    async def wait_for_live_signals(
+        _session_id, *, cursor=None, wait_seconds=0.0, limit=10
+    ):
+        assert limit == 10
+        waits.append((cursor, wait_seconds))
+        return batches.pop(0)
+
+    client.wait_for_live_signals = wait_for_live_signals
+    resident = _resident(tmp_path, client)
+    forced: list[bool] = []
+    offered: list[LiveSignal] = []
+
+    class _Core:
+        tick_seconds = 20.0
+
+        async def tick_once(self, *, force_ignite=False):
+            forced.append(force_ignite)
+            return {"status": "completed"}
+
+        def offer_live_signals(self, events):
+            offered.extend(events)
+
+        def take_acknowledged_live_signal_ids(self):
+            return tuple(event.id for event in offered)
+
+        def has_seen_live_signals(self, _events):
+            return False
+
+    resident._build_core = lambda _world, _session_id: _Core()
+
+    asyncio.run(resident.run(max_ticks=2, pause_seconds=20.0))
+
+    assert forced == [False, True]
+    assert offered == [signal]
+    assert waits[0][0] is None
+    assert waits[1][0] == cursor
+    assert waits[1][1] > 0
+    assert waits[2][0] == cursor
 
 
 def test_duration_bound_uses_elapsed_time_instead_of_a_tick_limit(tmp_path):

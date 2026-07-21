@@ -46,9 +46,10 @@ inputs in the identity loader; they do not restore the old ownership model.
   the remaining cold-reader audit. Expiry uses the tick's injected time and writes a terminal event. Normal
   append writes the ledger and one checkpoint, never the removed projection and snapshot shadows. Do not make
   the normal write path grow with lifetime history or restore front truncation.
-- The production loop polls current-place facts and local public speech. Polling is not a model activation;
-  first start, new local speech, an explicit wake, or the slow baseline activates the model. Do not replay old
-  speech as new at every baseline.
+- The production loop observes current-place facts on its normal cadence. In a city, it waits on a durable
+  exact-place speech cursor and wakes early when that cursor delivers something; the normal timer remains the
+  fallback. Delivery is not a command to reply. Do not replay old speech as new, advance the cursor before the
+  core acknowledges observation, or let activity elsewhere in the city trigger a resident poll.
 - Relationship summaries are reducer output, not a second memory store. They may use only an
   `utterance_perceived` delivery event and a canonical reply edge; their subjective claims must retain
   the supporting ledger event IDs and never turn chat text into an unsupported belief.
