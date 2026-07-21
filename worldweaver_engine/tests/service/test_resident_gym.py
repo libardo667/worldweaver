@@ -1,9 +1,84 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Levi Banks
 
+from urllib.parse import quote
+
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from src.api.game import _state_managers
+from src.database import Base, get_db
 from src.models import LocationChat, WorldEvent
 from src.services.gym_presentation import render_html, render_terminal
-from src.services.resident_gym import run_first_conversation
+from src.services.resident_gym import ProductionRuleGym, run_first_conversation
+from src.services.session_service import _session_locks, get_state_manager
+
+
+def _canonical_episode_snapshot(db_session):
+    chats = [
+        (row.display_name, row.location, row.message)
+        for row in db_session.query(LocationChat).order_by(LocationChat.id).all()
+    ]
+    events = [
+        (
+            row.session_id,
+            row.event_type,
+            row.summary,
+            row.world_state_delta,
+        )
+        for row in db_session.query(WorldEvent).order_by(WorldEvent.id).all()
+    ]
+    locations = {
+        session_id: str(
+            get_state_manager(session_id, db_session).get_variable("location") or ""
+        )
+        for session_id in ("gym-mara", "gym-ivo")
+    }
+    return {"chats": chats, "events": events, "locations": locations}
+
+
+def _expect(response, status_code: int = 200):
+    assert response.status_code == status_code, response.text
+    return response.json()
+
+
+def _signal_read(client, *, session_id, headers, cursor=None):
+    params = {}
+    if cursor is not None:
+        params = {
+            "after": cursor["after_id"],
+            "cursor_shard": cursor["shard_id"],
+            "cursor_location": cursor["location"],
+        }
+    return _expect(
+        client.get(
+            f"/api/world/session/{session_id}/signals",
+            params=params,
+            headers=headers,
+        )
+    )
+
+
+def _http_speak(client, *, session_id, location, message, headers):
+    return _expect(
+        client.post(
+            f"/api/world/location/{quote(location, safe='')}/chat",
+            json={"session_id": session_id, "message": message},
+            headers=headers,
+        )
+    )
+
+
+def _http_move(client, *, session_id, destination, headers):
+    return _expect(
+        client.post(
+            "/api/game/move",
+            json={"session_id": session_id, "destination": destination},
+            headers=headers,
+        )
+    )
 
 
 def test_first_gym_conversation_uses_exact_place_production_signals(db_session):
@@ -60,3 +135,182 @@ def test_gym_views_label_the_mechanical_baseline_and_do_not_add_story(db_session
     assert "The display adds layout and icons, not narration." in page
     assert "Good morning. Is the footbridge open?" in terminal
     assert "Good morning. Is the footbridge open?" in page
+
+
+def test_first_gym_episode_matches_authenticated_http_rules(db_session, monkeypatch):
+    run_first_conversation(db_session)
+    service_snapshot = _canonical_episode_snapshot(db_session)
+
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine)
+    http_db = session_factory()
+
+    from main import app
+
+    def override_db():
+        yield http_db
+
+    monkeypatch.setattr("src.api.auth.routes.send_welcome_email", lambda *_a: None)
+    monkeypatch.setattr("src.config.settings.require_email_verification", False)
+    app.dependency_overrides[get_db] = override_db
+    _state_managers.clear()
+    _session_locks.clear()
+
+    try:
+        arranger = ProductionRuleGym(
+            http_db,
+            episode="The Footbridge Hello",
+            world_id="gym-footbridge-world",
+        )
+        arranger.arrange_world(("Willow Court", "Footbridge"))
+
+        with TestClient(app, raise_server_exceptions=False) as client:
+            tokens = {}
+            for name in ("Mara", "Ivo"):
+                auth = _expect(
+                    client.post(
+                        "/api/auth/register",
+                        json={
+                            "email": f"gym-{name.lower()}@example.com",
+                            "display_name": name,
+                            "password": "gym-password-1",
+                            "password_confirmation": "gym-password-1",
+                            "terms_accepted": True,
+                        },
+                    )
+                )
+                tokens[name] = {"Authorization": f"Bearer {auth['token']}"}
+                _expect(
+                    client.post(
+                        "/api/session/bootstrap",
+                        json={
+                            "session_id": f"gym-{name.lower()}",
+                            "world_id": "gym-footbridge-world",
+                            "player_role": name,
+                            "bootstrap_source": "resident-gym-http",
+                            "entry_location": "Willow Court",
+                        },
+                        headers=tokens[name],
+                    )
+                )
+
+            anonymous = client.get("/api/world/session/gym-ivo/signals")
+            _expect(anonymous, 401)
+
+            mara_signal = _signal_read(
+                client,
+                session_id="gym-mara",
+                headers=tokens["Mara"],
+            )
+            ivo_signal = _signal_read(
+                client,
+                session_id="gym-ivo",
+                headers=tokens["Ivo"],
+            )
+
+            _http_speak(
+                client,
+                session_id="gym-mara",
+                location="Willow Court",
+                message="Good morning. Is the footbridge open?",
+                headers=tokens["Mara"],
+            )
+            ivo_signal = _signal_read(
+                client,
+                session_id="gym-ivo",
+                headers=tokens["Ivo"],
+                cursor=ivo_signal["cursor"],
+            )
+            assert [item["message"] for item in ivo_signal["events"]] == [
+                "Good morning. Is the footbridge open?"
+            ]
+
+            _http_speak(
+                client,
+                session_id="gym-ivo",
+                location="Willow Court",
+                message="I heard you. I can go and look.",
+                headers=tokens["Ivo"],
+            )
+            mara_signal = _signal_read(
+                client,
+                session_id="gym-mara",
+                headers=tokens["Mara"],
+                cursor=mara_signal["cursor"],
+            )
+            assert [item["message"] for item in mara_signal["events"]] == [
+                "I heard you. I can go and look."
+            ]
+
+            _http_move(
+                client,
+                session_id="gym-ivo",
+                destination="Footbridge",
+                headers=tokens["Ivo"],
+            )
+            ivo_signal = _signal_read(
+                client,
+                session_id="gym-ivo",
+                headers=tokens["Ivo"],
+                cursor=ivo_signal["cursor"],
+            )
+            assert ivo_signal["cursor_status"] == "scope_changed"
+
+            _http_speak(
+                client,
+                session_id="gym-mara",
+                location="Willow Court",
+                message="Can you hear me from over there?",
+                headers=tokens["Mara"],
+            )
+            ivo_signal = _signal_read(
+                client,
+                session_id="gym-ivo",
+                headers=tokens["Ivo"],
+                cursor=ivo_signal["cursor"],
+            )
+            assert ivo_signal["events"] == []
+
+            _http_move(
+                client,
+                session_id="gym-mara",
+                destination="Footbridge",
+                headers=tokens["Mara"],
+            )
+            mara_signal = _signal_read(
+                client,
+                session_id="gym-mara",
+                headers=tokens["Mara"],
+                cursor=mara_signal["cursor"],
+            )
+            assert mara_signal["cursor_status"] == "scope_changed"
+
+            _http_speak(
+                client,
+                session_id="gym-mara",
+                location="Footbridge",
+                message="There you are.",
+                headers=tokens["Mara"],
+            )
+            ivo_signal = _signal_read(
+                client,
+                session_id="gym-ivo",
+                headers=tokens["Ivo"],
+                cursor=ivo_signal["cursor"],
+            )
+            assert [item["message"] for item in ivo_signal["events"]] == [
+                "There you are."
+            ]
+
+        assert _canonical_episode_snapshot(http_db) == service_snapshot
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        http_db.close()
+        engine.dispose()
+        _state_managers.clear()
+        _session_locks.clear()
