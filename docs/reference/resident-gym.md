@@ -31,6 +31,20 @@ Each command prints a compact timeline and writes a self-contained visual report
 (`footbridge-hello.html`, `waiting-letter.html`, or `long-afternoon.html`). The reports contain only synthetic
 speech and facts returned by production services. Their icons and layout do not add a narrator's interpretation.
 
+The terminal timeline streams by default: each line is printed and flushed when its production-boundary record
+arrives. It is not an animation replayed after the episode. The current mechanical episodes finish quickly,
+but a future resident adapter will leave real wall-clock gaps visible around inference, waits, retries, and
+service calls. The stream may show public observations, choice kinds, action receipts, scheduling metadata, and
+model-call start/finish boundaries. It must not print private reasoning or private hearth prose.
+
+Use `--no-stream` to print the older complete terminal report only after the run, or `--json` for the complete
+structural result:
+
+```bash
+python dev.py gym --episode quiet-interval --no-stream
+python dev.py gym --episode quiet-interval --json
+```
+
 ## What the first episode proves
 
 `The Footbridge Hello` uses a scripted participant and a small mechanical listener. They begin together in
@@ -137,6 +151,10 @@ apparatus tells the truth about what happened.
 | Travel | Production service exists outside the gym | Recoverable local and federated travel episodes |
 | Stale information | Structural version fence exists in the reference resident | Change the world during a gym decision and prove safe reconsideration |
 | Fault recovery | Individual service rollback tests exist | Scenario-level database, process, and network fault injection |
+
+The command-line runner now exposes these records as a live, flushed stream while retaining the final HTML and
+JSON reports. That makes wall-clock stalls visible, but it does not by itself add resident inference telemetry;
+the participant adapter must emit content-safe phase boundaries when it is connected.
 
 Adding a trustworthiness scenario requires naming the production boundary, the expected invariant, the failure
 case, and the evidence that the gym did not use a shortcut.

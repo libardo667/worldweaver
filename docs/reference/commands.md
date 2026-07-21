@@ -96,7 +96,8 @@ python dev.py conversation-health --city CITY --since-hours 24
 python dev.py run PATH [args...]
 ```
 
-`gym` runs the first deterministic production-rule episode without a model or live shard. It prints a factual
-timeline and writes a self-contained visual report under `.runs/gym/`.
+`gym` runs a deterministic production-rule episode without a model or live shard. It streams each factual
+record as it happens and writes a self-contained visual report under `.runs/gym/`. Use `--no-stream` for one
+complete terminal report after the run or `--json` for the structural result.
 
 Use `python dev.py COMMAND --help` for the complete option list.

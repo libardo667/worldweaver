@@ -116,6 +116,51 @@ def _record_sentence(record: GymRecord) -> str:
     return f"{actor}: {record.kind.replace('_', ' ')}"
 
 
+def render_terminal_record(record: GymRecord) -> str:
+    """Render one record for immediate, line-buffered terminal output."""
+
+    icon = _ICONS.get(record.kind, "·")
+    return (
+        f"  {record.sequence:02d} {icon}  {_record_time(record)}  "
+        f"{_record_sentence(record)}"
+    )
+
+
+def render_terminal_stream_header(episode: str) -> str:
+    """Render the fixed heading shown before live records arrive."""
+
+    return "\n".join(
+        [
+            "",
+            "        🌿  WORLDWEAVER RESIDENT GYM  🌿",
+            f"        {episode}",
+            "",
+            "  Live structural record",
+        ]
+    )
+
+
+def render_terminal_stream_footer(result: GymEpisodeResult) -> str:
+    """Render final locations after the live stream closes."""
+
+    residents = []
+    for participant in result.participants:
+        marker = "⚙" if participant.implementation == "mechanical_listener" else "◆"
+        location = result.final_locations.get(participant.display_name, "unknown")
+        residents.append(f"  {marker} {participant.display_name} → {location}")
+    return "\n".join(
+        [
+            "",
+            "  Episode complete",
+            *residents,
+            "",
+            "  ◆ scripted participant   ⚙ mechanical baseline",
+            "  Each streamed line came from a service receipt or signal read.",
+            "",
+        ]
+    )
+
+
 def render_terminal(result: GymEpisodeResult) -> str:
     """Render one complete, non-animated terminal view."""
 
@@ -137,11 +182,7 @@ def render_terminal(result: GymEpisodeResult) -> str:
         "  What the production rules recorded",
     ]
     for record in result.records:
-        icon = _ICONS.get(record.kind, "·")
-        lines.append(
-            f"  {record.sequence:02d} {icon}  {_record_time(record)}  "
-            f"{_record_sentence(record)}"
-        )
+        lines.append(render_terminal_record(record))
     lines.extend(
         [
             "",

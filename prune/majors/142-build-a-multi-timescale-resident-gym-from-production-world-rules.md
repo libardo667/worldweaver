@@ -162,6 +162,12 @@ participant/model families. Each family needs generated variation, repeated tria
 wording, ordering, and seeds. One attractive transcript never counts as coverage. The maintained matrix and
 current status live in `docs/reference/resident-gym.md`.
 
+The terminal runner now streams each structural record as the corresponding production receipt or signal read
+returns, while still writing the finished HTML report. This is a real callback at record creation rather than
+post-run animation. It provides the observation surface needed for the first resident adapter: emit content-safe
+boundaries for waiting, observation delivery, inference start/finish, choice kind, action receipt, retry, and
+scheduled return, without exposing private reasoning or hearth prose.
+
 ## Files Affected
 
 - `worldweaver_engine/src/services/state/`

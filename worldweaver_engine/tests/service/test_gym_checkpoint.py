@@ -51,7 +51,12 @@ def test_quiet_interval_resumes_to_the_same_result_after_a_real_stop():
         assert len(checkpoint["scheduler"]["pending"]) == 2
         assert checkpoint["captured_at"] == "2026-07-20T12:00:00+00:00"
 
-        resumed = ProductionRuleGym.from_checkpoint(target_db, checkpoint)
+        resumed_records = []
+        resumed = ProductionRuleGym.from_checkpoint(
+            target_db,
+            checkpoint,
+            record_observer=resumed_records.append,
+        )
         assert (
             resumed.scheduled_checkpoint()["pending"]
             == checkpoint["scheduler"]["pending"]
@@ -59,6 +64,10 @@ def test_quiet_interval_resumes_to_the_same_result_after_a_real_stop():
         restarted = finish_quiet_interval(resumed).as_payload()
 
         assert restarted == uninterrupted
+        checkpoint_record_count = len(checkpoint["gym"]["records"])
+        assert [record.sequence for record in resumed_records] == list(
+            range(checkpoint_record_count + 1, len(restarted["records"]) + 1)
+        )
     finally:
         _close(uninterrupted_engine, uninterrupted_db)
         _close(source_engine, source_db)

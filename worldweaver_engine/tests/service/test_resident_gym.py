@@ -11,7 +11,13 @@ from sqlalchemy.pool import StaticPool
 from src.api.game import _state_managers
 from src.database import Base, get_db
 from src.models import DirectMessage, LocationChat, WorldEvent
-from src.services.gym_presentation import render_html, render_terminal
+from src.services.gym_presentation import (
+    render_html,
+    render_terminal,
+    render_terminal_record,
+    render_terminal_stream_footer,
+    render_terminal_stream_header,
+)
 from src.services.resident_gym import (
     ProductionRuleGym,
     run_first_conversation,
@@ -140,6 +146,18 @@ def test_gym_views_label_the_mechanical_baseline_and_do_not_add_story(db_session
     assert "The display adds layout and icons, not narration." in page
     assert "Good morning. Is the footbridge open?" in terminal
     assert "Good morning. Is the footbridge open?" in page
+
+
+def test_gym_can_stream_each_record_as_the_production_boundary_returns(db_session):
+    observed = []
+
+    result = run_first_conversation(db_session, record_observer=observed.append)
+
+    assert tuple(observed) == result.records
+    assert [record.sequence for record in observed] == list(range(1, len(observed) + 1))
+    assert "Live structural record" in render_terminal_stream_header(result.episode)
+    assert "🧭" in render_terminal_record(observed[0])
+    assert "Episode complete" in render_terminal_stream_footer(result)
 
 
 def test_waiting_letter_survives_session_change_until_acknowledged(db_session):

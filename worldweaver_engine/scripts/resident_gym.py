@@ -22,7 +22,13 @@ if str(ENGINE_ROOT) not in sys.path:
 
 from src.api.game import _state_managers  # noqa: E402
 from src.database import Base  # noqa: E402
-from src.services.gym_presentation import render_html, render_terminal  # noqa: E402
+from src.services.gym_presentation import (  # noqa: E402
+    render_html,
+    render_terminal,
+    render_terminal_record,
+    render_terminal_stream_footer,
+    render_terminal_stream_header,
+)
 from src.services.resident_gym import (  # noqa: E402
     run_first_conversation,
     run_quiet_interval,
@@ -52,6 +58,11 @@ def main() -> int:
         action="store_true",
         help="print the structural episode JSON instead of the terminal view",
     )
+    parser.add_argument(
+        "--no-stream",
+        action="store_true",
+        help="print the old complete terminal report after the episode finishes",
+    )
     args = parser.parse_args()
 
     _state_managers.clear()
@@ -63,6 +74,17 @@ def main() -> int:
     )
     Base.metadata.create_all(engine)
     session_factory = sessionmaker(bind=engine)
+    stream = not args.json and not args.no_stream
+    episode_titles = {
+        "footbridge": "The Footbridge Hello",
+        "waiting-letter": "The Waiting Letter",
+        "quiet-interval": "The Long Afternoon",
+    }
+    if stream:
+        print(render_terminal_stream_header(episode_titles[args.episode]), flush=True)
+
+    def show_record(record):
+        print(render_terminal_record(record), flush=True)
 
     try:
         with session_factory() as db:
@@ -71,7 +93,10 @@ def main() -> int:
                 "waiting-letter": run_waiting_letter,
                 "quiet-interval": run_quiet_interval,
             }
-            result = runners[args.episode](db)
+            result = runners[args.episode](
+                db,
+                record_observer=show_record if stream else None,
+            )
         default_names = {
             "footbridge": "footbridge-hello.html",
             "waiting-letter": "waiting-letter.html",
@@ -87,6 +112,8 @@ def main() -> int:
         output.write_text(render_html(result), encoding="utf-8")
         if args.json:
             print(json.dumps(result.as_payload(), indent=2, ensure_ascii=False))
+        elif stream:
+            print(render_terminal_stream_footer(result), flush=True)
         else:
             print(render_terminal(result))
         print(f"Visual episode: {output}")

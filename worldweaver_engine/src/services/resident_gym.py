@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from sqlalchemy.orm import Session
 
@@ -237,6 +237,7 @@ class ProductionRuleGym:
         scenario_id: str = "",
         scenario_version: int = 1,
         scenario_seed: int = 0,
+        record_observer: Callable[[GymRecord], None] | None = None,
     ):
         self.db = db
         self.episode = str(episode or "").strip()
@@ -261,6 +262,7 @@ class ProductionRuleGym:
         self._participant_checkpoints: dict[str, GymParticipantCheckpoint] = {}
         self._cursors: dict[str, _SignalCursor] = {}
         self._records: list[GymRecord] = []
+        self._record_observer = record_observer
 
     def _record(
         self,
@@ -270,16 +272,17 @@ class ProductionRuleGym:
         location: str | None = None,
         detail: dict[str, Any] | None = None,
     ) -> None:
-        self._records.append(
-            GymRecord(
-                sequence=len(self._records) + 1,
-                occurred_at=self.clock.now().isoformat(),
-                kind=kind,
-                actor=participant.display_name if participant is not None else None,
-                location=location,
-                detail=dict(detail or {}),
-            )
+        record = GymRecord(
+            sequence=len(self._records) + 1,
+            occurred_at=self.clock.now().isoformat(),
+            kind=kind,
+            actor=participant.display_name if participant is not None else None,
+            location=location,
+            detail=dict(detail or {}),
         )
+        self._records.append(record)
+        if self._record_observer is not None:
+            self._record_observer(record)
 
     def _scheduled_queue(self) -> ScheduledEventQueue:
         if self._scheduled is None:
@@ -739,7 +742,11 @@ class ProductionRuleGym:
 
     @classmethod
     def from_checkpoint(
-        cls, db: Session, raw_checkpoint: dict[str, Any]
+        cls,
+        db: Session,
+        raw_checkpoint: dict[str, Any],
+        *,
+        record_observer: Callable[[GymRecord], None] | None = None,
     ) -> "ProductionRuleGym":
         """Restore a validated checkpoint into an empty synthetic database."""
 
@@ -930,6 +937,7 @@ class ProductionRuleGym:
             scenario_id=scenario_id,
             scenario_version=scenario_version,
             scenario_seed=scenario_seed,
+            record_observer=record_observer,
         )
         gym._scheduled = scheduler
         gym._locations = locations
@@ -960,7 +968,11 @@ class ProductionRuleGym:
         )
 
 
-def run_first_conversation(db: Session) -> GymEpisodeResult:
+def run_first_conversation(
+    db: Session,
+    *,
+    record_observer: Callable[[GymRecord], None] | None = None,
+) -> GymEpisodeResult:
     """Run the first deterministic co-presence and speech-delivery scenario."""
 
     gym = ProductionRuleGym(
@@ -968,6 +980,7 @@ def run_first_conversation(db: Session) -> GymEpisodeResult:
         episode="The Footbridge Hello",
         world_id="gym-footbridge-world",
         clock=ControlledClock(datetime(2026, 7, 20, 9, 0, tzinfo=timezone.utc)),
+        record_observer=record_observer,
     )
     gym.arrange_world(("Willow Court", "Footbridge"))
 
@@ -1009,7 +1022,11 @@ def run_first_conversation(db: Session) -> GymEpisodeResult:
     return gym.result()
 
 
-def run_waiting_letter(db: Session) -> GymEpisodeResult:
+def run_waiting_letter(
+    db: Session,
+    *,
+    record_observer: Callable[[GymRecord], None] | None = None,
+) -> GymEpisodeResult:
     """Run actor-addressed delivery across a temporary session change."""
 
     gym = ProductionRuleGym(
@@ -1017,6 +1034,7 @@ def run_waiting_letter(db: Session) -> GymEpisodeResult:
         episode="The Waiting Letter",
         world_id="gym-waiting-letter-world",
         clock=ControlledClock(datetime(2026, 7, 20, 9, 0, tzinfo=timezone.utc)),
+        record_observer=record_observer,
     )
     gym.arrange_world(("Willow Court", "Footbridge"))
     mara = GymParticipant(
@@ -1056,7 +1074,11 @@ def run_waiting_letter(db: Session) -> GymEpisodeResult:
     return gym.result()
 
 
-def prepare_quiet_interval(db: Session) -> ProductionRuleGym:
+def prepare_quiet_interval(
+    db: Session,
+    *,
+    record_observer: Callable[[GymRecord], None] | None = None,
+) -> ProductionRuleGym:
     """Arrange the quiet-interval episode and leave its future work pending."""
 
     gym = ProductionRuleGym(
@@ -1064,6 +1086,7 @@ def prepare_quiet_interval(db: Session) -> ProductionRuleGym:
         episode="The Long Afternoon",
         world_id="gym-long-afternoon-world",
         clock=ControlledClock(datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc)),
+        record_observer=record_observer,
     )
     gym.arrange_world(("Willow Court", "Footbridge"))
     mara = GymParticipant(
@@ -1119,7 +1142,13 @@ def finish_quiet_interval(gym: ProductionRuleGym) -> GymEpisodeResult:
     return gym.result()
 
 
-def run_quiet_interval(db: Session) -> GymEpisodeResult:
+def run_quiet_interval(
+    db: Session,
+    *,
+    record_observer: Callable[[GymRecord], None] | None = None,
+) -> GymEpisodeResult:
     """Mix a live exchange with a skipped two-day production lifetime."""
 
-    return finish_quiet_interval(prepare_quiet_interval(db))
+    return finish_quiet_interval(
+        prepare_quiet_interval(db, record_observer=record_observer)
+    )
