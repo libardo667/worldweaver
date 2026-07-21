@@ -84,7 +84,31 @@ remain history but are not guessed into current state, while stale finish IDs ca
 Synthetic tests prove core destruction and rebuild, stable identity across an update, explicit closure,
 checkpoint/full-replay agreement, and isolation between two hearth folders. This is still a single bounded
 adapter field, not a hidden task manager or a claim that private computation ran while the host was stopped.
-Resident-chosen return time and named early-wake event classes remain the next separate slice.
+Resident-chosen return time and named early-wake event classes are added in the separate slice below.
+
+## Third slice — chosen return and eligible early wake (2026-07-20)
+
+Every new private continuation now chooses a return between 60 seconds and seven days. It can separately name
+`local_speech` as an event class that may offer an earlier model turn, or choose an empty list. The host still
+delivers and acknowledges exact-place speech when early activation is disabled, but no longer converts every
+delivery into an explicit forced wake. An explicit steward or hearth wake still opens a model turn without
+requiring an action or closing the activity.
+
+While a chosen return is in the future it replaces the ordinary five-minute model baseline for that activity.
+An early speech or explicit activation does not consume the future return. When the return becomes due, one
+versioned ledger event both clears that exact activity/time pair and checkpoints the activation time before
+inference. A crash after that write therefore cannot repeatedly offer the same return. The last activation
+time is also restored on core rebuild, so restarting the adapter is not treated as a new first activation.
+
+Synthetic tests cover opted-in and opted-out local speech, cursor acknowledgement without a model call, due
+return, explicit interruption without activity cancellation, checkpoint restore without a repeated turn,
+schedule validation, and the host's delivery/activation separation. This establishes one event class only;
+new classes must be added as typed delivery contracts rather than prose-scored urgency.
+
+The opted-out path currently acknowledges the delivered public speech without replaying its text at the later
+scheduled turn. That is an explicit limit, not a claim that the resident remembered what was said. A future
+missed-event or recall design must use bounded typed references and deliberate retrieval rather than quietly
+building an unlimited transcript into the private checkpoint.
 
 ## Files Affected
 
@@ -106,9 +130,9 @@ Resident-chosen return time and named early-wake event classes remain the next s
   reconstructing open activities from recent prose.
 - [x] After a confirmed action, the resident can later identify that action from a bounded typed receipt even
   when the ordinary scene does not show the actor its own public trace.
-- [ ] A resident can schedule a later opportunity to think and can separately name event classes that may
+- [x] A resident can schedule a later opportunity to think and can separately name event classes that may
   offer an earlier activation.
-- [ ] Receiving an interrupt never forces a reply, action, or cancellation of the current activity.
+- [x] Receiving an interrupt never forces a reply, action, or cancellation of the current activity.
 - [ ] A choice produced from stale world/process state cannot silently commit as if no intervening event
   occurred.
 - [ ] Two residents sharing one base model cannot read or receive each other's hidden state, caches, adapters,

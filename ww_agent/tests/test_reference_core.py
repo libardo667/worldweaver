@@ -153,6 +153,27 @@ def test_read_decision_cannot_smuggle_durable_fields():
         )
 
 
+def test_continue_decision_requires_bounded_schedule_fields():
+    with pytest.raises(ReferenceDecisionError, match="missing fields"):
+        ReferenceDecision.from_dict(
+            {"choice": "continue", "activity": "Sort the seed packets."},
+            allow_read=True,
+            source_names=set(),
+        )
+
+    with pytest.raises(ReferenceDecisionError, match="unsupported event class"):
+        ReferenceDecision.from_dict(
+            {
+                "choice": "continue",
+                "activity": "Sort the seed packets.",
+                "return_after_seconds": 300,
+                "wake_on": ["private_message"],
+            },
+            allow_read=True,
+            source_names=set(),
+        )
+
+
 def test_source_terms_are_visible_before_the_resident_chooses_to_read(tmp_path):
     core, _memory_dir, _acted, _reads = _core(
         tmp_path,
@@ -281,7 +302,12 @@ def test_private_activity_keeps_one_identity_across_core_rebuilds(tmp_path):
     first, memory_dir, _acted, _reads = _core(
         tmp_path,
         responses=[
-            {"choice": "continue", "activity": "Compare the two maps."},
+            {
+                "choice": "continue",
+                "activity": "Compare the two maps.",
+                "return_after_seconds": 300,
+                "wake_on": ["local_speech"],
+            },
         ],
     )
 
@@ -292,7 +318,12 @@ def test_private_activity_keeps_one_identity_across_core_rebuilds(tmp_path):
     continued, _same_memory, _acted_again, _reads_again = _core(
         tmp_path,
         responses=[
-            {"choice": "continue", "activity": "Annotate the clearer map."},
+            {
+                "choice": "continue",
+                "activity": "Annotate the clearer map.",
+                "return_after_seconds": 300,
+                "wake_on": ["local_speech"],
+            },
         ],
     )
     continued_result = asyncio.run(
@@ -337,7 +368,14 @@ def test_private_activity_keeps_one_identity_across_core_rebuilds(tmp_path):
 def test_private_activity_does_not_cross_hearths(tmp_path):
     first, _memory_dir, _acted, _reads = _core(
         tmp_path,
-        responses=[{"choice": "continue", "activity": "Sort the seed packets."}],
+        responses=[
+            {
+                "choice": "continue",
+                "activity": "Sort the seed packets.",
+                "return_after_seconds": 300,
+                "wake_on": ["local_speech"],
+            }
+        ],
     )
     asyncio.run(first.tick_once())
 
@@ -412,7 +450,7 @@ def test_no_new_signal_does_not_call_the_model_again_before_baseline(tmp_path):
     assert second == {
         "status": "idle",
         "choice": "none",
-        "reason": "no_new_local_signal_and_baseline_not_due",
+        "reason": "no_eligible_signal_or_due_return",
     }
     assert not acted
     assert not reads
@@ -438,6 +476,129 @@ def test_new_local_speech_wakes_before_the_slow_baseline(tmp_path):
     result = asyncio.run(core.tick_once(now=start + timedelta(seconds=20)))
 
     assert result["status"] == "completed"
+
+
+def test_private_activity_can_defer_speech_until_its_chosen_return(tmp_path):
+    core, memory_dir, _acted, _reads = _core(
+        tmp_path,
+        responses=[
+            {
+                "choice": "continue",
+                "activity": "Sort the seed packets.",
+                "return_after_seconds": 120,
+                "wake_on": [],
+            },
+            {"choice": "wait"},
+        ],
+    )
+    start = datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc)
+    first = asyncio.run(core.tick_once(now=start))
+    assert first["return_at"] == "2026-07-20T12:02:00+00:00"
+
+    signal = LiveSignal(
+        id=2,
+        kind="local_speech",
+        location="Alderbank Commons",
+        session_id="riley-session",
+        actor_id="actor-riley",
+        display_name="Riley",
+        message="Test Resident, do you have a moment?",
+        occurred_at="2026-07-20T12:00:20",
+    )
+    core._world.chat_error = AssertionError("cursor delivery should avoid chat fetch")
+    core.offer_live_signals((signal,))
+    deferred = asyncio.run(core.tick_once(now=start + timedelta(seconds=20)))
+    assert deferred == {
+        "status": "idle",
+        "choice": "none",
+        "reason": "no_eligible_signal_or_due_return",
+    }
+    assert len(core._llm.calls) == 1
+    assert core.take_acknowledged_live_signal_ids() == (2,)
+
+    returned = asyncio.run(core.tick_once(now=start + timedelta(seconds=120)))
+    assert returned["choice"] == "wait"
+    assert len(core._llm.calls) == 2
+
+    activity = core._open_private_activity
+    assert activity is not None
+    assert activity.return_at == ""
+    assert activity.wake_on == ()
+    event_types = [event["event_type"] for event in load_runtime_events(memory_dir)]
+    assert event_types.count("reference_activity_return_consumed") == 1
+
+    restarted, _same_memory, _acted_again, _reads_again = _core(
+        tmp_path,
+        responses=[],
+    )
+    restarted._world.chat = []
+    after_restart = asyncio.run(restarted.tick_once(now=start + timedelta(seconds=121)))
+    assert after_restart == {
+        "status": "idle",
+        "choice": "none",
+        "reason": "no_eligible_signal_or_due_return",
+    }
+    assert restarted._llm.calls == []
+
+
+def test_private_activity_can_allow_speech_to_offer_an_early_turn(tmp_path):
+    core, _memory_dir, _acted, _reads = _core(
+        tmp_path,
+        responses=[
+            {
+                "choice": "continue",
+                "activity": "Sort the seed packets.",
+                "return_after_seconds": 600,
+                "wake_on": ["local_speech"],
+            },
+            {"choice": "wait"},
+        ],
+    )
+    start = datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc)
+    asyncio.run(core.tick_once(now=start))
+    core._world.chat.append(
+        SimpleNamespace(
+            id=2,
+            session_id="riley-session",
+            actor_id="actor-riley",
+            display_name="Riley",
+            message="Test Resident, the delivery is here.",
+        )
+    )
+
+    result = asyncio.run(core.tick_once(now=start + timedelta(seconds=20)))
+
+    assert result["choice"] == "wait"
+    assert len(core._llm.calls) == 2
+    assert "the delivery is here" in core._llm.calls[1][1]
+    assert core._open_private_activity is not None
+    assert core._open_private_activity.return_at == "2026-07-20T12:10:00+00:00"
+
+
+def test_explicit_wake_does_not_cancel_private_activity(tmp_path):
+    core, _memory_dir, _acted, _reads = _core(
+        tmp_path,
+        responses=[
+            {
+                "choice": "continue",
+                "activity": "Repair the loose binding.",
+                "return_after_seconds": 600,
+                "wake_on": [],
+            },
+            {"choice": "wait"},
+        ],
+    )
+    start = datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc)
+    asyncio.run(core.tick_once(now=start))
+
+    result = asyncio.run(
+        core.tick_once(now=start + timedelta(seconds=20), force_ignite=True)
+    )
+
+    assert result["choice"] == "wait"
+    assert core._open_private_activity is not None
+    assert core._open_private_activity.activity == "Repair the loose binding."
+    assert core._open_private_activity.return_at == "2026-07-20T12:10:00+00:00"
 
 
 def test_slow_baseline_does_not_replay_old_speech_as_new(tmp_path):

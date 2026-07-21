@@ -32,9 +32,10 @@ The live loop separates cheap waiting and observation from model activation:
 
 ```text
 wait for a local signal or the normal timer, then observe the current place
-  -> activate on first start, new local speech, explicit wake, or a five-minute baseline
+  -> checkpoint delivery without treating it as a forced model call
+  -> activate on an eligible local signal, explicit wake, chosen return, or five-minute baseline
   -> optionally read one advertised source
-  -> attempt one typed action, continue privately, or wait
+  -> attempt one typed action, continue or finish private activity, or wait
   -> record a content-blind outcome
 ```
 
@@ -102,14 +103,18 @@ and record count. Identity growth is the narrow exception: its receipt retains t
 needed to prove explicit inspection before adoption, never the proposal text.
 
 There is exactly one elective read per activation. After that read, the model must attempt one outward action,
-continue a private activity, or wait; it cannot open another read. Exact-place speech and visible people are
-immediate observation and do not spend this read.
+continue or finish a private activity, or wait; it cannot open another read. Continuing chooses a return from
+one minute through seven days and whether `local_speech` may offer an earlier model turn. A future chosen
+return suppresses the ordinary five-minute baseline for that activity. Exact-place speech and visible people
+are immediate observation and do not spend this read.
 
 Each activation records content-blind receipts: whether inference completed, whether one source was requested,
 and whether an action was confirmed, declined, or left unknown. It does not store the prompt, completion,
 read query, returned text, or action prose in the ledger. A final private continuation is resident-owned state
-and is recorded in the private ledger. The old core's explicitly enabled prompt tracing remains legacy
-diagnostic code and is not wired into the production reference loop.
+and is reduced into one versioned hearth checkpoint record with a stable ID. Delivery that is not eligible for
+early activation is still acknowledged, but does not call the model or force a response. The old core's
+explicitly enabled prompt tracing remains legacy diagnostic code and is not wired into the production
+reference loop.
 
 ## World attachment
 

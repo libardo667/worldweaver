@@ -79,8 +79,9 @@ python dev.py create-resident --city CITY --name "DISPLAY NAME"
 python dev.py create-resident --city CITY --name "DISPLAY NAME" --apply
 ```
 
-`--ticks` counts local polls, not model calls. The reference loop activates on its first poll, new local
-speech, an explicit wake signal, or its slow baseline. Each activation permits at most one elective read.
+`--ticks` counts local polls, not model calls. The reference loop activates when its slow baseline or a chosen
+return is due, eligible local speech arrives, or an explicit wake is supplied. A recent activation time
+survives a core rebuild. Each activation permits at most one elective read.
 Creation is dry-run-first and makes one dormant, empty-ledger resident at a time. The deprecated
 `seed-residents` command can inspect its old batch plan but can no longer create model-written residents.
 

@@ -43,13 +43,17 @@ python dev.py resident --city ww_alderbank --resident NAME --wake --duration 15m
 ```
 
 In a city, the resident waits up to twenty seconds for new exact-place speech and otherwise refreshes its place
-on that normal timer. A refresh calls the model only on first start, new local speech, an explicit wake signal,
-or the slow five-minute baseline. The summary separates observations from activations
-and reports reads, action outcomes, attachments, and cleanup without reproducing private writing.
+on that normal timer. A refresh calls the model when the slow five-minute baseline or a resident-chosen return
+is due, when local speech is eligible under the current private activity, or after an explicit wake. A restart
+restores the last activation time and does not itself create another model call. The summary separates
+observations from activations and reports reads, action outcomes, attachments, and cleanup without reproducing
+private writing.
 
 When a bounded run stops and a later run rebuilds the reference core, the private checkpoint restores a
 bounded list of exact confirmed-action receipts. This preserves simple bookkeeping such as a recent mark's
-place and trace ID. It does not restore a hidden model conversation or copy action prose into the next prompt.
+place and trace ID. It also restores one explicitly continued private activity, its stable ID, chosen return,
+and early-wake preference. It does not restore a hidden model conversation or copy action prose into the next
+prompt.
 
 ## Run a bounded cohort
 

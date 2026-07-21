@@ -120,8 +120,10 @@ confirmed own actions, and a rebuilt reference core can recover exact action kin
 stable identifiers without receiving action prose. A synthetic mark survives core destruction and rebuild.
 The second slice gives one explicitly continued private activity a stable ID, exact bounded resident-authored
 description, deterministic checkpoint replay, and explicit completion. It survives a rebuilt core without
-being reconstructed from recent prose and stays isolated to its hearth. Next, add a resident-chosen return
-time and a small named set of event classes that may offer an earlier activation.
+being reconstructed from recent prose and stays isolated to its hearth. The third slice adds a chosen return
+between one minute and seven days, an optional `local_speech` early-wake class, restart-safe activation timing,
+and a host boundary where delivery is no longer a forced model call. Next, version each activation against
+the world and process state it began from so a stale model result cannot commit silently.
 
 ### 4. Add the private-to-public making boundary
 

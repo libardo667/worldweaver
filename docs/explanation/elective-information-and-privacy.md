@@ -42,8 +42,9 @@ Citywide chatter is not currently advertised because the engine does not yet hav
 citywide channel. The former `investigate` source was removed because it returned model-authored event
 summaries without the typed evidence needed to treat them as history.
 
-A source read returns to one final model call. The resident may then attempt an action, continue privately, or
-wait. It cannot request a second source during that activation. Reading never changes the world.
+A source read returns to one final model call. The resident may then attempt an action, continue or finish one
+private activity, or wait. Continuing includes a bounded return time and an optional `local_speech` early-wake
+class. It cannot request a second source during that activation. Reading never changes the world.
 
 Source material is visibly delimited from runtime instructions. It cannot change the response format or
 declare an action successful. The production reference loop reads fresh records by default; it does not

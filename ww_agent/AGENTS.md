@@ -42,6 +42,11 @@ inputs in the identity loader; they do not restore the old ownership model.
   same ID; waiting, reading, acting, and interruption leave it open; only an explicit matching finish event
   closes it. Do not infer active work from old unversioned continuation prose, create multiple hidden work
   queues, expose the description to a city, or treat an interrupted activation as cancellation.
+- Continuing private activity must set a return from 60 seconds through seven days and may opt into early
+  `local_speech` activation or choose no early event class. A future return replaces the five-minute model
+  baseline while that activity is open. The return-consumed event also records the activation time in one
+  checkpoint advance, so a crash cannot repeatedly offer the same due return. An early or explicit activation
+  does not consume a future return unless the resident replaces or finishes the activity.
 - Normal resident creation is model-free and one-at-a-time. It writes a chosen name, stable ID, dormant
   hearth manifest, public identity card, and host-sealed signing key while leaving the private ledger empty.
   City admission, activation, and waking are separate operator acts. The old Doula and its model-written
@@ -55,11 +60,11 @@ inputs in the identity loader; they do not restore the old ownership model.
   append writes the ledger and one checkpoint, never the removed projection and snapshot shadows. Do not make
   the normal write path grow with lifetime history or restore front truncation.
 - The production loop observes current-place facts on its normal cadence. In a city, it waits on a durable
-  exact-place speech cursor and wakes early when that cursor delivers something; the normal timer remains the
-  fallback. Delivery is not a command to reply. Do not replay old speech as new, advance the cursor before the
-  core acknowledges observation, or let activity elsewhere in the city trigger a resident poll. Persist only
-  content-blind cursor position, bind restoration to the exact city session, and establish a new scope after
-  hearth or cross-city travel.
+  exact-place speech cursor. Delivery supplies facts but is not itself an explicit forced wake: the core's
+  private schedule decides whether `local_speech` offers an early model turn. Delivery is never a command to
+  reply. Do not replay old speech as new, advance the cursor before the core acknowledges observation, or let
+  activity elsewhere in the city trigger a resident poll. Persist only content-blind cursor position, bind
+  restoration to the exact city session, and establish a new scope after hearth or cross-city travel.
 - Relationship summaries are reducer output, not a second memory store. They may use only an
   `utterance_perceived` delivery event and a canonical reply edge; their subjective claims must retain
   the supporting ledger event IDs and never turn chat text into an unsupported belief.

@@ -6,11 +6,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Protocol
 
 CONFIRMED_ACTION_RECEIPT_VERSION = 1
 CONFIRMED_ACTION_KINDS = {"speak", "move", "do", "write", "mark"}
 PRIVATE_ACTIVITY_STATE_VERSION = 1
+PRIVATE_ACTIVITY_WAKE_EVENT_CLASSES = frozenset({"local_speech"})
+REFERENCE_ACTIVATION_STATE_VERSION = 1
 
 
 class ActionChoice(Protocol):
@@ -57,6 +60,8 @@ class OpenPrivateActivity:
     activity: str
     opened_at: str
     updated_at: str
+    return_at: str = ""
+    wake_on: tuple[str, ...] = ("local_speech",)
 
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> "OpenPrivateActivity":
@@ -66,6 +71,24 @@ class OpenPrivateActivity:
         activity = str(raw.get("activity") or "").strip()
         opened_at = str(raw.get("opened_at") or "").strip()
         updated_at = str(raw.get("updated_at") or "").strip()
+        return_at = str(raw.get("return_at") or "").strip()
+        if return_at:
+            try:
+                parsed_return_at = datetime.fromisoformat(
+                    return_at.replace("Z", "+00:00")
+                )
+            except ValueError as exc:
+                raise ValueError("invalid private-activity return time") from exc
+            if parsed_return_at.tzinfo is None:
+                raise ValueError("private-activity return time must include a timezone")
+        raw_wake_on = raw.get("wake_on", ["local_speech"])
+        if not isinstance(raw_wake_on, (list, tuple)):
+            raise ValueError("invalid private-activity wake classes")
+        wake_on = tuple(str(value or "").strip() for value in raw_wake_on)
+        if len(wake_on) != len(set(wake_on)) or not set(wake_on) <= set(
+            PRIVATE_ACTIVITY_WAKE_EVENT_CLASSES
+        ):
+            raise ValueError("invalid private-activity wake classes")
         if not activity_id or not activity or len(activity) > 500:
             raise ValueError("invalid private-activity state")
         return cls(
@@ -73,6 +96,8 @@ class OpenPrivateActivity:
             activity=activity,
             opened_at=opened_at,
             updated_at=updated_at,
+            return_at=return_at,
+            wake_on=wake_on,
         )
 
     def as_dict(self) -> dict[str, Any]:
@@ -82,6 +107,8 @@ class OpenPrivateActivity:
             "activity": self.activity,
             "opened_at": self.opened_at,
             "updated_at": self.updated_at,
+            "return_at": self.return_at,
+            "wake_on": list(self.wake_on),
         }
 
 
@@ -95,6 +122,7 @@ def advance_open_private_activity(
     if event_type not in {
         "reference_activity_continued",
         "reference_activity_finished",
+        "reference_activity_return_consumed",
     }:
         return current
     payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
@@ -109,6 +137,16 @@ def advance_open_private_activity(
             return None
         return current
 
+    if event_type == "reference_activity_return_consumed":
+        if not current or str(current.get("activity_id") or "").strip() != activity_id:
+            return current
+        consumed_return_at = str(payload.get("return_at") or "").strip()
+        if str(current.get("return_at") or "").strip() != consumed_return_at:
+            return current
+        consumed = dict(current)
+        consumed["return_at"] = ""
+        return OpenPrivateActivity.from_dict(consumed).as_dict()
+
     activity = str(payload.get("activity") or "").strip()
     opened_at = str(payload.get("opened_at") or "").strip()
     updated_at = str(event.get("ts") or "").strip()
@@ -118,11 +156,27 @@ def advance_open_private_activity(
         "activity": activity,
         "opened_at": opened_at,
         "updated_at": updated_at,
+        "return_at": str(payload.get("return_at") or "").strip(),
+        "wake_on": payload.get("wake_on", ["local_speech"]),
     }
     try:
         return OpenPrivateActivity.from_dict(candidate).as_dict()
     except ValueError:
         return current
+
+
+def project_reference_activation_at(event: dict[str, Any]) -> str | None:
+    """Project a versioned activation time for restart-safe scheduling."""
+
+    if str(event.get("event_type") or "").strip() not in {
+        "reference_activation_started",
+        "reference_activity_return_consumed",
+    }:
+        return None
+    payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+    if payload.get("process_state_version") != REFERENCE_ACTIVATION_STATE_VERSION:
+        return None
+    return str(payload.get("as_of") or event.get("ts") or "").strip() or None
 
 
 def project_confirmed_action_receipt(

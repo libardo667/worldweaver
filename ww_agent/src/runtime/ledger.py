@@ -19,6 +19,7 @@ from src.runtime.relations import RELATIONAL_EVENT_SCHEMA_VERSION
 from src.runtime.process_state import (
     advance_open_private_activity,
     project_confirmed_action_receipt,
+    project_reference_activation_at,
 )
 
 _LEDGER_FILENAME = "runtime_ledger.jsonl"
@@ -35,9 +36,9 @@ _LEGACY_DERIVED_FILENAMES = {
 }
 
 CHECKPOINT_FORMAT_VERSION = 2
-REDUCER_FORMAT_VERSION = 6
+REDUCER_FORMAT_VERSION = 7
 PROJECTION_FORMAT_VERSIONS = {
-    "runtime": 3,
+    "runtime": 4,
     "subjective": 1,
     "memory": 1,
     "subjective_facts": 1,
@@ -840,6 +841,7 @@ def _build_runtime_projection(
     last_research: dict[str, Any] | None = None
     recent_confirmed_actions: list[dict[str, Any]] = []
     open_private_activity: dict[str, Any] | None = None
+    last_reference_activation_at: str | None = None
 
     for event in events:
         event_type = str(event.get("event_type") or "").strip()
@@ -893,6 +895,9 @@ def _build_runtime_projection(
             open_private_activity,
             event,
         )
+        activation_at = project_reference_activation_at(event)
+        if activation_at is not None:
+            last_reference_activation_at = activation_at
 
     return {
         "updated_at": as_of,
@@ -918,6 +923,7 @@ def _build_runtime_projection(
             -RECENT_CONFIRMED_ACTION_LIMIT:
         ],
         "open_private_activity": open_private_activity,
+        "last_reference_activation_at": last_reference_activation_at,
         "last_grounding": last_grounding,
         "last_movement": last_movement,
         "last_mail": last_mail,
@@ -2264,6 +2270,7 @@ def _advance_runtime_projection(
         ),
         event,
     )
+    activation_at = project_reference_activation_at(event)
     runtime_projection.update(
         {
             "updated_at": _replay_as_of_iso([event]),
@@ -2278,6 +2285,11 @@ def _advance_runtime_projection(
                 -RECENT_CONFIRMED_ACTION_LIMIT:
             ],
             "open_private_activity": open_private_activity,
+            "last_reference_activation_at": (
+                activation_at
+                if activation_at is not None
+                else runtime_projection.get("last_reference_activation_at")
+            ),
         }
     )
     if event_type in {"grounding_observed", "ground_intent_executed"}:
@@ -2338,6 +2350,14 @@ def load_open_private_activity(memory_dir: Path) -> dict[str, Any] | None:
     state = load_current_runtime_state(memory_dir)
     activity = state.runtime_projection.get("open_private_activity")
     return deepcopy(activity) if isinstance(activity, dict) else None
+
+
+def load_last_reference_activation_at(memory_dir: Path) -> str | None:
+    """Load the last versioned activation time from checkpoint state."""
+
+    state = load_current_runtime_state(memory_dir)
+    value = str(state.runtime_projection.get("last_reference_activation_at") or "")
+    return value.strip() or None
 
 
 def _advance_lifecycle_state(state: dict[str, Any], event: dict[str, Any]) -> tuple[

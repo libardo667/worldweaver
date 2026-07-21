@@ -22,11 +22,14 @@ from src.identity.loader import ResidentIdentity
 from src.inference.client import InferenceClient
 from src.runtime.ledger import (
     append_runtime_event,
+    load_last_reference_activation_at,
     load_open_private_activity,
     load_recent_confirmed_actions,
 )
 from src.runtime.process_state import (
     PRIVATE_ACTIVITY_STATE_VERSION,
+    PRIVATE_ACTIVITY_WAKE_EVENT_CLASSES,
+    REFERENCE_ACTIVATION_STATE_VERSION,
     ConfirmedActionReceipt,
     OpenPrivateActivity,
     confirmed_action_payload,
@@ -61,6 +64,8 @@ class ReferenceDecision:
     read: Reach | None = None
     act: Act | None = None
     activity: str = ""
+    return_after_seconds: int = 0
+    wake_on: tuple[str, ...] = ()
 
     @classmethod
     def from_dict(
@@ -87,7 +92,12 @@ class ReferenceDecision:
         expected_keys = {
             "read": {"choice", "source", "query"},
             "act": {"choice", "action"},
-            "continue": {"choice", "activity"},
+            "continue": {
+                "choice",
+                "activity",
+                "return_after_seconds",
+                "wake_on",
+            },
             "finish": {"choice"},
             "wait": {"choice"},
         }[choice]
@@ -128,12 +138,43 @@ class ReferenceDecision:
             return cls(choice=choice, act=act)
 
         if choice == "continue":
+            missing = expected_keys - set(raw)
+            if missing:
+                raise ReferenceDecisionError(
+                    f"missing fields for continue: {sorted(missing)}"
+                )
             activity = str(raw.get("activity") or "").strip()
             if not activity:
                 raise ReferenceDecisionError("continue.activity must be non-empty")
             if len(activity) > 500:
                 raise ReferenceDecisionError("continue.activity is too long")
-            return cls(choice=choice, activity=activity)
+            return_after_seconds = raw.get("return_after_seconds")
+            if (
+                isinstance(return_after_seconds, bool)
+                or not isinstance(return_after_seconds, int)
+                or not 60 <= return_after_seconds <= 604_800
+            ):
+                raise ReferenceDecisionError(
+                    "continue.return_after_seconds must be an integer from 60 to 604800"
+                )
+            raw_wake_on = raw.get("wake_on")
+            if not isinstance(raw_wake_on, list) or any(
+                not isinstance(value, str) for value in raw_wake_on
+            ):
+                raise ReferenceDecisionError("continue.wake_on must be an array")
+            wake_on = tuple(value.strip() for value in raw_wake_on)
+            if len(wake_on) != len(set(wake_on)) or not set(wake_on) <= set(
+                PRIVATE_ACTIVITY_WAKE_EVENT_CLASSES
+            ):
+                raise ReferenceDecisionError(
+                    "continue.wake_on contains an unsupported event class"
+                )
+            return cls(
+                choice=choice,
+                activity=activity,
+                return_after_seconds=return_after_seconds,
+                wake_on=wake_on,
+            )
 
         return cls(choice=choice)
 
@@ -412,6 +453,12 @@ def render_reference_observation(observation: ReferenceObservation) -> str:
             f"- id={activity.activity_id}\n"
             f"- your description: {activity.activity}"
         )
+        if activity.return_at:
+            wake_text = ", ".join(activity.wake_on) if activity.wake_on else "none"
+            lines.append(
+                f"You chose to reconsider it at {activity.return_at}; "
+                f"earlier activation classes: {wake_text}."
+            )
     if observation.sources:
         lines.append(
             "Information you may choose to read:\n"
@@ -482,7 +529,7 @@ class ReferenceResidentCore:
         self._activation_seconds = max(self._tick_seconds, float(activation_seconds))
         self._model = str(model or "").strip() or None
         self._temperature = temperature
-        self._last_activation_at: datetime | None = None
+        self._last_activation_at = self._load_last_activation_at()
         self._last_poll_at: datetime | None = None
         self._seen_local_speech_ids: set[str] = set()
         self._offered_live_signals: tuple[LiveSignal, ...] = ()
@@ -530,6 +577,30 @@ class ReferenceResidentCore:
         raw = load_open_private_activity(self._memory_dir)
         return OpenPrivateActivity.from_dict(raw) if raw is not None else None
 
+    def _load_last_activation_at(self) -> datetime | None:
+        raw = load_last_reference_activation_at(self._memory_dir)
+        if raw is None:
+            return None
+        try:
+            restored = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return restored if restored.tzinfo else restored.replace(tzinfo=timezone.utc)
+
+    def _activity_return_is_due(self, now: datetime) -> bool:
+        if self._open_private_activity is None:
+            return False
+        raw = self._open_private_activity.return_at
+        if not raw:
+            return False
+        try:
+            return_at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            return False
+        if return_at.tzinfo is None:
+            return_at = return_at.replace(tzinfo=timezone.utc)
+        return now >= return_at
+
     def _system_prompt(self, *, allow_read: bool) -> str:
         identity_text = str(
             self._identity.soul
@@ -557,7 +628,10 @@ class ReferenceResidentCore:
             f"Return exactly one JSON object choosing {choice_text}. "
             'Read: {"choice":"read","source":"advertised-name","query":"..."}. '
             'Act: {"choice":"act","action":{"kind":"speak|move|do|write|mark","body":"...","target":null}}. '
-            'Continue privately: {"choice":"continue","activity":"..."}. '
+            'Continue privately: {"choice":"continue","activity":"...",'
+            '"return_after_seconds":300,"wake_on":["local_speech"]}. '
+            "return_after_seconds must be an integer from 60 through 604800. "
+            'wake_on may contain "local_speech" or be empty. '
             f"{finish_instruction} "
             'Do nothing: {"choice":"wait"}.'
         )
@@ -665,18 +739,34 @@ class ReferenceResidentCore:
         current_signal_ids = set(observation.local_speech_ids)
         new_signal_ids = current_signal_ids - self._seen_local_speech_ids
         new_local_signal = bool(new_signal_ids)
+        local_signal_may_wake = (
+            self._open_private_activity is None
+            or "local_speech" in self._open_private_activity.wake_on
+        )
+        eligible_local_signal = new_local_signal and local_signal_may_wake
         first_activation = self._last_activation_at is None
         self._seen_local_speech_ids.update(current_signal_ids)
-        baseline_due = (
+        scheduled_return_due = self._activity_return_is_due(effective_now)
+        waiting_for_scheduled_return = bool(
+            self._open_private_activity is not None
+            and self._open_private_activity.return_at
+            and not scheduled_return_due
+        )
+        baseline_due = not waiting_for_scheduled_return and (
             first_activation
             or (effective_now - self._last_activation_at).total_seconds()
             >= self._activation_seconds
         )
-        if not (force_ignite or new_local_signal or baseline_due):
+        if not (
+            force_ignite
+            or eligible_local_signal
+            or scheduled_return_due
+            or baseline_due
+        ):
             return {
                 "status": "idle",
                 "choice": "none",
-                "reason": "no_new_local_signal_and_baseline_not_due",
+                "reason": "no_eligible_signal_or_due_return",
             }
         prompt_observation = observation
         if not first_activation:
@@ -695,10 +785,25 @@ class ReferenceResidentCore:
                 local_speech_ids=tuple(sorted(new_signal_ids)),
             )
         self._last_activation_at = effective_now
+        if scheduled_return_due and self._open_private_activity is not None:
+            append_runtime_event(
+                self._memory_dir,
+                event_type="reference_activity_return_consumed",
+                payload={
+                    "activity_state_version": PRIVATE_ACTIVITY_STATE_VERSION,
+                    "process_state_version": REFERENCE_ACTIVATION_STATE_VERSION,
+                    "activity_id": self._open_private_activity.activity_id,
+                    "return_at": self._open_private_activity.return_at,
+                    "as_of": effective_now.isoformat(),
+                },
+                ts=effective_now,
+            )
+            self._open_private_activity = self._load_open_activity()
         append_runtime_event(
             self._memory_dir,
             event_type="reference_activation_started",
             payload={
+                "process_state_version": REFERENCE_ACTIVATION_STATE_VERSION,
                 "as_of": (
                     effective_now.isoformat()
                     if isinstance(effective_now, datetime)
@@ -832,6 +937,7 @@ class ReferenceResidentCore:
                 if self._open_private_activity is not None
                 else effective_now.isoformat()
             )
+            return_at = effective_now + timedelta(seconds=decision.return_after_seconds)
             append_runtime_event(
                 self._memory_dir,
                 event_type="reference_activity_continued",
@@ -840,6 +946,8 @@ class ReferenceResidentCore:
                     "activity_id": activity_id,
                     "activity": decision.activity,
                     "opened_at": opened_at,
+                    "return_at": return_at.isoformat(),
+                    "wake_on": list(decision.wake_on),
                 },
                 ts=effective_now,
             )
@@ -849,6 +957,7 @@ class ReferenceResidentCore:
                 "choice": "continue",
                 "reads": reads,
                 "activity_id": activity_id,
+                "return_at": return_at.isoformat(),
             }
 
         if decision.choice == "finish" and self._open_private_activity is not None:

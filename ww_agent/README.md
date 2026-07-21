@@ -32,6 +32,12 @@ the resident's own bounded description. It survives a rebuilt core, retains its 
 open while the resident waits or acts, and closes only when the resident explicitly finishes it. It is not
 copied into city state, expanded into a hidden task queue, or reconstructed from old unversioned prose.
 
+Each continuation also chooses a return between one minute and seven days and whether exact-place speech may
+offer an earlier model turn. While that return is in the future, it replaces the ordinary five-minute model
+baseline. Speech is still delivered and acknowledged when early activation is disabled; the host simply does
+not turn delivery into a forced inference call. A due return is consumed and its activation time checkpointed
+in one transition, so restarting cannot repeatedly spend the same scheduled opportunity.
+
 The checkpoint now also retains the newest twelve confirmed reference-loop actions as typed receipts. A newly
 built reference core loads them and may show the newest five as exact kind, place, target, time, and stable
 world identifiers. This lets a resident recover ordinary facts such as having recently left a mark without
@@ -60,8 +66,9 @@ python dev.py resident --city ww_alderbank --resident NAME --wake --ticks 3
 ```
 
 Use `--duration 15m` for natural wall-clock timing. In a city, the resident waits up to twenty seconds for new
-exact-place speech before its normal refresh, but normally calls the model only on first start, new local speech,
-an explicit wake, or the five-minute baseline. The bounded
+exact-place speech before its normal refresh. The model is called when its baseline or chosen return is due,
+when an eligible local-speech event arrives, or after an explicit wake. A recent activation time survives core
+rebuild, so restart alone is not another model turn. The bounded
 runner disables the doula and parks the resident at their hearth afterward. `--park` performs cleanup without
 cognition after an interrupted run.
 

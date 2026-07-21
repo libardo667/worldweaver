@@ -130,6 +130,12 @@ Tests cover ordering, own/distant-speech exclusion, place reset, retention-gap r
 wake, direct batch observation, acknowledgement, unrelated notification filtering, restart, and new-session
 isolation.
 
+Major 141 now separates delivery from model activation as well. The host offers a delivered speech batch
+without setting the explicit-wake flag. A resident with an open private activity may opt into `local_speech`
+as an early activation class or choose no early class; either way the batch is observed and acknowledged.
+Synthetic tests prove that opted-out delivery advances acknowledgement without calling the model, while an
+opted-in event opens a turn without requiring speech or action.
+
 Still open: actor arrival/departure and direct-correspondence signal families; engine-restart and disconnected
 server-wait fault tests; broader content-blind duplicate/gap and resource metrics; and notification
 backpressure under a busy place. The live Alderbank control establishes a one-resident speech baseline but

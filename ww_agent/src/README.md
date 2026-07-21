@@ -4,13 +4,15 @@
 - `resident.py` — shared resident host and lifecycle: one home, one reference core, and one exclusive city or
   hearth attachment. It owns confirmed city departure, core rebuild, fresh city return, durable city-signal
   waiting and session-bound cursor restoration, keeper-whisper wake signals, optional tick-count or elapsed-time
-  bounds, and read-only observers used by operational surfaces. A time-bound host run changes no cognitive
-  clock; the core keeps its own cadence.
+  bounds, and read-only observers used by operational surfaces. Cursor delivery is passed to the core without
+  being converted into a forced activation. A time-bound host run changes no cognitive clock; the core keeps
+  and checkpoints its own cadence.
 - `runtime/reference_core.py` — production resident loop. It observes current-place facts, accepts a
   cursor-delivered local-speech batch without fetching it again, activates on a new local signal or slow
   baseline, permits one elective read, and accepts one final action, private continuation, or wait choice. A
   rebuilt core loads a bounded typed view of its own recently confirmed actions from the private checkpoint;
   it also restores one explicitly continued private activity under its stable ID and can finish it explicitly.
+  A continuation sets a bounded return time and selects whether local speech may offer an earlier activation.
   It does not restore prompts, completions, or action prose.
 - `runtime/process_state.py` — small versioned resident-process fields that can be shared by the reference
   adapter and later model adapters. It defines confirmed-action receipts, their exact renderer, and the
@@ -27,7 +29,8 @@
   and are not copied into city session storage. Its runtime projection keeps no more than twelve versioned
   confirmed-action receipts so a restart can recover exact bookkeeping without replaying or summarizing a
   resident's life. It also keeps at most one versioned open private activity; stale completion IDs and old
-  unversioned continuation events cannot change that state.
+  unversioned continuation events cannot change that state. The last versioned reference activation and an
+  atomically consumed scheduled return prevent restart from repeating a recent model turn.
 - `runtime/prompt_trace.py` — legacy-core diagnostic code; it is not wired into the production reference loop.
 - `runtime/prompt_context.py` — typed available/selected/withheld source envelope and final prose renderer.
 - `runtime/information.py` — private elective source access plus the structured provider-record contract;

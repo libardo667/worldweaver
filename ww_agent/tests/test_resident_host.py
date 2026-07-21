@@ -628,7 +628,7 @@ def test_city_host_wakes_early_for_cursor_delivered_speech(tmp_path):
 
     asyncio.run(resident.run(max_ticks=2, pause_seconds=20.0))
 
-    assert forced == [False, True]
+    assert forced == [False, False]
     assert offered == [signal]
     assert waits[0][0] is None
     assert waits[1][0] == cursor

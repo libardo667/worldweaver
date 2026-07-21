@@ -295,7 +295,7 @@ class Resident:
                     else None
                 )
                 pending_signals: LiveSignalBatch | None = None
-                live_signal_wake = False
+                cursor_recovery_wake = False
                 while True:
                     if (
                         tick_count > 0
@@ -310,9 +310,9 @@ class Resident:
                             if callable(offer_signals):
                                 offer_signals(pending_signals.events)
                         force_ignite = (
-                            self._take_force_ignite(world) or live_signal_wake
+                            self._take_force_ignite(world) or cursor_recovery_wake
                         )
-                        live_signal_wake = False
+                        cursor_recovery_wake = False
                         result = await core.tick_once(force_ignite=force_ignite)
                     except asyncio.CancelledError:
                         raise
@@ -380,9 +380,8 @@ class Resident:
                         delay = min(delay, max(0.0, deadline - loop.time()))
                     if pending_signals is not None:
                         await asyncio.sleep(delay)
-                        live_signal_wake = True
                         continue
-                    signal_cursor, pending_signals, live_signal_wake = (
+                    signal_cursor, pending_signals, cursor_recovery_wake = (
                         await self._wait_for_live_signals(
                             world,
                             session_id=session_id,
@@ -402,7 +401,7 @@ class Resident:
                             )
                             signal_cursor = pending_signals.cursor
                             pending_signals = None
-                            live_signal_wake = False
+                            cursor_recovery_wake = False
         except asyncio.CancelledError:
             logger.info("[%s] resident cancelled", self.name)
             raise
@@ -470,7 +469,9 @@ class Resident:
                         continue
                     return current_cursor, None, False
                 if batch.events:
-                    return current_cursor, batch, True
+                    # Delivery gives the core new facts. The core's private
+                    # schedule decides whether those facts open an early turn.
+                    return current_cursor, batch, False
                 self._record_live_signal_cursor(
                     previous=current_cursor,
                     current=batch.cursor,
