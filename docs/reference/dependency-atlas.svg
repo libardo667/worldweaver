@@ -75,13 +75,14 @@
     <text class="small" x="1348" y="323">auth + validation</text>
 
     <rect class="node node-live" x="1510" y="235" width="285" height="125" rx="20"/>
-    <text class="label" x="1653" y="281">Typed services</text>
-    <text class="small" x="1653" y="315">objects · access · making</text>
-    <text class="small" x="1653" y="342">exchange · stoops · movement</text>
+    <text class="label" x="1653" y="276">Typed services</text>
+    <text class="small" x="1653" y="306">objects · access · making</text>
+    <text class="small" x="1653" y="331">exchange · stoops</text>
+    <text class="small" x="1653" y="353">movement · speech</text>
 
     <rect class="node node-warning" x="1815" y="235" width="280" height="125" rx="20"/>
     <text class="label" x="1955" y="281">Rules in routes</text>
-    <text class="small" x="1955" y="315">local speech · travel</text>
+    <text class="small" x="1955" y="315">travel</text>
     <text class="small" x="1955" y="342">session lifecycle</text>
 
     <path class="arrow arrow-green" d="M1490 297 H1505"/>

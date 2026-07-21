@@ -39,19 +39,28 @@ periods by advancing an injected clock directly to the next scheduled event.
 9. Publish a held-out benchmark with unseen cities, paraphrased observations, renamed internal fields,
    different event orderings, and repeated trials. Keep the training scenarios separate.
 
-### Current boundary finding and first extraction — July 20, 2026
+### Current boundary finding and first two extractions — July 20, 2026
 
 The first source audit found an uneven production seam. Object custody, making, access, exchange, and stoops
 already put most business rules in service modules below HTTP. The first extraction moved canonical place
 anchoring into `services/location_routes.py` and the complete movement rule path into `services/movement.py`.
 The live HTTP endpoint now authenticates, calls that service, and translates its typed receipt or refusal.
 
-Local speech, travel, and session lifecycle still keep substantial rule and transaction logic in
-`src/api/game/world.py` and `src/api/game/state.py`. Movement also revealed that its session-state save and
-movement-event write were separate commits. That follow-up is now repaired separately: deferred event
-submission stages enabled projections and graph facts in the caller's transaction, movement stages its final
-session state, and one commit covers the complete single-hop or skip-through command. Tests force both an
-ordinary event failure and a final-hop failure and prove that database and cached state return to the origin.
+Local speech now lives in `services/local_speech.py`; its route authenticates and translates the service's
+typed receipt or refusal. Travel and session lifecycle still keep substantial rule and transaction logic in
+`src/api/game/world.py` and `src/api/game/state.py`.
+
+Movement revealed that its session-state save and movement-event write were separate commits. That follow-up
+is repaired: deferred event submission stages enabled projections and graph facts in the caller's transaction,
+movement stages its final session state, and one commit covers the complete single-hop or skip-through command.
+Tests force both an ordinary event failure and a final-hop failure and prove that database and cached state
+return to the origin.
+
+Local speech exposed the same class of fault in a more visible form. The chat row was committed and waiters
+were notified before the canonical utterance event was attempted; every event failure was then silently
+ignored. The service now commits the chat row, utterance event, projection, and fact together and notifies
+waiters only after success. A forced event failure proves that no chat row or event remains and no false wake
+is sent.
 
 Do not start the fast gym by calling route functions, copying those rules, or writing synthetic state directly.
 Continue extracting typed production services for the behaviors a first episode needs. Live routes and the gym can
