@@ -856,6 +856,45 @@ def test_private_activity_can_defer_speech_until_its_chosen_return(tmp_path):
     assert restarted._llm.calls == []
 
 
+def test_private_return_schedule_survives_restart_without_private_prose(tmp_path):
+    started = datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc)
+    first, memory_dir, _acted, _reads = _core(
+        tmp_path,
+        responses=[
+            {
+                "choice": "continue",
+                "activity": "Repair the blue book's loose binding in private.",
+                "return_after_seconds": 172800,
+                "wake_on": [],
+            }
+        ],
+    )
+    asyncio.run(first.tick_once(now=started))
+    original = first.scheduled_return()
+
+    restarted, _same_memory, _acted_again, _reads_again = _core(
+        tmp_path,
+        responses=[{"choice": "wait"}],
+    )
+    restored = restarted.scheduled_return()
+
+    assert restored == original
+    assert restored is not None
+    assert restored.due_at == started + timedelta(days=2)
+    assert "blue book" not in str(restored.as_payload())
+
+    result = asyncio.run(restarted.tick_once(now=restored.due_at))
+
+    assert result["choice"] == "wait"
+    assert restarted.scheduled_return() is None
+    events = load_runtime_events(memory_dir)
+    assert [
+        event["event_type"]
+        for event in events
+        if event["event_type"] == "reference_activity_return_consumed"
+    ] == ["reference_activity_return_consumed"]
+
+
 def test_private_activity_can_allow_speech_to_offer_an_early_turn(tmp_path):
     core, _memory_dir, _acted, _reads = _core(
         tmp_path,

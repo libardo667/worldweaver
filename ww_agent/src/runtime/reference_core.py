@@ -229,6 +229,23 @@ class ReferenceActivationBasis:
     process_version: str
 
 
+@dataclass(frozen=True, slots=True)
+class ReferenceScheduledReturn:
+    """Content-free scheduling data derived from one open private activity."""
+
+    event_id: str
+    activity_id: str
+    due_at: datetime
+
+    def as_payload(self) -> dict[str, str]:
+        return {
+            "event_id": self.event_id,
+            "event_kind": "resident_private_return",
+            "activity_id": self.activity_id,
+            "due_at": self.due_at.isoformat(),
+        }
+
+
 def _structural_version(label: str, payload: Any) -> str:
     encoded = json.dumps(
         payload,
@@ -799,19 +816,39 @@ class ReferenceResidentCore:
             return None
         return restored if restored.tzinfo else restored.replace(tzinfo=timezone.utc)
 
-    def _activity_return_is_due(self, now: datetime) -> bool:
+    def scheduled_return(self) -> ReferenceScheduledReturn | None:
+        """Expose the next durable deadline without exposing private prose."""
+
         if self._open_private_activity is None:
-            return False
+            return None
         raw = self._open_private_activity.return_at
         if not raw:
-            return False
+            return None
         try:
             return_at = datetime.fromisoformat(raw.replace("Z", "+00:00"))
         except ValueError:
-            return False
+            return None
         if return_at.tzinfo is None:
             return_at = return_at.replace(tzinfo=timezone.utc)
-        return now >= return_at
+        return_at = return_at.astimezone(timezone.utc)
+        activity_id = self._open_private_activity.activity_id
+        event_id = _structural_version(
+            "resident-return",
+            {
+                "actor_id": str(self._identity.actor_id or ""),
+                "activity_id": activity_id,
+                "due_at": return_at.isoformat(),
+            },
+        )
+        return ReferenceScheduledReturn(
+            event_id=event_id,
+            activity_id=activity_id,
+            due_at=return_at,
+        )
+
+    def _activity_return_is_due(self, now: datetime) -> bool:
+        scheduled = self.scheduled_return()
+        return scheduled is not None and now >= scheduled.due_at
 
     def _system_prompt(self, *, allow_read: bool) -> str:
         identity_text = str(
