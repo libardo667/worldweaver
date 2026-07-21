@@ -85,11 +85,22 @@ the willow bench, with a two-day lifetime. A controlled UTC clock jumps forward 
 lifetime rule still reports the bench active. It jumps two more hours and the same rule reports the bench
 expired. The terminal and browser views show exact timestamps and mark those jumps with a sun-and-moon trail.
 
-This is the first explicit clock seam, not the completed time system. The live default remains an aware UTC
-system clock, while tests and gym episodes may use a controlled clock that cannot move backward. The episode
-passes that time into an existing production rule; it does not patch global time or sleep. A durable scheduled
-event queue, resident private-activity returns, restartable time state, and measured real-time comparisons are
-still required before the gym can claim general multi-timescale coverage.
+This is the first explicit clock seam, not the completed time system. The live code continues to use real UTC,
+while tests and gym episodes may use a controlled clock that cannot move backward. The episode passes that time
+into an existing production rule; it does not patch global time or sleep.
+
+The clock now has a checkpointable scheduled-event queue. Events have stable IDs and deterministic ordering by
+deadline and insertion. Reading a due event does not consume it: the handler must explicitly acknowledge
+success. A stopped process therefore re-offers the same ID after restoring the JSON-safe checkpoint. This is an
+honest at-least-once contract, not an exactly-once claim; state-changing handlers must use the event ID as an
+idempotency key. `The Long Afternoon` now schedules both inspections through that queue.
+
+The reference resident also exposes its next chosen private return as content-free scheduling data: stable
+event ID, private activity ID, and UTC deadline. That schedule survives a runtime restart because it is derived
+from the resident's private ledger, and it contains none of the private activity description. An automated test
+restarts the runtime, advances to the two-day deadline, and proves the return is consumed once. The queue is not
+yet wired into the live resident host, and a complete gym checkpoint still needs engine state, participant
+state, queue state, and model state in one versioned envelope.
 
 Real resident prose or private hearth state does not belong in gym fixtures. Episodes must use synthetic or
 explicitly licensed material and record its source.

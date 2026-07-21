@@ -121,11 +121,22 @@ aware-UTC clock by 47 hours, verifies the place remains active, advances two mor
 The clock refuses backward movement, the live default remains real UTC, and no process sleeps through the
 interval. The report marks exact timestamps and clock jumps without inventing an event.
 
-This is deliberately narrower than the completed time architecture. The scenario passes its clock into an
-existing lazy lifetime rule. It does not yet provide a durable scheduled-event queue, resume scheduled private
-activities, persist the controlled clock across restarts, or compare accelerated and measured real-time runs.
-Build the queue and one scheduled resident return next. Do not add checkpoint forks, model calls, or training
-records until that scheduled path is replayable.
+The first scheduler slice now replaces the episode's manual jumps. Scheduled events have stable IDs, sort by
+UTC deadline and insertion order, remain pending until explicit acknowledgement, and serialize with the
+controlled clock into a versioned JSON-safe checkpoint. Restore re-offers an unacknowledged due event with the
+same ID, while acknowledgement prevents later redelivery. This is deliberately at-least-once; future mutating
+handlers must carry the event ID into production idempotency keys.
+
+The reference resident now exposes a content-free schedule for its next chosen private return. The schedule is
+derived from durable private-ledger state, survives runtime reconstruction, and contains only a stable event ID,
+activity ID, and UTC deadline—not the activity prose. A two-day synthetic check reconstructs the resident,
+advances directly to the deadline, activates it, and proves the scheduled return is consumed once.
+
+This is still narrower than the completed time architecture. The engine queue and resident schedule have not
+yet been connected by the live host or one combined gym adapter. A complete restart checkpoint must also bind
+engine state, participant private state, queue state, model adapter, and scenario provenance. Build that combined
+envelope and resume one stopped episode next. Do not add checkpoint forks, model calls, or training records until
+that path is replayable.
 
 ## Files Affected
 

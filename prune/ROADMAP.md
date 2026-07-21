@@ -186,8 +186,13 @@ still come later.
 
 That first clock slice now runs with `python dev.py gym --episode quiet-interval`. It combines a live room
 exchange with a production child-place lifetime, jumps 47 hours and then 2 more without sleeping, and observes
-the same rule before and after expiry. This proves the basic controlled UTC clock, not a general scheduler. A
-durable event queue and one scheduled resident return are next.
+the same rule before and after expiry.
+
+The episode now uses a versioned, checkpointable scheduled-event queue rather than direct clock jumps. Due
+events remain pending until acknowledgement and are re-offered with the same stable ID after restore. The
+reference resident now exposes its chosen private return as content-free scheduling data that survives runtime
+reconstruction, and a two-day test consumes that return once. The next step is one combined restart envelope and
+adapter joining engine state, queue state, and resident private state.
 
 ### 8. Train several resident model families
 
