@@ -28,7 +28,7 @@ inputs in the identity loader; they do not restore the old ownership model.
   identity loading creates a world attachment. Legacy homes without a manifest remain supported until
   their explicit migration.
 - The private runtime checkpoint carries one versioned resident-process envelope. It binds derived working
-  state to the durable actor, authoritative hearth shard and active generation, current city/hearth
+  state to the durable actor, authoritative hearth shard and active generation, current city/hearth/traveling
   attachment, reference-adapter version, selected model ID, and acknowledged local-speech cursor. Reject an
   actor/hearth mismatch or generation regression; do not silently transplant state between residents. The
   current API-backed adapter declares model state as `none` with a zero-byte bound. A later adapter must add

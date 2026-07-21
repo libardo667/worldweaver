@@ -122,10 +122,21 @@ def test_confirmed_city_departure_enters_private_hearth_with_same_home(tmp_path)
     assert resident._identity.growth_soul == growth_before
     assert client.left == ["test-resident-city-session"]
     assert not (resident._resident_dir / "session_id.txt").exists()
-    assert _event_types(resident)[-2:] == [
+    transition_types = [
+        event_type
+        for event_type in _event_types(resident)
+        if event_type.startswith("world_attachment_")
+    ]
+    assert transition_types[-2:] == [
         "world_attachment_transition_started",
         "world_attachment_changed",
     ]
+    assert (
+        load_resident_process_envelope(resident._resident_dir / "memory")["attachment"][
+            "kind"
+        ]
+        == "hearth"
+    )
     assert resident._restored_attachment_kind() == "hearth"
 
 
@@ -213,10 +224,21 @@ def test_hearth_return_bootstraps_a_fresh_city_session_for_same_actor(
     assert resident._identity.growth_soul == growth_before
     assert client.bootstrapped[0]["actor_id"] == "actor-test-resident"
     assert client.bootstrapped[0]["world_id"] == "test-world"
-    assert _event_types(resident)[-2:] == [
+    transition_types = [
+        event_type
+        for event_type in _event_types(resident)
+        if event_type.startswith("world_attachment_")
+    ]
+    assert transition_types[-2:] == [
         "world_attachment_transition_started",
         "world_attachment_changed",
     ]
+    assert (
+        load_resident_process_envelope(resident._resident_dir / "memory")["attachment"][
+            "kind"
+        ]
+        == "city"
+    )
 
 
 def test_city_to_city_travel_retires_source_then_swaps_one_host_to_destination(
@@ -263,11 +285,27 @@ def test_city_to_city_travel_retires_source_then_swaps_one_host_to_destination(
     assert (resident._resident_dir / "session_id.txt").read_text(
         encoding="utf-8"
     ) == resident._session_id
-    assert _event_types(resident)[-3:] == [
+    travel_types = [
+        event_type
+        for event_type in _event_types(resident)
+        if event_type.startswith("inter_shard_")
+    ]
+    assert travel_types[-3:] == [
         "inter_shard_travel_started",
         "inter_shard_source_departed",
         "inter_shard_travel_arrived",
     ]
+    process_events = [
+        event
+        for event in load_runtime_events(resident._resident_dir / "memory")
+        if event["event_type"] == "reference_process_bound"
+    ]
+    assert [event["payload"]["attachment"]["kind"] for event in process_events] == [
+        "traveling",
+        "city",
+    ]
+    assert process_events[0]["payload"]["attachment"]["travel_id"]
+    assert process_events[1]["payload"]["attachment"]["travel_id"] == ""
 
 
 def test_city_profile_selects_local_sources_and_refreshes_after_attachment(tmp_path):
@@ -378,7 +416,13 @@ def test_city_to_city_failure_before_source_retirement_keeps_local_life_running(
     assert resident._attachment_kind == "city"
     assert resident._session_id == "test-resident-city-session"
     assert resident._pending_shard_travel() is None
-    assert _event_types(resident)[-1] == "inter_shard_travel_aborted"
+    assert "inter_shard_travel_aborted" in _event_types(resident)
+    assert (
+        load_resident_process_envelope(resident._resident_dir / "memory")["attachment"][
+            "kind"
+        ]
+        == "city"
+    )
 
 
 def test_unfinished_departed_trip_resumes_at_destination_without_rebooting_source(
@@ -713,6 +757,7 @@ def test_reference_process_checkpoint_binds_identity_attachment_and_model(tmp_pa
         "world_id": "test-world",
         "city_id": "",
         "session_id": "test-resident-city-session",
+        "travel_id": "",
     }
     assert envelope["adapter"] == {
         "id": "worldweaver.reference-resident",

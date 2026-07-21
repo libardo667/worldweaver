@@ -116,6 +116,7 @@ class Resident:
         self._runtime_lease: HearthRuntimeLease | None = None
         self._hearth_shard_id = ""
         self._runtime_generation = 0
+        self._travel_id = ""
 
     @property
     def name(self) -> str:
@@ -180,7 +181,9 @@ class Resident:
         if pending_travel is not None:
             self._attachment_kind = "traveling"
             self._session_id = None
+            self._travel_id = pending_travel.travel_id
             (self._resident_dir / "session_id.txt").unlink(missing_ok=True)
+            self._bind_current_reference_process()
             logger.info(
                 "[%s] restored unfinished travel %s",
                 self.name,
@@ -615,19 +618,7 @@ class Resident:
             if self._pulse_temperature is _IDENTITY_TEMPERATURE
             else self._pulse_temperature
         )
-        selected_model = (
-            self._pulse_model
-            or identity.tuning.slow_model
-            or identity.tuning.fast_model
-        )
-        model_id = (
-            selected_model
-            or str(getattr(self._llm, "default_model_id", "") or "").strip()
-        )
-        if not model_id:
-            # Synthetic clients may not expose a configured model. Real
-            # InferenceClient instances always do.
-            model_id = "unresolved-client-default"
+        selected_model, model_id = self._process_model_binding()
         self._bind_reference_process(model_id=model_id, session_id=session_id)
         workshop = Workshop(self._resident_dir / "workshop")
         effector = WorldEffector(
@@ -670,6 +661,37 @@ class Resident:
         self._hearth_shard_id = activation.hearth_shard_id
         self._runtime_generation = activation.runtime_generation
 
+    def _process_model_binding(self) -> tuple[str | None, str]:
+        """Resolve the configured model override and the effective model ID."""
+
+        identity = self._require_identity()
+        selected_model = (
+            self._pulse_model
+            or identity.tuning.slow_model
+            or identity.tuning.fast_model
+        )
+        model_id = (
+            selected_model
+            or str(getattr(self._llm, "default_model_id", "") or "").strip()
+        )
+        if not model_id:
+            # Synthetic clients may not expose a configured model. Real
+            # InferenceClient instances always do.
+            model_id = "unresolved-client-default"
+        return selected_model, model_id
+
+    def _bind_current_reference_process(self, *, session_id: str | None = None) -> None:
+        """Bind the process checkpoint to the host's current attachment."""
+
+        if session_id is None:
+            session_id = (
+                ""
+                if self._attachment_kind == "traveling"
+                else self._active_session_id()
+            )
+        _selected_model, model_id = self._process_model_binding()
+        self._bind_reference_process(model_id=model_id, session_id=session_id)
+
     def _bind_reference_process(self, *, model_id: str, session_id: str) -> None:
         """Bind checkpointed process state to authoritative host/runtime facts."""
 
@@ -683,6 +705,7 @@ class Resident:
             city_id=str(self._city_id or ""),
             session_id=str(session_id or "").strip(),
             model_id=model_id,
+            travel_id=self._travel_id,
         )
         candidate = binding.as_dict()
         current = load_resident_process_envelope(self._resident_dir / "memory")
@@ -781,7 +804,9 @@ class Resident:
         (self._resident_dir / "session_id.txt").unlink(missing_ok=True)
         self._session_id = None
         self._attachment_kind = "hearth"
+        self._travel_id = ""
         hearth = self._build_hearth_world()
+        self._bind_current_reference_process()
         self._record_transition(
             "world_attachment_changed",
             transition_id=transition_id,
@@ -834,8 +859,10 @@ class Resident:
         await hearth_world.close()
         self._session_id = city_session_id
         self._attachment_kind = "city"
+        self._travel_id = ""
         await self._refresh_city_profile()
         city = self._build_city_world(city_session_id)
+        self._bind_current_reference_process(session_id=city_session_id)
         self._record_transition(
             "world_attachment_changed",
             transition_id=transition_id,
@@ -926,6 +953,8 @@ class Resident:
                         (self._resident_dir / "session_id.txt").unlink(missing_ok=True)
                         self._session_id = None
                         self._attachment_kind = "traveling"
+                        self._travel_id = pending.travel_id
+                        self._bind_current_reference_process()
                         break
             except asyncio.CancelledError:
                 raise
@@ -943,8 +972,12 @@ class Resident:
                     )
                     self._session_id = pending.source_session_id
                     self._attachment_kind = "city"
+                    self._travel_id = ""
                     (self._resident_dir / "session_id.txt").write_text(
                         self._session_id, encoding="utf-8"
+                    )
+                    self._bind_current_reference_process(
+                        session_id=pending.source_session_id
                     )
                     logger.warning(
                         "[%s] departure failed before source retirement; remaining in source city: %s",
@@ -985,10 +1018,14 @@ class Resident:
                     self._world_id = world_id
                     self._session_id = pending.destination_session_id
                     self._attachment_kind = "city"
+                    self._travel_id = ""
                     (self._resident_dir / "session_id.txt").write_text(
                         self._session_id, encoding="utf-8"
                     )
                     await self._refresh_city_profile()
+                    self._bind_current_reference_process(
+                        session_id=pending.destination_session_id
+                    )
                     self._record_transition(
                         "inter_shard_travel_arrived",
                         travel_id=pending.travel_id,

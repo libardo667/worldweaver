@@ -33,7 +33,7 @@ open while the resident waits or acts, and closes only when the resident explici
 copied into city state, expanded into a hidden task queue, or reconstructed from old unversioned prose.
 
 That checkpoint now has an explicit process envelope. It names the durable actor, authoritative hearth and
-active runtime generation, current city or hearth attachment, reference-adapter version, selected model ID,
+active runtime generation, current city, hearth, or in-transit attachment, reference-adapter version, selected model ID,
 and acknowledged local-speech cursor. Loading the checkpoint for a different actor or hearth, or moving it
 backward to an older generation, fails instead of quietly reusing the state. The current API-backed model has
 no portable hidden state, so the envelope says exactly that: format `none`, zero bytes. It does not pretend a

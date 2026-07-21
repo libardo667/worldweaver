@@ -7,7 +7,8 @@
   bounds, and read-only observers used by operational surfaces. Cursor delivery is passed to the core without
   being converted into a forced activation. A time-bound host run changes no cognitive clock; the core keeps
   and checkpoints its own cadence. Before constructing a core it binds the private checkpoint to the loaded
-  actor, authoritative hearth generation, current attachment, adapter, and selected model. A checkpoint for a
+  actor, authoritative hearth generation, current attachment (including an unfinished city handoff), adapter,
+  and selected model. A checkpoint for a
   different actor or hearth, or a newer generation than the active hearth, fails closed.
 - `runtime/reference_core.py` — production resident loop. It observes current-place facts, accepts a
   cursor-delivered local-speech batch without fetching it again, activates on a new local signal or slow

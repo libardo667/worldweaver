@@ -38,6 +38,7 @@ class ResidentProcessBinding:
     city_id: str
     session_id: str
     model_id: str
+    travel_id: str = ""
     adapter_id: str = REFERENCE_ADAPTER_ID
     adapter_version: int = REFERENCE_ADAPTER_VERSION
 
@@ -47,8 +48,15 @@ class ResidentProcessBinding:
         model_id = str(self.model_id or "").strip()
         if not actor_id:
             raise ValueError("resident process actor_id is required")
-        if attachment_kind not in {"city", "hearth"}:
-            raise ValueError("resident process attachment must be city or hearth")
+        if attachment_kind not in {"city", "hearth", "traveling"}:
+            raise ValueError(
+                "resident process attachment must be city, hearth, or traveling"
+            )
+        travel_id = str(self.travel_id or "").strip()
+        if attachment_kind == "traveling" and not travel_id:
+            raise ValueError("traveling resident process requires a travel_id")
+        if attachment_kind != "traveling" and travel_id:
+            raise ValueError("resident process travel_id requires traveling attachment")
         if (
             isinstance(self.runtime_generation, bool)
             or not isinstance(self.runtime_generation, int)
@@ -79,6 +87,7 @@ class ResidentProcessBinding:
                 "world_id": str(self.world_id or "").strip(),
                 "city_id": str(self.city_id or "").strip(),
                 "session_id": str(self.session_id or "").strip(),
+                "travel_id": travel_id,
             },
             "adapter": {
                 "id": self.adapter_id,
@@ -131,6 +140,7 @@ class ResidentProcessBinding:
             city_id=str(attachment.get("city_id") or "").strip(),
             session_id=str(attachment.get("session_id") or "").strip(),
             model_id=str(model.get("id") or "").strip(),
+            travel_id=str(attachment.get("travel_id") or "").strip(),
             adapter_id=str(adapter.get("id") or "").strip(),
             adapter_version=adapter_version,
         )

@@ -140,11 +140,12 @@ a prose comparison.
 ## Fifth slice — explicit process checkpoint envelope (2026-07-20)
 
 The existing private runtime checkpoint now contains one versioned process envelope. It binds the reduced
-working state to the durable actor ID, authoritative hearth shard and active runtime generation, current city
-or hearth attachment, reference-adapter version, selected model ID, and acknowledged exact-session speech
+working state to the durable actor ID, authoritative hearth shard and active runtime generation, current city,
+hearth, or in-transit attachment, reference-adapter version, selected model ID, and acknowledged exact-session speech
 cursor. A different actor or hearth cannot silently reuse it, and a host cannot move it backward to an older
 generation. A legitimate newer hearth generation updates the binding; a city-to-hearth change clears the city
-cursor.
+cursor. Cross-city travel binds the recoverable travel ID after source retirement and replaces it after
+confirmed destination arrival.
 
 The current reference adapter has no portable hidden model state. Its envelope records that fact as format
 `none`, format version 1, byte length 0, and maximum 0 instead of disguising a transcript or provider cache as

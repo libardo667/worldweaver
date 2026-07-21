@@ -80,11 +80,12 @@ versioned checkpoint is intended to hold current working state so normal ticks d
 history, and it can be rebuilt from the ledger.
 
 The checkpoint's resident-process envelope says whose working state this is and where it is attached. It binds
-the durable actor ID to the authoritative hearth shard and active runtime generation, current city or hearth
-attachment, reference-adapter version, selected model ID, and acknowledged city-event cursor. A host rejects a
+the durable actor ID to the authoritative hearth shard and active runtime generation, current city, hearth, or
+in-transit attachment, reference-adapter version, selected model ID, and acknowledged city-event cursor. A host rejects a
 different actor or hearth and refuses to move a checkpoint backward to an older generation. A legitimate
 hearth transfer advances the authoritative generation, then writes a new binding. City-to-hearth travel writes
-a new attachment and clears the city cursor.
+a new attachment and clears the city cursor. Cross-city travel records its travel ID after source retirement,
+then replaces that in-transit binding only after destination arrival succeeds.
 
 The reference adapter still makes independent API calls. Its envelope therefore declares model-state format
 `none`, format version 1, byte length 0, and maximum 0. This is deliberately not a hidden transcript or cache.
