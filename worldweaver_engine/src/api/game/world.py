@@ -11,7 +11,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
@@ -54,6 +54,20 @@ from ...services.location_routes import (
     resolve_route_anchor,
 )
 from ...services.movement import MovementError, move_session
+from ...services.participant_scene import (
+    active_world_traces as _active_world_traces,
+    build_participant_scene,
+    is_player_session as _is_player_session,
+    load_active_human_session_ids as _load_active_human_session_ids,
+    load_recent_session_rows as _load_recent_session_rows,
+    parse_session_updated_at as _parse_session_updated_at,
+    session_display_details as _session_display_details,
+    session_entity_type as _session_entity_type,
+    session_location_from_vars as _session_location_from_vars,
+    session_variables_payload as _session_variables_payload,
+    slug_display_name as _slug_display_name,
+    world_trace_payload as _world_trace_payload,
+)
 from ...services.actor_authority import (
     ActorAuthorizationError,
     RequestActorCredentials,
@@ -63,9 +77,6 @@ from ...services.actor_authority import (
     get_request_actor_credentials,
 )
 
-_INTERNAL_SESSION_PREFIXES = ("world-", "_", "player-", "agent-")
-_ACTIVE_HUMAN_SESSION_WINDOW = timedelta(hours=2)
-_RECENT_SESSION_SCAN_WINDOW = timedelta(hours=8)
 _RECENT_EVENT_CACHE_TTL_SECONDS = max(
     0.5, float(os.environ.get("WW_RECENT_EVENT_CACHE_SECONDS", "2.0"))
 )
@@ -76,7 +87,6 @@ _WORLD_TRACE_TTL_SECONDS = max(
     3600,
     min(90 * 86400, int(os.environ.get("WW_WORLD_TRACE_TTL_SECONDS", str(14 * 86400)))),
 )
-_WORLD_TRACE_SCENE_LIMIT = 12
 
 
 @dataclass(frozen=True)
@@ -133,160 +143,12 @@ def _authorize_actor_or_http(
         raise actor_authorization_http_error(exc) from exc
 
 
-def _world_trace_payload(row: WorldTrace) -> Dict[str, Any]:
-    """Return the source-attributed record shared by create receipts and scenes."""
-    trace_id = f"trace:{row.id}"
-    return {
-        "trace_id": trace_id,
-        "source_id": trace_id,
-        "author_session_id": str(row.session_id or ""),
-        "author_name": str(row.author_name or ""),
-        "location": str(row.location or ""),
-        "target": str(row.target or ""),
-        "body": str(row.body or ""),
-        "created_at": row.created_at.isoformat() if row.created_at else None,
-        "expires_at": row.expires_at.isoformat() if row.expires_at else None,
-        "provenance": "physical_trace",
-        "freshness": "active",
-        "locality": str(row.location or ""),
-        "visibility": "local",
-        "selection_mode": "embodied_local",
-    }
-
-
-def _active_world_traces(
-    db: Session, *, location: str, viewer_session_id: str
-) -> List[Dict[str, Any]]:
-    """Read a bounded local trace surface; expired and self-authored marks stay silent."""
-    if not location:
-        return []
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
-    rows = (
-        db.query(WorldTrace)
-        .filter(
-            WorldTrace.location == location,
-            WorldTrace.expires_at > now,
-            WorldTrace.session_id != viewer_session_id,
-        )
-        .order_by(WorldTrace.created_at.desc(), WorldTrace.id.desc())
-        .limit(_WORLD_TRACE_SCENE_LIMIT)
-        .all()
-    )
-    return [_world_trace_payload(row) for row in reversed(rows)]
-
-
-def _is_player_session(session_id: str) -> bool:
-    """Return True if this looks like a player/agent session rather than a world admin session."""
-    if not session_id:
-        return False
-    for prefix in _INTERNAL_SESSION_PREFIXES:
-        if session_id.startswith(prefix):
-            return False
-    return True
-
-
-def _parse_session_updated_at(value: Any) -> Optional[datetime]:
-    if isinstance(value, datetime):
-        parsed = value
-    else:
-        raw = str(value or "").strip()
-        if not raw:
-            return None
-        try:
-            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-        except ValueError:
-            return None
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
-
-
-def _session_variables_payload(raw_payload: Any) -> Dict[str, Any]:
-    if not isinstance(raw_payload, dict):
-        return {}
-    nested_vars = raw_payload.get("variables")
-    if raw_payload.get("_v") == 2 and isinstance(nested_vars, dict):
-        return cast(Dict[str, Any], nested_vars)
-    return cast(Dict[str, Any], raw_payload)
-
-
-def _session_display_details(
-    session_id: str, vars_payload: Dict[str, Any]
-) -> tuple[Optional[str], str]:
-    player_name: Optional[str] = None
-    player_role = str(vars_payload.get("player_role") or "").strip()
-    if player_role:
-        name_part = (
-            player_role.split(" — ")[0].strip() if " — " in player_role else player_role
-        )
-        player_name = name_part or None
-
-    agent_name = _slug_display_name(session_id)
-    if agent_name:
-        return player_name, agent_name
-    if player_name:
-        return player_name, player_name
-    return None, session_id[:12]
-
-
-def _session_entity_type(session_id: str) -> str:
-    return "agent" if _slug_display_name(session_id) else "human"
-
-
 def _shard_identity_payload() -> Dict[str, Any]:
     return {
         "shard_id": current_shard_id(),
         "city_id": settings.city_id,
         "shard_type": settings.shard_type,
     }
-
-
-def _load_active_human_session_ids(
-    db: Session,
-    requested_session_id: Optional[str] = None,
-) -> set[str]:
-    cutoff = datetime.now(timezone.utc) - _ACTIVE_HUMAN_SESSION_WINDOW
-    recent_rows = _load_recent_session_rows(
-        db,
-        requested_session_id=requested_session_id,
-        window=_ACTIVE_HUMAN_SESSION_WINDOW,
-    )
-    active: set[str] = set()
-    for row in recent_rows:
-        sid = str(row.session_id or "")
-        if not sid or not _is_player_session(sid):
-            continue
-        if _slug_display_name(sid):
-            continue
-        if requested_session_id and sid == requested_session_id:
-            active.add(sid)
-            continue
-        parsed_updated_at = _parse_session_updated_at(row.updated_at)
-        if parsed_updated_at is None:
-            continue
-        if parsed_updated_at >= cutoff:
-            active.add(sid)
-    return active
-
-
-def _load_recent_session_rows(
-    db: Session,
-    *,
-    requested_session_id: Optional[str] = None,
-    window: timedelta = _RECENT_SESSION_SCAN_WINDOW,
-) -> List[SessionVars]:
-    cutoff = (datetime.now(timezone.utc) - window).replace(tzinfo=None)
-    query = db.query(SessionVars)
-    if requested_session_id:
-        query = query.filter(
-            or_(
-                SessionVars.updated_at >= cutoff,
-                SessionVars.session_id == requested_session_id,
-            )
-        )
-    else:
-        query = query.filter(SessionVars.updated_at >= cutoff)
-    return query.all()
 
 
 def _clean_event_summary(summary: str) -> str:
@@ -373,19 +235,6 @@ def _roster_directory_entries(
         for key in expired:
             _ROSTER_DIRECTORY_CACHE.pop(key, None)
     return entries
-
-
-def _session_location_from_vars(vars_payload: Dict[str, Any]) -> str:
-    return str(vars_payload.get("location") or "").strip()
-
-
-def _session_role_label(vars_payload: Dict[str, Any], fallback: str) -> str:
-    raw_role = str(vars_payload.get("player_role") or "").strip()
-    if raw_role:
-        return (
-            raw_role.split(" — ")[0].strip() if " — " in raw_role else raw_role.strip()
-        )
-    return fallback
 
 
 def _recent_world_events_rows(
@@ -674,64 +523,6 @@ def _build_map_node_payload(
         "description": description,
         "parent_location": parent_location,
     }
-
-
-def _graph_alias_key(name: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "_", str(name or "").strip().lower()).strip("_")
-    return f"location_alias:{slug or 'current_location'}"
-
-
-def _graph_with_anchor_alias(
-    graph: Dict[str, Any],
-    *,
-    location_name: str,
-    anchor_name: str,
-) -> Dict[str, Any]:
-    location = str(location_name or "").strip()
-    anchor = str(anchor_name or "").strip()
-    if not location or not anchor or location == anchor:
-        return graph
-
-    nodes = [
-        dict(node) for node in list(graph.get("nodes") or []) if isinstance(node, dict)
-    ]
-    edges = [
-        dict(edge) for edge in list(graph.get("edges") or []) if isinstance(edge, dict)
-    ]
-    if any(str(node.get("name") or "").strip() == location for node in nodes):
-        return {"nodes": nodes, "edges": edges}
-
-    anchor_node = next(
-        (
-            node
-            for node in nodes
-            if str(node.get("name") or "").strip() == anchor
-            and str(node.get("key") or "").strip()
-        ),
-        None,
-    )
-    if anchor_node is None:
-        return {"nodes": nodes, "edges": edges}
-
-    alias_key = _graph_alias_key(location)
-    nodes.append(
-        {
-            **anchor_node,
-            "key": alias_key,
-            "name": location,
-        }
-    )
-
-    edge_pairs = {
-        (str(edge.get("from") or "").strip(), str(edge.get("to") or "").strip())
-        for edge in edges
-    }
-    anchor_key = str(anchor_node.get("key") or "").strip()
-    for source_key, target_key in ((alias_key, anchor_key), (anchor_key, alias_key)):
-        if source_key and target_key and (source_key, target_key) not in edge_pairs:
-            edges.append({"from": source_key, "to": target_key})
-            edge_pairs.add((source_key, target_key))
-    return {"nodes": nodes, "edges": edges}
 
 
 router = APIRouter()
@@ -1972,20 +1763,6 @@ _WW_AGENT_RESIDENTS = Path(
 )
 _SAFE_NAME_RE = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
 _SAFE_SESSION_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
-_AGENT_SLUG_RE = re.compile(r"^([a-z][a-z0-9_]*)[-_]\d{8}")
-
-
-def _slug_display_name(session_id: str) -> Optional[str]:
-    """Extract a human-readable display name from an agent session ID.
-
-    Agent sessions follow the pattern 'slug-YYYYMMDD-HHMMSS' where slug may
-    contain underscores (e.g. 'fei_fei'). Returns 'Fei Fei' style title-cased
-    name, or None if the session doesn't look like an agent session.
-    """
-    m = _AGENT_SLUG_RE.match(session_id)
-    if not m:
-        return None
-    return " ".join(w.capitalize() for w in m.group(1).split("_"))
 
 
 def _is_ww_agent_resident(agent_name: str) -> bool:
@@ -2253,90 +2030,7 @@ def get_agent_scene(
     if not _SAFE_SESSION_RE.match(session_id):
         raise HTTPException(status_code=400, detail="Invalid session_id format.")
     _authorize_bound_actor_or_http(db, credentials=credentials, session_id=session_id)
-
-    from ...services.world_memory import get_location_graph
-
-    row = db.get(SessionVars, session_id)
-    vars_payload = _session_variables_payload(row.vars) if row is not None else {}
-    location = _session_location_from_vars(vars_payload)
-    player_role = str(vars_payload.get("player_role") or "").strip()
-
-    active_human_session_ids = _load_active_human_session_ids(
-        db, requested_session_id=session_id
-    )
-    session_rows = _load_recent_session_rows(db, requested_session_id=session_id)
-    graph_anchor = resolve_route_anchor(db, location) if location else ""
-    present_by_sid: Dict[str, Dict[str, Any]] = {}
-    for session_row in session_rows:
-        sid = str(session_row.session_id or "").strip()
-        if not sid or sid == session_id or not _is_player_session(sid):
-            continue
-        if not _slug_display_name(sid) and sid not in active_human_session_ids:
-            continue
-
-        row_vars = _session_variables_payload(session_row.vars)
-        if _session_location_from_vars(row_vars) != location:
-            continue
-
-        _, display_name = _session_display_details(sid, row_vars)
-        role = _session_role_label(row_vars, display_name)
-        present_by_sid[sid] = {
-            "actor_id": str(
-                session_row.actor_id or row_vars.get("actor_id") or ""
-            ).strip(),
-            "session_id": sid,
-            "name": display_name,
-            "role": role or display_name,
-            "last_action": "",
-            "last_seen": (
-                session_row.updated_at.isoformat() if session_row.updated_at else None
-            ),
-        }
-
-    # ── Location graph (for movement decisions) ───────────────────────────────
-    graph = get_location_graph(db)
-    from ...services.sublocations import active_sublocations, graph_with_sublocations
-
-    graph = graph_with_sublocations(
-        graph,
-        parent_location=graph_anchor,
-        rows=active_sublocations(db, parent_location=graph_anchor),
-    )
-    scene_graph = _graph_with_anchor_alias(
-        {
-            "nodes": [
-                dict(node)
-                for node in list(graph.get("nodes") or [])
-                if isinstance(node, dict)
-            ],
-            "edges": [
-                dict(edge)
-                for edge in list(graph.get("edges") or [])
-                if isinstance(edge, dict)
-            ],
-        },
-        location_name=location,
-        anchor_name=graph_anchor,
-    )
-    traces_here = _active_world_traces(
-        db, location=location, viewer_session_id=session_id
-    )
-
-    return {
-        "session_id": session_id,
-        "location": location,
-        "role": player_role,
-        "present": list(present_by_sid.values()),
-        # Reserved for source-labelled environmental facts.  Do not turn
-        # weather, headcount, event count, or city-pack prose into authored
-        # social scenery and present it as direct perception.
-        "ambient_presence": [],
-        "traces_here": traces_here,
-        # Kept empty for response-shape compatibility. Historical events are
-        # available through explicit history and fact-query endpoints.
-        "recent_events_here": [],
-        "location_graph": scene_graph,
-    }
+    return build_participant_scene(db, session_id=session_id)
 
 
 @router.get("/world/scene/{session_id}/new-events")

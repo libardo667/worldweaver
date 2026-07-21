@@ -2249,11 +2249,15 @@ def seed_location_graph(
         if not name:
             continue
         description = str(loc.get("description", "")).strip()
+        metadata = {"description": description, "source": "location_seed"}
+        city_id = str(loc.get("city_id") or "").strip()
+        if city_id:
+            metadata["city_id"] = city_id
         node = _upsert_world_node(
             db,
             name=name,
             node_type=NODE_TYPE_LOCATION,
-            metadata={"description": description, "source": "location_seed"},
+            metadata=metadata,
         )
         nodes.append(node)
 
@@ -2265,6 +2269,7 @@ def seed_location_graph(
             _upsert_world_edge(db, b.id, a.id, "path", None, confidence=1.0)
 
     db.commit()
+    _invalidate_location_graph_cache()
     return len(nodes)
 
 

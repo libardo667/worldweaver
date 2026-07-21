@@ -15,6 +15,7 @@ from typing import Any, Callable, Iterable
 
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from .clock import (
     Clock,
     ControlledClock,
@@ -31,6 +32,7 @@ from .correspondence import (
 from .live_signals import read_live_signals
 from .local_speech import post_local_speech
 from .movement import move_session
+from .participant_scene import build_participant_scene
 from .session_lifecycle import (
     SessionBootstrapCommand,
     bootstrap_session,
@@ -368,7 +370,14 @@ class ProductionRuleGym:
 
         seed_location_graph(
             self.db,
-            [{"name": location, "description": ""} for location in normalized],
+            [
+                {
+                    "name": location,
+                    "description": "",
+                    "city_id": settings.city_id,
+                }
+                for location in normalized
+            ],
         )
         host = get_state_manager(self.world_id, self.db)
         host.set_variable("world_theme", "A controlled communication scenario")
@@ -662,6 +671,32 @@ class ProductionRuleGym:
                     },
                 )
         return events
+
+    def observe(self, session_id: str) -> dict[str, Any]:
+        """Read the same factual local scene used by the live participant API."""
+
+        participant = self._participant(session_id)
+        scene = build_participant_scene(
+            self.db,
+            session_id=session_id,
+            now=self.clock.now(),
+        )
+        graph = scene.get("location_graph")
+        graph_payload = graph if isinstance(graph, dict) else {}
+        present = scene.get("present")
+        traces = scene.get("traces_here")
+        self._record(
+            "observation_ready",
+            participant=participant,
+            location=str(scene.get("location") or ""),
+            detail={
+                "present_count": len(present) if isinstance(present, list) else 0,
+                "trace_count": len(traces) if isinstance(traces, list) else 0,
+                "route_count": len(graph_payload.get("edges") or []),
+                "place_count": len(graph_payload.get("nodes") or []),
+            },
+        )
+        return scene
 
     def speak(self, session_id: str, message: str) -> None:
         """Speak through the production local-speech service."""

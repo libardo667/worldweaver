@@ -20,6 +20,7 @@ from src.services.gym_presentation import (
 )
 from src.services.resident_gym import (
     ProductionRuleGym,
+    prepare_quiet_interval,
     run_first_conversation,
     run_quiet_interval,
     run_waiting_letter,
@@ -230,6 +231,29 @@ def test_quiet_interval_mixes_live_speech_with_a_two_day_rule(db_session):
     ]
     assert result.records[0].occurred_at == "2026-07-20T12:00:00+00:00"
     assert result.records[-1].occurred_at == "2026-07-22T13:00:00+00:00"
+
+
+def test_gym_observation_uses_the_production_scene_and_records_only_shape(db_session):
+    gym = prepare_quiet_interval(db_session)
+
+    scene = gym.observe("gym-afternoon-mara")
+
+    assert scene["location"] == "Willow Court"
+    assert [person["name"] for person in scene["present"]] == ["Ivo"]
+    assert scene["ambient_presence"] == []
+    assert scene["traces_here"] == []
+    assert any(
+        node["name"] == "willow bench" for node in scene["location_graph"]["nodes"]
+    )
+    record = gym.result().records[-1]
+    assert record.kind == "observation_ready"
+    assert record.detail == {
+        "present_count": 1,
+        "trace_count": 0,
+        "route_count": len(scene["location_graph"]["edges"]),
+        "place_count": len(scene["location_graph"]["nodes"]),
+    }
+    assert "dry seat" not in str(record.detail)
 
 
 def test_quiet_interval_view_marks_clock_jumps_as_display_only(db_session):
