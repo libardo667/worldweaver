@@ -18,6 +18,11 @@ checkpoint, prone to self-copying, and a poor substitute for an ongoing internal
 also do not expose stable hidden state, resident-specific weight changes, or a model version that WorldWeaver
 can preserve across hosts.
 
+The 2026-07-20 Mira control supplied a smaller concrete failure. Mira left two confirmed public marks and then
+told a human she had left none. Her next activation could see other people's marks but not her own recent
+confirmed actions. The first continuity work should solve this ordinary bookkeeping problem before attempting
+opaque hidden-state continuity.
+
 ## Proposed Solution
 
 Build a private, checkpointable resident process whose basic update is:
@@ -31,7 +36,9 @@ then support an open-weight recurrent or compact-state model without changing ci
 
 1. Define a versioned resident-process checkpoint. It should identify the resident, active hearth generation,
    model and adapter versions, event cursor, current world attachment, open private activity references,
-   resident-set timers, and the model-state format. Private semantic content stays in the hearth.
+   resident-set timers, a bounded typed record of recent confirmed own actions, and the model-state format.
+   Private semantic content stays in the hearth. The action record stores engine receipts and identifiers, not
+   a narrator-written interpretation of what the resident meant.
 2. Use Major 132's durable live-signal delivery rather than repeated full-scene polling. Delivery guarantees
    that an event is offered; it never requires speech or action.
 3. Add resident-chosen time controls: wait until a time, wake on named event classes, keep or abandon an open
@@ -70,6 +77,8 @@ then support an open-weight recurrent or compact-state model without changing ci
 
 - [ ] One versioned private checkpoint is sufficient to stop and restore a synthetic resident process without
   reconstructing open activities from recent prose.
+- [ ] After a confirmed action, the resident can later identify that action from a bounded typed receipt even
+  when the ordinary scene does not show the actor its own public trace.
 - [ ] A resident can schedule a later opportunity to think and can separately name event classes that may
   offer an earlier activation.
 - [ ] Receiving an interrupt never forces a reply, action, or cancellation of the current activity.

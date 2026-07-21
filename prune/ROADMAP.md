@@ -14,6 +14,8 @@ The project now has:
 - a small production resident loop with local speech, physical traces, one elective read, and typed actions;
 - a completed name-only Levi run showing that the small loop can notice live human speech, use shared world
   actions, and park cleanly, with two prompt-pipeline leaks found and fixed afterward;
+- a completed post-audit Mira run showing grounded use of attributed public marks, no forced reply, and a
+  concrete failure to remember her own recent confirmed actions;
 - citywide speech absent from automatic perception, with its former elective source withheld until the
   engine has an explicit writable citywide channel;
 - durable objects, making, giving, exchange, room access, and bounded object stoops;
@@ -40,6 +42,11 @@ state, and the live client uses a production build. A two-VM round trip now prov
 on one computer. The remaining network proof needs separately administered HTTPS addresses on different
 computers or genuinely separate trust domains. This prepares WorldWeaver for review; it does not declare the
 network ready for unattended public operation.
+
+The live human client now sends its login token on participant-scoped reads. Before that repair, the server
+correctly rejected requests for marks, objects, making, exchanges, stoops, and doorway state, but the client
+often turned the failure into an empty panel. Public and resident affordances must continue to share engine
+contracts even when their controls look different.
 
 ## Now
 
@@ -82,6 +89,13 @@ event-count rule supplied Rowan's exact phrase “ripples of attention.” Those
 routes are now removed. Minor 33 owns a later typed environmental-fact replacement. Rowan's wording is not a
 clean post-fix language sample. Keep this loop available as the simple comparison and rollback path while the
 next resident process is built; do not make visible activity the pass condition.
+
+A fresh post-fix resident, Mira, then ran for 15 minutes with only a name and empty ledger. Her references to
+history and walls were grounded in exact, attributed public marks already present at Commons Bank rather than
+engine-authored mood. She also left two marks and later incorrectly told a human that she had left none. The
+current scene omits the viewer's own marks, and independent model calls carry no bounded record of confirmed
+recent actions. Treat this as a direct input to Major 141: add typed self-action continuity, not a prose recap
+or a restored narrator.
 
 Continue the research audit as a separate evidence lane. It should explain why old mechanisms remain removed
 or earn re-entry, not tune the new loop toward sociability, movement, or a preferred personality.

@@ -42,6 +42,11 @@ marks left by other visitors and leave an attributed, expiring mark through the 
 residents. Temporary session IDs stay out of the human response. Stoop-held objects are excluded from the
 general loose-object list, so one object no longer appears under two incompatible sets of controls.
 
+A live phone check then found that participant-scoped GET requests did not include the person's login token.
+The server rejected them correctly, while several panels turned the error into an empty result; this made
+marks look absent and could also hide objects, making, exchanges, stoop custody, and doorway state. The shared
+client request path now authenticates those reads. Public, sessionless looking remains unauthenticated.
+
 The next layout change makes the current place and its available verbs the default human surface. The map
 remains available as a full-screen orientation and destination view, but a fictional town is not presented
 as an unlabeled graph behind a permanent side panel. Major 131 owns the generated fictional-map work.
