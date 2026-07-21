@@ -7,7 +7,6 @@ import logging
 import os
 import re
 import uuid
-from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -23,7 +22,6 @@ from ...models import (
     DurableObject,
     DoulaPoll,
     ExchangeReceipt,
-    FederationActorAuth,
     LocationChat,
     MaterialPool,
     ObjectExchange,
@@ -56,7 +54,6 @@ from ...models.schemas import (
 from ...services import (
     city_pack_service,
     federation_discovery,
-    federation_identity,
     federation_travel,
     session_service,
 )
@@ -71,7 +68,13 @@ from ...services.event_submission import WorldEventCommand, submit_world_event
 from ...services.resident_authority import (
     ResidentAuthorityError,
     authorize_resident_bootstrap_request,
-    bind_resident_session,
+)
+from ...services.session_lifecycle import (
+    ResidentSessionBinding,
+    SessionBootstrapCommand,
+    SessionLifecycleError,
+    bootstrap_session,
+    retire_session_presence,
 )
 from ...services.session_service import (
     remove_cached_sessions,
@@ -83,7 +86,6 @@ from ...services.world_context import build_world_context_header
 from ...services.world_memory import (
     EVENT_TYPE_CROSS_SHARD_ARRIVAL,
     EVENT_TYPE_CROSS_SHARD_DEPARTURE,
-    EVENT_TYPE_SESSION_BOOTSTRAP,
 )
 
 router = APIRouter()
@@ -163,56 +165,6 @@ def _require_handoff_owner(row: ShardTravelHandoff, player: Optional[Player]) ->
     if row.owner_player_id and (player is None or player.id != row.owner_player_id):
         raise HTTPException(
             status_code=403, detail="Cannot manage travel owned by another player."
-        )
-
-
-def _require_ordinary_player_attachment(
-    db: Session,
-    *,
-    session_id: str,
-    bootstrap_source: str,
-    player: Optional[Player],
-) -> None:
-    """Keep ordinary entry from creating a second human presence."""
-    if player is None or str(bootstrap_source or "").strip() == "federation-travel":
-        return
-    actor_id = str(player.actor_id or "").strip()
-    if not actor_id:
-        raise HTTPException(
-            status_code=409, detail="This player has no durable actor identity."
-        )
-    actor_auth = db.get(FederationActorAuth, actor_id)
-    if (
-        settings.require_email_verification
-        and actor_auth is not None
-        and actor_auth.email_verified_at is None
-    ):
-        raise HTTPException(status_code=409, detail="email_unverified")
-    if actor_auth is not None and actor_auth.profile_completed_at is None:
-        raise HTTPException(status_code=409, detail="profile_incomplete")
-
-    live_session = (
-        db.query(SessionVars).filter(SessionVars.actor_id == actor_id).first()
-    )
-    if live_session is not None and str(live_session.session_id) != str(session_id):
-        raise HTTPException(
-            status_code=409,
-            detail=f"This actor is already present in local session '{live_session.session_id}'.",
-        )
-
-    attachment = federation_identity.get_actor_bundle(db, actor_id)
-    local_shard = current_shard_id()
-    if attachment.status == "traveling":
-        raise HTTPException(
-            status_code=409,
-            detail="This actor is currently traveling and must finish that trip before ordinary entry.",
-        )
-    if attachment.current_shard != local_shard:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f"This actor is attached to '{attachment.current_shard}', not '{local_shard}'. Enter through federation travel rather than opening a second city presence."
-            ),
         )
 
 
@@ -565,75 +517,6 @@ def _finish_source_departure(
         "deleted": deleted,
         "handoff": _travel_handoff_payload(row),
         "federation": federation_result,
-    }
-
-
-_AGENT_SLUG_RE = re.compile(r"^([a-z][a-z0-9_]*)[-_]\d{8}")
-
-
-def _slug_display_name(session_id: str) -> Optional[str]:
-    m = _AGENT_SLUG_RE.match(str(session_id or ""))
-    if not m:
-        return None
-    return " ".join(part.capitalize() for part in m.group(1).split("_"))
-
-
-def _prune_duplicate_agent_sessions(
-    db: Session,
-    *,
-    keep_session_id: Optional[str] = None,
-    display_name: Optional[str] = None,
-) -> Dict[str, Any]:
-    target_name = str(display_name or "").strip().lower()
-    groups: Dict[str, list[tuple[str, datetime | None]]] = {}
-
-    for row in db.query(SessionVars).all():
-        session_id = str(row.session_id or "").strip()
-        agent_name = _slug_display_name(session_id)
-        if not session_id or not agent_name:
-            continue
-        normalized_name = agent_name.lower()
-        if target_name and normalized_name != target_name:
-            continue
-        groups.setdefault(normalized_name, []).append((session_id, row.updated_at))
-
-    pruned: list[Dict[str, Any]] = []
-    kept: list[Dict[str, Any]] = []
-    for normalized_name, entries in groups.items():
-        if len(entries) <= 1:
-            continue
-        display = " ".join(part.capitalize() for part in normalized_name.split(" "))
-        if keep_session_id and any(
-            session_id == keep_session_id for session_id, _ in entries
-        ):
-            survivor_id = keep_session_id
-        else:
-            survivor_id = max(
-                entries,
-                key=lambda item: (
-                    item[1].isoformat() if isinstance(item[1], datetime) else "",
-                    item[0],
-                ),
-            )[0]
-        kept.append({"display_name": display, "session_id": survivor_id})
-        for stale_session_id, _ in entries:
-            if stale_session_id == survivor_id:
-                continue
-            deleted = _delete_session_world_rows(db, stale_session_id)
-            _clear_runtime_session_caches(stale_session_id)
-            pruned.append(
-                {
-                    "display_name": display,
-                    "session_id": stale_session_id,
-                    "deleted": deleted,
-                }
-            )
-
-    return {
-        "groups_considered": len(groups),
-        "kept": kept,
-        "pruned": pruned,
-        "pruned_count": len(pruned),
     }
 
 
@@ -1007,177 +890,29 @@ def bootstrap_session_world(
     db: Session = Depends(get_db),
     player: Optional[Player] = Depends(get_current_player_strict),
 ):
-    """Initialize world content + onboarding vars for a new session.
-
-    The session joins an existing shared world and inherits its bounded world
-    context; resident-private state is initialized locally.
-    """
+    """Join one existing shared world through the canonical lifecycle service."""
     try:
-        _require_ordinary_player_attachment(
+        receipt = bootstrap_session(
             db,
-            session_id=str(payload.session_id),
-            bootstrap_source=str(payload.bootstrap_source),
+            command=SessionBootstrapCommand(
+                session_id=str(payload.session_id),
+                actor_id=str(payload.actor_id or "").strip() or None,
+                world_theme=payload.world_theme,
+                player_role=payload.player_role,
+                key_elements=tuple(payload.key_elements),
+                tone=payload.tone,
+                bootstrap_source=payload.bootstrap_source,
+                world_id=str(payload.world_id) if payload.world_id else None,
+                entry_location=payload.entry_location,
+            ),
             player=player,
         )
-        deleted = _delete_session_world_rows(db, payload.session_id)
-        _clear_runtime_session_caches(payload.session_id)
-        if any(int(count) > 0 for count in deleted.values()):
-            logging.info(
-                "Bootstrap freshness purge for session %s removed: %s",
-                payload.session_id,
-                deleted,
-            )
-
-        player_role = payload.player_role.strip()
-        if not player_role:
-            raise HTTPException(
-                status_code=422, detail="player_role must not be blank."
-            )
-
-        joining_world_id = str(payload.world_id).strip() if payload.world_id else None
-
-        if joining_world_id:
-            # ── Resident join flow ──────────────────────────────────────────
-            # Inherit shared world framing from the host world session so the
-            # resident narrator has global grounding immediately.
-            host_state = get_state_manager(joining_world_id, db)
-            inherited_context = host_state.get_world_context()
-
-            # If the resident didn't supply a theme, inherit from the seeded world.
-            world_theme = payload.world_theme.strip()
-            if not world_theme:
-                world_theme = host_state.get_variable("world_theme") or ""
-
-            state_manager = get_state_manager(payload.session_id, db)
-            bootstrap_completed_at = datetime.now(timezone.utc).isoformat()
-            state_manager.set_world_id(joining_world_id)
-            state_manager.set_variable("world_theme", world_theme)
-            state_manager.set_variable("player_role", player_role)
-            state_manager.set_variable("character_profile", player_role)
-            display_name = (
-                player_role.split(" — ", 1)[0].strip()
-                if " — " in player_role
-                else player_role
-            )
-            state_manager.set_variable("name", display_name)
-            tone = payload.tone.strip() or "adventure"
-            state_manager.set_variable("world_tone", tone)
-            if payload.key_elements:
-                state_manager.set_variable(
-                    "world_key_elements",
-                    [
-                        str(item).strip()
-                        for item in payload.key_elements
-                        if str(item).strip()
-                    ][:20],
-                )
-            state_manager.set_variable("_bootstrap_state", "completed")
-            state_manager.set_variable("_bootstrap_source", payload.bootstrap_source)
-            state_manager.set_variable(
-                "_bootstrap_completed_at", bootstrap_completed_at
-            )
-            # Determine entry location: explicit > city_pack node (shared context is descriptive only)
-            resolved_location: str = ""
-            if payload.entry_location:
-                resolved_location = str(payload.entry_location).strip()
-            if inherited_context:
-                state_manager.set_world_context(inherited_context)
-            if not resolved_location:
-                # Fall back to first city-pack location node — shared context is narrative only.
-                # Landmarks are not valid entry points (no map coordinates, orphaned from graph).
-                cp_nodes = (
-                    db.query(WorldNode)
-                    .filter(WorldNode.node_type == "location")
-                    .limit(500)
-                    .all()
-                )
-                cp_loc = next(
-                    (
-                        n.name
-                        for n in cp_nodes
-                        if (n.metadata_json or {}).get("source") == "city_pack"
-                    ),
-                    None,
-                )
-                if cp_loc:
-                    resolved_location = cp_loc
-            if resolved_location:
-                state_manager.set_variable("location", resolved_location)
-            save_state(state_manager, db)
-
-            # Log a WorldEvent so the digest roster can show the player's location immediately
-            # Extract just the name from player_role ("Name — vibe" format)
-            _display = display_name
-            submit_world_event(
-                db,
-                WorldEventCommand(
-                    session_id=payload.session_id,
-                    event_type=EVENT_TYPE_SESSION_BOOTSTRAP,
-                    summary=f"{_display} arrived at {resolved_location or 'the world'}.",
-                    delta={"location": resolved_location} if resolved_location else {},
-                    metadata={"surface": "session_bootstrap"},
-                    preserve_event_type=True,
-                ),
-            )
-            pruned_duplicates: Dict[str, Any] = {}
-            # Link session to authenticated player if present
-            if player:
-                sv = db.get(SessionVars, payload.session_id)
-                if sv:
-                    if sv.player_id != player.id:
-                        sv.player_id = player.id
-                    actor_id = str(player.actor_id or "").strip()
-                    if actor_id and sv.actor_id != actor_id:
-                        sv.actor_id = actor_id
-            else:
-                resident_actor_id = str(payload.actor_id or "").strip()
-                if resident_actor_id:
-                    sv = db.get(SessionVars, payload.session_id)
-                    if sv and sv.actor_id != resident_actor_id:
-                        sv.actor_id = resident_actor_id
-                pruned_duplicates = _prune_duplicate_agent_sessions(
-                    db,
-                    keep_session_id=payload.session_id,
-                    display_name=player_role,
-                )
-            db.commit()
-
-            contextual_vars = state_manager.get_contextual_variables()
-            return SessionBootstrapResponse(
-                success=True,
-                message=f"Resident session joined world {joining_world_id}.",
-                session_id=payload.session_id,
-                vars=contextual_vars,
-                theme=world_theme,
-                player_role=player_role,
-                bootstrap_state="completed",
-                bootstrap_diagnostics={
-                    "bootstrap_mode": "resident_join",
-                    "world_id": joining_world_id,
-                    "world_context_inherited": bool(inherited_context),
-                    "bootstrap_source": str(payload.bootstrap_source),
-                    "duplicate_agent_sessions_pruned": int(
-                        (pruned_duplicates or {}).get("pruned_count") or 0
-                    ),
-                },
-            )
-
-        # In V4, the world is seeded once via POST /api/world/seed.
-        # All characters join as residents with a world_id. There is no founder flow.
+        return SessionBootstrapResponse(**receipt.as_payload())
+    except SessionLifecycleError as exc:
         raise HTTPException(
-            status_code=422,
-            detail=(
-                "world_id is required. Seed the world first via POST /api/world/seed, then pass the returned world_id here."
-            ),
-        )
-    except HTTPException:
-        raise
-    except Exception as exc:
-        db.rollback()
-        logging.error("Session bootstrap failed: %s", exc)
-        raise HTTPException(
-            status_code=500, detail=f"Session bootstrap failed: {str(exc)}"
-        )
+            status_code=exc.status_code,
+            detail=exc.detail,
+        ) from exc
 
 
 @router.post("/session/bootstrap/resident", response_model=SessionBootstrapResponse)
@@ -1248,23 +983,31 @@ async def bootstrap_signed_resident_session(
             detail={"code": exc.code, "message": str(exc)},
         ) from exc
 
-    response = bootstrap_session_world(payload, db=db, player=None)
     try:
-        bind_resident_session(
+        receipt = bootstrap_session(
             db,
-            session_id=requested_session_id,
-            actor_id=verified.actor_id,
-            runtime_generation=verified.runtime_generation,
+            command=SessionBootstrapCommand(
+                session_id=requested_session_id,
+                actor_id=actor_id,
+                world_theme=payload.world_theme,
+                player_role=payload.player_role,
+                key_elements=tuple(payload.key_elements),
+                tone=payload.tone,
+                bootstrap_source=payload.bootstrap_source,
+                world_id=str(payload.world_id) if payload.world_id else None,
+                entry_location=payload.entry_location,
+            ),
+            resident_binding=ResidentSessionBinding(
+                actor_id=verified.actor_id,
+                runtime_generation=verified.runtime_generation,
+            ),
         )
-        db.commit()
-    except ResidentAuthorityError as exc:
-        _delete_session_world_rows(db, requested_session_id)
-        _clear_runtime_session_caches(requested_session_id)
+    except SessionLifecycleError as exc:
         raise HTTPException(
-            status_code=409,
-            detail={"code": exc.code, "message": str(exc)},
+            status_code=exc.status_code,
+            detail=exc.detail,
         ) from exc
-    return response
+    return SessionBootstrapResponse(**receipt.as_payload())
 
 
 @router.post("/session/leave")
@@ -1284,14 +1027,10 @@ def leave_session_world(
     except ActorAuthorizationError as exc:
         raise actor_authorization_http_error(exc) from exc
 
-    deleted = _retire_session_presence(db, payload.session_id)
-    _clear_runtime_session_caches(payload.session_id)
-    return {
-        "success": True,
-        "message": "Session removed from shard.",
-        "session_id": payload.session_id,
-        "deleted": deleted,
-    }
+    return retire_session_presence(
+        db,
+        session_id=str(payload.session_id),
+    ).as_payload()
 
 
 @router.post("/session/travel/depart")

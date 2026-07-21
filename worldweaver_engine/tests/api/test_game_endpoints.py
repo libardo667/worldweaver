@@ -394,7 +394,7 @@ class TestGameEndpoints:
         )
         assert db_session.query(ResidentRequestNonce).count() == 0
 
-    def test_session_bootstrap_prunes_stale_duplicate_agent_sessions(
+    def test_session_bootstrap_retires_stale_duplicate_presence_but_keeps_history(
         self, seeded_client, seeded_world_id, db_session
     ):
         stale_session_id = "test_resident-20260317-010101"
@@ -439,7 +439,7 @@ class TestGameEndpoints:
             db_session.query(WorldEvent)
             .filter(WorldEvent.session_id == stale_session_id)
             .count()
-            == 0
+            == 1
         )
 
     def test_session_leave_retires_presence_without_erasing_history(
