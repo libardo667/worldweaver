@@ -129,6 +129,18 @@ class DM:
     body: str
 
 
+@dataclass(frozen=True, slots=True)
+class CorrespondenceMessage:
+    """One private message offered to its durable recipient."""
+
+    message_id: int
+    sender_actor_id: str
+    sender_name: str
+    recipient_actor_id: str
+    body: str
+    sent_at: str
+
+
 @dataclass
 class DMRecipient:
     label: str
@@ -1118,8 +1130,63 @@ class WorldWeaverClient:
         ]
 
     # ------------------------------------------------------------------
-    # DMs (mail loop)
+    # Private correspondence
     # ------------------------------------------------------------------
+
+    async def get_pending_correspondence(
+        self, session_id: str, *, limit: int = 10
+    ) -> list[CorrespondenceMessage]:
+        """Offer private actor-addressed mail without consuming it."""
+
+        resp = await self._get(
+            f"/api/world/session/{session_id}/correspondence",
+            params={"limit": max(1, min(100, int(limit)))},
+            timeout=self._timeout_scene,
+        )
+        data = resp.json()
+        return [
+            CorrespondenceMessage(
+                message_id=int(message.get("message_id") or 0),
+                sender_actor_id=str(message.get("sender_actor_id") or ""),
+                sender_name=str(message.get("sender_name") or ""),
+                recipient_actor_id=str(message.get("recipient_actor_id") or ""),
+                body=str(message.get("body") or ""),
+                sent_at=str(message.get("sent_at") or ""),
+            )
+            for message in list(data.get("messages") or [])
+            if isinstance(message, dict) and int(message.get("message_id") or 0) > 0
+        ]
+
+    async def acknowledge_correspondence(
+        self, session_id: str, message_ids: list[int] | tuple[int, ...]
+    ) -> dict[str, Any]:
+        """Acknowledge mail only after the resident runtime has processed it."""
+
+        resp = await self._post(
+            f"/api/world/session/{session_id}/correspondence/acknowledge",
+            {"message_ids": list(message_ids)},
+            timeout=30.0,
+        )
+        return resp.json()
+
+    async def send_correspondence(
+        self, session_id: str, recipient_actor_id: str, body: str
+    ) -> dict[str, Any]:
+        """Send private mail to a known durable actor."""
+
+        resp = await self._post(
+            "/api/world/correspondence",
+            {
+                "session_id": session_id,
+                "recipient_actor_id": recipient_actor_id,
+                "body": body,
+            },
+            timeout=30.0,
+        )
+        return resp.json()
+
+    # Retained only for the disabled comparison runtime. The corresponding
+    # name-addressed server routes now return 410 rather than misdeliver mail.
 
     async def get_inbox(self, agent_name: str) -> list[DM]:
         """Mail loop: poll for unread DMs waiting for this agent. Marks them as read."""

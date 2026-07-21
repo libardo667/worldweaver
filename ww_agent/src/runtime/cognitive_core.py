@@ -367,11 +367,16 @@ class CognitiveCore:
             )
             anchor_stimulus = await self._anchor_stimulus(anchors)
             self._effector.present = list(brief.get("present") or [])
-            self._effector.co_present = [
+            co_present = [
                 dict(item)
                 for item in brief.get("co_present") or []
                 if isinstance(item, dict)
             ]
+            update_co_present = getattr(self._effector, "update_co_present", None)
+            if callable(update_co_present):
+                update_co_present(co_present)
+            else:
+                self._effector.co_present = co_present
             self._effector.heard = list(
                 brief.get("heard") or []
             )  # Major 66: read-from reply-edge source

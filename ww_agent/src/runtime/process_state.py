@@ -12,7 +12,7 @@ from typing import Any, Protocol
 CONFIRMED_ACTION_RECEIPT_VERSION = 1
 CONFIRMED_ACTION_KINDS = {"speak", "move", "do", "write", "mark"}
 PRIVATE_ACTIVITY_STATE_VERSION = 1
-PRIVATE_ACTIVITY_WAKE_EVENT_CLASSES = frozenset({"local_speech"})
+PRIVATE_ACTIVITY_WAKE_EVENT_CLASSES = frozenset({"correspondence", "local_speech"})
 REFERENCE_ACTIVATION_STATE_VERSION = 1
 RESIDENT_PROCESS_ENVELOPE_VERSION = 1
 REFERENCE_ADAPTER_ID = "worldweaver.reference-resident"

@@ -96,8 +96,14 @@ def test_effector_routes_write_to_workshop_not_mail(tmp_path):
         def __init__(self):
             self.letters = []
 
-        async def send_letter(self, **k):
-            self.letters.append(k)
+        async def send_correspondence(self, session_id, recipient_actor_id, body):
+            self.letters.append(
+                {
+                    "session_id": session_id,
+                    "recipient_actor_id": recipient_actor_id,
+                    "body": body,
+                }
+            )
             return {"ok": True}
 
     world = _W()
@@ -125,6 +131,8 @@ def test_effector_routes_write_to_workshop_not_mail(tmp_path):
         e.get("event_type") == "workshop_entry" for e in load_runtime_events(tmp_path)
     )
 
-    # A write to an actual person still goes to mail.
+    # A write to a person with a server-proven actor address still goes to mail.
+    eff.remember_actor("actor-leo", "Leo")
     asyncio.run(eff(Act(kind="write", body="Come see the foundation.", target="Leo")))
-    assert len(world.letters) == 1 and world.letters[0]["to_agent"] == "Leo"
+    assert len(world.letters) == 1
+    assert world.letters[0]["recipient_actor_id"] == "actor-leo"

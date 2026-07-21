@@ -15,7 +15,7 @@ from src.runtime.reference_core import (
     classify_action_outcome,
     observe_reference_world,
 )
-from src.world.client import LiveSignal
+from src.world.client import CorrespondenceMessage, LiveSignal
 
 
 def _identity() -> ResidentIdentity:
@@ -98,6 +98,8 @@ class _FakeWorld:
                 message="Test Resident, are you staying for tea?",
             )
         ]
+        self.correspondence: list[CorrespondenceMessage] = []
+        self.acknowledged_correspondence: list[int] = []
 
     async def get_scene(self, session_id):
         if self.scene_error:
@@ -108,6 +110,21 @@ class _FakeWorld:
         if self.chat_error:
             raise self.chat_error
         return self.chat
+
+    async def get_pending_correspondence(self, session_id, *, limit=10):
+        del session_id
+        return self.correspondence[:limit]
+
+    async def acknowledge_correspondence(self, session_id, message_ids):
+        del session_id
+        acknowledged = [int(message_id) for message_id in message_ids]
+        self.acknowledged_correspondence.extend(acknowledged)
+        self.correspondence = [
+            message
+            for message in self.correspondence
+            if message.message_id not in acknowledged
+        ]
+        return {"acknowledged_ids": acknowledged}
 
 
 def _core(tmp_path, *, responses, effector_result=None, information_result=None):
@@ -712,6 +729,68 @@ def test_new_local_speech_wakes_before_the_slow_baseline(tmp_path):
     result = asyncio.run(core.tick_once(now=start + timedelta(seconds=20)))
 
     assert result["status"] == "completed"
+
+
+def test_private_correspondence_wakes_and_is_acknowledged_after_inference(tmp_path):
+    core, memory_dir, _acted, _reads = _core(
+        tmp_path,
+        responses=[{"choice": "wait"}, {"choice": "wait"}],
+    )
+    start = datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc)
+    asyncio.run(core.tick_once(now=start))
+    core._world.correspondence.append(
+        CorrespondenceMessage(
+            message_id=17,
+            sender_actor_id="actor-riley",
+            sender_name="Riley",
+            recipient_actor_id="actor-test-resident",
+            body="Would you meet me by the footbridge?",
+            sent_at="2026-07-20T12:00:10+00:00",
+        )
+    )
+
+    result = asyncio.run(core.tick_once(now=start + timedelta(seconds=20)))
+
+    assert result["status"] == "completed"
+    assert "BEGIN PRIVATE CORRESPONDENCE" in core._llm.calls[1][1]
+    assert "Would you meet me by the footbridge?" in core._llm.calls[1][1]
+    assert core._world.acknowledged_correspondence == [17]
+    events = load_runtime_events(memory_dir)
+    assert any(
+        event["event_type"] == "reference_correspondence_acknowledged"
+        and event["payload"]["message_ids"] == [17]
+        for event in events
+    )
+    assert "Would you meet me by the footbridge?" not in str(events)
+
+
+def test_failed_inference_leaves_correspondence_waiting_for_retry(tmp_path):
+    core, _memory_dir, _acted, _reads = _core(
+        tmp_path,
+        responses=[RuntimeError("provider unavailable"), {"choice": "wait"}],
+    )
+    core._world.correspondence.append(
+        CorrespondenceMessage(
+            message_id=23,
+            sender_actor_id="actor-riley",
+            sender_name="Riley",
+            recipient_actor_id="actor-test-resident",
+            body="The kettle is ready.",
+            sent_at="2026-07-20T12:00:00+00:00",
+        )
+    )
+    start = datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc)
+
+    failed = asyncio.run(core.tick_once(now=start))
+    assert failed["status"] == "inference_failed"
+    assert core._world.acknowledged_correspondence == []
+    assert [message.message_id for message in core._world.correspondence] == [23]
+
+    retried = asyncio.run(core.tick_once(now=start + timedelta(seconds=20)))
+
+    assert core._world.acknowledged_correspondence == [23]
+    assert retried["status"] == "completed"
+    assert len(core._llm.calls) == 2
 
 
 def test_private_activity_can_defer_speech_until_its_chosen_return(tmp_path):

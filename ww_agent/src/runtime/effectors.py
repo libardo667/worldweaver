@@ -84,6 +84,7 @@ class WorldEffector:
         # The same co-presence set with durable actor/session identity. Names remain
         # for routing; these references are what relational ledger events record.
         self.co_present: list[dict[str, str]] = []
+        self._known_actor_ids: dict[str, str] = {}
         # The heard set this tick (speaker + stable msg id), refreshed by the core.
         # Major 66: lets a person-addressed reply record WHICH overture it answers —
         # READ-FROM the already-perceived speech, never elicited from the model.
@@ -108,6 +109,23 @@ class WorldEffector:
             location=self.location if location is None else location,
             co_present=self.co_present,
         )
+
+    def remember_actor(self, actor_id: str, name: str) -> None:
+        """Remember a server-proven address without treating it as current presence."""
+
+        normalized_name = normalize_reference(str(name or ""))
+        normalized_actor_id = str(actor_id or "").strip()
+        if normalized_name and normalized_actor_id:
+            self._known_actor_ids[normalized_name] = normalized_actor_id
+
+    def update_co_present(self, people: list[dict[str, str]]) -> None:
+        """Replace current presence while retaining durable addresses encountered."""
+
+        self.co_present = list(people)
+        for person in self.co_present:
+            self.remember_actor(
+                str(person.get("actor_id") or ""), str(person.get("name") or "")
+            )
 
     async def __call__(self, act: Act, *, now: Any = None) -> dict[str, Any]:
         try:
@@ -276,11 +294,17 @@ class WorldEffector:
             normalize_reference(p) for p in (self.present or [])
         }:
             # absent specific person → a private directed carry, not a citywide broadcast
-            await self._ww.send_letter(
-                from_name=self._identity.display_name,
-                to_agent=target_name,
-                body=act.body,
-                session_id=self._session_id,
+            if not addressed_actor_id:
+                return {
+                    "executed": False,
+                    "kind": "speak",
+                    "reason": "recipient_actor_unknown",
+                    "recipient": target_name,
+                }
+            await self._ww.send_correspondence(
+                self._session_id,
+                addressed_actor_id,
+                act.body,
             )
             append_runtime_event(
                 self._memory_dir,
@@ -288,6 +312,7 @@ class WorldEffector:
                 payload={
                     **self.relational_context(),
                     "recipient": target_name,
+                    "recipient_actor_id": addressed_actor_id,
                     "message": act.body,
                     "sent_at": _utc_now_iso(),
                     "in_reply_to": in_reply_to,
@@ -355,7 +380,9 @@ class WorldEffector:
         for person in self.co_present:
             if normalize_reference(str(person.get("name") or "")) == target:
                 return str(person.get("actor_id") or "").strip() or None
-        return None
+        if target_name in self._known_actor_ids.values():
+            return target_name
+        return self._known_actor_ids.get(target)
 
     async def _move(self, act: Act) -> dict[str, Any]:
         destination = str(act.target or act.body or "").strip()
@@ -1044,11 +1071,18 @@ class WorldEffector:
             }
         if not recipient:
             return {"executed": False, "kind": "write", "reason": "no_recipient"}
-        await self._ww.send_letter(
-            from_name=self._identity.display_name,
-            to_agent=recipient,
-            body=act.body,
-            session_id=self._session_id,
+        recipient_actor_id = self._addressed_actor_id(recipient)
+        if not recipient_actor_id:
+            return {
+                "executed": False,
+                "kind": "write",
+                "reason": "recipient_actor_unknown",
+                "recipient": recipient,
+            }
+        await self._ww.send_correspondence(
+            self._session_id,
+            recipient_actor_id,
+            act.body,
         )
         append_runtime_event(
             self._memory_dir,
@@ -1060,6 +1094,7 @@ class WorldEffector:
                 **self.relational_context(),
                 "mail_intent_id": f"mailint-{uuid.uuid4().hex[:12]}",
                 "recipient": recipient,
+                "recipient_actor_id": recipient_actor_id,
                 "source": "pulse",
                 "sent_at": _utc_now_iso(),
                 "in_reply_to": self._reply_edge(recipient),

@@ -440,6 +440,16 @@ class _StubWorld:
         )
         return {"ok": True}
 
+    async def send_correspondence(self, session_id, recipient_actor_id, body):
+        self.letters.append(
+            {
+                "session_id": session_id,
+                "recipient_actor_id": recipient_actor_id,
+                "body": body,
+            }
+        )
+        return {"success": True, "message_id": len(self.letters)}
+
 
 class _StubLLM:
     def __init__(self, *, json_response=None, raise_inference=False):
@@ -498,6 +508,7 @@ def test_effector_carries_absent_address_privately(tmp_path):
         location_hint="Chinatown",
     )
     eff.present = ["Levi"]  # Levi is here; Anika is across the city
+    eff.remember_actor("actor-anika", "Anika Vance")
 
     asyncio.run(
         eff(Act(kind="speak", body="Here's your tea.", target="Levi"))
@@ -510,12 +521,36 @@ def test_effector_carries_absent_address_privately(tmp_path):
         world.location_chats[0]["location"] == "Chinatown"
     )  # present target → the room
     assert len(world.location_chats) == 1  # the absent one did NOT hit any chat
-    assert world.letters[-1]["to_agent"] == "Anika Vance"  # it was carried privately
+    assert world.letters[-1]["recipient_actor_id"] == "actor-anika"
     assert len(_events_by_type(tmp_path, "chat_sent")) == 1
     assert (
         len(_events_by_type(tmp_path, "city_broadcast_sent")) == 0
     )  # nothing saturated the commons
     assert len(_events_by_type(tmp_path, "speech_carried")) == 1
+
+
+def test_effector_refuses_to_guess_an_absent_recipient_address(tmp_path):
+    world = _StubWorld(_Scene())
+    eff = WorldEffector(
+        ww_client=world,
+        session_id="s1",
+        identity=_identity(),
+        memory_dir=tmp_path,
+        location_hint="Chinatown",
+    )
+
+    result = asyncio.run(
+        eff(Act(kind="speak", body="This should not be misdelivered.", target="Sam"))
+    )
+
+    assert result == {
+        "executed": False,
+        "kind": "speak",
+        "reason": "recipient_actor_unknown",
+        "recipient": "Sam",
+    }
+    assert world.letters == []
+    assert _events_by_type(tmp_path, "speech_carried") == []
 
 
 def test_effector_seals_speech_to_workshop_during_incubation(tmp_path):
@@ -574,6 +609,8 @@ def test_effector_mail_stamps_reply_edge_when_recipient_was_heard(tmp_path):
             "message": "did the engine start?",
         }
     ]
+    eff.remember_actor("actor-levi", "Levi")
+    eff.remember_actor("actor-anika", "Anika Vance")
 
     asyncio.run(
         eff(Act(kind="write", body="Not yet — needs a new coil.", target="Levi"))
@@ -630,6 +667,7 @@ def test_effector_move_do_write(tmp_path):
         memory_dir=tmp_path,
         location_hint="Chinatown",
     )
+    eff.remember_actor("actor-levi", "Levi")
 
     move = asyncio.run(eff(Act(kind="move", body="", target="North Beach")))
     do = asyncio.run(eff(Act(kind="do", body="straighten the tea cups", target=None)))
@@ -639,7 +677,8 @@ def test_effector_move_do_write(tmp_path):
 
     assert move["executed"] and world.moves == ["North Beach"]
     assert do["executed"] and world.actions == ["straighten the tea cups"]
-    assert write["executed"] and world.letters[0]["to_agent"] == "Levi"
+    assert write["executed"]
+    assert world.letters[0]["recipient_actor_id"] == "actor-levi"
     assert len(_events_by_type(tmp_path, "move_executed")) == 1
     assert len(_events_by_type(tmp_path, "action_executed")) == 1
     assert len(_events_by_type(tmp_path, "mail_intent_sent")) == 1
