@@ -161,6 +161,12 @@ artifact but is not registered in the engine event queue. Connect that content-f
 at-least-once host instruction next; acknowledgement must follow successful resident processing rather than
 directly editing its ledger from the engine side.
 
+The resident half of that instruction now exists. `ReferenceResidentCore.handle_scheduled_return` refuses
+wrong or early IDs, consumes a due return before inference, and returns `already_processed` without another
+model call after checkpoint rebuild. The remaining gym work is transport and observation: register the
+content-free return in the combined queue, deliver the due offer to the separate participant process with a
+production-derived scene, and acknowledge only its `processed` or `already_processed` response.
+
 ### Scenario coverage map — July 21, 2026
 
 Gym coverage now has two explicit scales. Trustworthiness scenarios test that the apparatus tells the truth:

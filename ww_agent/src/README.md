@@ -18,7 +18,9 @@
   A continuation sets a bounded return time and selects whether local speech may offer an earlier activation.
   Each activation records content-light observation/process versions and rechecks both after final inference;
   a stale action or activity update is discarded and schedules a durable retry. It does not restore prompts,
-  completions, or action prose.
+  completions, or action prose. Host-offered scheduled returns use a stable content-free event ID and a
+  checkpointed consumption receipt, so a crash before scheduler acknowledgement cannot cause a second model
+  call for the same return.
 - `runtime/process_state.py` — small versioned resident-process fields that can be shared by the reference
   adapter and later model adapters. It defines confirmed-action receipts, their exact renderer, and the
   deterministic one-open-activity transition used by ledger replay and normal checkpoint advancement. It also

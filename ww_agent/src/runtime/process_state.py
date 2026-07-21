@@ -14,6 +14,7 @@ CONFIRMED_ACTION_KINDS = {"speak", "move", "do", "write", "mark"}
 PRIVATE_ACTIVITY_STATE_VERSION = 1
 PRIVATE_ACTIVITY_WAKE_EVENT_CLASSES = frozenset({"correspondence", "local_speech"})
 REFERENCE_ACTIVATION_STATE_VERSION = 1
+REFERENCE_RETURN_RECEIPT_VERSION = 1
 RESIDENT_PROCESS_ENVELOPE_VERSION = 1
 REFERENCE_ADAPTER_ID = "worldweaver.reference-resident"
 REFERENCE_ADAPTER_VERSION = 1
@@ -465,6 +466,31 @@ def project_reference_activation_at(event: dict[str, Any]) -> str | None:
     if payload.get("process_state_version") != REFERENCE_ACTIVATION_STATE_VERSION:
         return None
     return str(payload.get("as_of") or event.get("ts") or "").strip() or None
+
+
+def project_reference_return_receipt(event: dict[str, Any]) -> dict[str, Any] | None:
+    """Project the last handled scheduled return without private activity prose."""
+
+    if (
+        str(event.get("event_type") or "").strip()
+        != "reference_activity_return_consumed"
+    ):
+        return None
+    payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+    if payload.get("return_receipt_version") != REFERENCE_RETURN_RECEIPT_VERSION:
+        return None
+    event_id = str(payload.get("resident_return_event_id") or "").strip()
+    activity_id = str(payload.get("activity_id") or "").strip()
+    return_at = str(payload.get("return_at") or "").strip()
+    if not event_id or not activity_id or not return_at:
+        return None
+    return {
+        "return_receipt_version": REFERENCE_RETURN_RECEIPT_VERSION,
+        "event_id": event_id,
+        "activity_id": activity_id,
+        "return_at": return_at,
+        "consumed_at": str(event.get("ts") or "").strip(),
+    }
 
 
 def project_confirmed_action_receipt(

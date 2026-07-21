@@ -22,6 +22,7 @@ from src.runtime.process_state import (
     advance_resident_process_envelope,
     project_confirmed_action_receipt,
     project_reference_activation_at,
+    project_reference_return_receipt,
 )
 
 _LEDGER_FILENAME = "runtime_ledger.jsonl"
@@ -40,7 +41,7 @@ _LEGACY_DERIVED_FILENAMES = {
 CHECKPOINT_FORMAT_VERSION = 2
 REDUCER_FORMAT_VERSION = 11
 PROJECTION_FORMAT_VERSIONS = {
-    "runtime": 8,
+    "runtime": 9,
     "subjective": 1,
     "memory": 1,
     "subjective_facts": 1,
@@ -845,6 +846,7 @@ def _build_runtime_projection(
     open_private_activity: dict[str, Any] | None = None
     resident_process: dict[str, Any] | None = None
     last_reference_activation_at: str | None = None
+    last_reference_return_receipt: dict[str, Any] | None = None
     reference_reconsideration_pending = False
 
     for event in events:
@@ -906,6 +908,9 @@ def _build_runtime_projection(
         activation_at = project_reference_activation_at(event)
         if activation_at is not None:
             last_reference_activation_at = activation_at
+        return_receipt = project_reference_return_receipt(event)
+        if return_receipt is not None:
+            last_reference_return_receipt = return_receipt
         if payload.get("process_state_version") == REFERENCE_ACTIVATION_STATE_VERSION:
             if event_type == "reference_activation_started":
                 reference_reconsideration_pending = False
@@ -938,6 +943,7 @@ def _build_runtime_projection(
         "open_private_activity": open_private_activity,
         "resident_process": resident_process,
         "last_reference_activation_at": last_reference_activation_at,
+        "last_reference_return_receipt": last_reference_return_receipt,
         "reference_reconsideration_pending": reference_reconsideration_pending,
         "last_grounding": last_grounding,
         "last_movement": last_movement,
@@ -2294,6 +2300,7 @@ def _advance_runtime_projection(
         event,
     )
     activation_at = project_reference_activation_at(event)
+    return_receipt = project_reference_return_receipt(event)
     reference_reconsideration_pending = bool(
         runtime_projection.get("reference_reconsideration_pending")
     )
@@ -2321,6 +2328,11 @@ def _advance_runtime_projection(
                 activation_at
                 if activation_at is not None
                 else runtime_projection.get("last_reference_activation_at")
+            ),
+            "last_reference_return_receipt": (
+                return_receipt
+                if return_receipt is not None
+                else runtime_projection.get("last_reference_return_receipt")
             ),
             "reference_reconsideration_pending": reference_reconsideration_pending,
         }
@@ -2391,6 +2403,14 @@ def load_last_reference_activation_at(memory_dir: Path) -> str | None:
     state = load_current_runtime_state(memory_dir)
     value = str(state.runtime_projection.get("last_reference_activation_at") or "")
     return value.strip() or None
+
+
+def load_last_reference_return_receipt(memory_dir: Path) -> dict[str, Any] | None:
+    """Load the content-free receipt for the latest consumed private return."""
+
+    state = load_current_runtime_state(memory_dir)
+    receipt = state.runtime_projection.get("last_reference_return_receipt")
+    return deepcopy(receipt) if isinstance(receipt, dict) else None
 
 
 def load_resident_process_envelope(memory_dir: Path) -> dict[str, Any] | None:

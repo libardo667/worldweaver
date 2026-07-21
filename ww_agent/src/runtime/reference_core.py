@@ -25,6 +25,7 @@ from src.inference.client import InferenceClient
 from src.runtime.ledger import (
     append_runtime_event,
     load_last_reference_activation_at,
+    load_last_reference_return_receipt,
     load_open_private_activity,
     load_recent_confirmed_actions,
     load_reference_process_revision_fields,
@@ -33,6 +34,7 @@ from src.runtime.process_state import (
     PRIVATE_ACTIVITY_STATE_VERSION,
     PRIVATE_ACTIVITY_WAKE_EVENT_CLASSES,
     REFERENCE_ACTIVATION_STATE_VERSION,
+    REFERENCE_RETURN_RECEIPT_VERSION,
     ConfirmedActionReceipt,
     OpenPrivateActivity,
     confirmed_action_payload,
@@ -244,6 +246,36 @@ class ReferenceScheduledReturn:
             "activity_id": self.activity_id,
             "due_at": self.due_at.isoformat(),
         }
+
+
+def build_reference_scheduled_return(
+    *,
+    actor_id: str,
+    activity_id: str,
+    due_at: datetime,
+) -> ReferenceScheduledReturn:
+    """Build the stable host-facing ID for one private return deadline."""
+
+    normalized_actor = str(actor_id or "").strip()
+    normalized_activity = str(activity_id or "").strip()
+    if not normalized_actor or not normalized_activity:
+        raise ValueError("scheduled return requires actor and activity IDs")
+    normalized_due_at = (
+        due_at if due_at.tzinfo is not None else due_at.replace(tzinfo=timezone.utc)
+    ).astimezone(timezone.utc)
+    event_id = _structural_version(
+        "resident-return",
+        {
+            "actor_id": normalized_actor,
+            "activity_id": normalized_activity,
+            "due_at": normalized_due_at.isoformat(),
+        },
+    )
+    return ReferenceScheduledReturn(
+        event_id=event_id,
+        activity_id=normalized_activity,
+        due_at=normalized_due_at,
+    )
 
 
 def _structural_version(label: str, payload: Any) -> str:
@@ -831,24 +863,79 @@ class ReferenceResidentCore:
         if return_at.tzinfo is None:
             return_at = return_at.replace(tzinfo=timezone.utc)
         return_at = return_at.astimezone(timezone.utc)
-        activity_id = self._open_private_activity.activity_id
-        event_id = _structural_version(
-            "resident-return",
-            {
-                "actor_id": str(self._identity.actor_id or ""),
-                "activity_id": activity_id,
-                "due_at": return_at.isoformat(),
-            },
-        )
-        return ReferenceScheduledReturn(
-            event_id=event_id,
-            activity_id=activity_id,
+        return build_reference_scheduled_return(
+            actor_id=str(self._identity.actor_id or ""),
+            activity_id=self._open_private_activity.activity_id,
             due_at=return_at,
         )
 
-    def _activity_return_is_due(self, now: datetime) -> bool:
+    async def handle_scheduled_return(
+        self,
+        event_id: str,
+        *,
+        now: datetime,
+    ) -> dict[str, Any]:
+        """Idempotently handle one host-offered private return opportunity."""
+
+        normalized_event_id = str(event_id or "").strip()
+        if not normalized_event_id:
+            raise ValueError("scheduled return event ID is required")
+        effective_now = (
+            now if now.tzinfo is not None else now.replace(tzinfo=timezone.utc)
+        ).astimezone(timezone.utc)
+        previous = load_last_reference_return_receipt(self._memory_dir)
+        if (
+            isinstance(previous, dict)
+            and previous.get("event_id") == normalized_event_id
+        ):
+            return {
+                "status": "already_processed",
+                "event_id": normalized_event_id,
+                "choice": "none",
+            }
         scheduled = self.scheduled_return()
-        return scheduled is not None and now >= scheduled.due_at
+        if scheduled is None:
+            return {
+                "status": "rejected",
+                "event_id": normalized_event_id,
+                "reason": "no_scheduled_return",
+            }
+        if scheduled.event_id != normalized_event_id:
+            return {
+                "status": "rejected",
+                "event_id": normalized_event_id,
+                "reason": "event_id_mismatch",
+            }
+        if effective_now < scheduled.due_at:
+            return {
+                "status": "rejected",
+                "event_id": normalized_event_id,
+                "reason": "not_due",
+            }
+        activation = await self.tick_once(now=effective_now)
+        receipt = load_last_reference_return_receipt(self._memory_dir)
+        if (
+            not isinstance(receipt, dict)
+            or receipt.get("event_id") != normalized_event_id
+        ):
+            raise RuntimeError("scheduled return was not durably consumed")
+        return {
+            "status": "processed",
+            "event_id": normalized_event_id,
+            "activation_status": str(activation.get("status") or "unknown"),
+            "choice": str(activation.get("choice") or "none"),
+            "reads": int(activation.get("reads") or 0),
+            **(
+                {"action_outcome": str(activation.get("action_outcome") or "")}
+                if activation.get("action_outcome") is not None
+                else {}
+            ),
+            **(
+                {"error": str(activation.get("error") or "")}
+                if activation.get("error") is not None
+                else {}
+            ),
+        }
 
     def _system_prompt(self, *, allow_read: bool) -> str:
         identity_text = str(
@@ -1128,7 +1215,10 @@ class ReferenceResidentCore:
         )
         first_activation = self._last_activation_at is None
         self._seen_local_speech_ids.update(current_signal_ids)
-        scheduled_return_due = self._activity_return_is_due(effective_now)
+        scheduled_return = self.scheduled_return()
+        scheduled_return_due = bool(
+            scheduled_return is not None and effective_now >= scheduled_return.due_at
+        )
         waiting_for_scheduled_return = bool(
             self._open_private_activity is not None
             and self._open_private_activity.return_at
@@ -1170,12 +1260,16 @@ class ReferenceResidentCore:
             )
         self._last_activation_at = effective_now
         if scheduled_return_due and self._open_private_activity is not None:
+            if scheduled_return is None:
+                raise RuntimeError("due private return omitted its structural schedule")
             append_runtime_event(
                 self._memory_dir,
                 event_type="reference_activity_return_consumed",
                 payload={
                     "activity_state_version": PRIVATE_ACTIVITY_STATE_VERSION,
                     "process_state_version": REFERENCE_ACTIVATION_STATE_VERSION,
+                    "return_receipt_version": REFERENCE_RETURN_RECEIPT_VERSION,
+                    "resident_return_event_id": scheduled_return.event_id,
                     "activity_id": self._open_private_activity.activity_id,
                     "return_at": self._open_private_activity.return_at,
                     "as_of": effective_now.isoformat(),

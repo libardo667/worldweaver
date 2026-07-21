@@ -62,6 +62,10 @@ inputs in the identity loader; they do not restore the old ownership model.
   baseline while that activity is open. The return-consumed event also records the activation time in one
   checkpoint advance, so a crash cannot repeatedly offer the same due return. An early or explicit activation
   does not consume a future return unless the resident replaces or finishes the activity.
+- A host-offered private return uses the content-free stable return event ID. The core rejects an early or
+  mismatched offer, writes one versioned consumption receipt before inference, and reports a repeated offer as
+  already processed without another model call. A scheduler acknowledges only `processed` or
+  `already_processed`; it must retain rejected or interrupted offers.
 - Every reference activation carries a generated activation ID plus content-light observation and private
   process versions. After the final inference, re-read current structural facts and checkpoint fields. If
   location, presence, new speech IDs, trace IDs, routes, source declarations, scene availability, open

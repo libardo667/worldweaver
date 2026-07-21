@@ -7,7 +7,12 @@ from types import SimpleNamespace
 import pytest
 
 from src.identity.loader import LoopTuning, ResidentIdentity
-from src.runtime.ledger import append_runtime_event, load_runtime_events
+from src.runtime.ledger import (
+    append_runtime_event,
+    load_last_reference_return_receipt,
+    load_runtime_events,
+    rebuild_runtime_artifacts,
+)
 from src.runtime.reference_core import (
     ReferenceDecision,
     ReferenceDecisionError,
@@ -893,6 +898,85 @@ def test_private_return_schedule_survives_restart_without_private_prose(tmp_path
         for event in events
         if event["event_type"] == "reference_activity_return_consumed"
     ] == ["reference_activity_return_consumed"]
+
+
+def test_host_offered_private_return_is_idempotent_across_restart(tmp_path):
+    started = datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc)
+    first, memory_dir, _acted, _reads = _core(
+        tmp_path,
+        responses=[
+            {
+                "choice": "continue",
+                "activity": "Privately compare two synthetic route notes.",
+                "return_after_seconds": 172800,
+                "wake_on": [],
+            }
+        ],
+    )
+    asyncio.run(first.tick_once(now=started))
+    scheduled = first.scheduled_return()
+    assert scheduled is not None
+
+    restarted, _same_memory, _acted_again, _reads_again = _core(
+        tmp_path,
+        responses=[{"choice": "wait"}],
+    )
+    early = asyncio.run(
+        restarted.handle_scheduled_return(
+            scheduled.event_id,
+            now=scheduled.due_at - timedelta(seconds=1),
+        )
+    )
+    wrong = asyncio.run(
+        restarted.handle_scheduled_return(
+            "resident-return-v1-wrong",
+            now=scheduled.due_at,
+        )
+    )
+    processed = asyncio.run(
+        restarted.handle_scheduled_return(
+            scheduled.event_id,
+            now=scheduled.due_at,
+        )
+    )
+
+    assert early["reason"] == "not_due"
+    assert wrong["reason"] == "event_id_mismatch"
+    assert processed == {
+        "status": "processed",
+        "event_id": scheduled.event_id,
+        "activation_status": "completed",
+        "choice": "wait",
+        "reads": 0,
+    }
+    assert len(restarted._llm.calls) == 1
+    receipt = load_last_reference_return_receipt(memory_dir)
+    assert receipt == {
+        "return_receipt_version": 1,
+        "event_id": scheduled.event_id,
+        "activity_id": scheduled.activity_id,
+        "return_at": scheduled.due_at.isoformat(),
+        "consumed_at": scheduled.due_at.isoformat(),
+    }
+
+    rebuild_runtime_artifacts(memory_dir)
+    after_crash, _same_memory, _acted_after_crash, _reads_after_crash = _core(
+        tmp_path,
+        responses=[],
+    )
+    duplicate = asyncio.run(
+        after_crash.handle_scheduled_return(
+            scheduled.event_id,
+            now=scheduled.due_at + timedelta(seconds=1),
+        )
+    )
+
+    assert duplicate == {
+        "status": "already_processed",
+        "event_id": scheduled.event_id,
+        "choice": "none",
+    }
+    assert after_crash._llm.calls == []
 
 
 def test_private_activity_can_allow_speech_to_offer_an_early_turn(tmp_path):

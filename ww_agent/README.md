@@ -58,6 +58,12 @@ baseline. Speech is still delivered and acknowledged when early activation is di
 not turn delivery into a forced inference call. A due return is consumed and its activation time checkpointed
 in one transition, so restarting cannot repeatedly spend the same scheduled opportunity.
 
+The host-facing return operation is explicitly at-least-once. An offered event must match the stable ID derived
+from actor, private activity ID, and deadline, and it cannot be handled before that deadline. Consumption writes
+a content-free receipt before inference begins. If the resident process stops after that write but before the
+host receives its answer, the repeated offer returns `already_processed` without another model call. The receipt
+contains the return ID, activity ID, deadline, and consumption time—not the private activity description.
+
 Each model activation is also tied to structural versions of what the resident was shown and the private
 checkpoint state it began from. After the final model response, the adapter checks the current place and
 checkpoint again. A changed location, presence set, new speech ID, trace set, route, source declaration, or

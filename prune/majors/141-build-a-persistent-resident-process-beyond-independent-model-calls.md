@@ -174,6 +174,18 @@ Synthetic reducer tests prove continuous hosted state, clean suspension, measure
 time, and checkpoint/full-replay agreement. A resident-host test proves a bounded run writes start and suspend
 events around the actual run and releases its hearth lease with the envelope suspended.
 
+## Seventh slice — idempotent host return delivery (2026-07-21)
+
+`ReferenceResidentCore` now accepts an explicit host-offered private return event. It validates the stable ID
+derived from actor, private activity ID, and UTC deadline and refuses an early or mismatched offer. When due, it
+writes one versioned, content-free consumption receipt before beginning inference. If the process stops after
+that write but before the host receives an acknowledgement, replaying the same event returns
+`already_processed` without spending another model call. Checkpoint rebuild preserves the receipt. The receipt
+contains only event ID, activity ID, deadline, and consumption time.
+
+This closes the resident half of at-least-once scheduling. Major 142 still needs to deliver the event through
+the combined gym adapter and acknowledge its queue entry only after `processed` or `already_processed`.
+
 ## Files Affected
 
 - `ww_agent/src/resident.py`
