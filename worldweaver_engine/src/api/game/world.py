@@ -22,7 +22,6 @@ from ...config import settings
 from ...database import get_db
 from ...models import (
     SessionVars,
-    WorldEdge,
     WorldEvent,
     WorldFact,
     WorldNode,
@@ -42,6 +41,10 @@ from ...services.live_signals import (
     notify_live_signal,
     read_live_signals,
     wait_for_live_signal_change,
+)
+from ...services.location_routes import (
+    parent_location_name_for_node,
+    resolve_route_anchor,
 )
 from ...services.actor_authority import (
     ActorAuthorizationError,
@@ -574,42 +577,6 @@ def _load_live_presence_maps(
     }
 
 
-def _parent_location_name_for_node(
-    *,
-    name: str,
-    node_type: str,
-    metadata: Dict[str, Any],
-    city_id: Optional[str],
-) -> Optional[str]:
-    if node_type == "location":
-        return name
-
-    explicit_parent = str(metadata.get("parent_location") or "").strip()
-    if explicit_parent:
-        return explicit_parent
-
-    from ...services.city_pack_service import (
-        get_pack,
-        find_neighborhood_record_for_location,
-    )
-
-    pack = get_pack(city_id or settings.city_id)
-    neighborhood_id = str(metadata.get("neighborhood") or "").strip()
-    if pack and neighborhood_id:
-        for neighborhood in pack.get("neighborhoods", []):
-            if str(neighborhood.get("id") or "").strip() == neighborhood_id:
-                resolved = str(neighborhood.get("name") or "").strip()
-                if resolved:
-                    return resolved
-
-    record = find_neighborhood_record_for_location(name, city_id or settings.city_id)
-    if record:
-        resolved = str(record.get("name") or "").strip()
-        if resolved:
-            return resolved
-    return None
-
-
 def _prefer_map_node_candidate(
     existing: Optional[Dict[str, Any]],
     *,
@@ -680,23 +647,6 @@ def _build_map_node_payload(
     }
 
 
-def _node_has_path_edges(db: Session, node_id: int) -> bool:
-    if not node_id:
-        return False
-    edge = (
-        db.query(WorldEdge.id)
-        .filter(
-            WorldEdge.edge_type == "path",
-            or_(
-                WorldEdge.source_node_id == node_id,
-                WorldEdge.target_node_id == node_id,
-            ),
-        )
-        .first()
-    )
-    return edge is not None
-
-
 def _graph_alias_key(name: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "_", str(name or "").strip().lower()).strip("_")
     return f"location_alias:{slug or 'current_location'}"
@@ -753,40 +703,6 @@ def _graph_with_anchor_alias(
             edges.append({"from": source_key, "to": target_key})
             edge_pairs.add((source_key, target_key))
     return {"nodes": nodes, "edges": edges}
-
-
-def _resolve_route_anchor(db: Session, location_name: str) -> str:
-    candidate = str(location_name or "").strip()
-    if not candidate:
-        return candidate
-
-    nodes = (
-        db.query(WorldNode)
-        .filter(WorldNode.name == candidate)
-        .order_by(WorldNode.id.asc())
-        .all()
-    )
-    if not nodes:
-        return candidate
-
-    for node in nodes:
-        if str(getattr(node, "node_type", "") or "").strip() != "location":
-            continue
-        if _node_has_path_edges(db, int(getattr(node, "id", 0) or 0)):
-            return candidate
-
-    for node in nodes:
-        node_type = str(getattr(node, "node_type", "") or "").strip()
-        metadata = dict(getattr(node, "metadata_json", {}) or {})
-        parent = _parent_location_name_for_node(
-            name=candidate,
-            node_type=node_type or "landmark",
-            metadata=metadata,
-            city_id=str(metadata.get("city_id") or settings.city_id or ""),
-        )
-        if parent and parent != candidate:
-            return parent
-    return candidate
 
 
 router = APIRouter()
@@ -1790,7 +1706,7 @@ def create_world_sublocation(
         raise HTTPException(
             status_code=400, detail="Session has no current location set."
         )
-    parent_location = _resolve_route_anchor(db, current_location)
+    parent_location = resolve_route_anchor(db, current_location)
     try:
         row = create_or_refresh_ephemeral(
             db,
@@ -1835,7 +1751,7 @@ def map_move(
         )
 
     destination = payload.destination.strip()
-    current_anchor = _resolve_route_anchor(db, current_location)
+    current_anchor = resolve_route_anchor(db, current_location)
     from ...services.sublocations import (
         create_or_refresh_ephemeral,
         is_local_sublocation_candidate,
@@ -1861,7 +1777,7 @@ def map_move(
         )
     if destination_sublocation is not None:
         destination = str(destination_sublocation.name or destination)
-    destination_anchor = _resolve_route_anchor(db, destination)
+    destination_anchor = resolve_route_anchor(db, destination)
 
     if (
         current_location != destination
@@ -2179,7 +2095,7 @@ def query_world_map(
             exact_focus_names.add(node_name)
             metadata = dict(node.metadata_json or {})
             node_type = str(node.node_type or "").strip()
-            parent_location = _parent_location_name_for_node(
+            parent_location = parent_location_name_for_node(
                 name=node_name,
                 node_type=node_type,
                 metadata=metadata,
@@ -2189,7 +2105,7 @@ def query_world_map(
 
         if exact_focus_location_names:
             current_anchor = (
-                _resolve_route_anchor(db, requested_location)
+                resolve_route_anchor(db, requested_location)
                 if requested_location
                 else ""
             )
@@ -2197,7 +2113,7 @@ def query_world_map(
             if current_anchor:
                 expanded_locations.add(current_anchor)
             for focus_name in list(exact_focus_location_names):
-                destination_anchor = _resolve_route_anchor(db, focus_name)
+                destination_anchor = resolve_route_anchor(db, focus_name)
                 if current_anchor and destination_anchor:
                     expanded_locations.update(
                         find_route(db, current_anchor, destination_anchor)
@@ -2264,7 +2180,7 @@ def query_world_map(
         ):
             continue
 
-        parent_location = _parent_location_name_for_node(
+        parent_location = parent_location_name_for_node(
             name=node_name,
             node_type=node_type,
             metadata=metadata,
@@ -2837,7 +2753,7 @@ def get_agent_scene(
         db, requested_session_id=session_id
     )
     session_rows = _load_recent_session_rows(db, requested_session_id=session_id)
-    graph_anchor = _resolve_route_anchor(db, location) if location else ""
+    graph_anchor = resolve_route_anchor(db, location) if location else ""
     present_by_sid: Dict[str, Dict[str, Any]] = {}
     for session_row in session_rows:
         sid = str(session_row.session_id or "").strip()
