@@ -49,6 +49,7 @@ from ...services.correspondence import (
     pending_correspondence,
     send_correspondence,
 )
+from ...services.clock import Clock, get_world_clock
 from ...services.location_routes import (
     parent_location_name_for_node,
     resolve_route_anchor,
@@ -1180,6 +1181,7 @@ def get_world_roster_directory(
 def get_neighborhood_vitality(
     hours: int = Query(default=6, ge=1, le=72),
     db: Session = Depends(get_db),
+    world_clock: Clock = Depends(get_world_clock),
 ):
     """Neighborhood-level liveliness snapshot for doula targeting and operator inspection."""
     from ...services.city_pack_service import get_full_map_for_session
@@ -1242,9 +1244,7 @@ def get_neighborhood_vitality(
         else:
             entry["current_humans"] += 1
 
-    since_naive = (datetime.now(timezone.utc) - timedelta(hours=hours)).replace(
-        tzinfo=None
-    )
+    since_naive = (world_clock.now() - timedelta(hours=hours)).replace(tzinfo=None)
 
     chat_rows = (
         db.query(LocationChat).filter(LocationChat.created_at >= since_naive).all()
@@ -1387,11 +1387,16 @@ class SublocationCreateRequest(BaseModel):
 def get_world_sublocations(
     parent_location: str = Query(..., min_length=1, max_length=200),
     db: Session = Depends(get_db),
+    world_clock: Clock = Depends(get_world_clock),
 ):
     """List active child places without adding them to the canonical map."""
     from ...services.sublocations import active_sublocations, sublocation_payload
 
-    rows = active_sublocations(db, parent_location=parent_location.strip())
+    rows = active_sublocations(
+        db,
+        parent_location=parent_location.strip(),
+        now=world_clock.now(),
+    )
     return {
         "parent_location": parent_location.strip(),
         "sublocations": [sublocation_payload(row) for row in rows],
@@ -1404,6 +1409,7 @@ def create_world_sublocation(
     payload: SublocationCreateRequest,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ):
     """Create or refresh one bounded ephemeral place under the caller's map node."""
     from ...services.session_service import get_state_manager
@@ -1431,6 +1437,7 @@ def create_world_sublocation(
             label=payload.label,
             created_by_session=payload.session_id,
             ttl_seconds=payload.ttl_seconds,
+            now=world_clock.now(),
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -1444,6 +1451,7 @@ def map_move(
     payload: MapMoveRequest,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ):
     """Move one hop or one validated route through the canonical movement service."""
     session_id = payload.session_id
@@ -1458,6 +1466,7 @@ def map_move(
             destination=payload.destination,
             skip_to_destination=payload.skip_to_destination,
             allow_sublocation_create=payload.allow_sublocation_create,
+            now=world_clock.now(),
         )
     except MovementError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
@@ -1811,6 +1820,7 @@ def post_correspondence(
     payload: SendCorrespondenceRequest,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ):
     """Send private mail as one proven durable actor."""
 
@@ -1823,6 +1833,7 @@ def post_correspondence(
                 recipient_actor_id=payload.recipient_actor_id,
                 body=payload.body,
             ),
+            now=world_clock.now(),
         ).as_payload()
     except CorrespondenceError as exc:
         raise _correspondence_http_error(exc) from exc
@@ -1852,6 +1863,7 @@ def post_correspondence_acknowledgement(
     payload: AcknowledgeCorrespondenceRequest,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ):
     """Acknowledge private mail after the recipient has accepted delivery."""
 
@@ -1861,6 +1873,7 @@ def post_correspondence_acknowledgement(
             db,
             session_id=session_id,
             message_ids=payload.message_ids,
+            now=world_clock.now(),
         ).as_payload()
     except CorrespondenceError as exc:
         raise _correspondence_http_error(exc) from exc
@@ -2020,6 +2033,7 @@ def get_agent_scene(
     session_id: str,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ):
     """Return current, directly reportable local state for a participant.
 
@@ -2030,7 +2044,11 @@ def get_agent_scene(
     if not _SAFE_SESSION_RE.match(session_id):
         raise HTTPException(status_code=400, detail="Invalid session_id format.")
     _authorize_bound_actor_or_http(db, credentials=credentials, session_id=session_id)
-    return build_participant_scene(db, session_id=session_id)
+    return build_participant_scene(
+        db,
+        session_id=session_id,
+        now=world_clock.now(),
+    )
 
 
 @router.get("/world/scene/{session_id}/new-events")
@@ -2116,6 +2134,7 @@ def get_world_traces(
     session_id: str = Query(..., min_length=1, max_length=64),
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ):
     """Show another visitor's active public marks at the caller's exact place."""
     normalized_session_id = str(session_id or "").strip()
@@ -2134,7 +2153,10 @@ def get_world_traces(
         raise HTTPException(status_code=409, detail="Session has no current location.")
 
     traces = _active_world_traces(
-        db, location=location, viewer_session_id=normalized_session_id
+        db,
+        location=location,
+        viewer_session_id=normalized_session_id,
+        now=world_clock.now(),
     )
     for trace in traces:
         # Humans need authorship, not the temporary transport identifier the
@@ -2148,6 +2170,7 @@ def post_world_trace(
     payload: LeaveWorldTraceRequest,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ):
     """Leave one expiring physical mark at the actor's current location.
 
@@ -2172,7 +2195,7 @@ def post_world_trace(
         raise HTTPException(status_code=400, detail="Trace body cannot be empty.")
     target = str(payload.target or "").strip()
     _, author_name = _session_display_details(session_id, vars_payload)
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = world_clock.now().astimezone(timezone.utc).replace(tzinfo=None)
     row = WorldTrace(
         session_id=session_id,
         author_name=author_name,
@@ -2372,6 +2395,7 @@ def post_location_chat(
     payload: PostChatRequest,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ):
     """Post as a proven named session at its location."""
     session_id = str(payload.session_id or "").strip()
@@ -2382,6 +2406,7 @@ def post_location_chat(
             session_id=session_id,
             location=location,
             message=payload.message,
+            now=world_clock.now(),
         ).as_payload()
     except LocalSpeechError as exc:
         raise HTTPException(
@@ -2504,11 +2529,11 @@ def get_world_travel_destinations():
 
 
 @router.get("/world/grounding")
-def get_world_grounding():
+def get_world_grounding(world_clock: Clock = Depends(get_world_clock)):
     """Return the configured city's current clock and weather context."""
     from ...services.grounding import get_city_time_context
 
-    return get_city_time_context(settings.city_id)
+    return get_city_time_context(settings.city_id, now=world_clock.now())
 
 
 @router.get("/world/grounding/news")
@@ -2662,10 +2687,14 @@ class CastVoteRequest(BaseModel):
 
 
 @router.post("/world/doula/polls")
-def create_doula_poll(payload: CreatePollRequest, db: Session = Depends(get_db)):
+def create_doula_poll(
+    payload: CreatePollRequest,
+    db: Session = Depends(get_db),
+    world_clock: Clock = Depends(get_world_clock),
+):
     """Create a new doula classification poll. Called by the doula when it needs agent consensus."""
     import uuid
-    from datetime import timezone, timedelta
+    from datetime import timedelta
 
     poll = DoulaPoll(
         id=str(uuid.uuid4()),
@@ -2674,8 +2703,8 @@ def create_doula_poll(payload: CreatePollRequest, db: Session = Depends(get_db))
         entry_location=payload.entry_location,
         entity_class=payload.entity_class,
         weight=payload.weight,
-        expires_at=datetime.now(timezone.utc)
-        + timedelta(seconds=payload.expires_in_seconds),
+        expires_at=world_clock.now() + timedelta(seconds=payload.expires_in_seconds),
+        created_at=world_clock.now(),
         voters_json=payload.voters,
         votes_json={},
     )
@@ -2686,11 +2715,12 @@ def create_doula_poll(payload: CreatePollRequest, db: Session = Depends(get_db))
 
 
 @router.get("/world/doula/polls")
-def get_doula_polls(db: Session = Depends(get_db)):
+def get_doula_polls(
+    db: Session = Depends(get_db),
+    world_clock: Clock = Depends(get_world_clock),
+):
     """Return all open (unresolved, unexpired) polls. Called by the doula each scan cycle."""
-    from datetime import timezone
-
-    now = datetime.now(timezone.utc)
+    now = world_clock.now()
     polls = (
         db.query(DoulaPoll)
         .filter(DoulaPoll.resolved_at.is_(None), DoulaPoll.expires_at > now)
@@ -2747,10 +2777,9 @@ def cast_doula_vote(
 def resolve_doula_poll(
     poll_id: str,
     db: Session = Depends(get_db),
+    world_clock: Clock = Depends(get_world_clock),
 ):
     """Mark a poll as resolved (outcome computed by the doula). Returns final vote tally."""
-    from datetime import timezone
-
     poll = db.query(DoulaPoll).filter(DoulaPoll.id == poll_id).first()
     if not poll:
         raise HTTPException(status_code=404, detail="Poll not found")
@@ -2760,7 +2789,7 @@ def resolve_doula_poll(
     static_votes = sum(1 for v in votes.values() if v == "STATIC")
     outcome = "static" if static_votes >= agent_votes else "agent"
 
-    poll.resolved_at = datetime.now(timezone.utc)
+    poll.resolved_at = world_clock.now()
     poll.outcome = outcome
     db.commit()
     return {

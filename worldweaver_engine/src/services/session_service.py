@@ -7,6 +7,7 @@ import logging
 import os
 import threading
 from contextlib import contextmanager
+from datetime import datetime
 from typing import Any, Dict, Iterable, cast
 
 from sqlalchemy.orm import Session
@@ -14,6 +15,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..models import SessionVars
 from .cache import TTLCacheMap
+from .clock import utc_naive
 from .state_manager import AdvancedStateManager
 
 logger = logging.getLogger(__name__)
@@ -160,7 +162,12 @@ def get_state_manager(session_id: str, db: Session) -> AdvancedStateManager:
     return manager
 
 
-def stage_state(state_manager: AdvancedStateManager, db: Session) -> SessionVars:
+def stage_state(
+    state_manager: AdvancedStateManager,
+    db: Session,
+    *,
+    now: datetime | None = None,
+) -> SessionVars:
     """Stage full session state inside the caller's current transaction."""
 
     session_id = state_manager.session_id
@@ -171,14 +178,21 @@ def stage_state(state_manager: AdvancedStateManager, db: Session) -> SessionVars
         db.add(row)
 
     row.vars = state_manager.export_state()  # type: ignore
+    if now is not None:
+        row.updated_at = utc_naive(now)
     db.flush()
     return row
 
 
-def save_state(state_manager: AdvancedStateManager, db: Session) -> None:
+def save_state(
+    state_manager: AdvancedStateManager,
+    db: Session,
+    *,
+    now: datetime | None = None,
+) -> None:
     """Persist full session state and commit immediately."""
 
-    stage_state(state_manager, db)
+    stage_state(state_manager, db, now=now)
     db.commit()
 
 

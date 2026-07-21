@@ -45,6 +45,10 @@ inputs in the identity loader; they do not restore the old ownership model.
 - A bounded one-resident run must retire its public city session and return to the hearth before releasing
   `runtime.lock`. Operational cleanup may park an existing session without running cognition; never leave
   a stopped process looking alive in the city roster.
+- Resident experience and world-side timestamps use the host's injected world clock. Production defaults to
+  real UTC; controlled gym activations pass their scheduled instant through normal core ticks and `LocalWorld`.
+  Do not move runtime leases, retry sleeps, process-duration bounds, certificate validity, request nonces, or
+  inference latency onto that controlled clock.
 - `scripts/familiar.py` is an operational adapter around `src.resident.Resident`, not another composition
   root. Portraits and smoke runners may observe ticks but must not instantiate their own resident core.
 - Durable observations and actions enter the append-only ledger. Runtime views are projections, not a

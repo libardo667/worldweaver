@@ -23,6 +23,7 @@ from ...services.consequence_objects import (
     place_durable_object,
     visible_durable_objects,
 )
+from ...services.clock import Clock, get_world_clock
 
 router = APIRouter(prefix="/world/objects", tags=["world objects"])
 
@@ -93,6 +94,7 @@ def place_world_object(
     payload: ObjectCommandRequest,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ) -> dict[str, Any]:
     """Place a carried object at the caller's exact current location."""
 
@@ -105,6 +107,7 @@ def place_world_object(
             session_id=payload.session_id,
             object_id=object_id,
             idempotency_key=payload.idempotency_key,
+            now=world_clock.now(),
         ).to_dict()
     except ConsequenceDomainError as exc:
         _raise_http(exc)
@@ -116,6 +119,7 @@ def pick_up_world_object(
     payload: ObjectCommandRequest,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ) -> dict[str, Any]:
     """Reclaim an object the same stable actor ordinarily placed here."""
 
@@ -128,6 +132,7 @@ def pick_up_world_object(
             session_id=payload.session_id,
             object_id=object_id,
             idempotency_key=payload.idempotency_key,
+            now=world_clock.now(),
         ).to_dict()
     except ConsequenceDomainError as exc:
         _raise_http(exc)
@@ -139,6 +144,7 @@ def give_world_object(
     payload: GiveObjectRequest,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ) -> dict[str, Any]:
     """Give a carried object to a stable actor at the same exact location."""
 
@@ -152,6 +158,7 @@ def give_world_object(
             recipient_session_id=payload.recipient_session_id,
             object_id=object_id,
             idempotency_key=payload.idempotency_key,
+            now=world_clock.now(),
         ).to_dict()
     except ConsequenceDomainError as exc:
         _raise_http(exc)

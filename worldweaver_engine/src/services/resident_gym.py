@@ -16,6 +16,7 @@ from typing import Any, Callable, Iterable
 from sqlalchemy.orm import Session
 
 from ..config import settings
+from ..models import LocationChat, SessionVars, WorldEvent, WorldFact, WorldProjection
 from .clock import (
     Clock,
     ControlledClock,
@@ -203,6 +204,7 @@ class GymEpisodeResult:
     world_id: str
     locations: tuple[str, ...]
     participants: tuple[GymParticipant, ...]
+    fidelity: "GymFidelityProfile"
     final_locations: dict[str, str]
     records: tuple[GymRecord, ...]
 
@@ -214,9 +216,25 @@ class GymEpisodeResult:
             "world_id": self.world_id,
             "locations": list(self.locations),
             "participants": [asdict(item) for item in self.participants],
+            "fidelity": asdict(self.fidelity),
             "final_locations": dict(self.final_locations),
             "records": [asdict(item) for item in self.records],
         }
+
+
+@dataclass(frozen=True, slots=True)
+class GymFidelityProfile:
+    """Machine-readable boundary on what one episode may claim to represent."""
+
+    engine_rules: str
+    world_state: str
+    resident_composition: str
+    participant_transport: str
+    resident_authorization: str
+    city_sources: str
+    world_time: str
+    hearth_attachment: str
+    federation: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -437,7 +455,7 @@ class ProductionRuleGym:
                 source="resident_gym",
             )
         )
-        save_state(host, self.db)
+        save_state(host, self.db, now=self.clock.now())
         self._locations = normalized
         self._record("world_arranged", detail={"locations": list(normalized)})
 
@@ -463,6 +481,7 @@ class ProductionRuleGym:
                 bootstrap_source="resident-gym",
                 entry_location=location,
             ),
+            now=self.clock.now(),
         )
         self._participants[participant.session_id] = participant
         self._participant_checkpoints[participant.session_id] = (
@@ -518,6 +537,25 @@ class ProductionRuleGym:
             return self._participants[session_id]
         except KeyError as exc:
             raise ValueError(f"unknown gym participant: {session_id}") from exc
+
+    def _participant_location(self, session_id: str) -> str:
+        """Read a live location or retain the last structural attachment location."""
+
+        if self.db.get(SessionVars, session_id) is not None:
+            return str(
+                get_state_manager(session_id, self.db).get_variable("location") or ""
+            )
+        participant = self._participant(session_id)
+        for record in reversed(self._records):
+            if record.actor == participant.display_name and record.location:
+                return str(record.location)
+        return ""
+
+    def place_names(self, session_id: str) -> tuple[str, ...]:
+        """Return the bounded scenario graph vocabulary to one joined participant."""
+
+        self._participant(session_id)
+        return self._locations
 
     def retire(self, session_id: str) -> None:
         """End one temporary presence without erasing its durable actor."""
@@ -741,6 +779,372 @@ class ProductionRuleGym:
         )
         return scene
 
+    def read_location_chat(
+        self,
+        session_id: str,
+        *,
+        location: str,
+    ) -> tuple[dict[str, Any], ...]:
+        """Read bounded exact-place speech for a participant adapter.
+
+        This mirrors the authenticated live HTTP representation while keeping the
+        isolated gym on its in-memory database.  It is a read, not signal-cursor
+        delivery; the reference core applies its own activation-time filtering.
+        """
+
+        participant = self._participant(session_id)
+        normalized_location = str(location or "").strip()
+        current_location = str(
+            get_state_manager(session_id, self.db).get_variable("location") or ""
+        ).strip()
+        if not normalized_location or normalized_location != current_location:
+            raise ValueError("participant may read chat only at its current location")
+        rows = list(
+            reversed(
+                self.db.query(LocationChat)
+                .filter(LocationChat.location == normalized_location)
+                .order_by(LocationChat.created_at.desc())
+                .limit(30)
+                .all()
+            )
+        )
+        session_ids = {
+            str(row.session_id or "").strip()
+            for row in rows
+            if str(row.session_id or "").strip()
+        }
+        actor_ids = {
+            str(row.session_id or "").strip(): str(row.actor_id or "").strip()
+            for row in self.db.query(SessionVars)
+            .filter(SessionVars.session_id.in_(session_ids))
+            .all()
+        }
+        messages = tuple(
+            {
+                "id": int(row.id),
+                "session_id": str(row.session_id or ""),
+                "actor_id": str(row.actor_id or actor_ids.get(row.session_id, "")),
+                "display_name": str(row.display_name or ""),
+                "message": str(row.message or ""),
+                "ts": row.created_at.isoformat() if row.created_at else "",
+                "location": normalized_location,
+            }
+            for row in rows
+        )
+        self._record(
+            "local_speech_read",
+            participant=participant,
+            location=normalized_location,
+            detail={"message_count": len(messages)},
+        )
+        return messages
+
+    def record_resident_boundary(
+        self,
+        session_id: str,
+        *,
+        kind: str,
+        detail: dict[str, Any] | None = None,
+    ) -> None:
+        """Record one content-safe child-process lifecycle boundary."""
+
+        allowed = {
+            "resident_host_started",
+            "resident_host_finished",
+            "resident_city_profile_loaded",
+            "resident_inference_started",
+            "resident_inference_finished",
+            "resident_hearth_observed",
+        }
+        if kind not in allowed:
+            raise ValueError("unsupported resident boundary record")
+        safe_detail = dict(detail or {})
+        if kind in {"resident_host_started", "resident_host_finished"}:
+            if safe_detail:
+                raise ValueError("resident host boundary must be content-free")
+        elif kind == "resident_city_profile_loaded":
+            if set(safe_detail) != {
+                "city_id",
+                "capability_ids",
+                "source_names",
+            }:
+                raise ValueError("resident city profile fields are invalid")
+            city_id = str(safe_detail.get("city_id") or "").strip()
+
+            def public_ids(field: str) -> list[str]:
+                raw = safe_detail.get(field)
+                if not isinstance(raw, list) or len(raw) > 32:
+                    raise ValueError("resident city profile IDs are invalid")
+                values = [str(item or "").strip() for item in raw]
+                if values != sorted(set(values)) or any(
+                    not value
+                    or len(value) > 80
+                    or any(
+                        character not in "abcdefghijklmnopqrstuvwxyz0123456789_.:-"
+                        for character in value
+                    )
+                    for value in values
+                ):
+                    raise ValueError("resident city profile IDs are invalid")
+                return values
+
+            if (
+                not city_id
+                or len(city_id) > 80
+                or any(
+                    character not in "abcdefghijklmnopqrstuvwxyz0123456789_.:-"
+                    for character in city_id
+                )
+            ):
+                raise ValueError("resident city profile city ID is invalid")
+            safe_detail = {
+                "city_id": city_id,
+                "capability_ids": public_ids("capability_ids"),
+                "source_names": public_ids("source_names"),
+            }
+        elif kind == "resident_hearth_observed":
+            if set(safe_detail) != {
+                "attachment",
+                "hosting_state",
+                "location",
+                "source_names",
+                "hour",
+                "day_of_week",
+                "time_of_day",
+                "observed_at",
+            }:
+                raise ValueError("resident hearth observation fields are invalid")
+            source_names = safe_detail.get("source_names")
+            hour = safe_detail.get("hour")
+            try:
+                observed_at = datetime.fromisoformat(
+                    str(safe_detail.get("observed_at") or "")
+                )
+            except ValueError as exc:
+                raise ValueError("resident hearth observation time is invalid") from exc
+            if (
+                safe_detail.get("attachment") != "hearth"
+                or safe_detail.get("hosting_state") != "hosted"
+                or not isinstance(source_names, list)
+                or source_names != sorted(set(source_names))
+                or any(
+                    not str(name or "").strip() or len(str(name)) > 80
+                    for name in source_names
+                )
+                or isinstance(hour, bool)
+                or not isinstance(hour, int)
+                or not 0 <= hour <= 23
+                or observed_at.tzinfo is None
+                or observed_at.astimezone(timezone.utc) != self.clock.now()
+            ):
+                raise ValueError("resident hearth observation is invalid")
+            location = str(safe_detail.get("location") or "").strip()
+            if not location or len(location) > 120:
+                raise ValueError("resident hearth location is invalid")
+            safe_detail = {
+                **safe_detail,
+                "location": location,
+                "source_names": [str(name) for name in source_names],
+                "observed_at": observed_at.astimezone(timezone.utc).isoformat(),
+            }
+        elif set(safe_detail) - {
+            "call_index",
+            "model_id",
+            "prompt_tokens",
+            "completion_tokens",
+        }:
+            raise ValueError("resident boundary detail is not content-safe")
+        participant = self._participant(session_id)
+        location = (
+            str(safe_detail["location"])
+            if kind == "resident_hearth_observed"
+            else self._participant_location(session_id)
+        )
+        self._record(
+            kind,
+            participant=participant,
+            location=location,
+            detail=safe_detail,
+        )
+
+    def record_resident_attachment_verified(
+        self,
+        session_id: str,
+        *,
+        attachment: str,
+        process_hosting_state: str,
+        active_city_session_count: int,
+    ) -> None:
+        """Record engine and private-checkpoint agreement after city retirement."""
+
+        participant = self._participant(session_id)
+        if (
+            attachment != "hearth"
+            or process_hosting_state != "suspended"
+            or active_city_session_count != 0
+        ):
+            raise ValueError("resident attachment verification failed")
+        self._record(
+            "resident_attachment_verified",
+            participant=participant,
+            location="the hearth",
+            detail={
+                "attachment": attachment,
+                "process_hosting_state": process_hosting_state,
+                "active_city_session_count": active_city_session_count,
+            },
+        )
+
+    def record_participant_http(
+        self,
+        session_id: str,
+        *,
+        method: str,
+        target: str,
+        status_code: int,
+        resident_proof: bool,
+        response_payload: Any = None,
+    ) -> None:
+        """Record a content-free request crossing the production HTTP boundary."""
+
+        participant = self._participant(session_id)
+        request_method = str(method or "").strip().upper()
+        path = str(target or "").partition("?")[0].strip()
+        status = int(status_code)
+        if request_method not in {"GET", "POST"} or not path.startswith("/"):
+            raise ValueError("gym participant HTTP receipt is invalid")
+        location = self._participant_location(session_id)
+        self._record(
+            "participant_http",
+            participant=participant,
+            location=location,
+            detail={
+                "method": request_method,
+                "path": path,
+                "status_code": status,
+                "resident_proof": bool(resident_proof),
+            },
+        )
+
+        if (
+            request_method == "GET"
+            and path == f"/api/world/scene/{session_id}"
+            and 200 <= status < 300
+            and isinstance(response_payload, dict)
+        ):
+            graph = response_payload.get("location_graph")
+            graph_payload = graph if isinstance(graph, dict) else {}
+            present = response_payload.get("present")
+            traces = response_payload.get("traces_here")
+            self._record(
+                "participant_scene_ready",
+                participant=participant,
+                location=str(response_payload.get("location") or location),
+                detail={
+                    "present_count": (len(present) if isinstance(present, list) else 0),
+                    "trace_count": len(traces) if isinstance(traces, list) else 0,
+                    "route_count": len(graph_payload.get("edges") or []),
+                    "place_count": len(graph_payload.get("nodes") or []),
+                },
+            )
+
+        if (
+            request_method == "POST"
+            and path == "/api/game/move"
+            and 200 <= status < 300
+            and isinstance(response_payload, dict)
+        ):
+            destination = str(response_payload.get("to_location") or "").strip()
+            origin = str(response_payload.get("from_location") or "").strip()
+            route = response_payload.get("route")
+            self._record(
+                "moved" if bool(response_payload.get("moved")) else "stayed",
+                participant=participant,
+                location=destination or location,
+                detail={
+                    "from": origin,
+                    "to": destination,
+                    "route": (
+                        [str(item) for item in route] if isinstance(route, list) else []
+                    ),
+                },
+            )
+
+    def audit_world_chronology(self) -> dict[str, Any]:
+        """Prove exercised persistent world rows use recorded gym instants."""
+
+        participant_ids = tuple(sorted(self._participants))
+        allowed = {
+            datetime.fromisoformat(record.occurred_at)
+            .astimezone(timezone.utc)
+            .replace(tzinfo=None)
+            for record in self._records
+        }
+        rows: list[tuple[str, datetime | None]] = []
+        rows.extend(
+            ("world_event", row.created_at)
+            for row in self.db.query(WorldEvent)
+            .filter(WorldEvent.session_id.in_(participant_ids))
+            .all()
+        )
+        rows.extend(
+            ("location_chat", row.created_at)
+            for row in self.db.query(LocationChat)
+            .filter(LocationChat.session_id.in_(participant_ids))
+            .all()
+        )
+        rows.extend(
+            ("session", row.updated_at)
+            for row in self.db.query(SessionVars)
+            .filter(
+                (SessionVars.session_id.in_(participant_ids))
+                | (SessionVars.session_id == self.world_id)
+            )
+            .all()
+        )
+        rows.extend(
+            ("world_fact", row.valid_from)
+            for row in self.db.query(WorldFact)
+            .filter(WorldFact.session_id.in_(participant_ids))
+            .all()
+        )
+        participant_event_ids = {
+            int(row.id)
+            for row in self.db.query(WorldEvent.id)
+            .filter(WorldEvent.session_id.in_(participant_ids))
+            .all()
+        }
+        rows.extend(
+            ("world_projection", row.updated_at)
+            for row in self.db.query(WorldProjection).all()
+            if int(row.source_event_id or 0) in participant_event_ids
+        )
+        missing = [kind for kind, value in rows if value is None]
+        off_clock = [
+            (kind, value.isoformat())
+            for kind, value in rows
+            if value is not None and value not in allowed
+        ]
+        if missing or off_clock:
+            raise RuntimeError(
+                "persistent world chronology escaped the gym clock: "
+                f"missing={missing!r} off_clock={off_clock!r}"
+            )
+
+        counts: dict[str, int] = {}
+        instants: set[str] = set()
+        for kind, value in rows:
+            counts[kind] = counts.get(kind, 0) + 1
+            if value is not None:
+                instants.add(value.replace(tzinfo=timezone.utc).isoformat())
+        detail = {
+            "row_counts": dict(sorted(counts.items())),
+            "instants": sorted(instants),
+            "off_clock_count": 0,
+        }
+        self._record("world_chronology_audited", detail=detail)
+        return detail
+
     def deliver_resident_return(
         self,
         event: ScheduledEvent,
@@ -814,7 +1218,7 @@ class ProductionRuleGym:
             )
         return result
 
-    def speak(self, session_id: str, message: str) -> None:
+    def speak(self, session_id: str, message: str) -> dict[str, Any]:
         """Speak through the production local-speech service."""
 
         participant = self._participant(session_id)
@@ -825,6 +1229,7 @@ class ProductionRuleGym:
             session_id=session_id,
             location=location,
             message=message,
+            now=self.clock.now(),
         )
         self._record(
             "spoke",
@@ -832,8 +1237,9 @@ class ProductionRuleGym:
             location=location,
             detail={"signal_id": receipt.id, "message": str(message).strip()},
         )
+        return receipt.as_payload()
 
-    def move(self, session_id: str, destination: str) -> None:
+    def move(self, session_id: str, destination: str) -> dict[str, Any]:
         """Move through the production route, access, state, and event rules."""
 
         participant = self._participant(session_id)
@@ -841,6 +1247,7 @@ class ProductionRuleGym:
             self.db,
             session_id=session_id,
             destination=destination,
+            now=self.clock.now(),
         )
         self._record(
             "moved" if receipt.moved else "stayed",
@@ -852,6 +1259,12 @@ class ProductionRuleGym:
                 "route": list(receipt.route),
             },
         )
+        return {
+            "moved": receipt.moved,
+            "from_location": receipt.from_location,
+            "to_location": receipt.to_location,
+            "route": list(receipt.route),
+        }
 
     def checkpoint(self) -> dict[str, Any]:
         """Capture one integrity-bound restart envelope for this synthetic run."""
@@ -1102,18 +1515,73 @@ class ProductionRuleGym:
         """Freeze the current structural episode record."""
 
         final_locations = {
-            participant.display_name: str(
-                get_state_manager(session_id, self.db).get_variable("location") or ""
-            )
+            participant.display_name: self._participant_location(session_id)
             for session_id, participant in self._participants.items()
         }
+        implementations = {
+            participant.implementation for participant in self._participants.values()
+        }
+        model_resident = "reference_resident_model" in implementations
+        reference_resident = model_resident or any(
+            implementation.startswith("reference_resident_")
+            for implementation in implementations
+        )
         return GymEpisodeResult(
             schema="worldweaver.resident-gym.episode",
-            schema_version=2,
+            schema_version=8,
             episode=self.episode,
             world_id=self.world_id,
             locations=self._locations,
             participants=tuple(self._participants.values()),
+            fidelity=GymFidelityProfile(
+                engine_rules=(
+                    "production_fastapi_routes_and_services"
+                    if model_resident
+                    else "production_services"
+                ),
+                world_state="synthetic_sqlite",
+                resident_composition=(
+                    "normal_resident_host_and_reference_core"
+                    if model_resident
+                    else (
+                        "shared_production_reference_core"
+                        if reference_resident
+                        else "not_exercised"
+                    )
+                ),
+                participant_transport=(
+                    "worldweaver_client_http_via_stdio"
+                    if model_resident
+                    else "direct_scenario_calls"
+                ),
+                resident_authorization=(
+                    "signed_runtime_certificate" if model_resident else "not_exercised"
+                ),
+                city_sources=(
+                    "node_published_then_local_world_registry"
+                    if model_resident
+                    else "not_exercised"
+                ),
+                world_time=(
+                    "controlled_clock_across_engine_and_resident_world_state"
+                    if model_resident and isinstance(self.clock, ControlledClock)
+                    else (
+                        "controlled_clock_in_exercised_production_services"
+                        if isinstance(self.clock, ControlledClock)
+                        else "system_utc"
+                    )
+                ),
+                hearth_attachment=(
+                    "local_world_city_to_hearth_restart"
+                    if model_resident
+                    else (
+                        "portable_artifact_only"
+                        if reference_resident
+                        else "not_exercised"
+                    )
+                ),
+                federation="not_exercised",
+            ),
             final_locations=final_locations,
             records=tuple(self._records),
         )
@@ -1230,12 +1698,13 @@ def prepare_quiet_interval(
     *,
     record_observer: Callable[[GymRecord], None] | None = None,
     mara_implementation: str = "scripted_actor",
+    episode: str = "The Long Afternoon",
 ) -> ProductionRuleGym:
     """Arrange the quiet-interval episode and leave its future work pending."""
 
     gym = ProductionRuleGym(
         db,
-        episode="The Long Afternoon",
+        episode=episode,
         world_id="gym-long-afternoon-world",
         clock=ControlledClock(datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc)),
         record_observer=record_observer,

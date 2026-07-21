@@ -68,6 +68,32 @@ passes a scene built by the same service as the live scene API, deliberately los
 acknowledgement, and verifies that the retry performs zero additional model calls. The fixture model always
 chooses `wait`; this is a restart and custody test, not evidence of resident capability.
 
+The model-backed gym path extends that boundary with a generic versioned stdio byte transport. A separate child
+process runs the normal `Resident` host, an OpenAI-compatible model client, and the ordinary signed
+`WorldWeaverClient`; its exact HTTP requests return to the parent and enter the actual FastAPI application over
+the synthetic gym database. The host takes and releases the synthetic hearth's normal exclusive lease, resumes
+the bound city session, reads the node's public experience and city-pack profile, and constructs the same city
+source registry as an ordinary resident. The child never owns the engine database, and the structural stream carries
+inference boundaries and aggregate usage rather than
+prompts, completions, elective queries, or private source results. After activation, the stopped synthetic
+hearth is exported again so a later gym checkpoint binds the state that actually produced the result. The
+deterministic model proof now requests travel home, crosses the signed city leave route, and restarts in a
+second child process at the real `LocalWorld` attachment. That restart observes only the hearth registry and
+does not spend another model call.
+
+The stdio hop is process transport, not a second world API or resident composition root. A bounded scheduled
+return method on `Resident` owns the exact appointment, process interval, attachment wrapper, core, and custody
+release. The model gym exercises normal HTTP resident proof, including shard discovery,
+runtime-certificate signing, city admission, generation/session binding, verification, and nonce consumption.
+It now exercises both the node-published commons source registry and its replacement by the private hearth
+registry after confirmed departure. It still does not enable optional constructive-game capabilities, contact
+federation, or cross a listening network socket; its episode fidelity metadata names those gaps.
+
+Resident world time is explicit at the host boundary. Production hosts default to real UTC. A controlled gym
+activation injects the same world instant into normal reference-core ticks and `LocalWorld` grounding, whisper
+freshness, scene events, private reads, and voice records. Runtime leases, retry sleeps, certificate validity,
+request nonces, inference latency, and measured process duration retain their real or monotonic clocks.
+
 Each model activation is also tied to structural versions of what the resident was shown and the private
 checkpoint state it began from. After the final model response, the adapter checks the current place and
 checkpoint again. A changed location, presence set, new speech ID, trace set, route, source declaration, or

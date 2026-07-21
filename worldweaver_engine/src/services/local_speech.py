@@ -7,11 +7,13 @@ from __future__ import annotations
 
 import re
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from ..models import LocationChat, SessionVars
+from .clock import utc_naive
 from .event_submission import WorldEventCommand, submit_world_event
 from .live_signals import notify_live_signal
 from .world_memory import EVENT_TYPE_UTTERANCE
@@ -104,6 +106,7 @@ def post_local_speech(
     session_id: str,
     location: str,
     message: str,
+    now: datetime | None = None,
 ) -> LocalSpeechReceipt:
     """Record one public utterance and its world-memory consequences together."""
 
@@ -164,6 +167,7 @@ def post_local_speech(
         or None,
         display_name=display_name,
         message=normalized_message,
+        created_at=utc_naive(now) if now is not None else None,
     )
     summary = f"{display_name} said: {normalized_message}"
 
@@ -185,6 +189,7 @@ def post_local_speech(
                 metadata={"surface": "chat", "channel": session_location},
                 preserve_event_type=True,
                 defer_commit=True,
+                occurred_at=now,
             ),
         )
         db.commit()

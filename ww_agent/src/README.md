@@ -5,11 +5,18 @@
   hearth attachment. It owns confirmed city departure, core rebuild, fresh city return, durable city-signal
   waiting and session-bound cursor restoration, keeper-whisper wake signals, optional tick-count or elapsed-time
   bounds, and read-only observers used by operational surfaces. Cursor delivery is passed to the core without
-  being converted into a forced activation. A time-bound host run changes no cognitive clock; the core keeps
-  and checkpoints its own cadence. Before constructing a core it binds the private checkpoint to the loaded
-  actor, authoritative hearth generation, current attachment (including an unfinished city handoff), adapter,
+  being converted into a forced activation. The host supplies an explicit world clock to normal core ticks and
+  `LocalWorld`; production defaults to real UTC and controlled gym activations inject their scheduled instant.
+  Elapsed process bounds and waits remain monotonic or real. Before constructing a core it binds the private
+  checkpoint to the loaded actor, authoritative hearth generation, current attachment (including an unfinished
+  city handoff), adapter,
   and selected model. A checkpoint for a
-  different actor or hearth, or a newer generation than the active hearth, fails closed.
+  different actor or hearth, or a newer generation than the active hearth, fails closed. Its
+  `build_reference_core` function is the single composition seam for the core, effector, information access,
+  and workshop after a host has established and bound an attachment. `run_scheduled_return` owns a bounded,
+  exact host-offered appointment with the same process lifecycle, attachment wrapper, optional transition, and
+  custody release as a normal hosted run; the isolated gym enters through that host method rather than calling
+  the core directly.
 - `runtime/reference_core.py` — production resident loop. It observes current-place facts, accepts a
   cursor-delivered local-speech batch without fetching it again, activates on a new local signal or slow
   baseline, permits one elective read, and accepts one final action, private continuation, or wait choice. A
@@ -26,13 +33,18 @@
   deterministic one-open-activity transition used by ledger replay and normal checkpoint advancement. It also
   defines the process-envelope schema and projects its content-blind city-event cursor. The current stateless
   adapter declares a zero-byte `none` model-state format.
+- `runtime/world_clock.py` — the resident-side world-time contract. It separates controlled experience and
+  action time from operational clocks used for leases, sleeps, security, latency, and process duration.
 - `runtime/private_artifact.py` — the process-boundary adapter used by the synthetic gym. It describes an
   existing portable hearth package without exposing its path or contents, verifies exact bytes before
   extraction, rebuilds derived state from the private ledger in staging, and installs only after actor,
   hearth generation, attachment, session, adapter, and model all match. Its restore report contains no private
   activity prose.
-- `world/client.py` — the live HTTP client and the transport-free gym adapter share one factual scene parser,
-  so a separate-process restart cannot silently reinterpret the engine's scene shape.
+- `world/client.py` — the live resident and the separate-process model gym use the same HTTP client, response
+  parsers, shard discovery, and request signing. The gym's versioned stdio protocol carries the client's exact
+  HTTP bytes to the actual FastAPI application over the parent-owned synthetic database; it is transport, not
+  another world-rule implementation. The normal resident host reads the public shard experience and city-pack
+  preview through this client before constructing its city information-source registry.
 - `runtime/cognitive_core.py` — audited predecessor. It is not constructed by the resident host; keep it only
   as comparison and selective migration material until its remaining useful contracts are separated.
 - `runtime/ledger.py` — append-only event history and a versioned current-state checkpoint. Major 137 is

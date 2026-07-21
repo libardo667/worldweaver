@@ -39,6 +39,7 @@ from src.runtime.information import (
     resident_information_sources,
 )
 from src.runtime.travel import TravelRequest, parse_world_travel
+from src.runtime.world_clock import SystemWorldClock, WorldClock
 from src.world.client import WorldAffordance
 
 _READ_RX = re.compile(
@@ -114,12 +115,8 @@ class _Person:
 
 
 class _Event:
-    def __init__(self, who: str, summary: str) -> None:
-        self.who, self.summary, self.ts = (
-            who,
-            summary,
-            datetime.now(timezone.utc).isoformat(),
-        )
+    def __init__(self, who: str, summary: str, ts: str) -> None:
+        self.who, self.summary, self.ts = who, summary, ts
 
 
 class _Chat:
@@ -177,6 +174,7 @@ class LocalWorld:
         gifts_enabled: bool = False,
         city_names: set[str] | None = None,
         identity: ResidentIdentity | None = None,
+        world_clock: WorldClock | None = None,
     ) -> None:
         self.home_dir = Path(home_dir)
         self.home_dir.mkdir(parents=True, exist_ok=True)
@@ -203,6 +201,7 @@ class LocalWorld:
             if str(name).strip()
         }
         self._identity = identity
+        self._world_clock = world_clock or SystemWorldClock()
         self._pending_travel: TravelRequest | None = None
         self._reads: list[dict[str, Any]] = []
         self._weather = weather_provider
@@ -254,9 +253,11 @@ class LocalWorld:
 
     # --- time ------------------------------------------------------------
 
-    @staticmethod
-    def _now_local() -> datetime:
-        return datetime.now().astimezone()
+    def _now_local(self) -> datetime:
+        return self._world_clock.now().astimezone()
+
+    def _now_utc(self) -> datetime:
+        return self._world_clock.now().astimezone(timezone.utc)
 
     async def get_grounding(self) -> dict[str, Any]:
         now = self._now_local()
@@ -324,7 +325,13 @@ class LocalWorld:
         recent = []
         if whispers:
             latest = whispers[-1]["text"]
-            recent = [_Event(self.keeper_name, f'just said to you: "{latest[:80]}"')]
+            recent = [
+                _Event(
+                    self.keeper_name,
+                    f'just said to you: "{latest[:80]}"',
+                    self._now_utc().isoformat(),
+                )
+            ]
         # Read capability: advertise providers from the same registry contract the city
         # uses. A read result returns inside this ignition and is never a recent event.
         affordances = [
@@ -412,6 +419,12 @@ class LocalWorld:
             ]
         )
         return InformationSourceRegistry(sources)
+
+    @property
+    def information_source_names(self) -> tuple[str, ...]:
+        """Return the private names advertised by this hearth attachment."""
+
+        return tuple(self.information_sources().names)
 
     def _gift_deliveries(self) -> list[dict[str, str]]:
         """Read valid append-only gift notices without turning them into scene events."""
@@ -567,7 +580,7 @@ class LocalWorld:
 
     def _record_voice(self, kind: str, text: str) -> None:
         entry = {
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": self._now_utc().isoformat(),
             "kind": kind,
             "text": text,
         }
@@ -683,7 +696,7 @@ class LocalWorld:
                 media["data"],
                 want_images=self._vision,
             )
-            now = datetime.now(timezone.utc).isoformat()
+            now = self._now_utc().isoformat()
             content = "\n\n".join(
                 part
                 for part in (
@@ -732,7 +745,7 @@ class LocalWorld:
             )
             if alt.get("ok"):
                 path, result = raw.lstrip("/"), alt
-        now = datetime.now(timezone.utc).isoformat()
+        now = self._now_utc().isoformat()
         if result.get("ok"):
             content = str(result.get("content") or "")
             total = int(result.get("bytes_total") or len(content))

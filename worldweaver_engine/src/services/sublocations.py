@@ -158,6 +158,36 @@ def resolve_active_sublocation(
     return None
 
 
+def resolve_sublocation(
+    db: Session,
+    *,
+    label: str,
+    parent_location: str,
+) -> WorldNode | None:
+    """Resolve a child place regardless of lifetime for stale-route detection."""
+
+    target = re.sub(r"\s+", " ", str(label or "").strip()).lower()
+    if not target:
+        return None
+    rows = (
+        db.query(WorldNode)
+        .filter(WorldNode.node_type == NODE_TYPE_SUBLOCATION)
+        .order_by(WorldNode.id.asc())
+        .all()
+    )
+    for row in rows:
+        metadata = dict(row.metadata_json or {})
+        if str(metadata.get("parent_location") or "") != str(parent_location):
+            continue
+        labels = {
+            str(row.name or "").strip().lower(),
+            str(metadata.get("label") or "").strip().lower(),
+        }
+        if target in labels:
+            return row
+    return None
+
+
 def create_or_refresh_ephemeral(
     db: Session,
     *,

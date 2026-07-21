@@ -16,6 +16,7 @@ from ...services.actor_authority import (
     get_request_actor_credentials,
 )
 from ...services.consequence_objects import ConsequenceDomainError
+from ...services.clock import Clock, get_world_clock
 from ...services.object_exchange import (
     accept_object_exchange,
     cancel_object_exchange,
@@ -71,6 +72,7 @@ def post_object_exchange_offer(
     payload: ExchangeOfferRequest,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ) -> dict[str, Any]:
     """Offer one currently held object for one held by a present person."""
 
@@ -85,6 +87,7 @@ def post_object_exchange_offer(
             offered_object_id=payload.offered_object_id,
             requested_object_id=payload.requested_object_id,
             idempotency_key=payload.idempotency_key,
+            now=world_clock.now(),
         )
     except ConsequenceDomainError as exc:
         _raise_http(exc)
@@ -96,6 +99,7 @@ def post_object_exchange_acceptance(
     payload: ExchangeCommandRequest,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ) -> dict[str, Any]:
     """Accept exact terms and atomically swap both objects if still possible."""
 
@@ -108,6 +112,7 @@ def post_object_exchange_acceptance(
             session_id=payload.session_id,
             exchange_id=exchange_id,
             idempotency_key=payload.idempotency_key,
+            now=world_clock.now(),
         )
     except ConsequenceDomainError as exc:
         _raise_http(exc)
@@ -119,6 +124,7 @@ def post_object_exchange_decline(
     payload: ExchangeCommandRequest,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ) -> dict[str, Any]:
     """Decline exact terms without moving either object."""
 
@@ -131,6 +137,7 @@ def post_object_exchange_decline(
             session_id=payload.session_id,
             exchange_id=exchange_id,
             idempotency_key=payload.idempotency_key,
+            now=world_clock.now(),
         )
     except ConsequenceDomainError as exc:
         _raise_http(exc)
@@ -142,6 +149,7 @@ def post_object_exchange_cancellation(
     payload: ExchangeCommandRequest,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ) -> dict[str, Any]:
     """Cancel an open proposal without moving either object."""
 
@@ -154,6 +162,7 @@ def post_object_exchange_cancellation(
             session_id=payload.session_id,
             exchange_id=exchange_id,
             idempotency_key=payload.idempotency_key,
+            now=world_clock.now(),
         )
     except ConsequenceDomainError as exc:
         _raise_http(exc)

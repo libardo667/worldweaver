@@ -32,9 +32,19 @@ _ICONS = {
     "scheduled_event_offered": "🔔",
     "scheduled_event_acknowledged": "✅",
     "observation_ready": "👁️",
+    "participant_scene_ready": "🔭",
     "resident_activation_started": "⚙️",
     "resident_activation_finished": "🕯️",
     "resident_activation_interrupted": "⛔",
+    "resident_host_started": "🔐",
+    "resident_host_finished": "🔒",
+    "resident_city_profile_loaded": "🏛️",
+    "resident_attachment_verified": "🏠",
+    "resident_hearth_observed": "🔥",
+    "resident_inference_started": "🧠",
+    "resident_inference_finished": "💭",
+    "participant_http": "↔",
+    "world_chronology_audited": "⏱️",
 }
 
 
@@ -43,6 +53,8 @@ def _participant_marker(implementation: str) -> str:
         return "⚙"
     if implementation == "reference_resident_scripted_wait":
         return "🕯"
+    if implementation == "reference_resident_model":
+        return "🧠"
     return "◆"
 
 
@@ -55,6 +67,8 @@ def _participant_legend(result: GymEpisodeResult) -> str:
         entries.append("⚙ mechanical baseline")
     if "reference_resident_scripted_wait" in implementations:
         entries.append("🕯 reference resident + scripted wait model")
+    if "reference_resident_model" in implementations:
+        entries.append("🧠 normally hosted model-backed reference resident")
     return "   ".join(entries)
 
 
@@ -157,6 +171,57 @@ def _record_sentence(record: GymRecord) -> str:
         return (
             f"{actor}'s resident process was interrupted before the queue "
             "acknowledged its return."
+        )
+    if record.kind == "resident_host_started":
+        return f"{actor}'s normal resident host took custody at {record.location}."
+    if record.kind == "resident_host_finished":
+        return f"{actor}'s normal resident host suspended cleanly at {record.location}."
+    if record.kind == "resident_city_profile_loaded":
+        sources = ", ".join(str(item) for item in detail.get("source_names") or [])
+        capabilities = detail.get("capability_ids") or []
+        return (
+            f"{actor}'s host loaded {detail.get('city_id') or 'the node'} with "
+            f"{len(capabilities)} optional capability(s); sources: {sources or 'none'}."
+        )
+    if record.kind == "resident_attachment_verified":
+        return (
+            f"{actor}'s city session was retired and the stopped process checkpoint "
+            "named only the private hearth attachment."
+        )
+    if record.kind == "resident_hearth_observed":
+        sources = ", ".join(str(item) for item in detail.get("source_names") or [])
+        return (
+            f"{actor}'s restarted host observed {record.location} at "
+            f"{detail.get('time_of_day') or 'an unnamed time'}; private sources: "
+            f"{sources or 'none'}."
+        )
+    if record.kind == "resident_inference_started":
+        return (
+            f"{actor}'s model call {detail.get('call_index', 0)} began "
+            f"on {detail.get('model_id') or 'the configured model'}."
+        )
+    if record.kind == "resident_inference_finished":
+        return (
+            f"{actor}'s model call {detail.get('call_index', 0)} finished "
+            f"({detail.get('prompt_tokens', 0)} prompt, "
+            f"{detail.get('completion_tokens', 0)} completion tokens total)."
+        )
+    if record.kind == "participant_http":
+        proof = "signed resident proof" if detail.get("resident_proof") else "public"
+        return (
+            f"{actor}'s client received HTTP {detail.get('status_code')} for "
+            f"{detail.get('method')} {detail.get('path')} ({proof})."
+        )
+    if record.kind == "participant_scene_ready":
+        return (
+            f"{actor}'s HTTP scene exposed {detail.get('place_count', 0)} places, "
+            f"{detail.get('present_count', 0)} others, and "
+            f"{detail.get('trace_count', 0)} public traces at {record.location}."
+        )
+    if record.kind == "world_chronology_audited":
+        return (
+            "The exercised persistent world chronology matched the controlled "
+            f"clock across {sum(detail.get('row_counts', {}).values())} rows."
         )
     return f"{actor}: {record.kind.replace('_', ' ')}"
 

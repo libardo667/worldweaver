@@ -19,6 +19,7 @@ from ..models import (
     WorldNode,
     WorldStoop,
 )
+from .clock import utc_naive
 from .consequence_objects import (
     ActorContext,
     ConsequenceDomainError,
@@ -37,8 +38,12 @@ from .shard_experience import GameCapability
 _STOOP_ID_RE = re.compile(r"^[a-z0-9]+(?:[._-][a-z0-9]+)*$")
 
 
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+def _utcnow(now: datetime | None = None) -> datetime:
+    return (
+        utc_naive(now)
+        if now is not None
+        else datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
 
 def _require_stoop_capabilities() -> None:
@@ -392,6 +397,7 @@ def _finish(
     stoop_payload: dict[str, Any],
     entry_payload: dict[str, Any],
     summary: str,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     event = submit_world_event(
         db,
@@ -406,6 +412,7 @@ def _finish(
             skip_projection=True,
             preserve_event_type=True,
             defer_commit=True,
+            occurred_at=now,
         ),
     )
     receipt = StoopReceipt(
@@ -416,6 +423,7 @@ def _finish(
         entry_id=str(entry.entry_id),
         world_event_id=event.event_id,
         payload_json={"stoop": stoop_payload, "entry": entry_payload},
+        created_at=_utcnow(now),
     )
     db.add(receipt)
     db.commit()
@@ -453,6 +461,7 @@ def leave_object_on_stoop(
     stoop_id: str,
     object_id: str,
     idempotency_key: str,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     """Voluntarily make one held object available to any later visitor."""
 
@@ -504,12 +513,14 @@ def leave_object_on_stoop(
         object_row.location = str(stoop.location)
         object_row.placed_by_actor_id = None
         object_row.revision = int(object_row.revision or 1) + 1
+        object_row.updated_at = _utcnow(now)
         entry = StoopObjectEntry(
             stoop_id=str(stoop.stoop_id),
             object_id=str(object_row.object_id),
             left_by_actor_id=context.actor_id,
             status="active",
             object_revision_at_leave=int(object_row.revision),
+            created_at=_utcnow(now),
         )
         db.add(entry)
         db.flush()
@@ -526,6 +537,7 @@ def leave_object_on_stoop(
             stoop_payload=stoop_payload,
             entry_payload=entry_payload,
             summary=f"{object_row.name} is left on {stoop.title} for someone to take.",
+            now=now,
         )
     except IntegrityError:
         return _recover_duplicate(
@@ -546,6 +558,7 @@ def _resolve_stoop_entry(
     entry_id: str,
     idempotency_key: str,
     resolution: str,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     _require_stoop_capabilities()
     context = consequence_actor_context(db, session_id)
@@ -601,9 +614,10 @@ def _resolve_stoop_entry(
         object_row.location = None
         object_row.placed_by_actor_id = None
         object_row.revision = int(object_row.revision or 1) + 1
+        object_row.updated_at = _utcnow(now)
         entry.status = resolution
         entry.taken_by_actor_id = context.actor_id if resolution == "taken" else None
-        entry.resolved_at = _utcnow()
+        entry.resolved_at = _utcnow(now)
         db.flush()
         active_count = _active_count(db, str(stoop.stoop_id))
         stoop_payload = _stoop_payload(stoop, active_count=active_count)
@@ -620,6 +634,7 @@ def _resolve_stoop_entry(
             stoop_payload=stoop_payload,
             entry_payload=entry_payload,
             summary=f"{object_row.name} is {verb} {stoop.title}.",
+            now=now,
         )
     except IntegrityError:
         return _recover_duplicate(
@@ -640,6 +655,7 @@ def take_stoop_object(
     session_id: str,
     entry_id: str,
     idempotency_key: str,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     return _resolve_stoop_entry(
         db,
@@ -647,6 +663,7 @@ def take_stoop_object(
         entry_id=entry_id,
         idempotency_key=idempotency_key,
         resolution="taken",
+        now=now,
     )
 
 
@@ -656,6 +673,7 @@ def withdraw_stoop_object(
     session_id: str,
     entry_id: str,
     idempotency_key: str,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     return _resolve_stoop_entry(
         db,
@@ -663,4 +681,5 @@ def withdraw_stoop_object(
         entry_id=entry_id,
         idempotency_key=idempotency_key,
         resolution="withdrawn",
+        now=now,
     )

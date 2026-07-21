@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Mapping
 
 from sqlalchemy import or_
@@ -20,6 +21,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import ConsequenceReceipt, DurableObject, SessionVars, StoopObjectEntry
+from .clock import utc_naive
 from .event_submission import (
     WorldEventCommand,
     structural_event_idempotency_key,
@@ -251,7 +253,13 @@ def _complete_consequence(
     summary: str,
     details: Mapping[str, Any],
     provenance_event: bool = False,
+    now: datetime | None = None,
 ) -> ConsequenceResult:
+    if now is not None:
+        current = utc_naive(now)
+        if object_row.created_at is None:
+            object_row.created_at = current
+        object_row.updated_at = current
     event_receipt = submit_world_event(
         db,
         WorldEventCommand(
@@ -276,6 +284,7 @@ def _complete_consequence(
             skip_projection=True,
             preserve_event_type=True,
             defer_commit=True,
+            occurred_at=now,
         ),
     )
     if provenance_event:
@@ -295,6 +304,7 @@ def _complete_consequence(
             "after": after,
             "details": dict(details),
         },
+        created_at=utc_naive(now) if now is not None else None,
     )
     db.add(receipt)
     db.commit()
@@ -336,6 +346,7 @@ def found_durable_object(
     object_kind: str,
     provenance_ref: str,
     properties: Mapping[str, Any] | None = None,
+    now: datetime | None = None,
 ) -> ConsequenceResult:
     """Create one shard-founded object for seeding and later recipe output.
 
@@ -401,6 +412,7 @@ def found_durable_object(
             summary=f"{safe_name} becomes a durable part of this shard.",
             details={"to_actor_id": context.actor_id, "provenance_ref": safe_ref},
             provenance_event=True,
+            now=now,
         )
     except IntegrityError:
         return _recover_duplicate(
@@ -420,6 +432,7 @@ def place_durable_object(
     session_id: str,
     object_id: str,
     idempotency_key: str,
+    now: datetime | None = None,
 ) -> ConsequenceResult:
     _require_capabilities(
         GameCapability.DURABLE_OBJECTS, GameCapability.CUSTODY, GameCapability.PLACEMENT
@@ -470,6 +483,7 @@ def place_durable_object(
                 "from_actor_id": context.actor_id,
                 "to_location": context.location,
             },
+            now=now,
         )
     except IntegrityError:
         return _recover_duplicate(
@@ -490,6 +504,7 @@ def pick_up_durable_object(
     session_id: str,
     object_id: str,
     idempotency_key: str,
+    now: datetime | None = None,
 ) -> ConsequenceResult:
     """Return an ordinarily placed object to the actor who put it down."""
 
@@ -551,6 +566,7 @@ def pick_up_durable_object(
                 "from_location": context.location,
                 "to_actor_id": context.actor_id,
             },
+            now=now,
         )
     except IntegrityError:
         return _recover_duplicate(
@@ -572,6 +588,7 @@ def give_durable_object(
     recipient_session_id: str,
     object_id: str,
     idempotency_key: str,
+    now: datetime | None = None,
 ) -> ConsequenceResult:
     _require_capabilities(
         GameCapability.DURABLE_OBJECTS,
@@ -634,6 +651,7 @@ def give_durable_object(
                 "to_actor_id": recipient.actor_id,
                 "location": context.location,
             },
+            now=now,
         )
     except IntegrityError:
         return _recover_duplicate(

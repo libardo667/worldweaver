@@ -283,7 +283,7 @@ def get_sf_news(max_items: int = 5) -> list[dict]:
     return _news_cache
 
 
-def get_city_time_context(city_id: str) -> dict:
+def get_city_time_context(city_id: str, *, now: datetime | None = None) -> dict:
     """Return current local time and honest weather for one city pack."""
     manifest, weather_config = _city_config(city_id)
     timezone_name = str(weather_config.get("timezone") or "UTC")
@@ -292,11 +292,15 @@ def get_city_time_context(city_id: str) -> dict:
     except Exception:
         city_timezone = ZoneInfo("UTC")
         timezone_name = "UTC"
-    now = datetime.now(city_timezone)
-    hour = now.hour
-    minute = now.minute
-    month = now.month
-    day = now.day
+    current = (
+        now.astimezone(city_timezone)
+        if now is not None
+        else datetime.now(city_timezone)
+    )
+    hour = current.hour
+    minute = current.minute
+    month = current.month
+    day = current.day
 
     # Derive time-of-day bucket
     if 5 <= hour < 12:
@@ -321,8 +325,8 @@ def get_city_time_context(city_id: str) -> dict:
     # Human-readable datetime string — portable across OS
     hour_12 = hour % 12 or 12
     ampm = "AM" if hour < 12 else "PM"
-    month_name = now.strftime("%B")
-    day_name = now.strftime("%A")
+    month_name = current.strftime("%B")
+    day_name = current.strftime("%A")
     datetime_str = f"{day_name}, {month_name} {day} at {hour_12}:{minute:02d} {ampm}"
 
     weather = get_city_weather(city_id)

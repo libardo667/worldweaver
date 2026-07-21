@@ -13,6 +13,7 @@ from src.api.game.world import (
 )
 from src.api.game.state import _delete_all_world_rows
 from src.models import SessionVars, WorldEvent, WorldTrace
+from src.services.clock import SystemClock
 
 
 def _session(session_id: str, location: str = "Chinatown") -> SessionVars:
@@ -36,6 +37,7 @@ def test_trace_derives_author_and_location_without_entering_event_feed(db_sessio
             target="the bakery lintel",
         ),
         db_session,
+        world_clock=SystemClock(),
     )
 
     trace = receipt["trace"]
@@ -51,9 +53,16 @@ def test_trace_derives_author_and_location_without_entering_event_feed(db_sessio
     assert trace["selection_mode"] == "embodied_local"
     assert db_session.query(WorldEvent).count() == 0
 
-    scene = get_agent_scene(viewer_id, db_session)
+    scene = get_agent_scene(viewer_id, db_session, world_clock=SystemClock())
     assert scene["traces_here"] == [trace]
-    assert get_agent_scene(author_id, db_session)["traces_here"] == []
+    assert (
+        get_agent_scene(
+            author_id,
+            db_session,
+            world_clock=SystemClock(),
+        )["traces_here"]
+        == []
+    )
 
 
 def test_human_trace_view_uses_the_same_local_marks_without_session_ids(
@@ -105,6 +114,7 @@ def test_trace_visibility_is_location_bounded_and_expiry_bounded(db_session):
             session_id=author_id, body="a paper crane", target="the sill"
         ),
         db_session,
+        world_clock=SystemClock(),
     )
 
     assert (
@@ -147,6 +157,7 @@ def test_trace_requires_canonical_session_location(db_session):
         post_world_trace(
             LeaveWorldTraceRequest(session_id=session_id, body="a mark"),
             db_session,
+            world_clock=SystemClock(),
         )
 
     assert exc_info.value.status_code == 409
@@ -160,6 +171,7 @@ def test_hard_world_reset_clears_trace_store(db_session):
     post_world_trace(
         LeaveWorldTraceRequest(session_id=session_id, body="a temporary chalk spiral"),
         db_session,
+        world_clock=SystemClock(),
     )
 
     receipt = _delete_all_world_rows(db_session)

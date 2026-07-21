@@ -15,6 +15,7 @@ from ...services.actor_authority import (
     authorize_bound_session_actor_http,
     get_request_actor_credentials,
 )
+from ...services.clock import Clock, get_world_clock
 from ...services.space_access import (
     SpaceAccessError,
     access_status,
@@ -108,6 +109,7 @@ def post_access_request(
     payload: AccessRequestCommand,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ) -> dict[str, Any]:
     """Ask to enter a requestable place without generating a scene prompt."""
 
@@ -121,6 +123,7 @@ def post_access_request(
             location=payload.location,
             idempotency_key=payload.idempotency_key,
             note=payload.note,
+            now=world_clock.now(),
         )
     except SpaceAccessError as exc:
         _raise_http(exc)
@@ -132,6 +135,7 @@ def post_resolve_access_request(
     payload: ResolveRequestCommand,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ) -> dict[str, Any]:
     """Admit or decline one pending request as the place controller."""
 
@@ -145,6 +149,7 @@ def post_resolve_access_request(
             request_id=request_id,
             decision=payload.decision,
             idempotency_key=payload.idempotency_key,
+            now=world_clock.now(),
         )
     except SpaceAccessError as exc:
         _raise_http(exc)
@@ -155,6 +160,7 @@ def post_space_invitation(
     payload: AdmissionCommand,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ) -> dict[str, Any]:
     """Explicitly admit one stable actor to a controlled place."""
 
@@ -168,6 +174,7 @@ def post_space_invitation(
             recipient_session_id=payload.recipient_session_id,
             location=payload.location,
             idempotency_key=payload.idempotency_key,
+            now=world_clock.now(),
         )
     except SpaceAccessError as exc:
         _raise_http(exc)
@@ -178,6 +185,7 @@ def post_space_access_revocation(
     payload: AdmissionCommand,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ) -> dict[str, Any]:
     """End one actor's future entry without ejecting or trapping anyone."""
 
@@ -191,6 +199,7 @@ def post_space_access_revocation(
             recipient_session_id=payload.recipient_session_id,
             location=payload.location,
             idempotency_key=payload.idempotency_key,
+            now=world_clock.now(),
         )
     except SpaceAccessError as exc:
         _raise_http(exc)
@@ -201,6 +210,7 @@ def post_space_mode(
     payload: SpaceModeCommand,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ) -> dict[str, Any]:
     """Open, make requestable/private, or close one controlled place."""
 
@@ -215,6 +225,7 @@ def post_space_mode(
             mode=payload.mode,
             idempotency_key=payload.idempotency_key,
             note=payload.note,
+            now=world_clock.now(),
         )
     except SpaceAccessError as exc:
         _raise_http(exc)

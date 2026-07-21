@@ -16,6 +16,7 @@ from ...services.actor_authority import (
     get_request_actor_credentials,
 )
 from ...services.consequence_objects import ConsequenceDomainError
+from ...services.clock import Clock, get_world_clock
 from ...services.world_stoops import (
     browse_world_stoop,
     browse_world_stoop_at,
@@ -110,6 +111,7 @@ def post_leave_stoop_object(
     payload: LeaveStoopObjectRequest,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ) -> dict[str, Any]:
     """Voluntarily leave one held object for any later visitor to take."""
 
@@ -123,6 +125,7 @@ def post_leave_stoop_object(
             stoop_id=stoop_id,
             object_id=payload.object_id,
             idempotency_key=payload.idempotency_key,
+            now=world_clock.now(),
         )
     except ConsequenceDomainError as exc:
         _raise_http(exc)
@@ -134,6 +137,7 @@ def post_take_stoop_object(
     payload: StoopCommandRequest,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ) -> dict[str, Any]:
     """Take one available object, atomically retiring its stoop entry."""
 
@@ -146,6 +150,7 @@ def post_take_stoop_object(
             session_id=payload.session_id,
             entry_id=entry_id,
             idempotency_key=payload.idempotency_key,
+            now=world_clock.now(),
         )
     except ConsequenceDomainError as exc:
         _raise_http(exc)
@@ -157,6 +162,7 @@ def post_withdraw_stoop_object(
     payload: StoopCommandRequest,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ) -> dict[str, Any]:
     """Let the original depositor reclaim an entry that remains available."""
 
@@ -169,6 +175,7 @@ def post_withdraw_stoop_object(
             session_id=payload.session_id,
             entry_id=entry_id,
             idempotency_key=payload.idempotency_key,
+            now=world_clock.now(),
         )
     except ConsequenceDomainError as exc:
         _raise_http(exc)

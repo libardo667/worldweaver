@@ -30,12 +30,29 @@ def utc_datetime(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
+def utc_naive(value: datetime) -> datetime:
+    """Normalize one aware instant for the engine's UTC-naive SQL columns."""
+
+    return utc_datetime(value).replace(tzinfo=None)
+
+
 @dataclass(frozen=True, slots=True)
 class SystemClock:
     """The live shard clock."""
 
     def now(self) -> datetime:
         return datetime.now(timezone.utc)
+
+
+def get_world_clock() -> Clock:
+    """Return the request-scoped world clock used by live HTTP routes.
+
+    FastAPI dependency overrides may replace this with a controlled clock for
+    an isolated gym. Security expiry, request nonces, process timing, and model
+    latency deliberately do not use this dependency.
+    """
+
+    return SystemClock()
 
 
 class ControlledClock:

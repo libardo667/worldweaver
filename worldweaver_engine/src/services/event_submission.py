@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass, field
+from datetime import datetime
 import hashlib
 from typing import Any, Mapping
 
@@ -51,6 +52,7 @@ class WorldEventCommand:
     skip_projection: bool = False
     preserve_event_type: bool = False
     defer_commit: bool = False
+    occurred_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -137,6 +139,7 @@ def _record_command(
             skip_projection=command.skip_projection,
             preserve_event_type=command.preserve_event_type,
             commit=not command.defer_commit,
+            occurred_at=command.occurred_at,
         )
     except Exception:
         db.rollback()

@@ -8,6 +8,7 @@ from __future__ import annotations
 import re
 from copy import deepcopy
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -20,6 +21,7 @@ from .sublocations import (
     create_or_refresh_ephemeral,
     is_local_sublocation_candidate,
     resolve_active_sublocation,
+    resolve_sublocation,
     touch_sublocation,
 )
 from .world_memory import EVENT_TYPE_MOVEMENT, find_route
@@ -140,6 +142,7 @@ def move_session(
     destination: str,
     skip_to_destination: bool = False,
     allow_sublocation_create: bool = False,
+    now: datetime | None = None,
 ) -> MovementReceipt:
     """Move one session through the canonical place graph.
 
@@ -175,6 +178,7 @@ def move_session(
         db,
         label=normalized_destination,
         parent_location=current_anchor,
+        now=now,
     )
     if (
         destination_sublocation is None
@@ -186,6 +190,21 @@ def move_session(
             parent_location=current_anchor,
             label=normalized_destination,
             created_by_session=normalized_session_id,
+            now=now,
+        )
+    elif (
+        destination_sublocation is None
+        and resolve_sublocation(
+            db,
+            label=normalized_destination,
+            parent_location=current_anchor,
+        )
+        is not None
+    ):
+        raise MovementError(
+            "route_not_found",
+            f"No route from '{current_location}' to '{normalized_destination}'.",
+            status_code=404,
         )
     if destination_sublocation is not None:
         normalized_destination = str(
@@ -305,6 +324,7 @@ def move_session(
                         },
                         preserve_event_type=True,
                         defer_commit=True,
+                        occurred_at=now,
                     ),
                 )
             previous_final = state_manager.get_variable("location") or current_location
@@ -313,8 +333,8 @@ def move_session(
                 destination_sublocation is not None
                 and final_destination == normalized_destination
             ):
-                touch_sublocation(destination_sublocation)
-            stage_state(state_manager, db)
+                touch_sublocation(destination_sublocation, now=now)
+            stage_state(state_manager, db, now=now)
             final_summary = (
                 f"{mover_name} arrives at {final_destination.replace('_', ' ')}."
             )
@@ -334,6 +354,7 @@ def move_session(
                     metadata={"surface": "map_move", "mode": "skip_to_destination"},
                     preserve_event_type=True,
                     defer_commit=True,
+                    occurred_at=now,
                 ),
             )
             db.commit()
@@ -389,8 +410,8 @@ def move_session(
             destination_sublocation is not None
             and next_location == normalized_destination
         ):
-            touch_sublocation(destination_sublocation)
-        stage_state(state_manager, db)
+            touch_sublocation(destination_sublocation, now=now)
+        stage_state(state_manager, db, now=now)
         submit_world_event(
             db,
             WorldEventCommand(
@@ -407,6 +428,7 @@ def move_session(
                 metadata={"surface": "map_move", "mode": "single_hop"},
                 preserve_event_type=True,
                 defer_commit=True,
+                occurred_at=now,
             ),
         )
         db.commit()

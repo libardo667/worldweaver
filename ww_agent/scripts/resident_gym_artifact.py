@@ -8,18 +8,31 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
+
+from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
+import httpx
 
 AGENT_ROOT = Path(__file__).resolve().parents[1]
 if str(AGENT_ROOT) not in sys.path:
     sys.path.insert(0, str(AGENT_ROOT))
 
 from src.identity.hearth_manifest import initialize_hearth_manifest  # noqa: E402
+from src.identity.hearth_activation import initialize_hearth_activation  # noqa: E402
 from src.identity.hearth_package import export_hearth_package  # noqa: E402
+from src.identity.resident_identity_custody import (  # noqa: E402
+    initialize_resident_identity_custody,
+)
+from src.inference.client import InferenceClient  # noqa: E402
 from src.identity.loader import LoopTuning, ResidentIdentity  # noqa: E402
+from src.resident import Resident  # noqa: E402
+from src.familiar.local_world import LocalWorld  # noqa: E402
 from src.runtime.ledger import (  # noqa: E402
     append_runtime_event,
     load_resident_process_envelope,
@@ -34,7 +47,13 @@ from src.runtime.reference_core import (  # noqa: E402
     ReferenceResidentCore,
     build_reference_scheduled_return,
 )
-from src.world.client import SceneData, scene_data_from_payload  # noqa: E402
+from src.world.client import (  # noqa: E402
+    SceneData,
+    WorldWeaverClient,
+    scene_data_from_payload,
+)
+from src.world.resident_signing import signer_from_host_sealed_identity  # noqa: E402
+from src.runtime.world_clock import FixedWorldClock  # noqa: E402
 
 _SYNTHETIC_PRIVATE_ACTIVITY = (
     "Privately compare the synthetic blue and green route notes."
@@ -60,10 +79,43 @@ def _create_fixture(args: argparse.Namespace) -> dict:
     if package.exists() or package.is_symlink():
         raise PrivateArtifactError("synthetic resident package already exists")
     home.joinpath("identity").mkdir(parents=True)
+    home.joinpath("memory").mkdir()
+    home.joinpath("workshop").mkdir()
     home.joinpath("identity", "resident_id.txt").write_text(
         f"{args.actor_id}\n", encoding="utf-8"
     )
+    display_name = str(args.display_name or "Synthetic Gym Resident").strip()
+    canonical_soul = (
+        f"Your name is {display_name}. You are a synthetic gym participant.\n"
+    )
+    home.joinpath("identity", "display_name.txt").write_text(
+        f"{display_name}\n", encoding="utf-8"
+    )
+    home.joinpath("identity", "SOUL.canonical.md").write_text(
+        canonical_soul, encoding="utf-8"
+    )
+    home.joinpath("identity", "SOUL.md").write_text(canonical_soul, encoding="utf-8")
+    home.joinpath("session_id.txt").write_text(f"{args.session_id}\n", encoding="utf-8")
     manifest = initialize_hearth_manifest(home)
+    identity_descriptor = None
+    if args.host_key is not None:
+        host_key_path = args.host_key.resolve()
+        if host_key_path.exists() or host_key_path.is_symlink():
+            raise PrivateArtifactError("synthetic host key already exists")
+        host_key_path.parent.mkdir(parents=True, exist_ok=True)
+        host_private_key = X25519PrivateKey.generate()
+        encoded_host_key = (
+            base64.urlsafe_b64encode(host_private_key.private_bytes_raw())
+            .decode("ascii")
+            .rstrip("=")
+        )
+        host_key_path.write_text(f"{encoded_host_key}\n", encoding="utf-8")
+        host_key_path.chmod(0o600)
+        identity_descriptor = initialize_resident_identity_custody(
+            home,
+            host_transport_private_key_path=host_key_path,
+        )
+        initialize_hearth_activation(home)
     binding = ResidentProcessBinding(
         actor_id=args.actor_id,
         hearth_shard_id=manifest.hearth_shard_id,
@@ -105,10 +157,13 @@ def _create_fixture(args: argparse.Namespace) -> dict:
     )
     return {
         "schema": "worldweaver.synthetic-gym-private-artifact",
-        "schema_version": 2,
+        "schema_version": 3,
         "descriptor": descriptor.as_dict(),
         "process": binding.as_dict(),
         "scheduled_return": scheduled_return.as_payload(),
+        "identity": (
+            identity_descriptor.to_dict() if identity_descriptor is not None else None
+        ),
     }
 
 
@@ -123,6 +178,23 @@ def _restore(args: argparse.Namespace) -> dict:
         descriptor=descriptor,
         expected_process=process,
     )
+
+
+def _export(args: argparse.Namespace) -> dict:
+    home = args.home.resolve()
+    package = args.package.resolve()
+    package.parent.mkdir(parents=True, exist_ok=True)
+    export_hearth_package(home, package)
+    return describe_private_artifact(package).as_dict()
+
+
+def _issue_runtime_certificate(args: argparse.Namespace) -> dict:
+    signer = signer_from_host_sealed_identity(
+        args.home.resolve(),
+        audience=str(args.audience or "").strip(),
+        host_transport_private_key_path=args.host_key.resolve(),
+    )
+    return {"certificate_header": signer.certificate_header}
 
 
 def _parse_time(raw: str) -> datetime:
@@ -166,6 +238,326 @@ class _ScriptedWaitModel:
 
 async def _refuse_effect(*_args, **_kwargs) -> dict:
     raise RuntimeError("the scripted wait fixture may not perform an action or read")
+
+
+_GYM_ADAPTER_PROTOCOL = "worldweaver.gym-participant-stdio"
+_GYM_ADAPTER_PROTOCOL_VERSION = 2
+
+
+def _write_protocol(payload: dict[str, Any]) -> None:
+    print(json.dumps(payload, sort_keys=True), flush=True)
+
+
+class _StdioHTTPTransport(httpx.AsyncBaseTransport):
+    """Carry ordinary ``WorldWeaverClient`` HTTP requests to the parent app."""
+
+    def __init__(self, session_id: str) -> None:
+        self._request_sequence = 0
+        self._session_id = str(session_id or "").strip()
+        if not self._session_id:
+            raise ValueError("gym HTTP transport requires a bound session")
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        self._request_sequence += 1
+        request_id = f"request-{self._request_sequence:08d}"
+        body = await request.aread()
+        target = request.url.raw_path.decode("ascii")
+        _write_protocol(
+            {
+                "protocol": _GYM_ADAPTER_PROTOCOL,
+                "protocol_version": _GYM_ADAPTER_PROTOCOL_VERSION,
+                "type": "request",
+                "request_id": request_id,
+                "session_id": self._session_id,
+                "operation": "http",
+                "payload": {
+                    "method": request.method,
+                    "target": target,
+                    "headers": dict(request.headers),
+                    "body_base64": base64.b64encode(body).decode("ascii"),
+                },
+            }
+        )
+        line = sys.stdin.readline()
+        if not line:
+            raise RuntimeError("gym adapter closed before replying")
+        try:
+            response = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("gym adapter returned invalid JSON") from exc
+        if (
+            not isinstance(response, dict)
+            or response.get("protocol") != _GYM_ADAPTER_PROTOCOL
+            or response.get("protocol_version") != _GYM_ADAPTER_PROTOCOL_VERSION
+            or response.get("type") != "response"
+            or response.get("request_id") != request_id
+        ):
+            raise RuntimeError("gym adapter response binding is invalid")
+        if not bool(response.get("ok")):
+            raise RuntimeError(str(response.get("error") or "gym operation failed"))
+        result = response.get("result")
+        if not isinstance(result, dict):
+            raise RuntimeError("gym HTTP transport response must be an object")
+        try:
+            content = base64.b64decode(str(result.get("body_base64") or ""))
+        except (ValueError, TypeError) as exc:
+            raise RuntimeError("gym HTTP transport body is invalid") from exc
+        response_headers = result.get("headers")
+        if not isinstance(response_headers, dict):
+            raise RuntimeError("gym HTTP transport headers are invalid")
+        return httpx.Response(
+            status_code=int(result.get("status_code") or 500),
+            headers={str(key): str(value) for key, value in response_headers.items()},
+            content=content,
+            request=request,
+        )
+
+    async def aclose(self) -> None:
+        # ``WorldWeaverClient.for_resident`` closes its discovery client before
+        # constructing the signed client over this same one-process transport.
+        return None
+
+
+class _ScriptedReadActModel:
+    """Deterministic model fixture that exercises both adapter directions."""
+
+    def __init__(self, *, model_id: str, target: str) -> None:
+        self.default_model_id = model_id
+        self._target = target
+        self.total_calls = 0
+        self.total_prompt_tokens = 0
+        self.total_completion_tokens = 0
+
+    async def complete_json(self, *_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        self.total_calls += 1
+        if self.total_calls == 1:
+            return {"choice": "read", "source": "measure", "query": "6 * 7"}
+        return {
+            "choice": "act",
+            "action": {"kind": "move", "body": "", "target": self._target},
+        }
+
+    async def close(self) -> None:
+        return None
+
+
+class _ObservedModel:
+    """Emit only content-free inference boundaries across the gym protocol."""
+
+    def __init__(self, inner: Any, *, model_id: str):
+        self.inner = inner
+        self.model_id = model_id
+        self.call_count = 0
+
+    async def complete_json(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        self.call_count += 1
+        _write_protocol(
+            {
+                "protocol": _GYM_ADAPTER_PROTOCOL,
+                "protocol_version": _GYM_ADAPTER_PROTOCOL_VERSION,
+                "type": "event",
+                "event": "resident_inference_started",
+                "detail": {"call_index": self.call_count, "model_id": self.model_id},
+            }
+        )
+        result = await self.inner.complete_json(*args, **kwargs)
+        _write_protocol(
+            {
+                "protocol": _GYM_ADAPTER_PROTOCOL,
+                "protocol_version": _GYM_ADAPTER_PROTOCOL_VERSION,
+                "type": "event",
+                "event": "resident_inference_finished",
+                "detail": {
+                    "call_index": self.call_count,
+                    "model_id": self.model_id,
+                    "prompt_tokens": int(
+                        getattr(self.inner, "total_prompt_tokens", 0) or 0
+                    ),
+                    "completion_tokens": int(
+                        getattr(self.inner, "total_completion_tokens", 0) or 0
+                    ),
+                },
+            }
+        )
+        return result
+
+
+async def _run_model_return(args: argparse.Namespace) -> dict[str, Any]:
+    home = args.home.resolve()
+    expected_process = ResidentProcessBinding.from_dict(
+        _read_object(args.expected_process.resolve())
+    )
+    restored_process = load_resident_process_envelope(home / "memory")
+    if restored_process is None:
+        raise PrivateArtifactError("restored resident has no process checkpoint")
+    if ResidentProcessBinding.from_dict(restored_process) != expected_process:
+        raise PrivateArtifactError("restored resident process binding does not match")
+
+    model_id = expected_process.model_id
+    if args.model_mode in {"scripted-read-home", "scripted-read-move"}:
+        raw_model: Any = _ScriptedReadActModel(
+            model_id=model_id,
+            target=(
+                "home" if args.model_mode == "scripted-read-home" else "Footbridge"
+            ),
+        )
+    else:
+        key = os.environ.get("WW_INFERENCE_KEY", "").strip()
+        if not key:
+            raise PrivateArtifactError(
+                "WW_INFERENCE_KEY is required for a model-backed gym resident"
+            )
+        configured_model = str(args.model or model_id).strip()
+        if configured_model != model_id:
+            raise PrivateArtifactError(
+                "configured model does not match process binding"
+            )
+        raw_model = InferenceClient(
+            base_url=os.environ.get("WW_INFERENCE_URL", "https://openrouter.ai/api/v1"),
+            api_key=key,
+            default_model=configured_model,
+            timeout=float(os.environ.get("WW_INFERENCE_TIMEOUT", "200")),
+        )
+    model = _ObservedModel(raw_model, model_id=model_id)
+    transport = _StdioHTTPTransport(expected_process.session_id)
+    client: WorldWeaverClient | None = None
+    controlled_clock = FixedWorldClock(_parse_time(args.now))
+
+    async def observe_host_tick(_identity, world, _core, _result, _tick_count):
+        if isinstance(world, LocalWorld):
+            grounding = await world.get_grounding()
+            process = load_resident_process_envelope(home / "memory") or {}
+            attachment = (
+                process.get("attachment")
+                if isinstance(process.get("attachment"), dict)
+                else {}
+            )
+            hosting = (
+                process.get("hosting")
+                if isinstance(process.get("hosting"), dict)
+                else {}
+            )
+            _write_protocol(
+                {
+                    "protocol": _GYM_ADAPTER_PROTOCOL,
+                    "protocol_version": _GYM_ADAPTER_PROTOCOL_VERSION,
+                    "type": "event",
+                    "event": "resident_hearth_observed",
+                    "detail": {
+                        "attachment": str(attachment.get("kind") or ""),
+                        "hosting_state": str(hosting.get("state") or ""),
+                        "location": world.place,
+                        "source_names": sorted(world.information_source_names),
+                        "hour": int(grounding.get("hour") or 0),
+                        "day_of_week": str(grounding.get("day_of_week") or ""),
+                        "time_of_day": str(grounding.get("time_of_day") or ""),
+                        "observed_at": controlled_clock.now().isoformat(),
+                    },
+                }
+            )
+            return
+        _write_protocol(
+            {
+                "protocol": _GYM_ADAPTER_PROTOCOL,
+                "protocol_version": _GYM_ADAPTER_PROTOCOL_VERSION,
+                "type": "event",
+                "event": "resident_city_profile_loaded",
+                "detail": {
+                    "city_id": resident.city_id,
+                    "capability_ids": list(resident.city_capabilities),
+                    "source_names": sorted(
+                        str(item)
+                        for item in tuple(
+                            getattr(world, "information_source_names", ()) or ()
+                        )
+                        if str(item)
+                    ),
+                },
+            }
+        )
+
+    try:
+        client = await WorldWeaverClient.for_resident(
+            "http://worldweaver-gym.local",
+            home,
+            host_transport_private_key_path=args.host_key.resolve(),
+            transport=transport,
+        )
+        resident = Resident(
+            home,
+            client,
+            model,
+            tick_seconds=2,
+            pulse_model=model_id,
+            pulse_temperature=None,
+            tick_observer=observe_host_tick,
+            world_clock=controlled_clock,
+        )
+        await resident.start(expected_process.world_id)
+        _write_protocol(
+            {
+                "protocol": _GYM_ADAPTER_PROTOCOL,
+                "protocol_version": _GYM_ADAPTER_PROTOCOL_VERSION,
+                "type": "event",
+                "event": "resident_host_started",
+                "detail": {},
+            }
+        )
+        if args.command == "observe-hearth-model":
+            if expected_process.attachment_kind != "hearth":
+                raise PrivateArtifactError(
+                    "hearth observation requires a hearth-bound process"
+                )
+            await resident.run(max_ticks=1, pause_seconds=0.0)
+            result = {
+                "status": "observed",
+                "event_id": "",
+                "activation_status": "observed",
+                "choice": "none",
+            }
+            scheduled_return = None
+        else:
+            result, scheduled_return = await resident.run_scheduled_return(
+                args.event_id,
+                now=_parse_time(args.now),
+            )
+        _write_protocol(
+            {
+                "protocol": _GYM_ADAPTER_PROTOCOL,
+                "protocol_version": _GYM_ADAPTER_PROTOCOL_VERSION,
+                "type": "event",
+                "event": "resident_host_finished",
+                "detail": {},
+            }
+        )
+    finally:
+        await raw_model.close()
+        if client is not None:
+            await client.close()
+    process = load_resident_process_envelope(home / "memory")
+    if not isinstance(process, dict):
+        raise PrivateArtifactError("model host omitted its final process checkpoint")
+    return {
+        "schema": "worldweaver.synthetic-gym-return-result",
+        "schema_version": 3,
+        "status": str(result.get("status") or ""),
+        "event_id": str(result.get("event_id") or ""),
+        "activation_status": str(result.get("activation_status") or ""),
+        "choice": str(result.get("choice") or "none"),
+        "action_outcome": str(result.get("action_outcome") or ""),
+        "model_id": model_id,
+        "model_call_count": model.call_count,
+        "prompt_tokens": int(getattr(raw_model, "total_prompt_tokens", 0) or 0),
+        "completion_tokens": int(getattr(raw_model, "total_completion_tokens", 0) or 0),
+        "scheduled_return": (
+            scheduled_return.as_payload() if scheduled_return is not None else None
+        ),
+        "process": process,
+    }
+
+
+def _handle_model_return(args: argparse.Namespace) -> dict[str, Any]:
+    return asyncio.run(_run_model_return(args))
 
 
 def _handle_return(args: argparse.Namespace) -> dict:
@@ -234,12 +626,14 @@ def _parser() -> argparse.ArgumentParser:
     fixture.add_argument("--home", type=Path, required=True)
     fixture.add_argument("--package", type=Path, required=True)
     fixture.add_argument("--actor-id", required=True)
+    fixture.add_argument("--display-name", default="Synthetic Gym Resident")
     fixture.add_argument("--world-id", required=True)
     fixture.add_argument("--city-id", default="")
     fixture.add_argument("--session-id", required=True)
     fixture.add_argument("--model-id", default="test/reference-policy-v1")
     fixture.add_argument("--started-at", required=True)
     fixture.add_argument("--return-at", required=True)
+    fixture.add_argument("--host-key", type=Path)
 
     restore = subparsers.add_parser(
         "restore",
@@ -249,6 +643,19 @@ def _parser() -> argparse.ArgumentParser:
     restore.add_argument("--home", type=Path, required=True)
     restore.add_argument("--descriptor", type=Path, required=True)
     restore.add_argument("--expected-process", type=Path, required=True)
+    export = subparsers.add_parser(
+        "export",
+        help="export an updated stopped synthetic home for the engine checkpoint",
+    )
+    export.add_argument("--home", type=Path, required=True)
+    export.add_argument("--package", type=Path, required=True)
+    certificate = subparsers.add_parser(
+        "issue-runtime-certificate",
+        help="issue public runtime proof for one stopped synthetic resident",
+    )
+    certificate.add_argument("--home", type=Path, required=True)
+    certificate.add_argument("--host-key", type=Path, required=True)
+    certificate.add_argument("--audience", required=True)
     handle_return = subparsers.add_parser(
         "handle-return",
         help="offer a due return to the restored reference core with a scripted wait",
@@ -258,21 +665,77 @@ def _parser() -> argparse.ArgumentParser:
     handle_return.add_argument("--scene", type=Path, required=True)
     handle_return.add_argument("--event-id", required=True)
     handle_return.add_argument("--now", required=True)
+    model_return = subparsers.add_parser(
+        "handle-return-model",
+        help="run a normally hosted model-backed resident over the two-way gym protocol",
+    )
+    model_return.add_argument("--home", type=Path, required=True)
+    model_return.add_argument("--expected-process", type=Path, required=True)
+    model_return.add_argument("--event-id", required=True)
+    model_return.add_argument("--now", required=True)
+    model_return.add_argument("--model", default="")
+    model_return.add_argument("--host-key", type=Path, required=True)
+    model_return.add_argument(
+        "--model-mode",
+        choices=("live", "scripted-read-home", "scripted-read-move"),
+        default="live",
+        help=argparse.SUPPRESS,
+    )
+    hearth_observation = subparsers.add_parser(
+        "observe-hearth-model",
+        help="restart a normally hosted resident and observe its private hearth",
+    )
+    hearth_observation.add_argument("--home", type=Path, required=True)
+    hearth_observation.add_argument("--expected-process", type=Path, required=True)
+    hearth_observation.add_argument("--now", required=True)
+    hearth_observation.add_argument("--model", default="")
+    hearth_observation.add_argument("--host-key", type=Path, required=True)
+    hearth_observation.add_argument(
+        "--model-mode",
+        choices=("live", "scripted-read-home", "scripted-read-move"),
+        default="live",
+        help=argparse.SUPPRESS,
+    )
     return parser
 
 
 def main() -> int:
     args = _parser().parse_args()
+    interactive = args.command in {"handle-return-model", "observe-hearth-model"}
     try:
         handlers = {
             "create-fixture": _create_fixture,
             "restore": _restore,
+            "export": _export,
+            "issue-runtime-certificate": _issue_runtime_certificate,
             "handle-return": _handle_return,
+            "handle-return-model": _handle_model_return,
+            "observe-hearth-model": _handle_model_return,
         }
         result = handlers[args.command](args)
     except (OSError, PrivateArtifactError, ValueError) as exc:
+        if interactive:
+            _write_protocol(
+                {
+                    "protocol": _GYM_ADAPTER_PROTOCOL,
+                    "protocol_version": _GYM_ADAPTER_PROTOCOL_VERSION,
+                    "type": "error",
+                    "error": str(exc),
+                }
+            )
+            return 2
         print(json.dumps({"status": "invalid", "error": str(exc)}), file=sys.stderr)
         return 2
+    if interactive:
+        _write_protocol(
+            {
+                "protocol": _GYM_ADAPTER_PROTOCOL,
+                "protocol_version": _GYM_ADAPTER_PROTOCOL_VERSION,
+                "type": "result",
+                "result": result,
+            }
+        )
+        return 0
     print(json.dumps(result, sort_keys=True))
     return 0
 

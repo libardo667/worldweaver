@@ -100,6 +100,8 @@ def initialize_material_pools(
                         replenish_units=material.replenish_units,
                         replenish_every_seconds=material.replenish_every_seconds,
                         last_replenished_at=initialized_at,
+                        created_at=initialized_at,
+                        updated_at=initialized_at,
                     )
                     db.add(row)
                     db.flush()
@@ -333,6 +335,8 @@ def make_durable_object(
             provenance_ref=f"{declaration.ruleset.id}@{declaration.ruleset.version}:{recipe.id}",
             properties_json=dict(output.properties),
             revision=1,
+            created_at=made_at,
+            updated_at=made_at,
         )
         db.add(object_row)
         return _complete_consequence(
@@ -350,6 +354,7 @@ def make_durable_object(
                 "location": context.location,
                 "materials": material_changes,
             },
+            now=now,
             provenance_event=True,
         )
     except IntegrityError:

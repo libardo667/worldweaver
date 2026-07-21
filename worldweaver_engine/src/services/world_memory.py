@@ -823,6 +823,7 @@ def apply_event_to_projection(db: Session, event: WorldEvent) -> int:
                     **(update.metadata or {}),
                     "source_event_type": event.event_type,
                 },
+                updated_at=event.created_at,
             )
             db.add(row)
             db.flush()
@@ -856,6 +857,7 @@ def apply_event_to_projection(db: Session, event: WorldEvent) -> int:
         if update.metadata:
             merged_metadata.update(update.metadata)
         row.metadata_json = merged_metadata
+        row.updated_at = event.created_at
         applied += 1
 
     return applied
@@ -1110,6 +1112,7 @@ def _upsert_world_fact_direct(
     confidence: float = 0.8,
     location_node_id: Optional[int] = None,
     source_event_id: Optional[int] = None,
+    valid_at: Optional[datetime] = None,
 ) -> WorldFact:
     """Insert or update an active fact assertion without requiring a WorldEvent anchor."""
     from .embedding_service import EMBEDDING_DIMENSIONS
@@ -1136,7 +1139,7 @@ def _upsert_world_fact_direct(
 
     if active is not None:
         active.is_active = False
-        active.valid_to = datetime.now(timezone.utc)
+        active.valid_to = _to_utc_naive(valid_at or datetime.now(timezone.utc))
 
     fact = WorldFact(
         session_id=session_id,
@@ -1148,6 +1151,9 @@ def _upsert_world_fact_direct(
         is_active=True,
         source_event_id=source_event_id,
         summary=summary,
+        valid_from=_to_utc_naive(valid_at),
+        created_at=_to_utc_naive(valid_at),
+        updated_at=_to_utc_naive(valid_at),
         # Keep fact extraction cheap and lock-light on the hot path; re-embed
         # later if semantic retrieval quality needs to catch up.
         embedding=[0.0] * EMBEDDING_DIMENSIONS,
@@ -1178,6 +1184,7 @@ def _upsert_world_fact(
         confidence=confidence,
         location_node_id=location_node_id,
         source_event_id=event.id,
+        valid_at=event.created_at,
     )
 
 
@@ -1480,6 +1487,7 @@ def record_event(
     skip_projection: bool = False,
     preserve_event_type: bool = False,
     commit: bool = True,
+    occurred_at: Optional[datetime] = None,
 ) -> WorldEvent:
     """Create a WorldEvent, apply deltas, embed summary, and persist it.
 
@@ -1524,6 +1532,7 @@ def record_event(
         summary=summary,
         embedding=embed_text(summary),
         world_state_delta=persisted_delta,
+        created_at=_to_utc_naive(occurred_at),
     )
     db.add(event)
     if commit:

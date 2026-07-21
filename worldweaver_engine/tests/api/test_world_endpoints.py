@@ -1224,6 +1224,75 @@ class TestWorldEventLedgerEndpoints:
         )
         assert rejected.status_code == 422
 
+    def test_world_routes_share_one_overridden_clock_for_sublocation_expiry(
+        self,
+        client,
+        db_session,
+    ):
+        from main import app
+        from src.services.clock import ControlledClock, get_world_clock
+        from src.services.world_memory import seed_location_graph
+
+        clock = ControlledClock(datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc))
+        app.dependency_overrides[get_world_clock] = lambda: clock
+        seed_location_graph(
+            db_session,
+            [{"name": "Western Addition"}, {"name": "Hayes Valley"}],
+        )
+        _set_session_vars(
+            db_session,
+            "resident-one",
+            location="Western Addition",
+        )
+
+        created = client.post(
+            "/api/game/sublocations",
+            json={
+                "session_id": "resident-one",
+                "label": "back booth",
+                "ttl_seconds": 1800,
+            },
+        )
+        assert created.status_code == 200
+        assert created.json()["created_at"] == clock.now().isoformat()
+        entered = client.post(
+            "/api/game/move",
+            json={"session_id": "resident-one", "destination": "back booth"},
+        )
+        assert entered.status_code == 200
+        assert entered.json()["to_location"] == "back booth"
+        assert (
+            client.post(
+                "/api/game/move",
+                json={"session_id": "resident-one", "destination": "Hayes Valley"},
+            ).status_code
+            == 200
+        )
+
+        clock.advance(timedelta(seconds=1801))
+        returned = client.post(
+            "/api/game/move",
+            json={
+                "session_id": "resident-one",
+                "destination": "Western Addition",
+            },
+        )
+        assert returned.status_code == 200
+        listed = client.get(
+            "/api/world/sublocations",
+            params={"parent_location": "Western Addition"},
+        ).json()
+        assert listed["sublocations"] == []
+        scene = client.get("/api/world/scene/resident-one").json()
+        assert "back booth" not in {
+            node["name"] for node in scene["location_graph"]["nodes"]
+        }
+        expired_move = client.post(
+            "/api/game/move",
+            json={"session_id": "resident-one", "destination": "back booth"},
+        )
+        assert expired_move.status_code == 404
+
     def test_map_move_can_leave_disconnected_duplicate_place_via_anchor(
         self, client, db_session, monkeypatch
     ):

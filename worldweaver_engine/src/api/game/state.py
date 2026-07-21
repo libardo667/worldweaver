@@ -42,6 +42,7 @@ from ...models import (
     WorldStoop,
 )
 from ...services.auth_service import get_current_player_strict, require_player
+from ...services.clock import Clock, get_world_clock
 from ...models.schemas import (
     CurrentSessionResponse,
     SessionBootstrapRequest,
@@ -437,6 +438,7 @@ def _write_world_id(world_id: str) -> None:
 def seed_world(
     payload: WorldSeedRequest,
     db: Session = Depends(get_db),
+    world_clock: Clock = Depends(get_world_clock),
 ):
     """Seed the world once before any agents bootstrap.
 
@@ -451,12 +453,13 @@ def seed_world(
         raise HTTPException(status_code=404, detail="Not found.")
 
     import uuid
-    from datetime import datetime as _dt, timezone as _tz
+    from datetime import timezone as _tz
 
     # Reuse an existing world_id (e.g. adding a second city pack) or mint a fresh one.
+    current = world_clock.now()
     world_id = (
         payload.world_id or ""
-    ).strip() or f"world-{_dt.now(_tz.utc).strftime('%Y%m%d-%H%M%S')}-{str(uuid.uuid4())[:8]}"
+    ).strip() or f"world-{current.strftime('%Y%m%d-%H%M%S')}-{str(uuid.uuid4())[:8]}"
     raw_description = (payload.description or "").strip()
     description = raw_description or (
         f"A persistent world shaped by its inhabitants — {payload.world_theme}."
@@ -514,14 +517,14 @@ def seed_world(
                 seed_result.get("edges_seeded", 0),
             )
         state_manager.set_world_context(world_context)
-        save_state(state_manager, db)
+        save_state(state_manager, db, now=current)
 
         _write_world_id(world_id)
 
         return WorldSeedResponse(
             success=True,
             world_id=world_id,
-            seeded_at=_dt.now(_tz.utc).isoformat(),
+            seeded_at=current.astimezone(_tz.utc).isoformat(),
             message=f"World seeded. All agents can now join via world_id={world_id}",
             nodes_seeded=nodes_seeded,
             city_pack_used=city_pack_used,
@@ -578,6 +581,7 @@ def bootstrap_session_world(
     payload: SessionBootstrapRequest,
     db: Session = Depends(get_db),
     player: Optional[Player] = Depends(get_current_player_strict),
+    world_clock: Clock = Depends(get_world_clock),
 ):
     """Join one existing shared world through the canonical lifecycle service."""
     try:
@@ -595,6 +599,7 @@ def bootstrap_session_world(
                 entry_location=payload.entry_location,
             ),
             player=player,
+            now=world_clock.now(),
         )
         return SessionBootstrapResponse(**receipt.as_payload())
     except SessionLifecycleError as exc:
@@ -609,6 +614,7 @@ async def bootstrap_signed_resident_session(
     payload: SessionBootstrapRequest,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ):
     """Bootstrap one pre-admitted resident from an exact signed request.
 
@@ -690,6 +696,7 @@ async def bootstrap_signed_resident_session(
                 actor_id=verified.actor_id,
                 runtime_generation=verified.runtime_generation,
             ),
+            now=world_clock.now(),
         )
     except SessionLifecycleError as exc:
         raise HTTPException(

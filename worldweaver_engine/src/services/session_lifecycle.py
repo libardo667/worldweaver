@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..models import FederationActorAuth, Player, SessionVars, WorldNode
 from .event_submission import WorldEventCommand, submit_world_event
+from .clock import SystemClock, utc_naive
 from .federation_identity import current_shard_id, get_actor_bundle
 from .resident_authority import (
     ResidentAuthorityError,
@@ -262,6 +263,7 @@ def bootstrap_session(
     command: SessionBootstrapCommand,
     player: Player | None = None,
     resident_binding: ResidentSessionBinding | None = None,
+    now: datetime | None = None,
 ) -> SessionBootstrapReceipt:
     """Join one existing world and commit the complete local session together."""
 
@@ -312,7 +314,8 @@ def bootstrap_session(
             world_theme = str(host_state.get_variable("world_theme") or "")
 
         state_manager = get_state_manager(session_id, db)
-        bootstrap_completed_at = datetime.now(timezone.utc).isoformat()
+        current = now or SystemClock().now()
+        bootstrap_completed_at = current.astimezone(timezone.utc).isoformat()
         state_manager.set_world_id(world_id)
         state_manager.set_variable("world_theme", world_theme)
         state_manager.set_variable("player_role", player_role)
@@ -359,7 +362,7 @@ def bootstrap_session(
         if resolved_location:
             state_manager.set_variable("location", resolved_location)
 
-        session_row = stage_state(state_manager, db)
+        session_row = stage_state(state_manager, db, now=current)
         if player is not None:
             session_row.player_id = player.id
             player_actor_id = str(player.actor_id or "").strip()
@@ -369,6 +372,7 @@ def bootstrap_session(
             actor_id = str(command.actor_id or "").strip()
             if actor_id:
                 session_row.actor_id = actor_id
+        session_row.updated_at = utc_naive(current)
 
         submit_world_event(
             db,
@@ -380,6 +384,7 @@ def bootstrap_session(
                 metadata={"surface": "session_bootstrap"},
                 preserve_event_type=True,
                 defer_commit=True,
+                occurred_at=current,
             ),
         )
 
@@ -400,6 +405,10 @@ def bootstrap_session(
                 display_name=player_role,
             )
 
+        # Actor attachment is staged after the initial state insert and invokes
+        # the model's live ``onupdate`` default during the event flush. Restore
+        # the authoritative world instant before committing the joined presence.
+        session_row.updated_at = utc_naive(current)
         db.commit()
         remove_cached_sessions(retired_session_ids)
     except SessionLifecycleError:

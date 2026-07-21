@@ -60,6 +60,12 @@ class CityWorld:
         self._hearth_available = bool(hearth_available)
         self._pending_travel: TravelRequest | None = None
 
+    @property
+    def information_source_names(self) -> tuple[str, ...]:
+        """Return the public names advertised by this attachment's registry."""
+
+        return tuple(self._sources.names) if self._sources else ()
+
     async def get_scene(self, session_id: str) -> SceneData:
         scene = await self._client.get_scene(session_id)
         if self._sources:

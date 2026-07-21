@@ -8,6 +8,7 @@ from src.services.sublocations import (
     graph_with_sublocations,
     is_local_sublocation_candidate,
     resolve_active_sublocation,
+    resolve_sublocation,
     sublocation_payload,
 )
 
@@ -74,6 +75,14 @@ def test_expired_sublocation_stops_resolving_without_deleting_history(db_session
             now=NOW + timedelta(minutes=16),
         )
         is None
+    )
+    assert (
+        resolve_sublocation(
+            db_session,
+            label="back booth",
+            parent_location="Arbor Lodge",
+        )
+        is row
     )
 
 

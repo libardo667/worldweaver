@@ -38,13 +38,14 @@ from src.runtime.process_state import (
     PROCESS_HOST_LIFECYCLE_VERSION,
     ResidentProcessBinding,
 )
-from src.runtime.reference_core import ReferenceResidentCore
+from src.runtime.reference_core import ReferenceResidentCore, ReferenceScheduledReturn
 from src.runtime.travel import (
     PendingShardTravel,
     TravelRequest,
     derive_pending_shard_travel,
 )
 from src.runtime.workshop import Workshop
+from src.runtime.world_clock import SystemWorldClock, WorldClock
 from src.world.city_tools import build_city_source_registry
 from src.world.city_world import CityWorld
 from src.world.client import LiveSignalBatch, LiveSignalCursor, WorldWeaverClient
@@ -66,6 +67,55 @@ TickObserver = Callable[
     [ResidentIdentity, CityWorld | LocalWorld, ResidentCore, dict[str, Any], int],
     Awaitable[None] | None,
 ]
+
+
+def build_reference_core(
+    *,
+    identity: ResidentIdentity,
+    resident_dir: Path,
+    world: CityWorld | LocalWorld,
+    llm: Any,
+    session_id: str,
+    selected_model: str | None,
+    temperature: float | None,
+    attachment_kind: str,
+    tick_seconds: float | None = None,
+) -> ReferenceResidentCore:
+    """Compose the production reference core for one established attachment.
+
+    The resident host remains responsible for identity loading, process binding,
+    attachment lifecycle, and exclusive hearth custody.  This function owns only
+    the shared cognition/effector/information wiring so isolated hosts such as the
+    gym cannot grow a subtly different resident composition.
+    """
+
+    if attachment_kind not in {"city", "hearth"}:
+        raise ValueError("reference core attachment must be city or hearth")
+    workshop = Workshop(resident_dir / "workshop")
+    effector = WorldEffector(
+        ww_client=world,
+        session_id=session_id,
+        identity=identity,
+        memory_dir=resident_dir / "memory",
+        workshop=workshop,
+        all_writes_to_workshop=attachment_kind == "hearth",
+    )
+    information_access = InformationAccess(
+        ww_client=world,
+        memory_dir=resident_dir / "memory",
+    )
+    return ReferenceResidentCore(
+        identity=identity,
+        memory_dir=resident_dir / "memory",
+        world=world,
+        llm=llm,
+        session_id=session_id,
+        effector=effector,
+        information_access=information_access,
+        model=selected_model,
+        temperature=temperature,
+        **({"tick_seconds": tick_seconds} if tick_seconds is not None else {}),
+    )
 
 
 class Resident:
@@ -94,6 +144,7 @@ class Resident:
         tick_observer: TickObserver | None = None,
         world_client_factory: Callable[[str], WorldWeaverClient] | None = None,
         travel_retry_seconds: float = 5.0,
+        world_clock: WorldClock | None = None,
     ):
         self._resident_dir = resident_dir
         self._ww = ww_client
@@ -115,6 +166,7 @@ class Resident:
             lambda url: WorldWeaverClient(base_url=url)
         )
         self._travel_retry_seconds = max(0.0, float(travel_retry_seconds))
+        self._world_clock = world_clock or SystemWorldClock()
         self._owned_world_clients: list[WorldWeaverClient] = []
         self._runtime_lease: HearthRuntimeLease | None = None
         self._hearth_shard_id = ""
@@ -132,6 +184,18 @@ class Resident:
     def identity(self) -> ResidentIdentity:
         """The resident identity currently loaded by this temporary host."""
         return self._require_identity()
+
+    @property
+    def city_id(self) -> str:
+        """Public city-pack identity most recently disclosed by the attached node."""
+
+        return str(self._city_id or "")
+
+    @property
+    def city_capabilities(self) -> tuple[str, ...]:
+        """Public optional capability IDs most recently disclosed by the node."""
+
+        return tuple(sorted(self._city_capabilities))
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -253,6 +317,51 @@ class Resident:
         finally:
             self._release_runtime_lease()
 
+    async def run_scheduled_return(
+        self,
+        event_id: str,
+        *,
+        now: datetime,
+    ) -> tuple[dict[str, Any], ReferenceScheduledReturn | None]:
+        """Handle one exact private return through the bounded resident host.
+
+        ``start`` must already have established the attachment and exclusive
+        hearth custody. This method owns the matching hosted-process interval,
+        attachment wrapper, and lease release just as ``run`` does, while letting
+        an external scheduler offer one idempotent event instead of starting the
+        resident's polling loop.
+        """
+
+        if self._runtime_lease is None or self._identity is None:
+            raise RuntimeError(f"Resident {self.name} not started — call start() first")
+        if self._attachment_kind == "traveling":
+            raise RuntimeError(
+                f"Resident {self.name} cannot handle a private return while traveling"
+            )
+        self._begin_process_hosting()
+        world = self._build_current_world()
+        try:
+            core = self._build_core(world, self._active_session_id())
+            result = await core.handle_scheduled_return(event_id, now=now)
+            await self._notify_tick(world, core, result, 1)
+            scheduled_return = core.scheduled_return()
+            take_pending = getattr(world, "take_pending_travel", None)
+            request = take_pending() if callable(take_pending) else None
+            if request is not None:
+                world = await self._apply_travel_request(world, request)
+            return result, scheduled_return
+        finally:
+            try:
+                await world.close()
+                for client in list(self._owned_world_clients):
+                    await client.close()
+                self._owned_world_clients.clear()
+            finally:
+                try:
+                    self._suspend_process_hosting()
+                finally:
+                    self._release_runtime_lease()
+
     async def _park_current_city_at_hearth(self) -> None:
         if self._attachment_kind == "hearth":
             return
@@ -335,7 +444,10 @@ class Resident:
                             self._take_force_ignite(world) or cursor_recovery_wake
                         )
                         cursor_recovery_wake = False
-                        result = await core.tick_once(force_ignite=force_ignite)
+                        result = await core.tick_once(
+                            now=self._world_clock.now(),
+                            force_ignite=force_ignite,
+                        )
                     except asyncio.CancelledError:
                         raise
                     except Exception as exc:
@@ -613,6 +725,7 @@ class Resident:
             gifts_enabled=config.gifts,
             city_names={"city"},
             identity=identity,
+            world_clock=self._world_clock,
         )
 
     def _build_core(
@@ -628,34 +741,16 @@ class Resident:
         )
         selected_model, model_id = self._process_model_binding()
         self._bind_reference_process(model_id=model_id, session_id=session_id)
-        workshop = Workshop(self._resident_dir / "workshop")
-        effector = WorldEffector(
-            ww_client=world,
-            session_id=session_id,
+        return build_reference_core(
             identity=identity,
-            memory_dir=self._resident_dir / "memory",
-            workshop=workshop,
-            all_writes_to_workshop=self._attachment_kind == "hearth",
-        )
-        information_access = InformationAccess(
-            ww_client=world,
-            memory_dir=self._resident_dir / "memory",
-        )
-        return ReferenceResidentCore(
-            identity=identity,
-            memory_dir=self._resident_dir / "memory",
+            resident_dir=self._resident_dir,
             world=world,
             llm=self._llm,
             session_id=session_id,
-            effector=effector,
-            information_access=information_access,
-            model=selected_model,
+            selected_model=selected_model,
             temperature=pulse_temperature,
-            **(
-                {"tick_seconds": self._tick_seconds}
-                if self._tick_seconds is not None
-                else {}
-            ),
+            attachment_kind=self._attachment_kind,
+            tick_seconds=self._tick_seconds,
         )
 
     def _load_active_hearth_coordinates(self) -> None:
@@ -1148,6 +1243,8 @@ class Resident:
                 manifest = preview.get("manifest") if isinstance(preview, dict) else {}
                 if isinstance(manifest, dict):
                     self._city_id = str(manifest.get("city_id") or "").strip()
+                if not self._city_id and isinstance(preview, dict):
+                    self._city_id = str(preview.get("city_id") or "").strip()
             except Exception as exc:
                 logger.warning("[%s] could not read city identity: %s", self.name, exc)
 
@@ -1164,6 +1261,7 @@ class Resident:
                 "actor_id": str(identity.actor_id or ""),
                 **payload,
             },
+            ts=self._world_clock.now(),
         )
 
     def _last_attachment_kind(self) -> str | None:
@@ -1326,6 +1424,6 @@ class Resident:
         return session_id
 
     def _new_session_id(self) -> str:
-        ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        ts = self._world_clock.now().astimezone(timezone.utc).strftime("%Y%m%d-%H%M%S")
         name_slug = slugify_resident_name(self._require_identity().name)
         return f"{name_slug}-{ts}-{uuid.uuid4().hex[:8]}"

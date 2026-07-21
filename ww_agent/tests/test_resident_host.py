@@ -23,6 +23,7 @@ from src.runtime.ledger import (
 )
 from src.runtime.reference_core import ReferenceResidentCore
 from src.runtime.travel import PendingShardTravel, TravelRequest
+from src.runtime.world_clock import FixedWorldClock
 from src.world.city_world import CityWorld
 from src.world.client import LiveSignal, LiveSignalBatch, LiveSignalCursor
 
@@ -147,7 +148,7 @@ def test_bounded_stop_parks_city_session_at_hearth(tmp_path):
     class _Core:
         tick_seconds = 0.0
 
-        async def tick_once(self, *, force_ignite=False):
+        async def tick_once(self, *, now=None, force_ignite=False):
             return {"ignited": False}
 
     resident._build_core = lambda world, session_id: _Core()
@@ -164,6 +165,64 @@ def test_bounded_stop_parks_city_session_at_hearth(tmp_path):
     assert resident._attachment_kind == "hearth"
     assert resident._session_id is None
     assert not (resident._resident_dir / "session_id.txt").exists()
+
+
+def test_resident_host_passes_injected_world_time_to_normal_ticks(tmp_path):
+    instant = datetime(2034, 5, 6, 7, 8, 9, tzinfo=timezone.utc)
+    resident = _resident(tmp_path, _FakeCityClient())
+    resident._world_clock = FixedWorldClock(instant)
+    observed: list[datetime] = []
+
+    class _Core:
+        tick_seconds = 0.0
+
+        async def tick_once(self, *, now=None, force_ignite=False):
+            observed.append(now)
+            return {"status": "idle", "choice": "none"}
+
+    resident._build_core = lambda world, session_id: _Core()
+
+    asyncio.run(resident.run(max_ticks=1, pause_seconds=0.0))
+
+    assert observed == [instant]
+
+
+def test_bounded_scheduled_return_uses_host_interval_and_releases_custody(tmp_path):
+    resident = _resident(tmp_path, _FakeCityClient())
+    resident._runtime_lease = acquire_hearth_runtime(resident._resident_dir)
+    next_return = object()
+
+    class _Core:
+        tick_seconds = 0.0
+
+        async def handle_scheduled_return(self, event_id, *, now):
+            assert event_id == "return-1"
+            assert now == datetime(2026, 7, 22, tzinfo=timezone.utc)
+            return {"status": "processed", "event_id": event_id, "choice": "wait"}
+
+        def scheduled_return(self):
+            return next_return
+
+    resident._build_core = lambda world, session_id: _Core()
+
+    result, scheduled = asyncio.run(
+        resident.run_scheduled_return(
+            "return-1",
+            now=datetime(2026, 7, 22, tzinfo=timezone.utc),
+        )
+    )
+
+    assert result == {
+        "status": "processed",
+        "event_id": "return-1",
+        "choice": "wait",
+    }
+    assert scheduled is next_return
+    assert resident._runtime_lease is None
+    assert _event_types(resident)[-2:] == [
+        "reference_process_host_started",
+        "reference_process_host_suspended",
+    ]
 
 
 def test_unconfirmed_departure_cannot_activate_the_hearth(tmp_path):
@@ -188,12 +247,6 @@ def test_hearth_return_bootstraps_a_fresh_city_session_for_same_actor(
     tmp_path,
     monkeypatch,
 ):
-    class _FixedDateTime(datetime):
-        @classmethod
-        def now(cls, tz=None):
-            return cls(2026, 7, 17, 12, 0, 0, tzinfo=tz or timezone.utc)
-
-    monkeypatch.setattr(resident_module, "datetime", _FixedDateTime)
     monkeypatch.setattr(
         resident_module.uuid,
         "uuid4",
@@ -201,6 +254,9 @@ def test_hearth_return_bootstraps_a_fresh_city_session_for_same_actor(
     )
     client = _FakeCityClient()
     resident = _resident(tmp_path, client)
+    resident._world_clock = FixedWorldClock(
+        datetime(2026, 7, 17, 12, 0, 0, tzinfo=timezone.utc)
+    )
     resident._identity.growth_soul = "I carry this change between worlds."
     growth_before = resident._identity.growth_soul
     resident._attachment_kind = "hearth"
@@ -334,6 +390,24 @@ def test_city_profile_selects_local_sources_and_refreshes_after_attachment(tmp_p
     assert {"objects", "making", "stoops"}.issubset(city._sources.names)
     assert "eats" not in city._sources.names
     assert "news" not in city._sources.names
+
+
+def test_city_profile_uses_top_level_id_when_no_pack_is_available(tmp_path):
+    class _SyntheticClient(_FakeCityClient):
+        async def get_shard_experience(self) -> dict:
+            return {"entry_disclosure": {"capabilities": []}}
+
+        async def get_city_pack_preview(self) -> dict:
+            return {"available": False, "city_id": "resident_gym"}
+
+    resident = _resident(tmp_path, _SyntheticClient())
+
+    asyncio.run(resident._refresh_city_profile())
+    city = resident._build_city_world(resident._active_session_id())
+
+    assert resident.city_id == "resident_gym"
+    assert resident.city_capabilities == ()
+    assert city.information_source_names == ("recall", "measure", "places", "travel")
 
 
 def test_city_to_city_travel_retries_the_same_destination_handoff(tmp_path):
@@ -557,7 +631,7 @@ def test_host_replaces_the_core_after_travel_instead_of_running_two(tmp_path):
             self.world = world
             self.attachment_kind = attachment_kind
 
-        async def tick_once(self, *, force_ignite=False):
+        async def tick_once(self, *, now=None, force_ignite=False):
             built_for.append(self.attachment_kind)
             if self.attachment_kind == "city":
                 await self.world.post_map_move(
@@ -616,7 +690,7 @@ def test_host_tick_observer_uses_the_same_core_loop(tmp_path):
     class _Core:
         tick_seconds = 0.0
 
-        async def tick_once(self, *, force_ignite=False):
+        async def tick_once(self, *, now=None, force_ignite=False):
             return {"ignited": force_ignite}
 
     resident._build_core = lambda world, session_id: _Core()
@@ -666,7 +740,7 @@ def test_city_host_wakes_early_for_cursor_delivered_speech(tmp_path):
     class _Core:
         tick_seconds = 20.0
 
-        async def tick_once(self, *, force_ignite=False):
+        async def tick_once(self, *, now=None, force_ignite=False):
             forced.append(force_ignite)
             return {"status": "completed"}
 
@@ -934,7 +1008,7 @@ def test_cancelling_a_live_signal_wait_releases_the_hearth_lease(tmp_path):
     class _Core:
         tick_seconds = 20.0
 
-        async def tick_once(self, *, force_ignite=False):
+        async def tick_once(self, *, now=None, force_ignite=False):
             return {"status": "completed"}
 
     resident._build_core = lambda _world, _session_id: _Core()
@@ -969,7 +1043,7 @@ def test_duration_bound_uses_elapsed_time_instead_of_a_tick_limit(tmp_path):
     class _Core:
         tick_seconds = 0.005
 
-        async def tick_once(self, *, force_ignite=False):
+        async def tick_once(self, *, now=None, force_ignite=False):
             return {"ignited": force_ignite}
 
     resident._build_core = lambda world, session_id: _Core()
@@ -986,7 +1060,7 @@ def test_bounded_resident_run_records_a_clean_process_suspension(tmp_path):
     class _Core:
         tick_seconds = 0.0
 
-        async def tick_once(self, *, force_ignite=False):
+        async def tick_once(self, *, now=None, force_ignite=False):
             return {"status": "completed"}
 
     resident._build_core = lambda _world, _session_id: _Core()

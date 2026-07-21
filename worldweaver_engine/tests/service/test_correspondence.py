@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Levi Banks
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from src.models import (
@@ -33,6 +35,7 @@ def _add_actor(db_session, *, session_id: str, actor_id: str, name: str) -> None
 
 
 def test_correspondence_waits_for_acknowledgement_and_follows_the_actor(db_session):
+    sent_at = datetime(2032, 4, 5, 6, 7, tzinfo=timezone.utc)
     _add_actor(
         db_session,
         session_id="sender-session",
@@ -53,6 +56,7 @@ def test_correspondence_waits_for_acknowledgement_and_follows_the_actor(db_sessi
             recipient_actor_id="actor-recipient",
             body="I left the gate key with Rowan.",
         ),
+        now=sent_at,
     )
 
     first_offer = pending_correspondence(db_session, session_id="recipient-session-one")
@@ -84,6 +88,7 @@ def test_correspondence_waits_for_acknowledgement_and_follows_the_actor(db_sessi
         db_session,
         session_id="recipient-session-two",
         message_ids=[receipt.message_id],
+        now=sent_at + timedelta(days=2),
     )
     assert acknowledgement.acknowledged_ids == (receipt.message_id,)
     assert (
@@ -91,7 +96,8 @@ def test_correspondence_waits_for_acknowledgement_and_follows_the_actor(db_sessi
         == ()
     )
     row = db_session.get(DirectMessage, receipt.message_id)
-    assert row.acknowledged_at is not None
+    assert row.sent_at == sent_at.replace(tzinfo=None)
+    assert row.acknowledged_at == (sent_at + timedelta(days=2)).replace(tzinfo=None)
     assert row.read_at == row.acknowledged_at
 
 

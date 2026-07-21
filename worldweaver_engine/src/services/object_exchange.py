@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import DurableObject, ExchangeReceipt, ObjectExchange, SessionVars
+from .clock import utc_naive
 from .consequence_objects import (
     ActorContext,
     ConsequenceDomainError,
@@ -29,8 +30,12 @@ from .event_submission import (
 from .shard_experience import GameCapability
 
 
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+def _utcnow(now: datetime | None = None) -> datetime:
+    return (
+        utc_naive(now)
+        if now is not None
+        else datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
 
 def _require_exchange_capabilities() -> None:
@@ -232,6 +237,7 @@ def _finish_exchange_command(
     payload: dict[str, Any],
     summary: str,
     delta: dict[str, Any],
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     event = submit_world_event(
         db,
@@ -249,6 +255,7 @@ def _finish_exchange_command(
             skip_projection=True,
             preserve_event_type=True,
             defer_commit=True,
+            occurred_at=now,
         ),
     )
     receipt = ExchangeReceipt(
@@ -259,6 +266,7 @@ def _finish_exchange_command(
         exchange_id=str(exchange.exchange_id),
         world_event_id=event.event_id,
         payload_json={"exchange": payload},
+        created_at=_utcnow(now),
     )
     db.add(receipt)
     db.commit()
@@ -298,6 +306,7 @@ def offer_object_exchange(
     offered_object_id: str,
     requested_object_id: str,
     idempotency_key: str,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     """Propose exact terms without reserving or moving either object."""
 
@@ -362,6 +371,7 @@ def offer_object_exchange(
             requested_object_revision=int(requested.revision or 1),
             status="open",
             offered_at_location=context.location,
+            created_at=_utcnow(now),
         )
         db.add(exchange)
         db.flush()
@@ -375,6 +385,7 @@ def offer_object_exchange(
             payload=payload,
             summary=f"{offered.name} is offered in exchange for {requested.name}.",
             delta={"object_exchange": payload},
+            now=now,
         )
     except IntegrityError:
         return _recover_duplicate(
@@ -394,6 +405,7 @@ def accept_object_exchange(
     session_id: str,
     exchange_id: str,
     idempotency_key: str,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     """Recheck the exact terms and atomically swap both objects."""
 
@@ -463,7 +475,9 @@ def accept_object_exchange(
         requested.revision = int(requested.revision or 1) + 1
         exchange.status = "completed"
         exchange.completed_at_location = context.location
-        exchange.resolved_at = _utcnow()
+        exchange.resolved_at = _utcnow(now)
+        offered.updated_at = _utcnow(now)
+        requested.updated_at = _utcnow(now)
         db.flush()
         payload = _exchange_payload(exchange, offered=offered, requested=requested)
         return _finish_exchange_command(
@@ -480,6 +494,7 @@ def accept_object_exchange(
                     "before": before,
                 }
             },
+            now=now,
         )
     except IntegrityError:
         return _recover_duplicate(
@@ -501,6 +516,7 @@ def _resolve_open_exchange(
     exchange_id: str,
     idempotency_key: str,
     resolution: str,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     _require_exchange_capabilities()
     context = consequence_actor_context(db, session_id)
@@ -535,7 +551,7 @@ def _resolve_open_exchange(
                 status_code=403,
             )
         exchange.status = resolution
-        exchange.resolved_at = _utcnow()
+        exchange.resolved_at = _utcnow(now)
         offered, requested = _object_rows_for_exchange(db, exchange)
         db.flush()
         payload = _exchange_payload(exchange, offered=offered, requested=requested)
@@ -549,6 +565,7 @@ def _resolve_open_exchange(
             payload=payload,
             summary=f"The exchange of {offered.name} for {requested.name} is {verb}.",
             delta={"object_exchange": payload},
+            now=now,
         )
     except IntegrityError:
         return _recover_duplicate(
@@ -569,6 +586,7 @@ def decline_object_exchange(
     session_id: str,
     exchange_id: str,
     idempotency_key: str,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     return _resolve_open_exchange(
         db,
@@ -576,6 +594,7 @@ def decline_object_exchange(
         exchange_id=exchange_id,
         idempotency_key=idempotency_key,
         resolution="declined",
+        now=now,
     )
 
 
@@ -585,6 +604,7 @@ def cancel_object_exchange(
     session_id: str,
     exchange_id: str,
     idempotency_key: str,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     return _resolve_open_exchange(
         db,
@@ -592,6 +612,7 @@ def cancel_object_exchange(
         exchange_id=exchange_id,
         idempotency_key=idempotency_key,
         resolution="cancelled",
+        now=now,
     )
 
 

@@ -16,6 +16,7 @@ from ...services.actor_authority import (
     get_request_actor_credentials,
 )
 from ...services.consequence_objects import ConsequenceDomainError
+from ...services.clock import Clock, get_world_clock
 from ...services.material_making import make_durable_object, making_catalog
 
 router = APIRouter(prefix="/world", tags=["world making"])
@@ -41,6 +42,7 @@ def get_local_making_catalog(
     session_id: str = Query(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_-]+$"),
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ) -> dict[str, Any]:
     """Electively inspect only materials and recipes available right here."""
 
@@ -48,7 +50,7 @@ def get_local_making_catalog(
         db, credentials=credentials, session_id=session_id
     )
     try:
-        return making_catalog(db, session_id=session_id)
+        return making_catalog(db, session_id=session_id, now=world_clock.now())
     except ConsequenceDomainError as exc:
         _raise_http(exc)
 
@@ -58,6 +60,7 @@ def post_make_object(
     payload: MakeObjectRequest,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ) -> dict[str, Any]:
     """Make one declared object through the typed consequence boundary."""
 
@@ -70,6 +73,7 @@ def post_make_object(
             session_id=payload.session_id,
             recipe_id=payload.recipe_id,
             idempotency_key=payload.idempotency_key,
+            now=world_clock.now(),
         ).to_dict()
     except ConsequenceDomainError as exc:
         _raise_http(exc)

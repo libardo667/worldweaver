@@ -1,5 +1,7 @@
 """Contract tests for canonical world-event submission."""
 
+from datetime import datetime, timezone
+
 import pytest
 
 from src.models import WorldEvent, WorldFact, WorldProjection
@@ -37,6 +39,30 @@ def test_submits_observational_event_and_reports_projection(db_session):
     assert receipt.event_type == PERMANENT_EVENT_TYPE
     assert receipt.reducer_receipt is None
     assert receipt.projection_paths == ("environment.north_gate",)
+
+
+def test_explicit_world_instant_reaches_event_and_projection(db_session):
+    occurred_at = datetime(2032, 4, 5, 6, 7, tzinfo=timezone.utc)
+
+    receipt = submit_world_event(
+        db_session,
+        WorldEventCommand(
+            session_id="controlled-world-time",
+            event_type=EVENT_TYPE_FREEFORM_ACTION,
+            summary="The controlled gate closes.",
+            delta={"environment": {"controlled_gate": "closed"}},
+            occurred_at=occurred_at,
+        ),
+    )
+
+    expected = occurred_at.replace(tzinfo=None)
+    assert receipt.event.created_at == expected
+    projection = (
+        db_session.query(WorldProjection)
+        .filter(WorldProjection.path == "environment.controlled_gate")
+        .one()
+    )
+    assert projection.updated_at == expected
 
 
 def test_reduces_intent_and_persists_reducer_receipt(db_session):

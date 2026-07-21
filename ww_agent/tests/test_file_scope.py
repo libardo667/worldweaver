@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from src.familiar.file_scope import FileScope
 from src.familiar.local_world import LocalWorld
@@ -10,6 +10,7 @@ from src.familiar import visual
 from src.runtime.information import InformationSourceRegistry
 from src.runtime.prompt_context import PulseContext, render_affordance_catalog
 from src.runtime.travel import TravelRequest
+from src.runtime.world_clock import FixedWorldClock
 from src.runtime.perception import _reachable_destinations
 
 
@@ -352,3 +353,47 @@ def test_keeper_whisper_rouses_once_without_replaying_on_world_build(tmp_path):
         familiar_name="Resident",
     )
     assert rebuilt.take_force_ignite() is False
+
+
+def test_local_world_uses_injected_world_time_for_grounding_and_records(tmp_path):
+    instant = datetime(2034, 5, 6, 7, 8, 9, tzinfo=timezone.utc)
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / "whispers.jsonl").write_text(
+        "\n".join(
+            (
+                json.dumps(
+                    {
+                        "ts": (instant - timedelta(seconds=30)).isoformat(),
+                        "text": "Still here?",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "ts": (instant - timedelta(seconds=121)).isoformat(),
+                        "text": "Too old",
+                    }
+                ),
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    world = LocalWorld(
+        home_dir=home,
+        keeper_name="Levi",
+        world_clock=FixedWorldClock(instant),
+    )
+
+    grounding = asyncio.run(world.get_grounding())
+    heard = asyncio.run(world.get_location_chat("the hearth"))
+    scene = asyncio.run(world.get_scene("resident-hearth"))
+    asyncio.run(world.post_location_chat("the hearth", "resident-hearth", "Hello"))
+
+    local_instant = instant.astimezone()
+    assert grounding["hour"] == local_instant.hour
+    assert grounding["day_of_week"] == local_instant.strftime("%A")
+    assert grounding["weather"] == ""
+    assert [message.message for message in heard] == ["Still here?"]
+    assert scene.recent_events_here[0].ts == instant.isoformat()
+    assert world.spoken[-1]["ts"] == instant.isoformat()

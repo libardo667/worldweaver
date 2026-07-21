@@ -26,6 +26,7 @@ from ..models import (
     SpaceAccessRequest,
     WorldNode,
 )
+from .clock import utc_naive
 from .event_submission import (
     WorldEventCommand,
     structural_event_idempotency_key,
@@ -62,8 +63,12 @@ class ActorContext:
     location: str
 
 
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+def _utcnow(now: datetime | None = None) -> datetime:
+    return (
+        utc_naive(now)
+        if now is not None
+        else datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
 
 def _variables(raw: Any) -> dict[str, Any]:
@@ -412,6 +417,7 @@ def _record_receipt(
     location: str,
     result: dict[str, Any],
     public_event: dict[str, Any] | None = None,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     world_event_id: int | None = None
     if public_event is not None:
@@ -430,6 +436,7 @@ def _record_receipt(
                 skip_projection=True,
                 preserve_event_type=True,
                 defer_commit=True,
+                occurred_at=now,
             ),
         )
         world_event_id = event.event_id
@@ -441,6 +448,7 @@ def _record_receipt(
         location=location,
         world_event_id=world_event_id,
         payload_json=result,
+        created_at=_utcnow(now),
     )
     db.add(receipt)
     db.commit()
@@ -506,6 +514,7 @@ def set_space_mode(
     mode: AccessMode,
     idempotency_key: str,
     note: str | None = None,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     operation = "space_mode_changed"
     context, key, location, replay = _begin_command(
@@ -542,6 +551,7 @@ def set_space_mode(
     if note is not None:
         row.note = str(note or "").strip()[:500]
     row.revision = int(row.revision or 1) + 1
+    row.updated_at = _utcnow(now)
     db.flush()
     result = {
         "before": before,
@@ -570,6 +580,7 @@ def set_space_mode(
                     }
                 },
             },
+            now=now,
         )
     except IntegrityError:
         return _recover_duplicate(
@@ -588,6 +599,7 @@ def request_space_access(
     location: str,
     idempotency_key: str,
     note: str = "",
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     operation = "space_access_requested"
     context, key, location, replay = _begin_command(
@@ -635,6 +647,7 @@ def request_space_access(
         requester_actor_id=context.actor_id,
         requester_session_id=context.session_id,
         note=str(note or "").strip()[:500],
+        created_at=_utcnow(now),
     )
     db.add(request)
     db.flush()
@@ -654,6 +667,7 @@ def request_space_access(
             operation=operation,
             location=location,
             result=result,
+            now=now,
         )
     except IntegrityError:
         return _recover_duplicate(
@@ -672,6 +686,7 @@ def invite_to_space(
     recipient_session_id: str,
     location: str,
     idempotency_key: str,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     operation = "space_access_granted"
     context, key, location, replay = _begin_command(
@@ -714,12 +729,15 @@ def invite_to_space(
             actor_id=recipient_actor_id,
             active=True,
             granted_by_actor_id=context.actor_id,
+            created_at=_utcnow(now),
+            updated_at=_utcnow(now),
         )
         db.add(grant)
     else:
         grant.active = True
         grant.granted_by_actor_id = context.actor_id
         grant.revision = int(grant.revision or 1) + 1
+        grant.updated_at = _utcnow(now)
     db.flush()
     result = {
         "grant": {"location": location, "actor_id": recipient_actor_id, "active": True}
@@ -732,6 +750,7 @@ def invite_to_space(
             operation=operation,
             location=location,
             result=result,
+            now=now,
         )
     except IntegrityError:
         return _recover_duplicate(
@@ -750,6 +769,7 @@ def revoke_space_access(
     recipient_session_id: str,
     location: str,
     idempotency_key: str,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     operation = "space_access_revoked"
     context, key, location, replay = _begin_command(
@@ -786,6 +806,7 @@ def revoke_space_access(
         )
     grant.active = False
     grant.revision = int(grant.revision or 1) + 1
+    grant.updated_at = _utcnow(now)
     db.flush()
     result = {
         "grant": {"location": location, "actor_id": recipient_actor_id, "active": False}
@@ -798,6 +819,7 @@ def revoke_space_access(
             operation=operation,
             location=location,
             result=result,
+            now=now,
         )
     except IntegrityError:
         return _recover_duplicate(
@@ -857,6 +879,7 @@ def resolve_access_request(
     request_id: str,
     decision: RequestDecision,
     idempotency_key: str,
+    now: datetime | None = None,
 ) -> dict[str, Any]:
     _require_space_permissions()
     context = _actor_context(db, session_id)
@@ -901,7 +924,7 @@ def resolve_access_request(
         )
     request.status = decision
     request.resolved_by_actor_id = context.actor_id
-    request.resolved_at = _utcnow()
+    request.resolved_at = _utcnow(now)
     if decision == "admitted":
         grant = (
             db.query(SpaceAccessGrant)
@@ -919,12 +942,15 @@ def resolve_access_request(
                     actor_id=request.requester_actor_id,
                     active=True,
                     granted_by_actor_id=context.actor_id,
+                    created_at=_utcnow(now),
+                    updated_at=_utcnow(now),
                 )
             )
         else:
             grant.active = True
             grant.granted_by_actor_id = context.actor_id
             grant.revision = int(grant.revision or 1) + 1
+            grant.updated_at = _utcnow(now)
     db.flush()
     result = {
         "request": {
@@ -942,6 +968,7 @@ def resolve_access_request(
             operation=operation,
             location=location,
             result=result,
+            now=now,
         )
     except IntegrityError:
         return _recover_duplicate(

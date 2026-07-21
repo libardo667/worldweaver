@@ -181,30 +181,96 @@ Run the streamed proof with:
 python dev.py gym --episode resident-return
 ```
 
-### First model-backed live control — July 21, 2026
+### Two-way model participant adapter — July 21, 2026
 
-After the mechanical proof passed, the supported operator path created Tansy as a new name-only resident. The
-creation wrote no biography, vocation, voice samples, model output, or ledger history. Alderbank separately
-admitted the public identity card and activated generation 1 before a read-only preflight checked the hearth,
-runtime lock, model configuration, city health, and world seed.
+`The Model Appointment` now runs a disposable model-backed reference resident inside the isolated gym. The
+engine owns the synthetic database and the agent owns its synthetic hearth and model client in a separate
+process. Its first adapter used a versioned stdio vocabulary of named scene, speech, correspondence, place, and
+movement operations. That vocabulary has now been removed: stdio carries generic HTTP bytes from the ordinary
+`WorldWeaverClient`, and the parent dispatches them through the actual FastAPI application with its database
+dependency bound to the isolated gym database.
 
-Tansy then received exactly one live reference-loop activation using the shard's configured
-`google/gemini-3-flash-preview` model at its own default temperature. The structural result was:
+The synthetic resident has a real host-sealed identity. The client performs public shard-audience discovery,
+issues a short-lived runtime certificate, and signs exact encoded request targets and bodies. The gym explicitly
+admits only that disposable public identity, activates its runtime generation, binds it to the synthetic
+session, and then relies on the normal resident authorization and replay-nonce path. The structural record
+retains only method, path, status, and whether complete proof headers were present; it never stores the
+certificate, signature, nonce, request body, or private query.
 
-- 2 inference calls, because Tansy chose one elective read and then made a final choice;
-- 1,438 prompt tokens and 67 completion tokens;
-- one confirmed `move`, from Alderbank Commons to Commons Bank;
-- no public speech, no private continuation, and no failed or uncertain action;
-- 6.801 seconds elapsed before the bounded runner retired the city session and parked Tansy at the hearth.
+The child now enters through the normal `Resident` host. Its synthetic home carries a normal active
+hearth-generation record, the host takes the exclusive runtime lease, resumes the authorized city session,
+reads the node's public experience and city-pack profile, constructs the ordinary city source registry, binds
+the process, builds the shared reference core, and records a clean suspension before releasing custody. A
+bounded `Resident.run_scheduled_return` entrypoint lets the engine offer one exact idempotent appointment
+without substituting the polling loop or bypassing host ownership.
 
-Only the runner's structural counters and the public city movement receipt were inspected. The private query,
-source result, prompts, completions, and ledger prose were not opened. A post-run preflight showed the hearth
-lock free and no city-local session state left behind.
+The synthetic node identifies itself as `resident_gym` and publishes an ordinary commons with no optional game
+capabilities. The host therefore offers `measure`, `recall`, `places`, and `travel`, while correctly withholding
+objects, making, exchange, access, and stoops. The deterministic conformance proof performs an elective
+`measure` read and then requests travel home. It proves that unsigned readiness discovery and signed profile,
+scene, and `/api/session/leave` requests receive 200 responses through the production routes. The normal host
+changes attachment only after that retirement succeeds, binds its private process checkpoint to `hearth`, and
+releases custody. A second agent process restarts the same stopped home at a real `LocalWorld`, observes the
+hearth at the controlled instant with zero model calls, and proves the city sources were replaced by `growth`,
+`measure`, and `recall`. The synthetic database contains no remaining city session for that actor. Private
+query, result, prompts, completions, and activity prose do not enter the structural trajectory.
 
-This is one control, not a capability claim. It does show that a minimal identity can use elective information
-and take a grounded public action without ambient narration or a hand-authored personality. The next useful
-work is to put model-backed participants inside versioned gym scenarios, then repeat across models and seeds.
-Access/custody, travel, stale-decision timing, and fault-injection scenarios remain open.
+Run a real configured model without starting a live town:
+
+```bash
+export WW_INFERENCE_KEY=... WW_INFERENCE_MODEL=google/gemini-3-flash-preview
+python dev.py gym --episode resident-model
+```
+
+The earlier Tansy activation in Alderbank was a bounded live-town smoke run produced by a misunderstanding of
+this next step. It did not exercise the gym adapter and is not evidence for Major 142. Keep it classified as
+out-of-scope historical operation, and do not run more live-town residents while model-gym scenario and fault
+coverage remain the active work.
+
+### Fidelity consolidation — July 21, 2026
+
+The gym must be a controlled way to run WorldWeaver, not a second WorldWeaver implementation. The first
+consolidation slice removes duplicate resident composition: the normal `Resident` host and model gym now call
+one builder in `ww_agent/src/resident.py` for `ReferenceResidentCore`, `WorldEffector`, `InformationAccess`,
+and `Workshop`. Identity loading, process binding, exclusive hearth custody, and attachment lifecycle remain
+host responsibilities and are not smuggled into that builder.
+
+Episode schema version 8 includes a machine-readable fidelity profile. The current model episode truthfully
+claims the actual FastAPI routes and production engine services, synthetic SQLite state, shared reference-core
+composition under the normal `Resident` host, ordinary `WorldWeaverClient` HTTP carried over generic stdio
+bytes, signed runtime-certificate authorization, node-published city sources followed by the actual hearth
+registry, controlled world time across the exercised engine and resident semantics, confirmed city retirement,
+a real `LocalWorld` restart, portable artifacts, and no federation coverage. The stopped home retains its
+host-sealed identity; the exported artifacts
+deliberately do not. That is useful evidence but not a full-shard claim.
+
+The next bounded slice should inject scenario-level process and transport failures around this transition,
+then repeat a selected path against a listening server or container. Optional constructive-game capabilities
+and federation require their own explicit scenarios. Do not grow a parallel list of gym-only world abilities
+in the meantime.
+
+The controlled-time HTTP prerequisite is now closed for the routes exercised by the model appointment. Live
+requests receive `SystemClock`; the isolated gym overrides the same FastAPI dependency with its controlled
+clock. Scene building, sublocation listing and creation, and movement resolution therefore agree at one virtual
+instant. The model conformance test compares the direct activation scene with the signed HTTP scene at the
+willow bench's deadline, and an API test proves an expired child place disappears from both representations and
+cannot be entered through movement. Authorization expiry, nonces, process durations, and model latency remain
+real-time concerns.
+
+The persistence half now agrees too. Session bootstrap and movement updates, local speech, canonical world
+events, fact validity, and projection updates accept the same explicit world instant. Before producing a model
+episode result, the gym audits every exercised row against the trajectory's controlled instants and refuses the
+result if any row silently used wall time. Correspondence, traces, polls, grounding, durable objects, making,
+exchange, stoop, and access HTTP commands now receive this dependency as well, so future capability scenarios
+do not need another time architecture. Federation transfer records remain outside the claim alongside the
+federation boundary itself. Security expiry, replay guards, rate limits, cache freshness, process timing, and
+model latency deliberately remain real or monotonic.
+
+The resident half now has its matching clock seam. `Resident` and `LocalWorld` default to real UTC, while the
+gym child receives the engine appointment's controlled instant. Normal core ticks, hearth grounding, whisper
+freshness, hearth scene events, local reads, and voice records use that injected world time. Runtime leases,
+process suspension duration, retry sleeps, certificate expiry, nonce validation, and inference latency remain
+on their operational clocks.
 
 ### Scenario coverage map — July 21, 2026
 
@@ -220,11 +286,11 @@ participant/model families. Each family needs generated variation, repeated tria
 wording, ordering, and seeds. One attractive transcript never counts as coverage. The maintained matrix and
 current status live in `docs/reference/resident-gym.md`.
 
-The terminal runner now streams each structural record as the corresponding production receipt or signal read
+The terminal runner streams each structural record as the corresponding production receipt or signal read
 returns, while still writing the finished HTML report. This is a real callback at record creation rather than
-post-run animation. It provides the observation surface needed for the first resident adapter: emit content-safe
-boundaries for waiting, observation delivery, inference start/finish, choice kind, action receipt, retry, and
-scheduled return, without exposing private reasoning or hearth prose.
+post-run animation. The model adapter uses that surface for content-safe observation, inference start/finish,
+choice, action receipt, retry, and scheduled-return boundaries without exposing private reasoning or hearth
+prose.
 
 ## Files Affected
 

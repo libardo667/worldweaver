@@ -13,6 +13,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ..models import DirectMessage, Player, ResidentAuthority, SessionVars
+from .clock import utc_naive
 
 
 class CorrespondenceError(ValueError):
@@ -147,6 +148,7 @@ def send_correspondence(
     db: Session,
     *,
     command: SendCorrespondenceCommand,
+    now: datetime | None = None,
 ) -> CorrespondenceReceipt:
     """Store one private message between durable actors."""
 
@@ -183,6 +185,7 @@ def send_correspondence(
         recipient_actor_id=recipient_actor_id,
         to_name=recipient_actor_id,
         body=body,
+        sent_at=utc_naive(now) if now is not None else None,
     )
     try:
         db.add(row)
@@ -250,6 +253,7 @@ def acknowledge_correspondence(
     *,
     session_id: str,
     message_ids: Iterable[int],
+    now: datetime | None = None,
 ) -> CorrespondenceAcknowledgement:
     """Acknowledge only messages addressed to the caller's durable actor."""
 
@@ -288,13 +292,17 @@ def acknowledge_correspondence(
             status_code=403,
         )
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    acknowledged_at = (
+        utc_naive(now)
+        if now is not None
+        else datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     changed: list[int] = []
     try:
         for row in rows:
             if row.acknowledged_at is None:
-                row.acknowledged_at = now
-                row.read_at = now
+                row.acknowledged_at = acknowledged_at
+                row.read_at = acknowledged_at
                 changed.append(int(row.id))
         db.commit()
     except Exception as exc:
