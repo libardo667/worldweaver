@@ -64,6 +64,13 @@ The complete ledger file is append-only and is intended to be the resident's dur
 versioned checkpoint is intended to hold current working state so normal ticks do not replay the entire life
 history, and it can be rebuilt from the ledger.
 
+The first persistent-process slice uses that existing checkpoint rather than adding another memory file. A
+confirmed reference-loop action adds a versioned receipt containing its kind, place, target, time, resident
+ledger event ID, and any stable world identifier returned by the typed action. The checkpoint retains the
+newest twelve; a rebuilt reference core can present the newest five as exact fields. It does not retain action
+prose, invent a summary, or promote declined and unknown attempts. The city continues to own the public
+consequence while the hearth keeps the resident's private receipt that the city confirmed it.
+
 That checkpoint path was repaired in Major 137. Unfinished routes, mail, research, packets, and
 intents now advance from checkpoint state rather than being reconstructed from the newest 10,000 events.
 Completed queue history may be bounded, but it cannot evict older open work. New appends are serialized,

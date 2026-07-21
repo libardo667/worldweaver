@@ -8,7 +8,11 @@
   clock; the core keeps its own cadence.
 - `runtime/reference_core.py` — production resident loop. It observes current-place facts, accepts a
   cursor-delivered local-speech batch without fetching it again, activates on a new local signal or slow
-  baseline, permits one elective read, and accepts one final action, private continuation, or wait choice.
+  baseline, permits one elective read, and accepts one final action, private continuation, or wait choice. A
+  rebuilt core loads a bounded typed view of its own recently confirmed actions from the private checkpoint;
+  it does not restore prompts, completions, or action prose.
+- `runtime/process_state.py` — small versioned resident-process fields that can be shared by the reference
+  adapter and later model adapters. It currently defines confirmed-action receipts and their exact renderer.
 - `runtime/cognitive_core.py` — audited predecessor. It is not constructed by the resident host; keep it only
   as comparison and selective migration material until its remaining useful contracts are separated.
 - `runtime/ledger.py` — append-only event history and a versioned current-state checkpoint. Major 137 is
@@ -16,8 +20,11 @@
   a serialized, durably flushed sequence; an incomplete final write is quarantined and completed-record
   corruption stops replay. Open routes, mail, research, packets, and intents advance from the checkpoint and
   cannot be evicted by bounded recent history. Replay clocks are explicit, and queue expiry produces a named
-  terminal event. Normal append writes no standalone projection or snapshot shadows. It also derives the small relationship view from prompt-delivery and reply edges. These
-  private projections stay in the hearth and are not copied into city session storage.
+  terminal event. Normal append writes no standalone projection or snapshot shadows. It also derives the
+  small relationship view from prompt-delivery and reply edges. These private projections stay in the hearth
+  and are not copied into city session storage. Its runtime projection keeps no more than twelve versioned
+  confirmed-action receipts so a restart can recover exact bookkeeping without replaying or summarizing a
+  resident's life.
 - `runtime/prompt_trace.py` — legacy-core diagnostic code; it is not wired into the production reference loop.
 - `runtime/prompt_context.py` — typed available/selected/withheld source envelope and final prose renderer.
 - `runtime/information.py` — private elective source access plus the structured provider-record contract;

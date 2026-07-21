@@ -115,6 +115,11 @@ fence stale results when the world changes during inference. Begin with one synt
 open-weight model. Do not restore CognitiveCore under new names, generate an endless inner monologue, or claim
 that process continuity proves a human-like inner life.
 
+Major 141's first slice is now in place. The existing private checkpoint retains a bounded typed view of
+confirmed own actions, and a rebuilt reference core can recover exact action kind, place, target, time, and
+stable identifiers without receiving action prose. A synthetic mark survives core destruction and rebuild.
+Next, give an explicitly continued private activity a stable reference and resident-chosen return time.
+
 ### 4. Add the private-to-public making boundary
 
 Let a person or resident deliberately share a bounded note or made file at one place. Record authorship,

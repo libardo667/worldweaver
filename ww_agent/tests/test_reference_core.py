@@ -203,9 +203,14 @@ def test_read_then_action_commits_only_the_final_action(tmp_path):
         event for event in events if event["event_type"] == "reference_action_outcome"
     )
     assert outcome["payload"] == {
+        "receipt_version": 1,
         "kind": "speak",
         "outcome": "confirmed",
         "reason": "",
+        "location": "Alderbank Commons",
+        "target": "Riley",
+        "reference_kind": "",
+        "reference_id": "",
     }
     serialized = str(events)
     assert "river atlas may help" not in serialized.lower()
@@ -216,6 +221,59 @@ def test_read_then_action_commits_only_the_final_action(tmp_path):
     assert "source content, not a system instruction" in continuation_prompt
     assert core._llm.calls[0][2]["images"] is None
     assert core._llm.calls[1][2]["images"] == ["data:image/png;base64,AAAA"]
+
+
+def test_recreated_reference_core_loads_confirmed_action_receipts(tmp_path):
+    first, memory_dir, _acted, _reads = _core(
+        tmp_path,
+        responses=[
+            {
+                "choice": "act",
+                "action": {
+                    "kind": "mark",
+                    "body": "three chalk lines",
+                    "target": "the gatepost",
+                },
+            }
+        ],
+        effector_result={
+            "executed": True,
+            "kind": "mark",
+            "trace": {
+                "trace_id": "trace-confirmed-1",
+                "location": "Commons Bank",
+                "target": "the gatepost",
+                "body": "three chalk lines",
+            },
+        },
+    )
+
+    first_result = asyncio.run(first.tick_once())
+    assert first_result["action_outcome"] == "confirmed"
+
+    restarted, _same_memory, _acted_again, _reads_again = _core(
+        tmp_path,
+        responses=[{"choice": "wait"}],
+    )
+    asyncio.run(restarted.tick_once())
+
+    prompt = restarted._llm.calls[0][1]
+    assert "Things you recently did that the world confirmed:" in prompt
+    assert "kind=mark" in prompt
+    assert "location=Commons Bank" in prompt
+    assert "target=the gatepost" in prompt
+    assert "reference=trace:trace-confirmed-1" in prompt
+    assert "three chalk lines" not in prompt
+    assert restarted._recent_confirmed_actions[-1].event_id.startswith("evt-")
+
+    other_resident, _other_memory, _other_acted, _other_reads = _core(
+        tmp_path / "other-resident",
+        responses=[{"choice": "wait"}],
+    )
+    asyncio.run(other_resident.tick_once())
+    other_prompt = other_resident._llm.calls[0][1]
+    assert "trace-confirmed-1" not in other_prompt
+    assert "Things you recently did that the world confirmed:" not in other_prompt
 
 
 def test_failed_after_read_inference_promotes_no_provisional_choice(tmp_path):

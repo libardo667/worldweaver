@@ -34,6 +34,9 @@ inputs in the identity loader; they do not restore the old ownership model.
   root. Portraits and smoke runners may observe ticks but must not instantiate their own resident core.
 - Durable observations and actions enter the append-only ledger. Runtime views are projections, not a
   second source of truth, and they stay in the hearth rather than being copied into city session storage.
+- A confirmed reference-loop action writes a versioned structural receipt. The checkpoint retains at most
+  twelve and the prompt may show at most five, using only kind, place, target, time, and stable identifiers.
+  Never turn those receipts into model-written summaries or copy action prose into this working-state view.
 - Normal resident creation is model-free and one-at-a-time. It writes a chosen name, stable ID, dormant
   hearth manifest, public identity card, and host-sealed signing key while leaving the private ledger empty.
   City admission, activation, and waking are separate operator acts. The old Doula and its model-written

@@ -47,6 +47,10 @@ on that normal timer. A refresh calls the model only on first start, new local s
 or the slow five-minute baseline. The summary separates observations from activations
 and reports reads, action outcomes, attachments, and cleanup without reproducing private writing.
 
+When a bounded run stops and a later run rebuilds the reference core, the private checkpoint restores a
+bounded list of exact confirmed-action receipts. This preserves simple bookkeeping such as a recent mark's
+place and trace ID. It does not restore a hidden model conversation or copy action prose into the next prompt.
+
 ## Run a bounded cohort
 
 Preflight everyone first:

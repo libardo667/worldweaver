@@ -16,6 +16,7 @@ from typing import Any, Iterator
 import fcntl
 
 from src.runtime.relations import RELATIONAL_EVENT_SCHEMA_VERSION
+from src.runtime.process_state import project_confirmed_action_receipt
 
 _LEDGER_FILENAME = "runtime_ledger.jsonl"
 _CHECKPOINT_FILENAME = "runtime_checkpoint.json"
@@ -31,14 +32,15 @@ _LEGACY_DERIVED_FILENAMES = {
 }
 
 CHECKPOINT_FORMAT_VERSION = 2
-REDUCER_FORMAT_VERSION = 4
+REDUCER_FORMAT_VERSION = 5
 PROJECTION_FORMAT_VERSIONS = {
-    "runtime": 1,
+    "runtime": 2,
     "subjective": 1,
     "memory": 1,
     "subjective_facts": 1,
     "cognitive": 1,
 }
+RECENT_CONFIRMED_ACTION_LIMIT = 12
 PACKET_PROJECTION_LIMIT = 200
 INTENT_PROJECTION_LIMIT = 100
 MAIL_INTENT_PROJECTION_LIMIT = 100
@@ -833,6 +835,7 @@ def _build_runtime_projection(
     last_movement: dict[str, Any] | None = None
     last_mail: dict[str, Any] | None = None
     last_research: dict[str, Any] | None = None
+    recent_confirmed_actions: list[dict[str, Any]] = []
 
     for event in events:
         event_type = str(event.get("event_type") or "").strip()
@@ -879,6 +882,9 @@ def _build_runtime_projection(
                 "query": str(payload.get("query") or "").strip(),
                 "priority": str(payload.get("priority") or "").strip(),
             }
+        action_receipt = project_confirmed_action_receipt(event)
+        if action_receipt is not None:
+            recent_confirmed_actions.append(action_receipt)
 
     return {
         "updated_at": as_of,
@@ -899,6 +905,9 @@ def _build_runtime_projection(
                 "ts": str(event.get("ts") or "").strip(),
             }
             for event in events[-20:]
+        ],
+        "recent_confirmed_actions": recent_confirmed_actions[
+            -RECENT_CONFIRMED_ACTION_LIMIT:
         ],
         "last_grounding": last_grounding,
         "last_movement": last_movement,
@@ -2232,6 +2241,12 @@ def _advance_runtime_projection(
             "ts": str(event.get("ts") or "").strip(),
         }
     )
+    recent_confirmed_actions = list(
+        runtime_projection.get("recent_confirmed_actions") or []
+    )
+    action_receipt = project_confirmed_action_receipt(event)
+    if action_receipt is not None:
+        recent_confirmed_actions.append(action_receipt)
     runtime_projection.update(
         {
             "updated_at": _replay_as_of_iso([event]),
@@ -2242,6 +2257,9 @@ def _advance_runtime_projection(
             or None,
             "event_counts": event_counts,
             "recent_events": recent_events[-20:],
+            "recent_confirmed_actions": recent_confirmed_actions[
+                -RECENT_CONFIRMED_ACTION_LIMIT:
+            ],
         }
     )
     if event_type in {"grounding_observed", "ground_intent_executed"}:
@@ -2286,6 +2304,14 @@ def _advance_runtime_projection(
             "priority": str(payload.get("priority") or "").strip(),
         }
     return runtime_projection
+
+
+def load_recent_confirmed_actions(memory_dir: Path) -> list[dict[str, Any]]:
+    """Load the bounded confirmed-action view from the private checkpoint state."""
+
+    state = load_current_runtime_state(memory_dir)
+    actions = list(state.runtime_projection.get("recent_confirmed_actions") or [])
+    return deepcopy(actions[-RECENT_CONFIRMED_ACTION_LIMIT:])
 
 
 def _advance_lifecycle_state(state: dict[str, Any], event: dict[str, Any]) -> tuple[

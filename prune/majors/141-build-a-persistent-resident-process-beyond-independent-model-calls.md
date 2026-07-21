@@ -59,6 +59,19 @@ then support an open-weight recurrent or compact-state model without changing ci
    showing that later choices reflect those different histories. This is a software claim, not evidence of
    consciousness or a human-equivalent inner life.
 
+## First slice — confirmed own actions (2026-07-20)
+
+The existing private `runtime_checkpoint.json` now carries the newest twelve versioned, typed receipts for
+actions the engine confirmed. Each retains only the resident ledger event ID, time, action kind, place, target,
+and an available stable world identifier. The reference loop loads this view when a new core is built and may
+show the newest five as exact fields. It does not store action prose, generate a recap, or promote declined,
+unknown, and old untyped outcomes.
+
+A synthetic mark test discards the first core, builds a second one over the same hearth, and proves that the
+second prompt contains the confirmed place, target, and trace ID without the mark body. Checkpoint-backed and
+full-ledger rebuild paths produce the same bounded list. This solves the Mira bookkeeping failure; it does not
+yet preserve open activities, resident timers, model state, or elapsed-time distinctions.
+
 ## Files Affected
 
 - `ww_agent/src/resident.py`
@@ -77,7 +90,7 @@ then support an open-weight recurrent or compact-state model without changing ci
 
 - [ ] One versioned private checkpoint is sufficient to stop and restore a synthetic resident process without
   reconstructing open activities from recent prose.
-- [ ] After a confirmed action, the resident can later identify that action from a bounded typed receipt even
+- [x] After a confirmed action, the resident can later identify that action from a bounded typed receipt even
   when the ordinary scene does not show the actor its own public trace.
 - [ ] A resident can schedule a later opportunity to think and can separately name event classes that may
   offer an earlier activation.

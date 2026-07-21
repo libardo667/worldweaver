@@ -754,6 +754,56 @@ def test_current_state_and_queue_readers_use_the_checkpoint(
     assert ledger.derive_research_queue(tmp_path) == []
 
 
+def test_confirmed_action_receipts_are_bounded_and_checkpoint_backed(
+    tmp_path, monkeypatch
+) -> None:
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="reference_action_outcome",
+        payload={"kind": "mark", "outcome": "confirmed"},
+    )
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="reference_action_outcome",
+        payload={
+            "receipt_version": 1,
+            "kind": "mark",
+            "outcome": "declined",
+            "location": "Commons Bank",
+        },
+    )
+    for index in range(14):
+        ledger.append_runtime_event(
+            tmp_path,
+            event_type="reference_action_outcome",
+            payload={
+                "receipt_version": 1,
+                "kind": "mark",
+                "outcome": "confirmed",
+                "location": "Commons Bank",
+                "target": f"surface-{index}",
+                "reference_kind": "trace",
+                "reference_id": f"trace-{index}",
+            },
+        )
+
+    original_load = ledger._load_events
+    actions = ledger.load_recent_confirmed_actions(tmp_path)
+    assert len(actions) == ledger.RECENT_CONFIRMED_ACTION_LIMIT
+    assert actions[0]["reference_id"] == "trace-2"
+    assert actions[-1]["reference_id"] == "trace-13"
+
+    def reject_cold_load(_memory_dir):
+        raise AssertionError("confirmed actions must load from a current checkpoint")
+
+    monkeypatch.setattr(ledger, "_load_events", reject_cold_load)
+    assert ledger.load_recent_confirmed_actions(tmp_path) == actions
+
+    monkeypatch.setattr(ledger, "_load_events", original_load)
+    ledger.rebuild_runtime_artifacts(tmp_path)
+    assert ledger.load_recent_confirmed_actions(tmp_path) == actions
+
+
 def test_normal_append_writes_only_the_ledger_and_checkpoint(tmp_path) -> None:
     ledger.append_runtime_event(tmp_path, event_type="first", payload={})
     ledger.append_runtime_event(tmp_path, event_type="second", payload={})

@@ -29,6 +29,12 @@ that survive bounded history. An ordinary reference-loop tick does not parse col
 completions, read results, and action prose are not retained. A final private continuation is recorded only in
 the resident's private ledger.
 
+The checkpoint now also retains the newest twelve confirmed reference-loop actions as typed receipts. A newly
+built reference core loads them and may show the newest five as exact kind, place, target, time, and stable
+world identifiers. This lets a resident recover ordinary facts such as having recently left a mark without
+storing the mark's prose or asking the city to hold private continuity. Declined, unknown, and older untyped
+action records are not promoted into that view.
+
 ## Run from the repository root
 
 Install and test:

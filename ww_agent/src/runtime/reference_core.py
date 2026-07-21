@@ -19,7 +19,12 @@ from typing import Any, Awaitable, Callable
 
 from src.identity.loader import ResidentIdentity
 from src.inference.client import InferenceClient
-from src.runtime.ledger import append_runtime_event
+from src.runtime.ledger import append_runtime_event, load_recent_confirmed_actions
+from src.runtime.process_state import (
+    ConfirmedActionReceipt,
+    confirmed_action_payload,
+    render_confirmed_action_receipt,
+)
 from src.runtime.pulse import Act, PulseValidationError, Reach
 from src.runtime.relations import chat_utterance_id
 from src.world.client import LiveSignal
@@ -145,6 +150,7 @@ class ReferenceObservation:
     traces: tuple[str, ...] = ()
     reachable: tuple[str, ...] = ()
     sources: tuple[ReferenceSource, ...] = ()
+    recent_confirmed_actions: tuple[ConfirmedActionReceipt, ...] = ()
 
     @property
     def source_names(self) -> set[str]:
@@ -377,6 +383,14 @@ def render_reference_observation(observation: ReferenceObservation) -> str:
         lines.append("Visible marks: " + "; ".join(observation.traces))
     if observation.reachable:
         lines.append("You can move toward: " + ", ".join(observation.reachable) + ".")
+    if observation.recent_confirmed_actions:
+        lines.append(
+            "Things you recently did that the world confirmed:\n"
+            + "\n".join(
+                render_confirmed_action_receipt(receipt)
+                for receipt in observation.recent_confirmed_actions[-5:]
+            )
+        )
     if observation.sources:
         lines.append(
             "Information you may choose to read:\n"
@@ -452,6 +466,7 @@ class ReferenceResidentCore:
         self._seen_local_speech_ids: set[str] = set()
         self._offered_live_signals: tuple[LiveSignal, ...] = ()
         self._acknowledged_live_signal_ids: tuple[int, ...] = ()
+        self._recent_confirmed_actions = self._load_confirmed_actions()
         self.latest_observation: ReferenceObservation | None = None
 
     @property
@@ -482,6 +497,12 @@ class ReferenceResidentCore:
         acknowledged = self._acknowledged_live_signal_ids
         self._acknowledged_live_signal_ids = ()
         return acknowledged
+
+    def _load_confirmed_actions(self) -> tuple[ConfirmedActionReceipt, ...]:
+        return tuple(
+            ConfirmedActionReceipt.from_dict(raw)
+            for raw in load_recent_confirmed_actions(self._memory_dir)
+        )
 
     def _system_prompt(self, *, allow_read: bool) -> str:
         identity_text = str(
@@ -572,6 +593,10 @@ class ReferenceResidentCore:
             identity=self._identity,
             local_speech_since=speech_since,
             delivered_local_speech=(self._offered_live_signals or None),
+        )
+        observation = replace(
+            observation,
+            recent_confirmed_actions=self._recent_confirmed_actions,
         )
         if self._offered_live_signals:
             observed_source_ids = set(observation.local_speech_ids)
@@ -741,16 +766,15 @@ class ReferenceResidentCore:
             append_runtime_event(
                 self._memory_dir,
                 event_type="reference_action_outcome",
-                payload={
-                    "kind": decision.act.kind,
-                    "outcome": outcome,
-                    "reason": (
-                        str(result.get("reason") or "")
-                        if isinstance(result, dict)
-                        else "invalid_result"
-                    ),
-                },
+                payload=confirmed_action_payload(
+                    decision.act,
+                    result,
+                    outcome=outcome,
+                    observed_location=observation.location,
+                ),
             )
+            if outcome == "confirmed":
+                self._recent_confirmed_actions = self._load_confirmed_actions()
             return {
                 "status": "completed",
                 "choice": "act",
