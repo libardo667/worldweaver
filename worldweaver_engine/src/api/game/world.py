@@ -46,6 +46,7 @@ from ...services.location_routes import (
     parent_location_name_for_node,
     resolve_route_anchor,
 )
+from ...services.movement import MovementError, move_session
 from ...services.actor_authority import (
     ActorAuthorizationError,
     RequestActorCredentials,
@@ -1550,74 +1551,6 @@ def get_world_entry(
     }
 
 
-def _movement_fact_payload(
-    *,
-    mover_name: str,
-    destination: str,
-    in_transit: bool,
-    summary: str,
-) -> Dict[str, Any]:
-    return {
-        "facts": [
-            {
-                "subject": mover_name,
-                "subject_type": "entity",
-                "predicate": "location",
-                "value": destination,
-                "location": destination,
-                "summary": summary,
-                "confidence": 0.95,
-            },
-            {
-                "subject": mover_name,
-                "subject_type": "entity",
-                "predicate": "in_transit",
-                "value": bool(in_transit),
-                "location": destination,
-                "summary": summary,
-                "confidence": 0.9,
-            },
-        ],
-        "parser_mode": "structured",
-    }
-
-
-def _movement_event_delta(
-    *,
-    origin: str,
-    destination: str,
-    in_transit: bool,
-    mover_name: str,
-    summary: str,
-) -> Dict[str, Any]:
-    spatial_nodes: Dict[str, Dict[str, Any]] = {
-        destination: {
-            "last_arrival_actor": mover_name,
-            "last_arrival_from": origin,
-            "last_arrival_summary": summary,
-            "last_movement_in_transit": bool(in_transit),
-        }
-    }
-    if origin and origin != destination:
-        spatial_nodes[origin] = {
-            "last_departure_actor": mover_name,
-            "last_departure_to": destination,
-            "last_departure_summary": summary,
-        }
-    return {
-        "origin": origin,
-        "destination": destination,
-        "in_transit": bool(in_transit),
-        "spatial_nodes": spatial_nodes,
-        "__world_facts__": _movement_fact_payload(
-            mover_name=mover_name,
-            destination=destination,
-            in_transit=in_transit,
-            summary=summary,
-        ),
-    }
-
-
 def _utterance_event_delta(
     *,
     speaker_name: str,
@@ -1728,270 +1661,23 @@ def map_move(
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
 ):
-    """Move one hop toward destination along the shortest graph path.
-
-    Bypasses LLM — pure graph traversal over 'path' edges.
-    Each call advances one hop. Call repeatedly to continue transit.
-    Returns the new location, the full planned route, and remaining hops.
-    """
-    from ...services.session_service import get_state_manager, save_state
-    from ...services.world_memory import EVENT_TYPE_MOVEMENT, find_route
-
+    """Move one hop or one validated route through the canonical movement service."""
     session_id = payload.session_id
     if not _SAFE_SESSION_RE.match(session_id):
         raise HTTPException(status_code=400, detail="Invalid session_id format.")
     _authorize_bound_actor_or_http(db, credentials=credentials, session_id=session_id)
 
-    sm = get_state_manager(session_id, db)
-    current_location = sm.get_variable("location") or ""
-
-    if not current_location:
-        raise HTTPException(
-            status_code=400, detail="Session has no current location set."
-        )
-
-    destination = payload.destination.strip()
-    current_anchor = resolve_route_anchor(db, current_location)
-    from ...services.sublocations import (
-        create_or_refresh_ephemeral,
-        is_local_sublocation_candidate,
-        resolve_active_sublocation,
-        touch_sublocation,
-    )
-
-    destination_sublocation = resolve_active_sublocation(
-        db,
-        label=destination,
-        parent_location=current_anchor,
-    )
-    if (
-        destination_sublocation is None
-        and payload.allow_sublocation_create
-        and is_local_sublocation_candidate(destination, current_anchor)
-    ):
-        destination_sublocation = create_or_refresh_ephemeral(
-            db,
-            parent_location=current_anchor,
-            label=destination,
-            created_by_session=session_id,
-        )
-    if destination_sublocation is not None:
-        destination = str(destination_sublocation.name or destination)
-    destination_anchor = resolve_route_anchor(db, destination)
-
-    if (
-        current_location != destination
-        and current_anchor
-        and destination_anchor
-        and current_anchor == destination_anchor
-    ):
-        route = [current_location, destination]
-    else:
-        route = find_route(
-            db, current_anchor or current_location, destination_anchor or destination
-        )
-        if (
-            route
-            and current_anchor
-            and current_location != current_anchor
-            and route[0] == current_anchor
-        ):
-            route = [current_location, *route[1:]]
-        if (
-            route
-            and destination_anchor
-            and destination_anchor != destination
-            and route[-1] == destination_anchor
-        ):
-            route = [*route, destination]
-
-    snapped = False
-    if not route:
-        # If routing failed because current_location is a narrative sublocation that isn't
-        # in the graph (e.g. "The Bakery Stall"), snap the agent directly to the destination
-        # as a one-time recovery move. This re-anchors orphaned agents without stranding them.
-        dest_route = find_route(
-            db, destination_anchor or destination, destination_anchor or destination
-        )
-        if dest_route and current_location != destination:
-            # current_location is the bad node; destination is valid — snap there.
-            route = [current_location, destination]
-            snapped = True
-        else:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No route from '{current_location}' to '{destination}'.",
-            )
-
-    if len(route) == 1:
-        # Already at destination
-        return {
-            "moved": False,
-            "from_location": current_location,
-            "to_location": current_location,
-            "route": route,
-            "route_remaining": [],
-            "narrative": f"You are already at {current_location.replace('_', ' ')}.",
-        }
-
-    # Access rules apply only to places this command is about to enter. The
-    # current/origin place is intentionally absent, so no policy can trap a
-    # resident inside. Skip mode validates the whole route before changing any
-    # session state or writing any movement event.
-    from ...services.space_access import SpaceAccessError, assert_route_entry_allowed
-
-    entered_locations = (
-        route[1:] if payload.skip_to_destination and not snapped else [route[1]]
-    )
     try:
-        assert_route_entry_allowed(
+        receipt = move_session(
             db,
             session_id=session_id,
-            destinations=entered_locations,
+            destination=payload.destination,
+            skip_to_destination=payload.skip_to_destination,
+            allow_sublocation_create=payload.allow_sublocation_create,
         )
-    except SpaceAccessError as exc:
-        raise HTTPException(
-            status_code=exc.status_code,
-            detail={"code": exc.code, "message": str(exc)},
-        ) from exc
-
-    # Derive a display name for the mover.
-    # player_role is set explicitly at bootstrap (e.g. "Brunhilda"); prefer it
-    # over player_name which can be stale (injected by world projection).
-    _raw_role = sm.get_variable("player_role") or ""
-    _role_name = (
-        _raw_role.split(" — ")[0].strip() if " — " in _raw_role else _raw_role.strip()
-    ) or None
-    mover_name = (
-        _slug_display_name(session_id)
-        or _role_name
-        or sm.get_variable("player_name")
-        or "Someone"
-    )
-
-    if payload.skip_to_destination and not snapped:
-        # ── Skip mode: burn through every intermediate hop silently, log a
-        # transit WorldEvent for each so passers-by see the trace, then land
-        # at the final destination with a single arrival narrative.
-        final_dest = route[-1]
-        intermediate_hops = route[1:-1]  # all stops except current and final
-        for hop in intermediate_hops:
-            prev = sm.get_variable("location") or current_location
-            sm.set_variable("location", hop)
-            summary = (
-                f"{mover_name} passes through {hop.replace('_', ' ')}, "
-                f"continuing toward {final_dest.replace('_', ' ')}."
-            )
-            submit_world_event(
-                db,
-                WorldEventCommand(
-                    session_id=session_id,
-                    event_type=EVENT_TYPE_MOVEMENT,
-                    summary=summary,
-                    delta=_movement_event_delta(
-                        origin=prev,
-                        destination=hop,
-                        in_transit=True,
-                        mover_name=mover_name,
-                        summary=summary,
-                    ),
-                    metadata={"surface": "map_move", "mode": "skip_to_destination"},
-                    preserve_event_type=True,
-                ),
-            )
-        # Final hop
-        prev_final = sm.get_variable("location") or current_location
-        sm.set_variable("location", final_dest)
-        if destination_sublocation is not None and final_dest == destination:
-            touch_sublocation(destination_sublocation)
-        save_state(sm, db)
-        final_summary = f"{mover_name} arrives at {final_dest.replace('_', ' ')}."
-        submit_world_event(
-            db,
-            WorldEventCommand(
-                session_id=session_id,
-                event_type=EVENT_TYPE_MOVEMENT,
-                summary=final_summary,
-                delta=_movement_event_delta(
-                    origin=prev_final,
-                    destination=final_dest,
-                    in_transit=False,
-                    mover_name=mover_name,
-                    summary=final_summary,
-                ),
-                metadata={"surface": "map_move", "mode": "skip_to_destination"},
-                preserve_event_type=True,
-            ),
-        )
-        via = intermediate_hops
-        if via:
-            via_str = ", ".join(h.replace("_", " ") for h in via)
-            narrative = f"You pass through {via_str} and arrive at {final_dest.replace('_', ' ')}."
-        else:
-            narrative = f"You arrive at {final_dest.replace('_', ' ')}."
-        return {
-            "moved": True,
-            "from_location": current_location,
-            "to_location": final_dest,
-            "route": route,
-            "route_remaining": [],
-            "narrative": narrative,
-        }
-
-    # ── Single-hop mode (default) ────────────────────────────────────────────
-    next_location = route[1]
-    route_remaining = route[2:]
-
-    sm.set_variable("location", next_location)
-    if destination_sublocation is not None and next_location == destination:
-        touch_sublocation(destination_sublocation)
-    save_state(sm, db)
-
-    if snapped:
-        narrative = f"You find yourself at {next_location.replace('_', ' ')}."
-    elif route_remaining:
-        stops = len(route_remaining)
-        narrative = f"You head toward {destination.replace('_', ' ')}, passing through {next_location.replace('_', ' ')}. ({stops} more stop{'s' if stops != 1 else ''} to go)"
-    else:
-        narrative = f"You arrive at {next_location.replace('_', ' ')}."
-
-    # Transit vs arrival summary — transit events let people at the intermediate
-    # node see the traveller pass through without polluting the arrival location.
-    if route_remaining:
-        final_dest = route[-1] if route else destination
-        event_summary = (
-            f"{mover_name} passes through {next_location.replace('_', ' ')}, "
-            f"continuing toward {final_dest.replace('_', ' ')}."
-        )
-    else:
-        event_summary = f"{mover_name} arrives at {next_location.replace('_', ' ')}."
-
-    submit_world_event(
-        db,
-        WorldEventCommand(
-            session_id=session_id,
-            event_type=EVENT_TYPE_MOVEMENT,
-            summary=event_summary,
-            delta=_movement_event_delta(
-                origin=current_location,
-                destination=next_location,
-                in_transit=bool(route_remaining),
-                mover_name=mover_name,
-                summary=event_summary,
-            ),
-            metadata={"surface": "map_move", "mode": "single_hop"},
-            preserve_event_type=True,
-        ),
-    )
-
-    return {
-        "moved": True,
-        "from_location": current_location,
-        "to_location": next_location,
-        "route": route,
-        "route_remaining": route_remaining,
-        "narrative": narrative,
-    }
+    except MovementError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    return receipt.as_payload()
 
 
 @router.get("/world/map/query")

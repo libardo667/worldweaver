@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..models import WorldEdge, WorldNode
-from .city_pack_service import find_neighborhood_record_for_location, get_pack
+from . import city_pack_service
 
 
 def parent_location_name_for_node(
@@ -32,7 +32,7 @@ def parent_location_name_for_node(
         return explicit_parent
 
     selected_city_id = city_id or settings.city_id
-    pack = get_pack(selected_city_id)
+    pack = city_pack_service.get_pack(selected_city_id)
     neighborhood_id = str(metadata.get("neighborhood") or "").strip()
     if pack and neighborhood_id:
         for neighborhood in pack.get("neighborhoods", []):
@@ -41,7 +41,9 @@ def parent_location_name_for_node(
                 if resolved:
                     return resolved
 
-    record = find_neighborhood_record_for_location(name, selected_city_id)
+    record = city_pack_service.find_neighborhood_record_for_location(
+        name, selected_city_id
+    )
     if record:
         resolved = str(record.get("name") or "").strip()
         if resolved:
