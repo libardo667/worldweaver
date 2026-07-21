@@ -1322,6 +1322,7 @@ def _help() -> None:
   python dev.py city-draft create --city CITY
                                         build a private draft and preview outside published packs
   python dev.py city-studio             open the private browser editor on this computer
+  python dev.py gym                     run the first deterministic production-rule gym episode
   python dev.py run <script> [args...]  run a repository Python script
 
 Other commands are passed to worldweaver_engine/scripts/dev.py, so commands such as
@@ -1374,6 +1375,8 @@ def main() -> int:
         return _run([sys.executable, "scripts/city_draft.py", *rest], cwd=ENGINE_DIR)
     if command == "city-studio":
         return _run([sys.executable, "scripts/city_studio.py", *rest], cwd=ENGINE_DIR)
+    if command == "gym":
+        return _run([sys.executable, "scripts/resident_gym.py", *rest], cwd=ENGINE_DIR)
     if command == "agent":
         return _run([sys.executable, "-m", "src.main", *rest], cwd=AGENT_DIR)
     if command == "engine":
