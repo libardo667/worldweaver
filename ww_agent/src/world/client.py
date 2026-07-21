@@ -201,6 +201,100 @@ def world_facts_to_prose(facts: list[WorldFact], limit: int = 5) -> str:
     return "\n".join(lines)
 
 
+def scene_data_from_payload(data: dict[str, Any], *, session_id: str) -> SceneData:
+    """Parse the engine's factual scene shape without requiring HTTP transport."""
+
+    present = [
+        PresentCharacter(
+            name=str(item.get("name", "") or ""),
+            role=str(item.get("role", "") or ""),
+            last_action=str(item.get("last_action", "") or ""),
+            last_seen=str(item.get("last_seen", "") or ""),
+            actor_id=str(item.get("actor_id", "") or ""),
+            session_id=str(item.get("session_id", "") or ""),
+        )
+        for item in data.get("present", [])
+        if isinstance(item, dict)
+    ]
+    ambient_presence = [
+        AmbientPresence(
+            kind=str(item.get("kind", "") or ""),
+            label=str(item.get("label", "") or ""),
+            source=str(item.get("source", "") or ""),
+            intensity=float(item.get("intensity", 0.0) or 0.0),
+            ttl_seconds=int(item.get("ttl_seconds", 0) or 0),
+            pressure_tags=[
+                str(tag) for tag in list(item.get("pressure_tags") or []) if str(tag)
+            ],
+            sensory_note=str(item.get("sensory_note", "") or ""),
+        )
+        for item in data.get("ambient_presence", [])
+        if isinstance(item, dict)
+    ]
+    affordances = [
+        WorldAffordance(
+            source_id=str(item.get("source_id", "") or ""),
+            name=str(item.get("name", "") or ""),
+            description=str(item.get("description", "") or ""),
+            egress=bool(item.get("egress", False)),
+            provenance=str(item.get("provenance", "unknown") or "unknown"),
+            freshness=str(item.get("freshness", "unknown") or "unknown"),
+            locality=str(item.get("locality", "unknown") or "unknown"),
+            visibility=str(item.get("visibility", "private") or "private"),
+            selection_mode=str(item.get("selection_mode", "query") or "query"),
+        )
+        for item in data.get("affordances", [])
+        if isinstance(item, dict)
+    ]
+    events = [
+        RecentEvent(
+            who=str(item.get("who", "") or ""),
+            summary=str(item.get("summary", "") or ""),
+            ts=str(item.get("ts", "") or ""),
+            event_id=str(item.get("event_id", "") or ""),
+            event_type=str(item.get("event_type", "") or ""),
+        )
+        for item in data.get("recent_events_here", [])
+        if isinstance(item, dict)
+    ]
+    traces_here = [
+        WorldTraceRecord(
+            trace_id=str(item.get("trace_id", "") or ""),
+            source_id=str(item.get("source_id", "") or ""),
+            author_session_id=str(item.get("author_session_id", "") or ""),
+            author_name=str(item.get("author_name", "") or ""),
+            location=str(item.get("location", "") or ""),
+            target=str(item.get("target", "") or ""),
+            body=str(item.get("body", "") or ""),
+            created_at=str(item.get("created_at", "") or ""),
+            expires_at=str(item.get("expires_at", "") or ""),
+            provenance=str(
+                item.get("provenance", "physical_trace") or "physical_trace"
+            ),
+            freshness=str(item.get("freshness", "active") or "active"),
+            locality=str(item.get("locality", "") or ""),
+            visibility=str(item.get("visibility", "local") or "local"),
+            selection_mode=str(
+                item.get("selection_mode", "embodied_local") or "embodied_local"
+            ),
+        )
+        for item in data.get("traces_here", [])
+        if isinstance(item, dict) and str(item.get("trace_id") or "").strip()
+    ]
+    location_graph = data.get("location_graph")
+    return SceneData(
+        session_id=session_id,
+        location=str(data.get("location", "") or ""),
+        role=str(data.get("role", "") or ""),
+        present=present,
+        ambient_presence=ambient_presence,
+        affordances=affordances,
+        traces_here=traces_here,
+        recent_events_here=events,
+        location_graph=location_graph if isinstance(location_graph, dict) else {},
+    )
+
+
 # ---------------------------------------------------------------------------
 # Client
 # ---------------------------------------------------------------------------
@@ -940,96 +1034,9 @@ class WorldWeaverClient:
             f"/api/world/scene/{session_id}", timeout=self._timeout_scene
         )
         data = resp.json()
-
-        present = [
-            PresentCharacter(
-                name=p.get("name", ""),
-                role=p.get("role", ""),
-                last_action=p.get("last_action", ""),
-                last_seen=p.get("last_seen", ""),
-                actor_id=str(p.get("actor_id", "") or ""),
-                session_id=str(p.get("session_id", "") or ""),
-            )
-            for p in data.get("present", [])
-        ]
-        ambient_presence = [
-            AmbientPresence(
-                kind=str(item.get("kind", "")),
-                label=str(item.get("label", "")),
-                source=str(item.get("source", "")),
-                intensity=float(item.get("intensity", 0.0) or 0.0),
-                ttl_seconds=int(item.get("ttl_seconds", 0) or 0),
-                pressure_tags=[
-                    str(tag)
-                    for tag in list(item.get("pressure_tags") or [])
-                    if str(tag)
-                ],
-                sensory_note=str(item.get("sensory_note", "")),
-            )
-            for item in data.get("ambient_presence", [])
-            if isinstance(item, dict)
-        ]
-        affordances = [
-            WorldAffordance(
-                source_id=str(item.get("source_id", "") or ""),
-                name=str(item.get("name", "") or ""),
-                description=str(item.get("description", "") or ""),
-                egress=bool(item.get("egress", False)),
-                provenance=str(item.get("provenance", "unknown") or "unknown"),
-                freshness=str(item.get("freshness", "unknown") or "unknown"),
-                locality=str(item.get("locality", "unknown") or "unknown"),
-                visibility=str(item.get("visibility", "private") or "private"),
-                selection_mode=str(item.get("selection_mode", "query") or "query"),
-            )
-            for item in data.get("affordances", [])
-            if isinstance(item, dict)
-        ]
-        events = [
-            RecentEvent(
-                who=e.get("who", ""),
-                summary=e.get("summary", ""),
-                ts=e.get("ts", ""),
-                event_id=str(e.get("event_id", "") or ""),
-                event_type=str(e.get("event_type", "") or ""),
-            )
-            for e in data.get("recent_events_here", [])
-        ]
-        traces_here = [
-            WorldTraceRecord(
-                trace_id=str(item.get("trace_id", "") or ""),
-                source_id=str(item.get("source_id", "") or ""),
-                author_session_id=str(item.get("author_session_id", "") or ""),
-                author_name=str(item.get("author_name", "") or ""),
-                location=str(item.get("location", "") or ""),
-                target=str(item.get("target", "") or ""),
-                body=str(item.get("body", "") or ""),
-                created_at=str(item.get("created_at", "") or ""),
-                expires_at=str(item.get("expires_at", "") or ""),
-                provenance=str(
-                    item.get("provenance", "physical_trace") or "physical_trace"
-                ),
-                freshness=str(item.get("freshness", "active") or "active"),
-                locality=str(item.get("locality", "") or ""),
-                visibility=str(item.get("visibility", "local") or "local"),
-                selection_mode=str(
-                    item.get("selection_mode", "embodied_local") or "embodied_local"
-                ),
-            )
-            for item in data.get("traces_here", [])
-            if isinstance(item, dict) and str(item.get("trace_id") or "").strip()
-        ]
-
-        return SceneData(
-            session_id=session_id,
-            location=data.get("location", ""),
-            role=data.get("role", ""),
-            present=present,
-            ambient_presence=ambient_presence,
-            affordances=affordances,
-            traces_here=traces_here,
-            recent_events_here=events,
-            location_graph=data.get("location_graph", {}),
-        )
+        if not isinstance(data, dict):
+            raise WorldClientError("scene response must be an object")
+        return scene_data_from_payload(data, session_id=session_id)
 
     async def get_new_events(self, session_id: str, since: str) -> list[RecentEvent]:
         """Poll for events at the agent's location since a timestamp. Fast loop trigger."""

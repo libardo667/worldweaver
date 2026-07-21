@@ -27,14 +27,21 @@ Run the first mixed-time episode:
 python dev.py gym --episode quiet-interval
 ```
 
+Run the separate-process scheduled-return rehearsal:
+
+```bash
+python dev.py gym --episode resident-return
+```
+
 Each command prints a compact timeline and writes a self-contained visual report under `.runs/gym/`
-(`footbridge-hello.html`, `waiting-letter.html`, or `long-afternoon.html`). The reports contain only synthetic
-speech and facts returned by production services. Their icons and layout do not add a narrator's interpretation.
+(`footbridge-hello.html`, `waiting-letter.html`, `long-afternoon.html`, or `kept-appointment.html`). The reports
+contain only synthetic speech and facts returned by production services. Their icons and layout do not add a
+narrator's interpretation.
 
 The terminal timeline streams by default: each line is printed and flushed when its production-boundary record
-arrives. It is not an animation replayed after the episode. The current mechanical episodes finish quickly,
-but a future resident adapter will leave real wall-clock gaps visible around inference, waits, retries, and
-service calls. The stream may show public observations, choice kinds, action receipts, scheduling metadata, and
+arrives. It is not an animation replayed after the episode. The current scripted model finishes quickly; a
+model-backed resident will leave real wall-clock gaps visible around inference, waits, retries, and service
+calls. The stream may show public observations, choice kinds, action receipts, scheduling metadata, and
 model-call start/finish boundaries. It must not print private reasoning or private hearth prose.
 
 Use `--no-stream` to print the older complete terminal report only after the run, or `--json` for the complete
@@ -112,8 +119,7 @@ idempotency key. `The Long Afternoon` now schedules both inspections through tha
 The reference resident also exposes its next chosen private return as content-free scheduling data: stable
 event ID, private activity ID, and UTC deadline. That schedule survives a runtime restart because it is derived
 from the resident's private ledger, and it contains none of the private activity description. An automated test
-restarts the runtime, advances to the two-day deadline, and proves the return is consumed once. The queue is not
-yet wired into the live resident host.
+restarts the runtime, advances to the two-day deadline, and proves the return is consumed once.
 
 The gym now has its first combined restart envelope. It binds the scenario and seed, controlled clock and
 pending events, participant identities and adapters, signal cursors, structural timeline, and a complete
@@ -123,13 +129,22 @@ final result as an uninterrupted run. Damaged envelopes, substituted actor ident
 targets fail before replacement.
 
 This is a narrow synthetic proof. The envelope records only an ID, digest, format, and size for externally held
-resident or model state; it does not copy private hearth content into the engine artifact. No real resident
-adapter activates from that external artifact through the gym yet. A separate agent process now proves the
-private half of restore: it verifies a portable hearth package's exact bytes, imports into staging, rebuilds the
-derived checkpoint from the append-only ledger, checks actor, hearth generation, attachment, session, adapter,
-and model, and only then installs the restored synthetic home. The engine never imports the agent package and
-neither its descriptor nor its restore report contains private activity prose. The restored private return is
-not yet connected to the engine queue.
+resident or model state; it does not copy private hearth prose into the engine checkpoint. A separate agent
+process verifies a portable hearth package's exact bytes,
+imports into staging, rebuilds the derived checkpoint from the append-only ledger, checks actor, hearth
+generation, attachment, session, adapter, and model, and only then installs the restored synthetic home. The
+engine never imports the agent package and neither its descriptor nor its restore report contains private
+activity prose.
+
+`The Kept Appointment` connects that restored artifact to the engine queue. The live HTTP route and the gym use
+one factual scene builder, and the HTTP client and transport-free agent adapter use one scene parser. At the
+two-day deadline the separate agent process runs the real reference core with a fixture model that always
+chooses `wait`. The engine then simulates losing its acknowledgement and restarts. It offers the same stable
+event again; the resident returns `already_processed` with zero model calls, after which the queue acknowledges
+the event. Streamed records show scene counts and process boundaries, never the private activity or prompt.
+
+This is the final mechanical rehearsal before a model-backed resident run. It proves restart, custody, scene
+delivery, and at-least-once handling. It does not measure judgment, conversation, planning, or personality.
 
 The database snapshot supports SQLite only and may restore only into an empty synthetic database. Its hash
 detects damage and internal mismatches; it is not a signature and does not make an envelope from an untrusted
@@ -152,17 +167,17 @@ apparatus tells the truth about what happened.
 | Production-rule parity | Footbridge episode matches an authenticated in-process HTTP replay | Repeat selected paths against a running container |
 | Identity and authorization | Anonymous signal access is refused; correspondence uses durable actor IDs | Cover every gym action and resident proof type |
 | Exact-place perception | Speech follows location and a durable cursor | Reconnect, cursor gaps, and concurrent arrival/speech ordering |
-| Delayed work | Stable scheduled IDs, controlled UTC, explicit acknowledgement | Idempotent state-changing handlers and failed-handler retry |
-| Stop and resume | Combined engine envelope and separately held synthetic hearth artifact reproduce one uninterrupted result across processes | Connect the resident's content-free return to the host queue and activate the reference adapter |
+| Delayed work | Stable scheduled IDs, controlled UTC, explicit acknowledgement, and idempotent private-return retry | Other state-changing handlers and failed-handler retry |
+| Stop and resume | A separate reference core restores, handles a due return, and refuses a second model call after lost acknowledgement | Model-backed run, live host wiring, and authenticated portable checkpoints |
 | Correspondence | Mail survives a session change and remains pending until acknowledgement | Interruption policy, cross-shard delivery, and failure recovery |
 | Access and custody | Production services exist outside the gym | Refusal, making, carrying, giving, exchange, and stoop episodes |
 | Travel | Production service exists outside the gym | Recoverable local and federated travel episodes |
 | Stale information | Structural version fence exists in the reference resident | Change the world during a gym decision and prove safe reconsideration |
 | Fault recovery | Individual service rollback tests exist | Scenario-level database, process, and network fault injection |
 
-The command-line runner now exposes these records as a live, flushed stream while retaining the final HTML and
-JSON reports. That makes wall-clock stalls visible, but it does not by itself add resident inference telemetry;
-the participant adapter must emit content-safe phase boundaries when it is connected.
+The command-line runner exposes these records as a live, flushed stream while retaining the final HTML and JSON
+reports. The separate-process return episode emits content-safe observation and activation boundaries, making
+wall-clock stalls visible without printing prompts, completions, or private hearth prose.
 
 Adding a trustworthiness scenario requires naming the production boundary, the expected invariant, the failure
 case, and the evidence that the gym did not use a shortcut.

@@ -183,8 +183,12 @@ that write but before the host receives an acknowledgement, replaying the same e
 `already_processed` without spending another model call. Checkpoint rebuild preserves the receipt. The receipt
 contains only event ID, activity ID, deadline, and consumption time.
 
-This closes the resident half of at-least-once scheduling. Major 142 still needs to deliver the event through
-the combined gym adapter and acknowledge its queue entry only after `processed` or `already_processed`.
+Major 142 now delivers this event through the combined gym adapter. A separate agent process restores the
+synthetic private artifact, receives the production-derived scene at the two-day deadline, and runs the real
+reference core with a scripted `wait` model. The engine deliberately loses the first acknowledgement and
+restarts. Its retry receives `already_processed` with zero further model calls before the queue is
+acknowledged. This closes the first full at-least-once scheduling proof; it is not yet a model-backed resident
+capability result.
 
 ## Files Affected
 

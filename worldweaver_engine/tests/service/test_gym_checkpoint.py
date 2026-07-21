@@ -2,6 +2,7 @@
 # Copyright (C) 2026 Levi Banks
 
 import json
+from datetime import datetime, timedelta
 from pathlib import Path
 import subprocess
 import sys
@@ -200,6 +201,56 @@ def test_participant_private_artifacts_are_bound_by_metadata_not_embedded():
         _close(source_engine, source_db)
 
 
+def test_resident_return_response_must_match_before_queue_acknowledgement():
+    engine, db = _memory_session()
+    try:
+        gym = prepare_quiet_interval(db)
+        gym.bind_participant_artifacts(
+            "gym-afternoon-mara",
+            adapter_id="worldweaver.reference-resident",
+            adapter_version=2,
+            model_id="reference-policy-v1",
+            private_state={
+                "custody": "participant_private",
+                "format": "worldweaver.hearth-package",
+                "format_version": 1,
+                "artifact_id": "resident-checkpoint-17",
+                "sha256": "a" * 64,
+                "byte_length": 4096,
+            },
+        )
+        queued = gym.schedule_resident_return(
+            "gym-afternoon-mara",
+            resident_event_id="resident-return-expected",
+            activity_id="activity-expected",
+            due_at=gym.clock.now() + timedelta(hours=1),
+        )
+        offered = gym.offer_next_scheduled()
+        assert [event.event_id for event in offered] == [queued.event_id]
+
+        with pytest.raises(ValueError, match="does not match"):
+            gym.deliver_resident_return(
+                offered[0],
+                lambda _event, _scene: {
+                    "status": "processed",
+                    "event_id": "resident-return-other",
+                    "choice": "wait",
+                    "model_call_count": 1,
+                },
+            )
+
+        assert [item["event_id"] for item in gym.scheduled_checkpoint()["pending"]] == [
+            queued.event_id,
+            "scheduled-00000001",
+            "scheduled-00000002",
+        ]
+        record = gym.result().records[-1]
+        assert record.kind == "resident_activation_interrupted"
+        assert record.detail["reason"] == "return_binding_mismatch"
+    finally:
+        _close(engine, db)
+
+
 def test_engine_and_private_resident_artifact_restart_across_processes(tmp_path):
     uninterrupted_engine, uninterrupted_db = _memory_session()
     source_engine, source_db = _memory_session()
@@ -274,3 +325,150 @@ def test_engine_and_private_resident_artifact_restart_across_processes(tmp_path)
         _close(uninterrupted_engine, uninterrupted_db)
         _close(source_engine, source_db)
         _close(target_engine, target_db)
+
+
+def test_due_private_return_is_processed_once_across_lost_ack_and_restart(tmp_path):
+    source_engine, source_db = _memory_session()
+    first_engine, first_db = _memory_session()
+    replay_engine, replay_db = _memory_session()
+    try:
+        artifact = _agent_artifact_command(
+            "create-fixture",
+            "--home",
+            str(tmp_path / "source-resident"),
+            "--package",
+            str(tmp_path / "resident.wwhearth"),
+            "--actor-id",
+            "gym-afternoon-actor-mara",
+            "--world-id",
+            "gym-long-afternoon-world",
+            "--session-id",
+            "gym-afternoon-mara",
+            "--started-at",
+            "2026-07-20T12:00:00+00:00",
+            "--return-at",
+            "2026-07-22T12:00:00+00:00",
+        )
+        scheduled_return = artifact["scheduled_return"]
+        assert scheduled_return["event_kind"] == "resident_private_return"
+
+        clear_session_caches()
+        stopped = prepare_quiet_interval(
+            source_db,
+            mara_implementation="reference_resident_scripted_wait",
+        )
+        process = artifact["process"]
+        stopped.bind_participant_artifacts(
+            "gym-afternoon-mara",
+            adapter_id=process["adapter"]["id"],
+            adapter_version=process["adapter"]["version"],
+            model_id=process["model"]["id"],
+            private_state=artifact["descriptor"],
+        )
+        stopped.schedule_resident_return(
+            "gym-afternoon-mara",
+            resident_event_id=scheduled_return["event_id"],
+            activity_id=scheduled_return["activity_id"],
+            due_at=datetime.fromisoformat(scheduled_return["due_at"]),
+        )
+        checkpoint = json.loads(json.dumps(stopped.checkpoint()))
+        assert len(checkpoint["scheduler"]["pending"]) == 3
+
+        descriptor_path = tmp_path / "descriptor.json"
+        process_path = tmp_path / "process.json"
+        scene_path = tmp_path / "scene.json"
+        descriptor_path.write_text(json.dumps(artifact["descriptor"]), encoding="utf-8")
+        process_path.write_text(json.dumps(process), encoding="utf-8")
+        _agent_artifact_command(
+            "restore",
+            "--package",
+            str(tmp_path / "resident.wwhearth"),
+            "--home",
+            str(tmp_path / "restored-resident"),
+            "--descriptor",
+            str(descriptor_path),
+            "--expected-process",
+            str(process_path),
+        )
+
+        resumed = ProductionRuleGym.from_checkpoint(first_db, checkpoint)
+        inspection = resumed.offer_next_scheduled()
+        assert [event.kind for event in inspection] == ["inspect_sublocation"]
+        resumed.inspect_sublocation(
+            parent_location=str(inspection[0].payload["parent_location"]),
+            sublocation_id=str(inspection[0].payload["sublocation_id"]),
+        )
+        resumed.acknowledge_scheduled((inspection[0].event_id,))
+
+        due = resumed.offer_next_scheduled()
+        assert [event.kind for event in due] == ["resident_private_return"]
+
+        def handle_return(event, scene):
+            scene_path.write_text(json.dumps(scene), encoding="utf-8")
+            return _agent_artifact_command(
+                "handle-return",
+                "--home",
+                str(tmp_path / "restored-resident"),
+                "--expected-process",
+                str(process_path),
+                "--scene",
+                str(scene_path),
+                "--event-id",
+                str(event.payload["resident_event_id"]),
+                "--now",
+                event.due_at.isoformat(),
+            )
+
+        first_result = resumed.deliver_resident_return(due[0], handle_return)
+        assert first_result["status"] == "processed"
+        assert first_result["choice"] == "wait"
+        assert first_result["model_call_count"] == 1
+
+        # Simulate the engine dying after the resident committed its receipt but
+        # before the scheduler acknowledgement reached durable storage.
+        lost_ack_checkpoint = json.loads(json.dumps(resumed.checkpoint()))
+        assert any(
+            item["event_id"] == due[0].event_id
+            for item in lost_ack_checkpoint["scheduler"]["pending"]
+        )
+
+        replayed = ProductionRuleGym.from_checkpoint(replay_db, lost_ack_checkpoint)
+        retried = replayed.offer_next_scheduled()
+        assert [event.event_id for event in retried] == [due[0].event_id]
+        second_result = replayed.deliver_resident_return(retried[0], handle_return)
+        assert second_result["status"] == "already_processed"
+        assert second_result["model_call_count"] == 0
+        replayed.acknowledge_scheduled((retried[0].event_id,))
+
+        final_inspection = replayed.offer_next_scheduled()
+        assert [event.kind for event in final_inspection] == ["inspect_sublocation"]
+        replayed.inspect_sublocation(
+            parent_location=str(final_inspection[0].payload["parent_location"]),
+            sublocation_id=str(final_inspection[0].payload["sublocation_id"]),
+        )
+        replayed.acknowledge_scheduled((final_inspection[0].event_id,))
+        assert replayed.scheduled_checkpoint()["pending"] == []
+
+        lifecycle = [
+            record
+            for record in replayed.result().records
+            if record.kind
+            in {
+                "observation_ready",
+                "resident_activation_started",
+                "resident_activation_finished",
+            }
+        ]
+        assert [record.kind for record in lifecycle[-3:]] == [
+            "observation_ready",
+            "resident_activation_started",
+            "resident_activation_finished",
+        ]
+        assert lifecycle[-1].detail["status"] == "already_processed"
+        assert "synthetic blue" not in json.dumps(
+            [record.detail for record in lifecycle]
+        )
+    finally:
+        _close(source_engine, source_db)
+        _close(first_engine, first_db)
+        _close(replay_engine, replay_db)

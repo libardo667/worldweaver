@@ -31,7 +31,31 @@ _ICONS = {
     "scheduled_event_created": "🗓️",
     "scheduled_event_offered": "🔔",
     "scheduled_event_acknowledged": "✅",
+    "observation_ready": "👁️",
+    "resident_activation_started": "⚙️",
+    "resident_activation_finished": "🕯️",
+    "resident_activation_interrupted": "⛔",
 }
+
+
+def _participant_marker(implementation: str) -> str:
+    if implementation == "mechanical_listener":
+        return "⚙"
+    if implementation == "reference_resident_scripted_wait":
+        return "🕯"
+    return "◆"
+
+
+def _participant_legend(result: GymEpisodeResult) -> str:
+    implementations = {item.implementation for item in result.participants}
+    entries = []
+    if "scripted_actor" in implementations:
+        entries.append("◆ scripted participant")
+    if "mechanical_listener" in implementations:
+        entries.append("⚙ mechanical baseline")
+    if "reference_resident_scripted_wait" in implementations:
+        entries.append("🕯 reference resident + scripted wait model")
+    return "   ".join(entries)
 
 
 def _record_time(record: GymRecord) -> str:
@@ -89,7 +113,8 @@ def _record_sentence(record: GymRecord) -> str:
         return f"{actor}'s pending mailbox was empty."
     if record.kind == "time_advanced":
         hours = int(detail.get("elapsed_seconds") or 0) // 3600
-        return f"The controlled clock advanced {hours} hours without sleeping."
+        unit = "hour" if hours == 1 else "hours"
+        return f"The controlled clock advanced {hours} {unit} without sleeping."
     if record.kind == "sublocation_created":
         return (
             f"{actor} created {detail.get('label')} under {record.location}; "
@@ -113,6 +138,26 @@ def _record_sentence(record: GymRecord) -> str:
     if record.kind == "scheduled_event_acknowledged":
         event_ids = ", ".join(str(item) for item in detail.get("event_ids") or [])
         return f"The queue acknowledged {event_ids or 'no scheduled event'}."
+    if record.kind == "observation_ready":
+        return (
+            f"{actor}'s factual scene was ready at {record.location}: "
+            f"{detail.get('present_count', 0)} other participant(s), "
+            f"{detail.get('place_count', 0)} place(s), "
+            f"{detail.get('trace_count', 0)} public trace(s)."
+        )
+    if record.kind == "resident_activation_started":
+        return f"{actor}'s resident process began handling its scheduled return."
+    if record.kind == "resident_activation_finished":
+        return (
+            f"{actor}'s resident process reported {detail.get('status') or 'unknown'} "
+            f"after {detail.get('model_call_count', 0)} model call(s); "
+            f"choice: {detail.get('choice') or 'none'}."
+        )
+    if record.kind == "resident_activation_interrupted":
+        return (
+            f"{actor}'s resident process was interrupted before the queue "
+            "acknowledged its return."
+        )
     return f"{actor}: {record.kind.replace('_', ' ')}"
 
 
@@ -145,7 +190,7 @@ def render_terminal_stream_footer(result: GymEpisodeResult) -> str:
 
     residents = []
     for participant in result.participants:
-        marker = "⚙" if participant.implementation == "mechanical_listener" else "◆"
+        marker = _participant_marker(participant.implementation)
         location = result.final_locations.get(participant.display_name, "unknown")
         residents.append(f"  {marker} {participant.display_name} → {location}")
     return "\n".join(
@@ -154,7 +199,7 @@ def render_terminal_stream_footer(result: GymEpisodeResult) -> str:
             "  Episode complete",
             *residents,
             "",
-            "  ◆ scripted participant   ⚙ mechanical baseline",
+            f"  {_participant_legend(result)}",
             "  Each streamed line came from a service receipt or signal read.",
             "",
         ]
@@ -167,7 +212,7 @@ def render_terminal(result: GymEpisodeResult) -> str:
     locations = "  ─────  ".join(f"⌂ {location}" for location in result.locations)
     residents = []
     for participant in result.participants:
-        marker = "⚙" if participant.implementation == "mechanical_listener" else "◆"
+        marker = _participant_marker(participant.implementation)
         location = result.final_locations.get(participant.display_name, "unknown")
         residents.append(f"  {marker} {participant.display_name} → {location}")
 
@@ -186,7 +231,7 @@ def render_terminal(result: GymEpisodeResult) -> str:
     lines.extend(
         [
             "",
-            "  ◆ scripted participant   ⚙ mechanical baseline",
+            f"  {_participant_legend(result)}",
             "  Every line above comes from a service receipt or signal read.",
             "",
         ]
@@ -199,7 +244,7 @@ def render_html(result: GymEpisodeResult) -> str:
 
     participant_cards = []
     for participant in result.participants:
-        marker = "⚙" if participant.implementation == "mechanical_listener" else "◆"
+        marker = _participant_marker(participant.implementation)
         participant_cards.append(
             "<li>"
             f'<span class="marker">{marker}</span> '
@@ -218,7 +263,7 @@ def render_html(result: GymEpisodeResult) -> str:
         occupants = (
             "".join(
                 '<span class="occupant">'
-                + ("⚙" if item.implementation == "mechanical_listener" else "◆")
+                + _participant_marker(item.implementation)
                 + f" {escape(item.display_name)}</span>"
                 for item in present
             )

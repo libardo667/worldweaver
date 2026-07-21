@@ -142,11 +142,8 @@ refused before database replacement.
 Private resident and model state remain under participant custody. The combined envelope carries only an
 external artifact's ID, format, version, digest, and byte length; it does not embed private prose. The current
 scripted and mechanical participants correctly bind `none`. This is a SQLite-only synthetic restore, not a
-portable production database backup and not yet a real reference-resident resume. Its content hash detects
-damage and inconsistent substitution, but it does not authenticate an untrusted checkpoint. Next, add the
-smallest gym participant adapter that supplies and restores the existing private resident checkpoint through
-this binding, verifies the external artifact bytes, and keeps the trust source explicit. Do not add checkpoint
-forks, model calls, or training records until that complete adapter path is replayable.
+portable production database backup. Its content hash detects damage and inconsistent substitution, but it
+does not authenticate an untrusted checkpoint.
 
 The private artifact half is now replayable across a real process boundary. It reuses the deterministic portable
 hearth package: the engine stores only format, ID, byte count, and digest, while a child agent process verifies
@@ -156,16 +153,37 @@ bytes and process substitution without leaving a partial home. A combined test s
 synthetic resident artifact, restores each in its own package context, and produces the same engine result as
 the uninterrupted control. The descriptor and content-safe restore report contain no private activity prose.
 
-This does not yet activate `ReferenceResidentCore`. The resident's private scheduled return survives inside the
-artifact but is not registered in the engine event queue. Connect that content-free schedule through an
-at-least-once host instruction next; acknowledgement must follow successful resident processing rather than
-directly editing its ledger from the engine side.
-
 The resident half of that instruction now exists. `ReferenceResidentCore.handle_scheduled_return` refuses
 wrong or early IDs, consumes a due return before inference, and returns `already_processed` without another
-model call after checkpoint rebuild. The remaining gym work is transport and observation: register the
-content-free return in the combined queue, deliver the due offer to the separate participant process with a
-production-derived scene, and acknowledge only its `processed` or `already_processed` response.
+model call after checkpoint rebuild.
+
+### First separate-process activation — July 21, 2026
+
+`The Kept Appointment` now closes the combined handoff. The HTTP scene route and the gym share one factual
+scene builder, including current presence, public traces, active sublocations, and the route graph. The builder
+accepts an injected clock for controlled runs; the gym does not maintain a second scene rule. The agent's HTTP
+client and its transport-free gym adapter likewise share one scene parser.
+
+The engine registers the resident's content-free return in its checkpointed queue, restores the synthetic
+hearth package in a separate agent process, advances 48 hours, and offers the due event to the real
+`ReferenceResidentCore`. For this plumbing test only, the model adapter always chooses `wait`; the core still
+performs its normal observation, durable return consumption, inference, and stale-state recheck. The engine
+records only scene counts, lifecycle boundaries, status, choice kind, and model-call count.
+
+The episode deliberately drops the first queue acknowledgement after the resident commits its receipt. After
+the engine checkpoint restarts, the same event is offered again. The resident reports `already_processed` with
+zero model calls, and only then does the engine acknowledge the event. This proves the destructive edge we
+needed before using a real resident: an engine retry cannot spend the same private return twice.
+
+Run the streamed proof with:
+
+```bash
+python dev.py gym --episode resident-return
+```
+
+This still does not authorize waking an existing resident. The first model-backed run should use a newly
+created disposable resident, a bounded scenario, explicit model/cost settings, and the same content-safe
+lifecycle stream. Access/custody, travel, stale-decision timing, and fault-injection scenarios remain next.
 
 ### Scenario coverage map — July 21, 2026
 
@@ -205,7 +223,7 @@ scheduled return, without exposing private reasoning or hearth prose.
 ## Acceptance Criteria
 
 - [ ] The same production domain functions decide an action in a live test shard and in the gym.
-- [ ] One episode can combine sub-minute conversation with multi-day scheduled activities without sleeping
+- [x] One episode can combine sub-minute conversation with multi-day scheduled activities without sleeping
   through the quiet virtual interval.
 - [ ] Synthetic snapshots include enough engine and resident state to fork, replay, stop, and resume an
   episode with documented determinism.

@@ -63,6 +63,10 @@ from actor, private activity ID, and deadline, and it cannot be handled before t
 a content-free receipt before inference begins. If the resident process stops after that write but before the
 host receives its answer, the repeated offer returns `already_processed` without another model call. The receipt
 contains the return ID, activity ID, deadline, and consumption time—not the private activity description.
+The resident gym now proves that rule across the engine/agent process boundary. It restores a synthetic hearth,
+passes a scene built by the same service as the live scene API, deliberately loses the first engine
+acknowledgement, and verifies that the retry performs zero additional model calls. The fixture model always
+chooses `wait`; this is a restart and custody test, not evidence of resident capability.
 
 Each model activation is also tied to structural versions of what the resident was shown and the private
 checkpoint state it began from. After the final model response, the adapter checks the current place and

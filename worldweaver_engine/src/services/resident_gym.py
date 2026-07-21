@@ -315,6 +315,49 @@ class ProductionRuleGym:
         )
         return event
 
+    def schedule_resident_return(
+        self,
+        session_id: str,
+        *,
+        resident_event_id: str,
+        activity_id: str,
+        due_at: datetime,
+    ) -> ScheduledEvent:
+        """Schedule one content-free private deadline for a bound participant."""
+
+        participant = self._participant(session_id)
+        binding = self._participant_checkpoints[session_id]
+        if binding.private_state.get("format") != "worldweaver.hearth-package":
+            raise ValueError("resident return requires a bound private artifact")
+        normalized_event_id = str(resident_event_id or "").strip()
+        normalized_activity_id = str(activity_id or "").strip()
+        if not normalized_event_id or not normalized_activity_id:
+            raise ValueError("resident return requires event and activity IDs")
+        normalized_due_at = (
+            due_at if due_at.tzinfo is not None else due_at.replace(tzinfo=timezone.utc)
+        ).astimezone(timezone.utc)
+        if normalized_due_at < self.clock.now():
+            raise ValueError("resident return deadline is already past")
+        event = self._scheduled_queue().schedule_at(
+            normalized_due_at,
+            kind="resident_private_return",
+            payload={
+                "session_id": participant.session_id,
+                "resident_event_id": normalized_event_id,
+                "activity_id": normalized_activity_id,
+            },
+        )
+        self._record(
+            "scheduled_event_created",
+            participant=participant,
+            detail={
+                "event_id": event.event_id,
+                "event_kind": event.kind,
+                "due_at": event.due_at.isoformat(),
+            },
+        )
+        return event
+
     def offer_next_scheduled(self) -> tuple[ScheduledEvent, ...]:
         """Move to the next deadline and offer it without consuming it."""
 
@@ -697,6 +740,79 @@ class ProductionRuleGym:
             },
         )
         return scene
+
+    def deliver_resident_return(
+        self,
+        event: ScheduledEvent,
+        handler: Callable[[ScheduledEvent, dict[str, Any]], dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Offer one due private return; the caller separately acknowledges it."""
+
+        if event.kind != "resident_private_return":
+            raise ValueError("scheduled event is not a resident return")
+        if event.due_at > self.clock.now():
+            raise ValueError("resident return was offered before its deadline")
+        session_id = str(event.payload.get("session_id") or "").strip()
+        expected_event_id = str(event.payload.get("resident_event_id") or "").strip()
+        activity_id = str(event.payload.get("activity_id") or "").strip()
+        if not session_id or not expected_event_id or not activity_id:
+            raise ValueError("resident return binding is incomplete")
+        participant = self._participant(session_id)
+        scene = self.observe(session_id)
+        self._record(
+            "resident_activation_started",
+            participant=participant,
+            location=str(scene.get("location") or ""),
+            detail={
+                "event_id": expected_event_id,
+                "activity_id": activity_id,
+            },
+        )
+        try:
+            result = handler(event, scene)
+        except Exception as exc:
+            self._record(
+                "resident_activation_interrupted",
+                participant=participant,
+                location=str(scene.get("location") or ""),
+                detail={
+                    "event_id": expected_event_id,
+                    "reason": type(exc).__name__,
+                },
+            )
+            raise
+        if not isinstance(result, dict):
+            raise ValueError("resident return handler must return an object")
+        status = str(result.get("status") or "").strip()
+        reported_event_id = str(result.get("event_id") or "").strip()
+        if reported_event_id != expected_event_id:
+            self._record(
+                "resident_activation_interrupted",
+                participant=participant,
+                location=str(scene.get("location") or ""),
+                detail={
+                    "event_id": expected_event_id,
+                    "reason": "return_binding_mismatch",
+                },
+            )
+            raise ValueError("resident return response does not match offered event")
+        self._record(
+            "resident_activation_finished",
+            participant=participant,
+            location=str(scene.get("location") or ""),
+            detail={
+                "event_id": expected_event_id,
+                "status": status,
+                "activation_status": str(result.get("activation_status") or ""),
+                "choice": str(result.get("choice") or "none"),
+                "model_call_count": int(result.get("model_call_count") or 0),
+            },
+        )
+        if status not in {"processed", "already_processed"}:
+            raise ValueError(
+                f"resident return was not consumable: {status or 'unknown'}"
+            )
+        return result
 
     def speak(self, session_id: str, message: str) -> None:
         """Speak through the production local-speech service."""
@@ -1113,6 +1229,7 @@ def prepare_quiet_interval(
     db: Session,
     *,
     record_observer: Callable[[GymRecord], None] | None = None,
+    mara_implementation: str = "scripted_actor",
 ) -> ProductionRuleGym:
     """Arrange the quiet-interval episode and leave its future work pending."""
 
@@ -1128,7 +1245,7 @@ def prepare_quiet_interval(
         session_id="gym-afternoon-mara",
         actor_id="gym-afternoon-actor-mara",
         display_name="Mara",
-        implementation="scripted_actor",
+        implementation=str(mara_implementation or "").strip(),
     )
     ivo = GymParticipant(
         session_id="gym-afternoon-ivo",

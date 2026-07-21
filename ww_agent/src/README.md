@@ -31,6 +31,8 @@
   extraction, rebuilds derived state from the private ledger in staging, and installs only after actor,
   hearth generation, attachment, session, adapter, and model all match. Its restore report contains no private
   activity prose.
+- `world/client.py` — the live HTTP client and the transport-free gym adapter share one factual scene parser,
+  so a separate-process restart cannot silently reinterpret the engine's scene shape.
 - `runtime/cognitive_core.py` — audited predecessor. It is not constructed by the resident host; keep it only
   as comparison and selective migration material until its remaining useful contracts are separated.
 - `runtime/ledger.py` — append-only event history and a versioned current-state checkpoint. Major 137 is
