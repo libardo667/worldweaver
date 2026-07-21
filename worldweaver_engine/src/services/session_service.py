@@ -192,3 +192,11 @@ def remove_cached_sessions(session_ids: Iterable[str]) -> int:
         with _session_locks_guard:
             _session_locks.pop(session_id, None)
     return removed
+
+
+def clear_session_caches() -> None:
+    """Clear process-local session state after replacing a synthetic database."""
+
+    _state_managers.clear()
+    with _session_locks_guard:
+        _session_locks.clear()
