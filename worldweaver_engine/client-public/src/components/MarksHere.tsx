@@ -19,14 +19,20 @@ export function MarksHere({ location, sessionId }: Props) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   const refresh = useCallback(async () => {
-    const result = await getWorldTraces(sessionId);
-    setTraces(result.traces ?? []);
+    try {
+      const result = await getWorldTraces(sessionId);
+      setTraces(result.traces ?? []);
+      setLoadError("");
+    } catch {
+      setLoadError("Marks could not be loaded.");
+    }
   }, [sessionId]);
 
   useEffect(() => {
-    void refresh().catch(() => setTraces([]));
+    void refresh();
   }, [location, refresh]);
 
   usePoll(refresh, 10_000);
@@ -54,7 +60,9 @@ export function MarksHere({ location, sessionId }: Props) {
   return (
     <section className="place-section marks-here">
       <h3 className="place-section-title">Marks here</h3>
-      {traces.length === 0 ? (
+      {loadError ? (
+        <p className="object-error" role="alert">{loadError}</p>
+      ) : traces.length === 0 ? (
         <p className="stoop-entry-desc">No one else has left a mark here.</p>
       ) : (
         <div className="mark-list">

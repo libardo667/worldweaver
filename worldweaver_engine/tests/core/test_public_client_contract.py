@@ -27,6 +27,7 @@ def test_public_client_can_read_and_leave_the_same_local_marks_as_residents():
     assert 'postJson("/api/world/traces"' in source
     assert "<MarksHere" in place_panel
     assert "A mark stays at this exact place" in marks
+    assert "Marks could not be loaded." in marks
 
 
 def test_public_client_authenticates_participant_scoped_reads():
