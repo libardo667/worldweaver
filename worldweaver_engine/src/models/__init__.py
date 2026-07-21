@@ -707,23 +707,22 @@ class DoulaPoll(Base):
 
 
 class DirectMessage(Base):
-    """Async message intended for a player or agent.
-
-    Privacy and authorship depend on API authorization; the current compatibility
-    routes do not yet enforce that boundary.
-    """
+    """Private asynchronous correspondence between durable actors."""
 
     __tablename__ = "direct_messages"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     from_name = Column(String(60), nullable=False)
     from_session_id = Column(String(64), nullable=True, index=True)  # reply routing
+    sender_actor_id = Column(String(36), nullable=True, index=True)
+    recipient_actor_id = Column(String(36), nullable=True, index=True)
     to_name = Column(
         String(64), nullable=False, index=True
-    )  # agent slug or player session_id
+    )  # legacy address or durable actor ID for version-2 rows
     body = Column(Text, nullable=False)
     sent_at = Column(DateTime, server_default=func.now(), index=True)
-    read_at = Column(DateTime, nullable=True)  # NULL = unread
+    read_at = Column(DateTime, nullable=True)  # legacy compatibility mirror
+    acknowledged_at = Column(DateTime, nullable=True, index=True)
 
 
 class FederationShard(Base):

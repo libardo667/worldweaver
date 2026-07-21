@@ -41,6 +41,14 @@ from ...services.live_signals import (
     wait_for_live_signal_change,
 )
 from ...services.local_speech import LocalSpeechError, post_local_speech
+from ...services.correspondence import (
+    CorrespondenceError,
+    SendCorrespondenceCommand,
+    acknowledge_correspondence,
+    correspondence_threads,
+    pending_correspondence,
+    send_correspondence,
+)
 from ...services.location_routes import (
     parent_location_name_for_node,
     resolve_route_anchor,
@@ -51,6 +59,7 @@ from ...services.actor_authority import (
     RequestActorCredentials,
     actor_authorization_http_error,
     authorize_bound_session_actor,
+    authorize_session_actor,
     get_request_actor_credentials,
 )
 
@@ -95,6 +104,26 @@ def _authorize_bound_actor_or_http(
 ) -> None:
     try:
         authorize_bound_session_actor(
+            db,
+            credentials=credentials,
+            session_id=session_id,
+            required_scope=required_scope,
+        )
+    except ActorAuthorizationError as exc:
+        raise actor_authorization_http_error(exc) from exc
+
+
+def _authorize_actor_or_http(
+    db: Session,
+    *,
+    credentials: RequestActorCredentials,
+    session_id: str,
+    required_scope: str = "session.act",
+) -> None:
+    """Require exact human or resident proof with no legacy anonymous fallback."""
+
+    try:
+        authorize_session_actor(
             db,
             credentials=credentials,
             session_id=session_id,
@@ -1973,29 +2002,6 @@ def _valid_agent(agent_name: str) -> bool:
     return workspace.is_dir()
 
 
-class SendDMRequest(BaseModel):
-    recipient: Optional[str] = Field(default=None, min_length=1, max_length=64)
-    recipient_type: str = Field(default="agent", min_length=1, max_length=16)
-    to_agent: Optional[str] = Field(default=None, min_length=1, max_length=32)
-    from_name: str = Field(..., min_length=1, max_length=60)
-    body: str = Field(..., min_length=1, max_length=4000)
-    session_id: Optional[str] = Field(default=None, max_length=64)
-
-
-class AgentDMReplyRequest(BaseModel):
-    from_agent: str = Field(..., min_length=1, max_length=32)
-    to_session_id: str = Field(..., min_length=1, max_length=64)
-    body: str = Field(..., min_length=1, max_length=4000)
-
-
-def _dm_counterpart_key(dm: DirectMessage, session_id: str) -> str:
-    if str(dm.to_name or "").strip() == session_id:
-        raw = str(dm.from_name or "").strip()
-    else:
-        raw = str(dm.to_name or "").strip()
-    return re.sub(r"[^a-z0-9]+", "_", raw.lower()).strip("_")
-
-
 def _player_label_for_session(db: Session, session_id: str) -> str:
     row = db.get(SessionVars, session_id)
     if row is not None:
@@ -2006,288 +2012,144 @@ def _player_label_for_session(db: Session, session_id: str) -> str:
     return session_id[:12]
 
 
-def _dm_counterpart_label(
-    dm: DirectMessage,
+class SendCorrespondenceRequest(BaseModel):
+    session_id: str = Field(..., min_length=1, max_length=64)
+    recipient_actor_id: str = Field(..., min_length=1, max_length=36)
+    body: str = Field(..., min_length=1, max_length=4000)
+
+
+class AcknowledgeCorrespondenceRequest(BaseModel):
+    message_ids: list[int] = Field(default_factory=list, max_length=100)
+
+
+def _correspondence_http_error(exc: CorrespondenceError) -> HTTPException:
+    return HTTPException(
+        status_code=exc.status_code,
+        detail={"code": exc.code, "message": str(exc)},
+    )
+
+
+@router.post("/world/correspondence")
+def post_correspondence(
+    payload: SendCorrespondenceRequest,
+    db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+):
+    """Send private mail as one proven durable actor."""
+
+    _authorize_actor_or_http(db, credentials=credentials, session_id=payload.session_id)
+    try:
+        return send_correspondence(
+            db,
+            command=SendCorrespondenceCommand(
+                sender_session_id=payload.session_id,
+                recipient_actor_id=payload.recipient_actor_id,
+                body=payload.body,
+            ),
+        ).as_payload()
+    except CorrespondenceError as exc:
+        raise _correspondence_http_error(exc) from exc
+
+
+@router.get("/world/session/{session_id}/correspondence")
+def get_pending_correspondence(
     session_id: str,
-    *,
-    db: Session | None = None,
-) -> str:
-    if str(dm.to_name or "").strip() == session_id:
-        raw = str(dm.from_name or "").strip()
-        return raw.replace("_", " ").strip().title()
-    raw = str(dm.to_name or "").strip()
-    if db is not None and _SAFE_SESSION_RE.match(raw) and not _valid_agent(raw):
-        return _player_label_for_session(db, raw)
-    return raw.replace("_", " ").strip().title()
+    limit: int = Query(default=50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+):
+    """Offer unacknowledged private mail without consuming it."""
+
+    _authorize_actor_or_http(db, credentials=credentials, session_id=session_id)
+    try:
+        return pending_correspondence(
+            db, session_id=session_id, limit=limit
+        ).as_payload()
+    except CorrespondenceError as exc:
+        raise _correspondence_http_error(exc) from exc
+
+
+@router.post("/world/session/{session_id}/correspondence/acknowledge")
+def post_correspondence_acknowledgement(
+    session_id: str,
+    payload: AcknowledgeCorrespondenceRequest,
+    db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+):
+    """Acknowledge private mail after the recipient has accepted delivery."""
+
+    _authorize_actor_or_http(db, credentials=credentials, session_id=session_id)
+    try:
+        return acknowledge_correspondence(
+            db,
+            session_id=session_id,
+            message_ids=payload.message_ids,
+        ).as_payload()
+    except CorrespondenceError as exc:
+        raise _correspondence_http_error(exc) from exc
+
+
+@router.get("/world/session/{session_id}/correspondence/threads")
+def get_correspondence_threads(
+    session_id: str,
+    db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+):
+    """Return private actor-addressed threads for one proven participant."""
+
+    _authorize_actor_or_http(db, credentials=credentials, session_id=session_id)
+    try:
+        threads = correspondence_threads(db, session_id=session_id)
+    except CorrespondenceError as exc:
+        raise _correspondence_http_error(exc) from exc
+    return {"session_id": session_id, "threads": list(threads), "count": len(threads)}
+
+
+def _retired_correspondence_route() -> None:
+    raise HTTPException(
+        status_code=410,
+        detail={
+            "code": "legacy_correspondence_retired",
+            "message": (
+                "Name- and session-addressed DM routes are retired. Use durable "
+                "actor-addressed correspondence."
+            ),
+        },
+    )
 
 
 @router.post("/world/dm")
-def send_dm(
-    payload: SendDMRequest,
-    db: Session = Depends(get_db),
-    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
-):
-    """Store a DM claiming the supplied sender and recipient.
-
-    The current route validates names and row existence but does not authenticate
-    control of ``session_id``. The agent poll also marks unread rows read before
-    resident prompt delivery; both are tracked as correspondence audit gaps.
-    """
-    recipient = str(payload.recipient or payload.to_agent or "").strip()
-    recipient_type = str(payload.recipient_type or "agent").strip().lower()
-    if not recipient:
-        raise HTTPException(status_code=400, detail="Missing recipient.")
-
-    from_session = (
-        payload.session_id
-        if payload.session_id and _SAFE_SESSION_RE.match(payload.session_id or "")
-        else None
-    )
-    if from_session:
-        _authorize_bound_actor_or_http(
-            db, credentials=credentials, session_id=from_session
-        )
-    delivered_to = recipient
-
-    if recipient_type == "player":
-        if not _SAFE_SESSION_RE.match(recipient):
-            raise HTTPException(status_code=400, detail="Invalid player recipient.")
-        if _slug_display_name(recipient):
-            raise HTTPException(
-                status_code=400, detail="Player recipient must be a human session."
-            )
-        row = db.get(SessionVars, recipient)
-        if row is None:
-            raise HTTPException(
-                status_code=404, detail=f"No player session found for '{recipient}'."
-            )
-        delivered_to = _player_label_for_session(db, recipient)
-    else:
-        agent = recipient.lower().strip()
-        if not _valid_agent(agent):
-            raise HTTPException(
-                status_code=404, detail=f"No agent found for '{agent}'."
-            )
-        recipient = agent
-        delivered_to = agent
-
-    dm = DirectMessage(
-        from_name=payload.from_name,
-        from_session_id=from_session,
-        to_name=recipient,
-        body=payload.body,
-    )
-    db.add(dm)
-    db.commit()
-
-    return {
-        "success": True,
-        "dm_id": dm.id,
-        "delivered_to": delivered_to,
-        "recipient_type": recipient_type,
-        "recipient_key": recipient,
-    }
+def retired_send_dm():
+    _retired_correspondence_route()
 
 
 @router.post("/world/dm/reply")
-def agent_dm_reply(payload: AgentDMReplyRequest, db: Session = Depends(get_db)):
-    """Store a DM reply claiming a locally valid agent name.
-
-    This compatibility route does not yet authenticate control of the agent.
-    """
-    agent = payload.from_agent.lower().strip()
-    if not _valid_agent(agent):
-        raise HTTPException(status_code=404, detail=f"No agent found for '{agent}'.")
-
-    if not _SAFE_SESSION_RE.match(payload.to_session_id):
-        raise HTTPException(status_code=400, detail="Invalid session_id format.")
-
-    dm = DirectMessage(
-        from_name=agent.capitalize(),
-        from_session_id=None,
-        to_name=payload.to_session_id,
-        body=payload.body,
-    )
-    db.add(dm)
-    db.commit()
-
-    return {"success": True, "dm_id": dm.id, "from_agent": agent}
+def retired_agent_dm_reply():
+    _retired_correspondence_route()
 
 
 @router.get("/world/dm/inbox/{agent}")
-def get_agent_dm_inbox(agent: str, db: Session = Depends(get_db)):
-    """Return unread DMs and mark them read during this unauthenticated poll.
-
-    This is legacy mail-loop behavior, not consume-on-prompt delivery.
-    """
-    agent = agent.lower().strip()
-    if not _valid_agent(agent):
-        raise HTTPException(status_code=404, detail=f"No agent found for '{agent}'.")
-
-    unread = (
-        db.query(DirectMessage)
-        .filter(DirectMessage.to_name == agent, DirectMessage.read_at.is_(None))
-        .order_by(DirectMessage.sent_at)
-        .all()
-    )
-
-    now = datetime.utcnow()
-    dms = []
-    for dm in unread:
-        # Encode sender + id as filename for backward compat with mail loop parsing
-        safe_from = re.sub(r"[^a-zA-Z0-9_-]", "_", dm.from_name)[:20].lower()
-        ts = dm.sent_at.strftime("%Y%m%d-%H%M%S") if dm.sent_at else "000000-000000"
-        filename = f"from_{safe_from}_{ts}.md"
-        reply_header = (
-            f"Reply-To-Session: {dm.from_session_id}\n" if dm.from_session_id else ""
-        )
-        body = f"# DM from {dm.from_name}\n{reply_header}\n{dm.body}\n"
-        dms.append({"filename": filename, "body": body})
-        dm.read_at = now
-
-    if unread:
-        db.commit()
-
-    return {"agent": agent, "letters": dms, "count": len(dms)}
+def retired_agent_dm_inbox(agent: str):
+    del agent
+    _retired_correspondence_route()
 
 
 @router.get("/world/dm/my-inbox/{session_id}")
-def get_player_dm_inbox(
-    session_id: str,
-    db: Session = Depends(get_db),
-    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
-):
-    """Return all DMs for a proven named session."""
-    if not _SAFE_SESSION_RE.match(session_id):
-        raise HTTPException(status_code=400, detail="Invalid session_id format.")
-    _authorize_bound_actor_or_http(db, credentials=credentials, session_id=session_id)
-
-    all_dms = (
-        db.query(DirectMessage)
-        .filter(DirectMessage.to_name == session_id)
-        .order_by(DirectMessage.sent_at)
-        .all()
-    )
-
-    dms = []
-    for dm in all_dms:
-        safe_from = re.sub(r"[^a-zA-Z0-9_-]", "_", dm.from_name)[:20].lower()
-        ts = dm.sent_at.strftime("%Y%m%d-%H%M%S") if dm.sent_at else "000000-000000"
-        filename = f"from_{safe_from}_{ts}.md"
-        dms.append({"filename": filename, "body": dm.body, "dm_id": dm.id})
-
-    return {"session_id": session_id, "letters": dms, "count": len(dms)}
+def retired_player_dm_inbox(session_id: str):
+    del session_id
+    _retired_correspondence_route()
 
 
 @router.get("/world/dm/my-threads/{session_id}")
-def get_player_dm_threads(
-    session_id: str,
-    db: Session = Depends(get_db),
-    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
-):
-    """Return threads for a proven named session."""
-    if not _SAFE_SESSION_RE.match(session_id):
-        raise HTTPException(status_code=400, detail="Invalid session_id format.")
-    _authorize_bound_actor_or_http(db, credentials=credentials, session_id=session_id)
-
-    all_dms = (
-        db.query(DirectMessage)
-        .filter(
-            or_(
-                DirectMessage.to_name == session_id,
-                DirectMessage.from_session_id == session_id,
-            )
-        )
-        .order_by(DirectMessage.sent_at, DirectMessage.id)
-        .all()
-    )
-
-    threads: dict[str, dict[str, Any]] = {}
-    for dm in all_dms:
-        counterpart_key = _dm_counterpart_key(dm, session_id)
-        if not counterpart_key:
-            continue
-        thread = threads.setdefault(
-            counterpart_key,
-            {
-                "thread_key": counterpart_key,
-                "counterpart": _dm_counterpart_label(dm, session_id, db=db),
-                "messages": [],
-                "last_at": None,
-                "unread_count": 0,
-            },
-        )
-        direction = (
-            "inbound" if str(dm.to_name or "").strip() == session_id else "outbound"
-        )
-        sent_at = dm.sent_at.isoformat() if dm.sent_at else None
-        thread["messages"].append(
-            {
-                "dm_id": dm.id,
-                "direction": direction,
-                "body": str(dm.body or ""),
-                "sent_at": sent_at,
-                "read_at": dm.read_at.isoformat() if dm.read_at else None,
-                "from_name": str(dm.from_name or ""),
-                "to_name": str(dm.to_name or ""),
-            }
-        )
-        thread["last_at"] = sent_at or thread["last_at"]
-        if direction == "inbound" and dm.read_at is None:
-            thread["unread_count"] = int(thread["unread_count"] or 0) + 1
-
-    ordered_threads = sorted(
-        threads.values(),
-        key=lambda item: str(item.get("last_at") or ""),
-        reverse=True,
-    )
-    return {
-        "session_id": session_id,
-        "threads": ordered_threads,
-        "count": len(ordered_threads),
-    }
+def retired_player_dm_threads(session_id: str):
+    del session_id
+    _retired_correspondence_route()
 
 
 @router.post("/world/dm/my-threads/{session_id}/read/{thread_key}")
-def mark_player_dm_thread_read(
-    session_id: str,
-    thread_key: str,
-    db: Session = Depends(get_db),
-    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
-):
-    """Mark a proven named session's thread read."""
-    if not _SAFE_SESSION_RE.match(session_id):
-        raise HTTPException(status_code=400, detail="Invalid session_id format.")
-    _authorize_bound_actor_or_http(db, credentials=credentials, session_id=session_id)
-    normalized_thread_key = re.sub(
-        r"[^a-z0-9]+", "_", str(thread_key or "").lower()
-    ).strip("_")
-    if not normalized_thread_key:
-        raise HTTPException(status_code=400, detail="Invalid thread_key format.")
-
-    unread = (
-        db.query(DirectMessage)
-        .filter(DirectMessage.to_name == session_id, DirectMessage.read_at.is_(None))
-        .order_by(DirectMessage.sent_at, DirectMessage.id)
-        .all()
-    )
-
-    now = datetime.utcnow()
-    updated = 0
-    for dm in unread:
-        if _dm_counterpart_key(dm, session_id) != normalized_thread_key:
-            continue
-        dm.read_at = now
-        updated += 1
-
-    if updated:
-        db.commit()
-
-    return {
-        "session_id": session_id,
-        "thread_key": normalized_thread_key,
-        "marked_read": updated,
-    }
+def retired_player_dm_thread_read(session_id: str, thread_key: str):
+    del session_id, thread_key
+    _retired_correspondence_route()
 
 
 # ---------------------------------------------------------------------------
