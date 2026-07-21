@@ -123,7 +123,7 @@ Tests cover ordering, own/distant-speech exclusion, place reset, retention-gap r
 wake, direct batch observation, acknowledgement, unrelated notification filtering, restart, and new-session
 isolation.
 
-Still open: actor arrival/departure and direct-correspondence signal families; explicit pause and engine-restart
-fault tests; content-blind latency/duplicate/gap metrics; notification backpressure under a busy place; and a
-post-fix live Alderbank run. These should extend the cursor contract rather than introduce prose-based urgency
-or a second event log.
+Still open: actor arrival/departure and direct-correspondence signal families; engine-restart and disconnected
+server-wait fault tests; content-blind latency/duplicate/gap metrics; notification backpressure under a busy
+place; and a post-fix live Alderbank run. These should extend the cursor contract rather than introduce
+prose-based urgency or a second event log.

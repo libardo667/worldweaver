@@ -670,6 +670,63 @@ def test_live_signal_cursor_restores_only_for_the_same_city_session(tmp_path):
     assert new_attachment is None
 
 
+def test_cancelling_a_live_signal_wait_releases_the_hearth_lease(tmp_path):
+    client = _FakeCityClient()
+    wait_started = asyncio.Event()
+    wait_cancelled = False
+    calls = 0
+
+    async def wait_for_live_signals(
+        _session_id, *, cursor=None, wait_seconds=0.0, limit=10
+    ):
+        nonlocal calls, wait_cancelled
+        calls += 1
+        if cursor is None:
+            return LiveSignalBatch(
+                LiveSignalCursor(
+                    shard_id="alderbank",
+                    location="Alderbank Commons",
+                    after_id=4,
+                ),
+                "established",
+                "complete",
+                (),
+                False,
+            )
+        wait_started.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            wait_cancelled = True
+            raise
+
+    client.wait_for_live_signals = wait_for_live_signals
+    resident = _resident(tmp_path, client)
+
+    class _Core:
+        tick_seconds = 20.0
+
+        async def tick_once(self, *, force_ignite=False):
+            return {"status": "completed"}
+
+    resident._build_core = lambda _world, _session_id: _Core()
+
+    async def run_and_cancel():
+        task = asyncio.create_task(resident.run())
+        await asyncio.wait_for(wait_started.wait(), timeout=1.0)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    asyncio.run(run_and_cancel())
+
+    assert calls == 2
+    assert wait_cancelled is True
+    assert resident._runtime_lease is None
+
+
 def test_duration_bound_uses_elapsed_time_instead_of_a_tick_limit(tmp_path):
     observed: list[int] = []
 
