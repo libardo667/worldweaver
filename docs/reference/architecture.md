@@ -19,8 +19,9 @@ Movement, speech, objects, making, exchange, access, traces, and travel use type
 engine, rather than participant prose, decides whether each attempt changes canonical state and records an
 event. Movement now commits its session state, hop events, projections, and fact rows atomically. Local speech
 likewise commits its public message, event, projection, and fact together, then wakes listeners only after the
-commit succeeds. Travel and session-lifecycle rules remain under audit, so do not generalize that guarantee
-beyond services that test it.
+commit succeeds. Session entry now commits its state, bootstrap event, account or resident binding, and stale
+presence retirement together; leaving removes only the live presence and keeps public history. Travel remains
+under audit, so do not generalize those guarantees beyond services that test them.
 
 The old freeform action narrator is retired. `/api/action` remains only as a `410 Gone` tombstone so old
 callers fail honestly.

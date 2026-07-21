@@ -77,13 +77,12 @@
     <rect class="node node-live" x="1510" y="235" width="285" height="125" rx="20"/>
     <text class="label" x="1653" y="276">Typed services</text>
     <text class="small" x="1653" y="306">objects · access · making</text>
-    <text class="small" x="1653" y="331">exchange · stoops</text>
-    <text class="small" x="1653" y="353">movement · speech</text>
+    <text class="small" x="1653" y="331">exchange · movement · speech</text>
+    <text class="small" x="1653" y="353">stoops · session lifecycle</text>
 
     <rect class="node node-warning" x="1815" y="235" width="280" height="125" rx="20"/>
     <text class="label" x="1955" y="281">Rules in routes</text>
-    <text class="small" x="1955" y="315">travel</text>
-    <text class="small" x="1955" y="342">session lifecycle</text>
+    <text class="small" x="1955" y="326">inter-city travel</text>
 
     <path class="arrow arrow-green" d="M1490 297 H1505"/>
     <path class="arrow" d="M1653 360 V405"/>

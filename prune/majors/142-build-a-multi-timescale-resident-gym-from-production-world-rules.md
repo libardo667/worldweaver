@@ -39,7 +39,7 @@ periods by advancing an injected clock directly to the next scheduled event.
 9. Publish a held-out benchmark with unseen cities, paraphrased observations, renamed internal fields,
    different event orderings, and repeated trials. Keep the training scenarios separate.
 
-### Current boundary finding and first two extractions — July 20, 2026
+### Current boundary finding and first three extractions — July 20, 2026
 
 The first source audit found an uneven production seam. Object custody, making, access, exchange, and stoops
 already put most business rules in service modules below HTTP. The first extraction moved canonical place
@@ -47,8 +47,8 @@ anchoring into `services/location_routes.py` and the complete movement rule path
 The live HTTP endpoint now authenticates, calls that service, and translates its typed receipt or refusal.
 
 Local speech now lives in `services/local_speech.py`; its route authenticates and translates the service's
-typed receipt or refusal. Travel and session lifecycle still keep substantial rule and transaction logic in
-`src/api/game/world.py` and `src/api/game/state.py`.
+typed receipt or refusal. Session entry and retirement now live in `services/session_lifecycle.py`. Inter-city
+travel remains the large route-owned family in `src/api/game/state.py`.
 
 Movement revealed that its session-state save and movement-event write were separate commits. That follow-up
 is repaired: deferred event submission stages enabled projections and graph facts in the caller's transaction,
@@ -61,6 +61,12 @@ were notified before the canonical utterance event was attempted; every event fa
 ignored. The service now commits the chat row, utterance event, projection, and fact together and notifies
 waiters only after success. A forced event failure proves that no chat row or event remains and no false wake
 is sent.
+
+Session bootstrap exposed an append-only violation: its duplicate-agent cleanup deleted the older session's
+public events and facts. It now retires only the stale live presence and preserves public history. Bootstrap
+also refuses to overwrite an occupied session ID and commits the new state, bootstrap event, account or
+resident authority binding, and duplicate retirement as one local transaction. Tests force event and resident
+binding failures and prove that neither a half-created session nor a half-created arrival event survives.
 
 Do not start the fast gym by calling route functions, copying those rules, or writing synthetic state directly.
 Continue extracting typed production services for the behaviors a first episode needs. Live routes and the gym can
