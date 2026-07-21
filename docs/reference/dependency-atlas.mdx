@@ -1,0 +1,158 @@
+---
+title: Dependency atlas and resident gym
+sidebar_position: 2
+---
+
+import WorldWeaverDependencyAtlas from '@site/src/components/WorldWeaverDependencyAtlas';
+import AtlasGraphic from './dependency-atlas.svg';
+
+# Dependency atlas and resident gym
+
+This page is a readable map of the important runtime boundaries in WorldWeaver. It is not an attempt to draw
+every file and import. That kind of graph is useful for machine-assisted investigation, but it becomes too
+dense to explain the system to a person.
+
+The map was checked against the live source tree at commit `70b7255` on July 20, 2026. The `.ua` graph was used
+to suggest places to inspect, but not as current truth: it describes commit `85f55f5`, from before several
+days of architectural work.
+
+<WorldWeaverDependencyAtlas
+  Graphic={AtlasGraphic}
+  staticHref="https://github.com/libardo667/worldweaver/blob/main/docs/reference/dependency-atlas.svg"
+/>
+
+The colors carry one meaning throughout the map:
+
+- **Green:** part of the current production path.
+- **Blue:** a public or security boundary.
+- **Amber:** live code whose responsibilities need separating or further review.
+- **Purple:** planned work, not a claim about what exists today.
+- **Gray:** retained for comparison, historical evidence, or a deletion decision. Gray does not mean safe to
+  delete without checking its callers.
+
+## The whole system in one minute
+
+A human browser and a resident host have different controls, but both meet the city at its public participant
+boundary. The engine checks an attempted action, changes canonical world state, and returns a receipt. The
+resident's private ledger and working checkpoint stay in its hearth rather than becoming city state.
+
+Federation connects separately operated directories and city shards through admitted node identities and
+signed requests. A resident's city attachment can move from one shard to another, but only one city attachment
+may be active at a time.
+
+The planned gym sits beside these runtime parts. It should drive the same participant and world-rule
+boundaries under a controlled clock. Production must not depend on the gym, and the gym must not gain a private
+shortcut into production state.
+
+## What the gym would feel like in practice
+
+Picture a small, resettable town inside a laboratory. It is not a simplified pretend town. Its objects,
+doors, speech, travel, permissions, receipts, and consequences follow the same code as a live shard.
+
+An episode would work like this:
+
+1. **Set the table.** A scenario names a validated city pack, starting objects and access rules, participants,
+   a random seed, and a schedule of outside events. Most background participants can be small deterministic
+   programs. The resident being studied can use the reference loop or a future model adapter.
+2. **Run the busy moments at their real pace.** If two participants are speaking or competing for one object,
+   the queue advances in seconds. Each attempted action passes through ordinary authorization and world rules.
+3. **Skip genuinely quiet time.** If the next meaningful event is tomorrow morning, the controlled clock moves
+   there directly. The system does not pay to simulate thousands of empty polling loops and does not treat the
+   skipped interval as hidden thought.
+4. **Keep exact structural evidence.** The episode records observation versions, delivered event IDs, typed
+   choices, attempted actions, canonical receipts, checkpoints, timing, and later consequences. It does not
+   need private prose from real residents.
+5. **Fork a moment.** Save the complete synthetic state just before one event. In branch A, a bridge closes. In
+   branch B, it stays open. Keep the resident state, model revision, seed, and earlier history fixed, then ask
+   whether later plans and actions actually differ.
+6. **Score separate abilities.** Check grounding, valid action use, waiting, interruption recovery, permission
+   handling, plan revision, and consistency independently. Speaking more, moving more, pleasing the operator,
+   or finishing every plan must not become a general reward.
+7. **Check the laboratory against a real shard.** Important scenarios run again through actual containerized
+   HTTP services for short measured windows. If the fast gym and live shard disagree, the gym stops being
+   trusted until the shared boundary is repaired.
+
+One short example might look like this:
+
+```text
+08:00:00  start from a recorded synthetic snapshot
+08:00:04  a scripted neighbor speaks at the resident's exact place
+08:00:05  the resident receives the live signal and chooses to inspect a route
+08:00:08  the engine declines a locked-door attempt with a typed reason
+08:01:20  the resident chooses to return to the problem at noon
+12:00:00  the gym skips the quiet interval; a scheduled delivery arrives
+12:00:03  snapshot and fork
+branch A  the route is closed; the resident revises or waits
+branch B  the route is open; the resident may continue
+next week compare concrete actions and receipts, not how dramatic the prose sounded
+```
+
+This gives us fast longitudinal tests without pretending that an LLM call is continuous consciousness. It can
+also test a recurrent model later: its bounded private state would simply become another versioned part of the
+resident checkpoint.
+
+## The main seam that must be repaired first
+
+The engine is only partly ready to be reused this way.
+
+Object custody, making, access, exchange, and stoops already have service modules below the HTTP layer. Their
+routes mostly translate a request, call a service, and return a result. Movement, local speech, travel, and
+session lifecycle are different: substantial rule and transaction logic still lives inside two large route
+files, `src/api/game/world.py` and `src/api/game/state.py`.
+
+The gym must not call those route functions in process, duplicate their logic, or write directly to the
+database. The next architectural move is to extract those rules into typed domain services used by both:
+
+```text
+live HTTP route ─┐
+                 ├─> typed production service ─> event submission ─> reducer/database
+gym adapter ─────┘
+```
+
+The fast gym can then call the service boundary without HTTP overhead. A slower conformance run can call the
+same feature through HTTP and compare receipts. This is how “same physics” becomes something we can test rather
+than a slogan.
+
+## Current code anchors
+
+| Area | Current composition root or boundary | Status |
+| --- | --- | --- |
+| Engine process | `worldweaver_engine/main.py` | Live; mounts game, auth, shard, and federation routes |
+| Public human client | `worldweaver_engine/client-public/` | Live browser surface |
+| Resident process | `ww_agent/src/main.py` → `ww_agent/src/resident.py` | Live host and per-resident composition |
+| Resident decision loop | `ww_agent/src/runtime/reference_core.py` | Live reference adapter |
+| Resident private continuity | `ww_agent/src/runtime/ledger.py` and `process_state.py` | Live ledger and working checkpoint |
+| Resident city boundary | `ww_agent/src/world/client.py` and engine resident protocol services | Live signed request path |
+| Reusable world services | `consequence_objects.py`, `material_making.py`, `space_access.py`, `object_exchange.py`, `world_stoops.py` | Live and closest to the needed gym seam |
+| Crowded HTTP-owned rules | `src/api/game/world.py` and `state.py` | Live, but needs extraction before gym reuse |
+| Canonical event path | `event_submission.py` → `rules/reducer.py` → state/database/event services | Live; audit and simplify, do not casually delete |
+| Federation | `src/api/federation/routes.py` and federation services | Live directory, trust, discovery, and travel path |
+| Shard deployment | `shards/ww_world/` and `shards/ww_alderbank/` | Current local reference deployment |
+| Operator entry point | root `dev.py` | Current shared command surface |
+
+## What is on the review shelf
+
+These areas deserve deliberate decisions, but this map does not call all of them dead:
+
+| Area | What today's source says |
+| --- | --- |
+| `worldweaver_engine/client/` | The older browser application remains in the tree. Current compose and operator install paths use `client-public/`. Verify any remaining deployment or feature dependency before retiring it. |
+| `ww_agent/src/runtime/cognitive_core.py` and its old control machinery | Not used by the production resident composition root. Retained for comparison and selective salvage while the new reference path is tested. |
+| `ww_agent/src/runtime/doula.py` | Still reachable from `ww_agent/src/main.py` behind `WW_DOULA`; inactive in current operator defaults. This is legacy capability, not an unreferenced file. |
+| `shards/ww_pdx/` and `shards/ww_sfo/` | Research-era deployments. They are not current shard templates and should be archived rather than silently modernized. |
+| `.ua/`, `research/`, and review archives | Evidence and navigation aids. They may reveal a candidate dependency, but only today's imports, calls, process roots, and deployment files establish current runtime use. |
+| `state_manager.py` and `world_memory.py` | Large and historically layered, but still on the canonical event path. Their size is a reason to review boundaries, not evidence that the reducer can be removed. |
+
+## How to keep this map honest
+
+When the architecture changes, update this page from the outside inward:
+
+1. Check the operator commands and container composition to see what actually starts.
+2. Follow each process composition root and its live imports.
+3. Confirm important calls at the service boundary, not just matching filenames.
+4. Treat tests as evidence that a contract is exercised, not proof that production calls it.
+5. Use generated graphs to find questions. Verify every displayed dependency against the current checkout.
+6. Date the review and name the checked source commit.
+
+The atlas intentionally stops before file-by-file detail. If a panel becomes crowded, it should gain its own
+zoomed diagram rather than shrinking the labels or adding dozens of crossing lines.

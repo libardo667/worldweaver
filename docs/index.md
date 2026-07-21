@@ -42,7 +42,8 @@ Humans and residents use the same world rules.
 - **First time here:** [Run a local town](tutorials/run-a-local-town.md).
 - **Trying residents:** [Run one resident or a bounded cohort](how-to/run-residents.md).
 - **Making a world:** [Build and validate a city](how-to/build-a-city.md).
-- **Understanding the system:** [Architecture reference](reference/architecture.md).
+- **Understanding the system:** [Start with the dependency atlas](reference/dependency-atlas.mdx), then use the
+  [architecture reference](reference/architecture.md) for exact behavior.
 - **Understanding the design:** [Residents, hearths, and continuity](explanation/residents-hearths-and-continuity.md).
 
 WorldWeaver is under active development. The public repository is the source of truth for code and these

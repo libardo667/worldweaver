@@ -39,6 +39,19 @@ periods by advancing an injected clock directly to the next scheduled event.
 9. Publish a held-out benchmark with unseen cities, paraphrased observations, renamed internal fields,
    different event orderings, and repeated trials. Keep the training scenarios separate.
 
+### Current boundary finding — July 20, 2026
+
+The first source audit found an uneven production seam. Object custody, making, access, exchange, and stoops
+already put most business rules in service modules below HTTP. Movement, local speech, travel, and session
+lifecycle still keep substantial rule and transaction logic in `src/api/game/world.py` and
+`src/api/game/state.py`.
+
+Do not start the fast gym by calling route functions, copying those rules, or writing synthetic state directly.
+First extract typed production services for the behaviors a first episode needs. Live routes and the gym can
+then call the same services, while a slower containerized conformance run checks that HTTP and in-process
+receipts still agree. The maintained dependency atlas and the plain-language episode design live in
+`docs/reference/dependency-atlas.mdx`.
+
 ## Files Affected
 
 - `worldweaver_engine/src/services/state/`
@@ -51,6 +64,7 @@ periods by advancing an injected clock directly to the next scheduled event.
 - `research/resident-gym/` (new)
 - `scripts/` (new gym operation commands)
 - `docs/reference/architecture.md`
+- `docs/reference/dependency-atlas.mdx`
 - `docs/reference/resident-gym.md` (new)
 
 ## Acceptance Criteria

@@ -1,0 +1,276 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="3300" height="1500" viewBox="0 0 3300 1500" role="img" aria-labelledby="title description">
+  <title id="title">WorldWeaver dependency atlas</title>
+  <desc id="description">Six large panels show clients, the world engine, federation, the resident host, the planned resident gym, and code under review. Arrows show only important runtime boundaries.</desc>
+  <defs>
+    <style>
+      .canvas { fill: #050b14; }
+      .panel { fill: #0b1726; stroke: #64748b; stroke-width: 5; }
+      .panel-live { stroke: #4ade80; }
+      .panel-boundary { stroke: #38bdf8; }
+      .panel-future { stroke: #e879f9; }
+      .panel-review { stroke: #94a3b8; }
+      .node { fill: #13243a; stroke: #cbd5e1; stroke-width: 3; }
+      .node-live { fill: #102b27; stroke: #4ade80; }
+      .node-boundary { fill: #10263a; stroke: #38bdf8; }
+      .node-warning { fill: #33250d; stroke: #fbbf24; }
+      .node-future { fill: #2a1735; stroke: #e879f9; }
+      .node-review { fill: #1d2531; stroke: #94a3b8; }
+      .title { fill: #ffffff; font: 700 56px Inter, system-ui, sans-serif; }
+      .panel-title { fill: #ffffff; font: 700 42px Inter, system-ui, sans-serif; }
+      .panel-subtitle { fill: #cbd5e1; font: 400 24px Inter, system-ui, sans-serif; }
+      .label { fill: #f8fafc; font: 650 27px Inter, system-ui, sans-serif; text-anchor: middle; }
+      .small { fill: #cbd5e1; font: 400 21px Inter, system-ui, sans-serif; text-anchor: middle; }
+      .code { fill: #e2e8f0; font: 500 19px ui-monospace, SFMono-Regular, Consolas, monospace; text-anchor: middle; }
+      .edge-label { fill: #ffffff; font: 650 21px Inter, system-ui, sans-serif; text-anchor: middle; paint-order: stroke; stroke: #050b14; stroke-width: 9; }
+      .arrow { fill: none; stroke: #f8fafc; stroke-width: 6; marker-end: url(#arrow); }
+      .arrow-blue { stroke: #38bdf8; }
+      .arrow-green { stroke: #4ade80; }
+      .arrow-purple { stroke: #e879f9; stroke-dasharray: 18 12; }
+      .arrow-muted { stroke: #94a3b8; stroke-dasharray: 14 12; }
+      .divider { stroke: #334155; stroke-width: 3; }
+      .pill { fill: #172033; stroke-width: 3; }
+      .pill-text { fill: #ffffff; font: 650 20px Inter, system-ui, sans-serif; text-anchor: middle; }
+    </style>
+    <marker id="arrow" markerWidth="18" markerHeight="18" refX="14" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,12 L15,6 z" fill="context-stroke"/>
+    </marker>
+  </defs>
+
+  <rect class="canvas" width="3300" height="1500"/>
+  <text class="title" x="100" y="66">WorldWeaver dependency atlas</text>
+
+  <!-- 1. People and public clients -->
+  <g id="clients">
+    <rect class="panel panel-boundary" x="100" y="100" width="1000" height="600" rx="34"/>
+    <text class="panel-title" x="150" y="158">1. People and public clients</text>
+    <text class="panel-subtitle" x="150" y="196">Different controls; the same world rules.</text>
+
+    <rect class="node node-boundary" x="155" y="245" width="400" height="145" rx="22"/>
+    <text class="label" x="355" y="300">Human browser</text>
+    <text class="code" x="355" y="338">client-public/</text>
+    <text class="small" x="355" y="368">place, verbs, map, account</text>
+
+    <rect class="node node-boundary" x="645" y="245" width="400" height="145" rx="22"/>
+    <text class="label" x="845" y="300">Resident city client</text>
+    <text class="code" x="845" y="338">ww_agent/src/world/</text>
+    <text class="small" x="845" y="368">signed reads and attempts</text>
+
+    <path class="arrow arrow-blue" d="M355 390 V455 H565"/>
+    <path class="arrow arrow-blue" d="M845 390 V455 H595"/>
+
+    <rect class="node node-live" x="300" y="455" width="600" height="155" rx="22"/>
+    <text class="label" x="600" y="510">Public participant boundary</text>
+    <text class="small" x="600" y="548">HTTP commands + authenticated reads</text>
+    <text class="small" x="600" y="580">runtime signatures for resident hosts</text>
+  </g>
+
+  <!-- 2. World engine -->
+  <g id="engine">
+    <rect class="panel panel-live" x="1150" y="100" width="1000" height="600" rx="34"/>
+    <text class="panel-title" x="1200" y="158">2. World engine</text>
+    <text class="panel-subtitle" x="1200" y="196">The authority for shared, public facts.</text>
+
+    <rect class="node node-boundary" x="1205" y="235" width="285" height="125" rx="20"/>
+    <text class="label" x="1348" y="287">FastAPI routes</text>
+    <text class="small" x="1348" y="323">auth + validation</text>
+
+    <rect class="node node-live" x="1510" y="235" width="285" height="125" rx="20"/>
+    <text class="label" x="1653" y="281">Typed services</text>
+    <text class="small" x="1653" y="315">objects · access · making</text>
+    <text class="small" x="1653" y="342">exchange · stoops</text>
+
+    <rect class="node node-warning" x="1815" y="235" width="280" height="125" rx="20"/>
+    <text class="label" x="1955" y="281">Rules in routes</text>
+    <text class="small" x="1955" y="315">movement · speech · travel</text>
+    <text class="small" x="1955" y="342">session lifecycle</text>
+
+    <path class="arrow arrow-green" d="M1490 297 H1505"/>
+    <path class="arrow" d="M1653 360 V405"/>
+    <path class="arrow" d="M1955 360 V405 H1785"/>
+
+    <rect class="node node-live" x="1420" y="405" width="460" height="105" rx="20"/>
+    <text class="label" x="1650" y="449">Event submission</text>
+    <text class="code" x="1650" y="483">submit_world_event()</text>
+
+    <path class="arrow arrow-green" d="M1650 510 V550"/>
+
+    <rect class="node node-live" x="1210" y="550" width="300" height="105" rx="20"/>
+    <text class="label" x="1360" y="594">Reducer</text>
+    <text class="small" x="1360" y="627">apply canonical event</text>
+
+    <rect class="node node-live" x="1550" y="550" width="300" height="105" rx="20"/>
+    <text class="label" x="1700" y="594">PostgreSQL</text>
+    <text class="small" x="1700" y="627">facts + sessions</text>
+
+    <rect class="node node-live" x="1890" y="550" width="205" height="105" rx="20"/>
+    <text class="label" x="1993" y="594">Events</text>
+    <text class="small" x="1993" y="627">receipts + signals</text>
+
+    <path class="arrow arrow-green" d="M1510 603 H1545"/>
+    <path class="arrow arrow-green" d="M1850 603 H1885"/>
+  </g>
+
+  <!-- 3. Federation -->
+  <g id="federation">
+    <rect class="panel panel-boundary" x="2200" y="100" width="1000" height="600" rx="34"/>
+    <text class="panel-title" x="2250" y="158">3. Federation</text>
+    <text class="panel-subtitle" x="2250" y="196">Separate stewards; admitted, signed connections.</text>
+
+    <rect class="node node-boundary" x="2255" y="250" width="270" height="150" rx="22"/>
+    <text class="label" x="2390" y="303">World directory</text>
+    <text class="small" x="2390" y="340">node identities</text>
+    <text class="small" x="2390" y="372">admission + discovery</text>
+
+    <rect class="node node-live" x="2565" y="250" width="270" height="150" rx="22"/>
+    <text class="label" x="2700" y="303">City shard A</text>
+    <text class="small" x="2700" y="340">its own database</text>
+    <text class="small" x="2700" y="372">its own steward key</text>
+
+    <rect class="node node-live" x="2875" y="250" width="270" height="150" rx="22"/>
+    <text class="label" x="3010" y="303">City shard B</text>
+    <text class="small" x="3010" y="340">another computer</text>
+    <text class="small" x="3010" y="372">another steward</text>
+
+    <path class="arrow arrow-blue" d="M2525 325 H2560"/>
+    <path class="arrow arrow-blue" d="M2835 325 H2870"/>
+
+    <rect class="node node-boundary" x="2400" y="475" width="545" height="140" rx="22"/>
+    <text class="label" x="2673" y="525">Recoverable travel handoff</text>
+    <text class="small" x="2673" y="561">retire source → verify trip → arrive</text>
+    <text class="small" x="2673" y="592">never two active city attachments</text>
+
+    <path class="arrow arrow-blue" d="M2700 400 V470"/>
+    <path class="arrow arrow-blue" d="M3010 400 V445 H2945"/>
+  </g>
+
+  <!-- 4. Resident host -->
+  <g id="resident">
+    <rect class="panel panel-live" x="100" y="820" width="1000" height="600" rx="34"/>
+    <text class="panel-title" x="150" y="878">4. Resident host</text>
+    <text class="panel-subtitle" x="150" y="916">Private continuity beside—not inside—the city.</text>
+
+    <rect class="node node-live" x="155" y="965" width="285" height="135" rx="20"/>
+    <text class="label" x="298" y="1010">Hearth files</text>
+    <text class="small" x="298" y="1046">identity · ledger</text>
+    <text class="small" x="298" y="1077">working checkpoint</text>
+
+    <rect class="node node-live" x="465" y="965" width="285" height="135" rx="20"/>
+    <text class="label" x="608" y="1010">Resident host</text>
+    <text class="code" x="608" y="1046">resident.py</text>
+    <text class="small" x="608" y="1077">one awake process</text>
+
+    <rect class="node node-live" x="775" y="965" width="270" height="135" rx="20"/>
+    <text class="label" x="910" y="1010">Reference core</text>
+    <text class="code" x="910" y="1046">reference_core.py</text>
+    <text class="small" x="910" y="1077">one choice at a time</text>
+
+    <path class="arrow arrow-green" d="M440 1033 H460"/>
+    <path class="arrow arrow-green" d="M750 1033 H770"/>
+
+    <rect class="node node-boundary" x="260" y="1170" width="300" height="145" rx="20"/>
+    <text class="label" x="410" y="1218">Information adapter</text>
+    <text class="small" x="410" y="1254">current facts + one</text>
+    <text class="small" x="410" y="1285">elective source</text>
+
+    <rect class="node node-boundary" x="650" y="1170" width="300" height="145" rx="20"/>
+    <text class="label" x="800" y="1218">Effector adapter</text>
+    <text class="small" x="800" y="1254">typed action attempt</text>
+    <text class="small" x="800" y="1285">confirmed receipt</text>
+
+    <path class="arrow arrow-blue" d="M835 1100 L800 1165"/>
+    <path class="arrow arrow-blue" d="M875 1100 L420 1165"/>
+
+    <rect class="node node-live" x="380" y="1340" width="440" height="55" rx="18"/>
+    <text class="small" x="600" y="1376">signed city client → public boundary</text>
+  </g>
+
+  <!-- 5. Resident gym -->
+  <g id="gym">
+    <rect class="panel panel-future" x="1150" y="820" width="1000" height="600" rx="34"/>
+    <text class="panel-title" x="1200" y="878">5. Resident gym (planned)</text>
+    <text class="panel-subtitle" x="1200" y="916">Controlled time around the real rule boundary.</text>
+
+    <rect class="node node-future" x="1205" y="965" width="275" height="130" rx="20"/>
+    <text class="label" x="1343" y="1010">Scenario</text>
+    <text class="small" x="1343" y="1046">city · actors · seed</text>
+    <text class="small" x="1343" y="1077">scheduled events</text>
+
+    <rect class="node node-future" x="1515" y="965" width="275" height="130" rx="20"/>
+    <text class="label" x="1653" y="1010">Event queue</text>
+    <text class="small" x="1653" y="1046">real-time windows</text>
+    <text class="small" x="1653" y="1077">skip quiet time</text>
+
+    <rect class="node node-future" x="1825" y="965" width="270" height="130" rx="20"/>
+    <text class="label" x="1960" y="1010">Participants</text>
+    <text class="small" x="1960" y="1046">script · reference</text>
+    <text class="small" x="1960" y="1077">future model</text>
+
+    <path class="arrow arrow-purple" d="M1480 1030 H1510"/>
+    <path class="arrow arrow-purple" d="M1790 1030 H1820"/>
+
+    <rect class="node node-boundary" x="1270" y="1160" width="350" height="145" rx="20"/>
+    <text class="label" x="1445" y="1208">Shared rule seam</text>
+    <text class="small" x="1445" y="1244">same checks and receipts</text>
+    <text class="small" x="1445" y="1275">as a live shard</text>
+
+    <rect class="node node-future" x="1680" y="1160" width="350" height="145" rx="20"/>
+    <text class="label" x="1855" y="1208">Snapshot + fork</text>
+    <text class="small" x="1855" y="1244">change one event</text>
+    <text class="small" x="1855" y="1275">compare later structure</text>
+
+    <path class="arrow arrow-purple" d="M1960 1095 V1130 H1445 V1155"/>
+    <path class="arrow arrow-purple" d="M1620 1233 H1675"/>
+
+    <rect class="node node-future" x="1420" y="1340" width="460" height="55" rx="18"/>
+    <text class="small" x="1650" y="1376">synthetic trajectories → separate scoring</text>
+  </g>
+
+  <!-- 6. Review shelf -->
+  <g id="review">
+    <rect class="panel panel-review" x="2200" y="820" width="1000" height="600" rx="34"/>
+    <text class="panel-title" x="2250" y="878">6. Review shelf</text>
+    <text class="panel-subtitle" x="2250" y="916">Present in the tree does not mean live in production.</text>
+
+    <rect class="node node-review" x="2255" y="965" width="420" height="125" rx="20"/>
+    <text class="label" x="2465" y="1012">Old browser client</text>
+    <text class="code" x="2465" y="1052">worldweaver_engine/client/</text>
+
+    <rect class="node node-review" x="2725" y="965" width="420" height="125" rx="20"/>
+    <text class="label" x="2935" y="1012">CognitiveCore path</text>
+    <text class="small" x="2935" y="1052">comparison and salvage only</text>
+
+    <rect class="node node-warning" x="2255" y="1140" width="420" height="125" rx="20"/>
+    <text class="label" x="2465" y="1187">Optional doula path</text>
+    <text class="small" x="2465" y="1227">still importable behind a flag</text>
+
+    <rect class="node node-review" x="2725" y="1140" width="420" height="125" rx="20"/>
+    <text class="label" x="2935" y="1187">Research shards + .ua</text>
+    <text class="small" x="2935" y="1227">historical evidence, not truth</text>
+
+    <rect class="node node-warning" x="2365" y="1320" width="670" height="65" rx="18"/>
+    <text class="small" x="2700" y="1362">verify live callers before keeping, moving, or deleting</text>
+  </g>
+
+  <!-- Only the major cross-boundary dependencies are drawn at overview scale. -->
+  <path class="arrow arrow-blue" d="M1100 520 H1140"/>
+  <text class="edge-label" x="1120" y="500">commands</text>
+
+  <path class="arrow arrow-blue" d="M2150 520 H2190"/>
+  <text class="edge-label" x="2170" y="500">signed federation</text>
+
+  <path class="arrow arrow-blue" d="M1040 820 C1080 730 1140 710 1240 700"/>
+  <text class="edge-label" x="1085" y="757">reads + attempts</text>
+
+  <path class="arrow arrow-purple" d="M1650 820 V710"/>
+  <text class="edge-label" x="1775" y="768">must reuse domain rules</text>
+
+  <!-- Status legend -->
+  <rect class="pill" x="2300" y="24" width="190" height="48" rx="24" stroke="#4ade80"/>
+  <text class="pill-text" x="2395" y="56">live path</text>
+  <rect class="pill" x="2510" y="24" width="220" height="48" rx="24" stroke="#38bdf8"/>
+  <text class="pill-text" x="2620" y="56">public boundary</text>
+  <rect class="pill" x="2750" y="24" width="190" height="48" rx="24" stroke="#e879f9"/>
+  <text class="pill-text" x="2845" y="56">planned</text>
+  <rect class="pill" x="2960" y="24" width="190" height="48" rx="24" stroke="#fbbf24"/>
+  <text class="pill-text" x="3055" y="56">needs review</text>
+</svg>
