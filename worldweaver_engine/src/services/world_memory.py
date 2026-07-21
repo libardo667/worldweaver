@@ -1483,9 +1483,9 @@ def record_event(
 ) -> WorldEvent:
     """Create a WorldEvent, apply deltas, embed summary, and persist it.
 
-    ``commit=False`` is reserved for structural services that must commit the
-    event and their own canonical rows in one transaction. Those callers skip
-    projection and graph extraction, which have their own commit boundaries.
+    With ``commit=False``, the event and any enabled derived projection or graph
+    rows are flushed into the caller's transaction without committing it. This
+    lets a domain service commit its canonical state and event together.
     """
     from .embedding_service import embed_text
 
@@ -1531,6 +1531,16 @@ def record_event(
         db.refresh(event)
     else:
         db.flush()
+
+    if not commit and settings.enable_world_projection and not skip_projection:
+        apply_event_to_projection(db, event)
+
+    if (
+        not commit
+        and settings.enable_world_graph_extraction
+        and not skip_graph_extraction
+    ):
+        _record_graph_assertions(db, event)
 
     if commit and settings.enable_world_projection and not skip_projection:
         try:

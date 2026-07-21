@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.models import WorldEvent
+from src.models import WorldEvent, WorldFact, WorldProjection
 from src.models.schemas import ActionDeltaContract, ActionDeltaSetOperation
 from src.services.event_submission import (
     EventSubmissionError,
@@ -221,16 +221,41 @@ def test_structural_event_can_share_an_outer_transaction(db_session):
     assert db_session.query(WorldEvent).count() == 0
 
 
-def test_deferred_event_rejects_independent_projection_or_graph_work(db_session):
-    with pytest.raises(EventSubmissionError, match="deferred commit"):
-        submit_world_event(
-            db_session,
-            WorldEventCommand(
-                session_id="event-spine-unsafe-transaction",
-                event_type="object_placed",
-                summary="A structurally unsafe event is attempted.",
-                defer_commit=True,
-            ),
-        )
+def test_deferred_event_stages_derived_rows_in_the_outer_transaction(db_session):
+    submit_world_event(
+        db_session,
+        WorldEventCommand(
+            session_id="event-spine-derived-transaction",
+            event_type="movement",
+            summary="Someone arrives at the west gate.",
+            delta={
+                "spatial_nodes": {"West Gate": {"last_arrival_actor": "Someone"}},
+                "__world_facts__": {
+                    "facts": [
+                        {
+                            "subject": "Someone",
+                            "subject_type": "entity",
+                            "predicate": "location",
+                            "value": "West Gate",
+                            "location": "West Gate",
+                            "summary": "Someone arrives at the west gate.",
+                            "confidence": 0.95,
+                        }
+                    ],
+                    "parser_mode": "structured",
+                },
+            },
+            preserve_event_type=True,
+            defer_commit=True,
+        ),
+    )
+
+    assert db_session.query(WorldEvent).count() == 1
+    assert db_session.query(WorldProjection).count() > 0
+    assert db_session.query(WorldFact).count() > 0
+
+    db_session.rollback()
 
     assert db_session.query(WorldEvent).count() == 0
+    assert db_session.query(WorldProjection).count() == 0
+    assert db_session.query(WorldFact).count() == 0

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import re
+from copy import deepcopy
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -13,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from .event_submission import WorldEventCommand, submit_world_event
 from .location_routes import resolve_route_anchor
-from .session_service import get_state_manager, save_state
+from .session_service import get_state_manager, stage_state
 from .space_access import SpaceAccessError, assert_route_entry_allowed
 from .sublocations import (
     create_or_refresh_ephemeral,
@@ -255,6 +256,7 @@ def move_session(
             destinations=entered_locations,
         )
     except SpaceAccessError as exc:
+        db.rollback()
         raise MovementError(
             exc.code,
             {"code": exc.code, "message": str(exc)},
@@ -271,65 +273,74 @@ def move_session(
         or state_manager.get_variable("player_name")
         or "Someone"
     )
+    state_snapshot = deepcopy(state_manager.export_state())
 
     if skip_to_destination and not snapped:
-        final_destination = route[-1]
-        intermediate_hops = route[1:-1]
-        for hop in intermediate_hops:
-            previous = state_manager.get_variable("location") or current_location
-            state_manager.set_variable("location", hop)
-            summary = (
-                f"{mover_name} passes through {hop.replace('_', ' ')}, "
-                f"continuing toward {final_destination.replace('_', ' ')}."
+        try:
+            final_destination = route[-1]
+            intermediate_hops = route[1:-1]
+            for hop in intermediate_hops:
+                previous = state_manager.get_variable("location") or current_location
+                state_manager.set_variable("location", hop)
+                summary = (
+                    f"{mover_name} passes through {hop.replace('_', ' ')}, "
+                    f"continuing toward {final_destination.replace('_', ' ')}."
+                )
+                submit_world_event(
+                    db,
+                    WorldEventCommand(
+                        session_id=normalized_session_id,
+                        event_type=EVENT_TYPE_MOVEMENT,
+                        summary=summary,
+                        delta=_movement_event_delta(
+                            origin=previous,
+                            destination=hop,
+                            in_transit=True,
+                            mover_name=str(mover_name),
+                            summary=summary,
+                        ),
+                        metadata={
+                            "surface": "map_move",
+                            "mode": "skip_to_destination",
+                        },
+                        preserve_event_type=True,
+                        defer_commit=True,
+                    ),
+                )
+            previous_final = state_manager.get_variable("location") or current_location
+            state_manager.set_variable("location", final_destination)
+            if (
+                destination_sublocation is not None
+                and final_destination == normalized_destination
+            ):
+                touch_sublocation(destination_sublocation)
+            stage_state(state_manager, db)
+            final_summary = (
+                f"{mover_name} arrives at {final_destination.replace('_', ' ')}."
             )
             submit_world_event(
                 db,
                 WorldEventCommand(
                     session_id=normalized_session_id,
                     event_type=EVENT_TYPE_MOVEMENT,
-                    summary=summary,
+                    summary=final_summary,
                     delta=_movement_event_delta(
-                        origin=previous,
-                        destination=hop,
-                        in_transit=True,
+                        origin=previous_final,
+                        destination=final_destination,
+                        in_transit=False,
                         mover_name=str(mover_name),
-                        summary=summary,
+                        summary=final_summary,
                     ),
-                    metadata={
-                        "surface": "map_move",
-                        "mode": "skip_to_destination",
-                    },
+                    metadata={"surface": "map_move", "mode": "skip_to_destination"},
                     preserve_event_type=True,
+                    defer_commit=True,
                 ),
             )
-        previous_final = state_manager.get_variable("location") or current_location
-        state_manager.set_variable("location", final_destination)
-        if (
-            destination_sublocation is not None
-            and final_destination == normalized_destination
-        ):
-            touch_sublocation(destination_sublocation)
-        save_state(state_manager, db)
-        final_summary = (
-            f"{mover_name} arrives at {final_destination.replace('_', ' ')}."
-        )
-        submit_world_event(
-            db,
-            WorldEventCommand(
-                session_id=normalized_session_id,
-                event_type=EVENT_TYPE_MOVEMENT,
-                summary=final_summary,
-                delta=_movement_event_delta(
-                    origin=previous_final,
-                    destination=final_destination,
-                    in_transit=False,
-                    mover_name=str(mover_name),
-                    summary=final_summary,
-                ),
-                metadata={"surface": "map_move", "mode": "skip_to_destination"},
-                preserve_event_type=True,
-            ),
-        )
+            db.commit()
+        except Exception:
+            db.rollback()
+            state_manager.import_state(state_snapshot)
+            raise
         if intermediate_hops:
             via = ", ".join(hop.replace("_", " ") for hop in intermediate_hops)
             narrative = (
@@ -349,10 +360,6 @@ def move_session(
 
     next_location = route[1]
     route_remaining = route[2:]
-    state_manager.set_variable("location", next_location)
-    if destination_sublocation is not None and next_location == normalized_destination:
-        touch_sublocation(destination_sublocation)
-    save_state(state_manager, db)
 
     if snapped:
         narrative = f"You find yourself at {next_location.replace('_', ' ')}."
@@ -376,23 +383,37 @@ def move_session(
     else:
         event_summary = f"{mover_name} arrives at {next_location.replace('_', ' ')}."
 
-    submit_world_event(
-        db,
-        WorldEventCommand(
-            session_id=normalized_session_id,
-            event_type=EVENT_TYPE_MOVEMENT,
-            summary=event_summary,
-            delta=_movement_event_delta(
-                origin=current_location,
-                destination=next_location,
-                in_transit=bool(route_remaining),
-                mover_name=str(mover_name),
+    try:
+        state_manager.set_variable("location", next_location)
+        if (
+            destination_sublocation is not None
+            and next_location == normalized_destination
+        ):
+            touch_sublocation(destination_sublocation)
+        stage_state(state_manager, db)
+        submit_world_event(
+            db,
+            WorldEventCommand(
+                session_id=normalized_session_id,
+                event_type=EVENT_TYPE_MOVEMENT,
                 summary=event_summary,
+                delta=_movement_event_delta(
+                    origin=current_location,
+                    destination=next_location,
+                    in_transit=bool(route_remaining),
+                    mover_name=str(mover_name),
+                    summary=event_summary,
+                ),
+                metadata={"surface": "map_move", "mode": "single_hop"},
+                preserve_event_type=True,
+                defer_commit=True,
             ),
-            metadata={"surface": "map_move", "mode": "single_hop"},
-            preserve_event_type=True,
-        ),
-    )
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        state_manager.import_state(state_snapshot)
+        raise
 
     return MovementReceipt(
         moved=True,

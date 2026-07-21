@@ -160,8 +160,9 @@ def get_state_manager(session_id: str, db: Session) -> AdvancedStateManager:
     return manager
 
 
-def save_state(state_manager: AdvancedStateManager, db: Session) -> None:
-    """Persist full session state as a v2 JSON payload."""
+def stage_state(state_manager: AdvancedStateManager, db: Session) -> SessionVars:
+    """Stage full session state inside the caller's current transaction."""
+
     session_id = state_manager.session_id
 
     row = db.get(SessionVars, session_id)
@@ -170,6 +171,14 @@ def save_state(state_manager: AdvancedStateManager, db: Session) -> None:
         db.add(row)
 
     row.vars = state_manager.export_state()  # type: ignore
+    db.flush()
+    return row
+
+
+def save_state(state_manager: AdvancedStateManager, db: Session) -> None:
+    """Persist full session state and commit immediately."""
+
+    stage_state(state_manager, db)
     db.commit()
 
 
