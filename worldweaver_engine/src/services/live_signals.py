@@ -61,13 +61,21 @@ class LiveSignalError(ValueError):
 
 def _session_vars(raw: Any) -> dict[str, Any]:
     if isinstance(raw, dict):
+        nested = raw.get("variables")
+        if raw.get("_v") == 2 and isinstance(nested, dict):
+            return nested
         return raw
     if isinstance(raw, str):
         try:
             parsed = json.loads(raw)
         except (TypeError, ValueError):
             return {}
-        return parsed if isinstance(parsed, dict) else {}
+        if not isinstance(parsed, dict):
+            return {}
+        nested = parsed.get("variables")
+        if parsed.get("_v") == 2 and isinstance(nested, dict):
+            return nested
+        return parsed
     return {}
 
 
