@@ -42,13 +42,22 @@ export class ApiError extends Error {
   }
 }
 
-async function getJson<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
+async function getJson<T>(
+  path: string,
+  params?: Record<string, string | number | undefined>,
+  authenticated = false,
+): Promise<T> {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(params ?? {})) {
     if (v !== undefined) qs.set(k, String(v));
   }
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
-  const resp = await fetch(`${localShardPath(path)}${suffix}`, { headers: { Accept: "application/json" } });
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (authenticated) {
+    const jwt = getJwt();
+    if (jwt) headers.Authorization = `Bearer ${jwt}`;
+  }
+  const resp = await fetch(`${localShardPath(path)}${suffix}`, { headers });
   if (!resp.ok) {
     throw new ApiError(resp.status, `${path} -> ${resp.status}`);
   }
@@ -110,6 +119,7 @@ export function browseStoopAt(stoopId: string, location: string, sessionId?: str
   return getJson(
     `/api/world/stoops/${encodeURIComponent(stoopId)}`,
     sessionId ? { session_id: sessionId } : { location },
+    Boolean(sessionId),
   );
 }
 
@@ -214,7 +224,7 @@ export function postSpeak(location: string, sessionId: string, displayName: stri
 }
 
 export function getWorldTraces(sessionId: string): Promise<LocalWorldTraces> {
-  return getJson("/api/world/traces", { session_id: sessionId });
+  return getJson("/api/world/traces", { session_id: sessionId }, true);
 }
 
 export function postWorldTrace(sessionId: string, body: string, target = ""): Promise<{ ok: boolean }> {
@@ -270,7 +280,7 @@ function freshKey(verb: string): string {
 }
 
 export function getMakingCatalog(sessionId: string): Promise<MakingCatalog> {
-  return getJson("/api/world/making", { session_id: sessionId });
+  return getJson("/api/world/making", { session_id: sessionId }, true);
 }
 
 export function postMake(sessionId: string, recipeId: string): Promise<{ object?: { object_id: string } }> {
@@ -282,7 +292,7 @@ export function postMake(sessionId: string, recipeId: string): Promise<{ object?
 }
 
 export function getMyObjects(sessionId: string): Promise<{ objects: DurableObjectView[]; count: number }> {
-  return getJson("/api/world/objects", { session_id: sessionId });
+  return getJson("/api/world/objects", { session_id: sessionId }, true);
 }
 
 export function postPickUpObject(objectId: string, sessionId: string): Promise<unknown> {
@@ -308,7 +318,7 @@ export function postLeaveOnStoop(stoopId: string, objectId: string, sessionId: s
 }
 
 export function getObjectExchanges(sessionId: string): Promise<ObjectExchanges> {
-  return getJson("/api/world/exchanges", { session_id: sessionId });
+  return getJson("/api/world/exchanges", { session_id: sessionId }, true);
 }
 
 export function postGiveObject(objectId: string, sessionId: string, recipientSessionId: string): Promise<unknown> {
@@ -348,14 +358,14 @@ export function postExchangeDecision(
 // --- One exact doorway ----------------------------------------------------
 
 export function getSpaceAccess(sessionId: string, location: string): Promise<{ access: SpaceAccessStatus }> {
-  return getJson("/api/world/access", { session_id: sessionId, location });
+  return getJson("/api/world/access", { session_id: sessionId, location }, true);
 }
 
 export function getPendingSpaceAccessRequests(
   sessionId: string,
   location: string,
 ): Promise<PendingSpaceAccessRequests> {
-  return getJson("/api/world/access/requests", { session_id: sessionId, location });
+  return getJson("/api/world/access/requests", { session_id: sessionId, location }, true);
 }
 
 export function postSpaceAccessRequest(sessionId: string, location: string, note: string): Promise<unknown> {
