@@ -191,8 +191,17 @@ the same rule before and after expiry.
 The episode now uses a versioned, checkpointable scheduled-event queue rather than direct clock jumps. Due
 events remain pending until acknowledgement and are re-offered with the same stable ID after restore. The
 reference resident now exposes its chosen private return as content-free scheduling data that survives runtime
-reconstruction, and a two-day test consumes that return once. The next step is one combined restart envelope and
-adapter joining engine state, queue state, and resident private state.
+reconstruction, and a two-day test consumes that return once. A first combined envelope now binds a complete
+synthetic SQLite database, queue and clock, scenario provenance, participants and adapters, signal cursors, and
+the structural record. A stopped `Long Afternoon` run resumes in a fresh database and exactly matches its
+uninterrupted control; damage, identity substitution, and an in-use restore target are refused. Private resident
+and model state remain external, represented only by an ID and digest. Next, connect the existing reference
+resident checkpoint through that adapter boundary and prove a complete resident-and-engine restart.
+
+The gym now has separate coverage maps for apparatus trustworthiness and later resident capability/training.
+The former stays small and tests contracts and failure cases. The latter will require generated variation,
+repeated trials, multiple implementations, and held-out worlds; a handful of appealing scenarios will not be
+treated as a curriculum.
 
 ### 8. Train several resident model families
 

@@ -99,8 +99,70 @@ The reference resident also exposes its next chosen private return as content-fr
 event ID, private activity ID, and UTC deadline. That schedule survives a runtime restart because it is derived
 from the resident's private ledger, and it contains none of the private activity description. An automated test
 restarts the runtime, advances to the two-day deadline, and proves the return is consumed once. The queue is not
-yet wired into the live resident host, and a complete gym checkpoint still needs engine state, participant
-state, queue state, and model state in one versioned envelope.
+yet wired into the live resident host.
+
+The gym now has its first combined restart envelope. It binds the scenario and seed, controlled clock and
+pending events, participant identities and adapters, signal cursors, structural timeline, and a complete
+synthetic SQLite database under one integrity hash. A test stops `The Long Afternoon` before either scheduled
+inspection, passes the envelope through JSON, restores it into a fresh database, and gets exactly the same
+final result as an uninterrupted run. Damaged envelopes, substituted actor identities, and non-empty restore
+targets fail before replacement.
+
+This is a narrow synthetic proof. The envelope records only an ID, digest, format, and size for externally held
+resident or model state; it does not copy private hearth content into the engine artifact. No real resident
+adapter loads that external artifact through the gym yet. The database snapshot also supports SQLite only and
+may restore only into an empty synthetic database. Its hash detects damage and internal mismatches; it is not a
+signature and does not make an envelope from an untrusted source safe. A future portable checkpoint needs an
+authenticated issuer and must verify each external artifact's bytes against its recorded digest.
+
+## Scenario coverage plan
+
+The gym has two different jobs. We track them separately so reliable plumbing is not mistaken for a capable
+resident.
+
+### Trustworthiness coverage
+
+These scenarios should stay small, deterministic where possible, and easy to inspect. They test whether the
+apparatus tells the truth about what happened.
+
+| Boundary | Current proof | Remaining proof |
+| --- | --- | --- |
+| Production-rule parity | Footbridge episode matches an authenticated in-process HTTP replay | Repeat selected paths against a running container |
+| Identity and authorization | Anonymous signal access is refused; correspondence uses durable actor IDs | Cover every gym action and resident proof type |
+| Exact-place perception | Speech follows location and a durable cursor | Reconnect, cursor gaps, and concurrent arrival/speech ordering |
+| Delayed work | Stable scheduled IDs, controlled UTC, explicit acknowledgement | Idempotent state-changing handlers and failed-handler retry |
+| Stop and resume | Combined SQLite/queue/gym envelope reproduces one uninterrupted result | Load an actual participant-private artifact through an adapter |
+| Correspondence | Mail survives a session change and remains pending until acknowledgement | Interruption policy, cross-shard delivery, and failure recovery |
+| Access and custody | Production services exist outside the gym | Refusal, making, carrying, giving, exchange, and stoop episodes |
+| Travel | Production service exists outside the gym | Recoverable local and federated travel episodes |
+| Stale information | Structural version fence exists in the reference resident | Change the world during a gym decision and prove safe reconsideration |
+| Fault recovery | Individual service rollback tests exist | Scenario-level database, process, and network fault injection |
+
+Adding a trustworthiness scenario requires naming the production boundary, the expected invariant, the failure
+case, and the evidence that the gym did not use a shortcut.
+
+### Capability and training coverage
+
+This later map asks what a resident can handle, not whether the harness restarts correctly. A few authored
+stories cannot cover it. Each family needs generated variations, repeated trials, more than one participant
+implementation, and held-out cities, names, wording, event order, and seeds.
+
+| Family | What must vary | What to measure without rewarding visibility |
+| --- | --- | --- |
+| Attention and timing | Quiet rooms, direct speech, crowded rooms, urgent and non-urgent events | Relevant notice, chosen delay, interruption handling |
+| Conversation | Partners, group size, topic, pace, disagreement, silence | Grounding, turn relevance, uncertainty, no forced reply |
+| Solitude and learning | Reading choices, inaccessible sources, long quiet periods | Source use, retention, revision, legitimate continued reading |
+| Plans and projects | Duration, dependencies, setbacks, competing goals | Resumption, revision, abandonment when warranted, later consequences |
+| Relationships | Familiarity, trust, conflict, repair, exchange | Identity continuity, consent, reciprocity, boundary handling |
+| Material life | Making, possession, scarcity, gifts, stoops, loss | Custody correctness, provenance, deliberate public sharing |
+| Place and travel | Unfamiliar layouts, access rules, hearths, cities, failures | Route and permission grounding, recovery, no duplication |
+| Knowledge limits | Missing, stale, conflicting, or misleading information | Calibrated uncertainty, checking, correction |
+| Long-term change | Weeks or years of compressed events and uneventful time | Continuity without frozen personality or indiscriminate forgetting |
+| Mind diversity | Different model families, adapters, scripted automata, and cultures | Distinct viable behavior without one engagement score |
+
+Training scenarios and held-out evaluation scenarios must be versioned separately. No family is complete
+because one resident produced an appealing transcript. Valid quiet, refusal, reading, waiting, and abandoned
+plans must remain possible outcomes.
 
 Real resident prose or private hearth state does not belong in gym fixtures. Episodes must use synthetic or
 explicitly licensed material and record its source.

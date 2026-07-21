@@ -132,11 +132,35 @@ derived from durable private-ledger state, survives runtime reconstruction, and 
 activity ID, and UTC deadline—not the activity prose. A two-day synthetic check reconstructs the resident,
 advances directly to the deadline, activates it, and proves the scheduled return is consumed once.
 
-This is still narrower than the completed time architecture. The engine queue and resident schedule have not
-yet been connected by the live host or one combined gym adapter. A complete restart checkpoint must also bind
-engine state, participant private state, queue state, model adapter, and scenario provenance. Build that combined
-envelope and resume one stopped episode next. Do not add checkpoint forks, model calls, or training records until
-that path is replayable.
+The first combined restart envelope is now in place. It binds scenario ID/version/seed, participant identities
+and adapter versions, signal cursors, the structural timeline, the controlled clock and queue, and a complete
+synthetic SQLite database under one content-derived integrity hash. `The Long Afternoon` can stop before its
+two scheduled inspections, serialize through JSON, restore into a fresh database, and finish with exactly the
+same structural result as an uninterrupted run. A damaged envelope, actor substitution, or non-empty target is
+refused before database replacement.
+
+Private resident and model state remain under participant custody. The combined envelope carries only an
+external artifact's ID, format, version, digest, and byte length; it does not embed private prose. The current
+scripted and mechanical participants correctly bind `none`. This is a SQLite-only synthetic restore, not a
+portable production database backup and not yet a real reference-resident resume. Its content hash detects
+damage and inconsistent substitution, but it does not authenticate an untrusted checkpoint. Next, add the
+smallest gym participant adapter that supplies and restores the existing private resident checkpoint through
+this binding, verifies the external artifact bytes, and keeps the trust source explicit. Do not add checkpoint
+forks, model calls, or training records until that complete adapter path is replayable.
+
+### Scenario coverage map — July 21, 2026
+
+Gym coverage now has two explicit scales. Trustworthiness scenarios test that the apparatus tells the truth:
+production-rule parity, authorization, exact-place delivery, delayed work, stop/resume, correspondence, access,
+custody, travel, stale-decision rejection, and fault recovery. They stay small and inspectable. The first five
+have partial or complete narrow proofs; access/custody, travel, scenario-level stale decisions, and fault
+injection still need gym episodes.
+
+Capability and training scenarios come later. They vary attention and timing, conversation, solitude and
+learning, plans, relationships, material life, place and travel, uncertain knowledge, long-term change, and
+participant/model families. Each family needs generated variation, repeated trials, and held-out cities,
+wording, ordering, and seeds. One attractive transcript never counts as coverage. The maintained matrix and
+current status live in `docs/reference/resident-gym.md`.
 
 ## Files Affected
 
