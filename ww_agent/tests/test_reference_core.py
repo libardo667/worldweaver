@@ -342,6 +342,30 @@ def test_unavoidable_hearing_excludes_archived_room_chat():
     assert observation.heard == (("Riley", "2", "chat:Alderbank Commons:2"),)
 
 
+def test_unavoidable_observation_excludes_archived_speech_event_copy():
+    world = _FakeWorld()
+    world.scene.recent_events_here = [
+        SimpleNamespace(
+            event_type="utterance",
+            summary="Old Speaker said: A conversation from two days ago.",
+        ),
+        SimpleNamespace(
+            event_type="object_transferred",
+            summary="A cup changed hands.",
+        ),
+    ]
+
+    observation = asyncio.run(
+        observe_reference_world(
+            world,
+            session_id="test-session",
+            identity=_identity(),
+        )
+    )
+
+    assert observation.recent_events == ("A cup changed hands.",)
+
+
 def test_local_direct_speech_is_in_the_unavoidable_observation():
     observation = asyncio.run(
         observe_reference_world(

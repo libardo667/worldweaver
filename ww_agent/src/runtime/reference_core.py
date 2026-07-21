@@ -221,10 +221,14 @@ async def observe_reference_world(
         for item in list(getattr(scene, "ambient_presence", []) or [])[:5]
         if str(getattr(item, "label", "") or "").strip()
     )
+    # Public speech is also projected into the world event log.  The live-speech
+    # path owns hearing, including its time and cursor rules; including utterance
+    # events here would replay archived room chat through a second prompt route.
     recent_events = tuple(
         str(getattr(item, "summary", "") or "").strip()
         for item in list(getattr(scene, "recent_events_here", []) or [])[:8]
         if str(getattr(item, "summary", "") or "").strip()
+        and str(getattr(item, "event_type", "") or "").strip() != "utterance"
     )
     traces = tuple(
         " ".join(
