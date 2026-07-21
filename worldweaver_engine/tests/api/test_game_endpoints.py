@@ -482,6 +482,70 @@ class TestGameEndpoints:
             .all()
         ] == event_ids
 
+    def test_unsigned_caller_cannot_depart_an_agent_session(
+        self, seeded_client, seeded_world_id, db_session
+    ):
+        session_id = "unsigned-travel-departure"
+        bootstrap = seeded_client.post(
+            "/api/session/bootstrap",
+            json={
+                "session_id": session_id,
+                "actor_id": "unsigned-travel-actor",
+                "player_role": "Unsigned Traveler",
+                "world_id": seeded_world_id,
+                "entry_location": "Embarcadero",
+            },
+        )
+        assert bootstrap.status_code == 200
+
+        response = seeded_client.post(
+            "/api/session/travel/depart",
+            json={
+                "travel_id": "unsigned-trip",
+                "session_id": session_id,
+                "route_id": "sf-pdx",
+                "destination_shard": "rose-city-coop-1",
+            },
+        )
+
+        assert response.status_code == 401
+        assert response.json()["detail"]["code"] == "actor_proof_required"
+        assert db_session.get(SessionVars, session_id) is not None
+
+    def test_unsigned_caller_cannot_create_an_arriving_agent_session(
+        self, seeded_client, db_session, monkeypatch
+    ):
+        monkeypatch.setattr(
+            "src.services.shard_travel.current_shard_id", lambda: "bay-commons-1"
+        )
+        monkeypatch.setattr(
+            "src.services.shard_travel.federation_travel.get_federated_travel",
+            lambda **_kwargs: {
+                "travel": {
+                    "travel_id": "unsigned-arrival",
+                    "actor_id": "unsigned-arrival-actor",
+                    "actor_type": "agent",
+                    "source_shard": "rose-city-coop-1",
+                    "destination_shard": "bay-commons-1",
+                    "arrival_hub_id": "emeryville-sf-transfer",
+                    "status": "traveling",
+                }
+            },
+        )
+
+        response = seeded_client.post(
+            "/api/session/travel/arrive",
+            json={
+                "travel_id": "unsigned-arrival",
+                "session_id": "unsigned-arrival-session",
+            },
+        )
+
+        assert response.status_code == 401
+        assert response.json()["detail"]["code"] == "actor_proof_required"
+        assert db_session.get(SessionVars, "unsigned-arrival-session") is None
+        assert db_session.get(ShardTravelHandoff, "unsigned-arrival") is None
+
     def test_session_travel_departure_retires_presence_and_is_idempotent(
         self,
         seeded_client,
@@ -489,6 +553,10 @@ class TestGameEndpoints:
         db_session,
         monkeypatch,
     ):
+        monkeypatch.setattr(
+            "src.api.game.state._authorize_travel_request",
+            lambda *_args, **_kwargs: None,
+        )
         session_id = "resident-cross-node-departure"
         bootstrap = seeded_client.post(
             "/api/session/bootstrap",
@@ -502,7 +570,7 @@ class TestGameEndpoints:
         )
         assert bootstrap.status_code == 200
         monkeypatch.setattr(
-            "src.api.game.state.federation_discovery.get_travel_destinations",
+            "src.services.shard_travel.federation_discovery.get_travel_destinations",
             lambda: {
                 "registry": {"reachable": True},
                 "destinations": [
@@ -527,12 +595,12 @@ class TestGameEndpoints:
         starts = []
         departures = []
         monkeypatch.setattr(
-            "src.api.game.state.federation_travel.start_federated_travel",
+            "src.services.shard_travel.federation_travel.start_federated_travel",
             lambda **kwargs: starts.append(kwargs)
             or {"travel": {"status": "departing"}, "idempotent": False},
         )
         monkeypatch.setattr(
-            "src.api.game.state.federation_travel.confirm_federated_departure",
+            "src.services.shard_travel.federation_travel.confirm_federated_departure",
             lambda **kwargs: departures.append(kwargs)
             or {"travel": {"status": "traveling"}, "idempotent": False},
         )
@@ -579,6 +647,10 @@ class TestGameEndpoints:
         db_session,
         monkeypatch,
     ):
+        monkeypatch.setattr(
+            "src.api.game.state._authorize_travel_request",
+            lambda *_args, **_kwargs: None,
+        )
         session_id = "resident-recovering-departure"
         bootstrap = seeded_client.post(
             "/api/session/bootstrap",
@@ -592,7 +664,7 @@ class TestGameEndpoints:
         )
         assert bootstrap.status_code == 200
         monkeypatch.setattr(
-            "src.api.game.state.federation_discovery.get_travel_destinations",
+            "src.services.shard_travel.federation_discovery.get_travel_destinations",
             lambda: {
                 "registry": {"reachable": True},
                 "destinations": [
@@ -615,7 +687,7 @@ class TestGameEndpoints:
             },
         )
         monkeypatch.setattr(
-            "src.api.game.state.federation_travel.start_federated_travel",
+            "src.services.shard_travel.federation_travel.start_federated_travel",
             lambda **_kwargs: {"travel": {"status": "departing"}},
         )
 
@@ -623,7 +695,7 @@ class TestGameEndpoints:
             raise HTTPException(status_code=503, detail="federation unavailable")
 
         monkeypatch.setattr(
-            "src.api.game.state.federation_travel.confirm_federated_departure",
+            "src.services.shard_travel.federation_travel.confirm_federated_departure",
             unavailable_departure,
         )
         response = seeded_client.post(
@@ -642,7 +714,7 @@ class TestGameEndpoints:
         assert db_session.get(SessionVars, session_id) is None
 
         monkeypatch.setattr(
-            "src.api.game.state.federation_travel.confirm_federated_departure",
+            "src.services.shard_travel.federation_travel.confirm_federated_departure",
             lambda **_kwargs: {"travel": {"status": "traveling"}, "idempotent": True},
         )
         retry = seeded_client.post("/api/session/travel/trip-local-002/retry-departure")
@@ -658,6 +730,10 @@ class TestGameEndpoints:
         db_session,
         monkeypatch,
     ):
+        monkeypatch.setattr(
+            "src.api.game.state._authorize_travel_request",
+            lambda *_args, **_kwargs: None,
+        )
         session_id = "resident-away-from-departure"
         bootstrap = seeded_client.post(
             "/api/session/bootstrap",
@@ -671,7 +747,7 @@ class TestGameEndpoints:
         )
         assert bootstrap.status_code == 200
         monkeypatch.setattr(
-            "src.api.game.state.federation_discovery.get_travel_destinations",
+            "src.services.shard_travel.federation_discovery.get_travel_destinations",
             lambda: {
                 "registry": {"reachable": True},
                 "destinations": [
@@ -716,6 +792,10 @@ class TestGameEndpoints:
         db_session,
         monkeypatch,
     ):
+        monkeypatch.setattr(
+            "src.api.game.state._authorize_travel_request",
+            lambda *_args, **_kwargs: None,
+        )
         trip = {
             "travel_id": "trip-arrival-001",
             "actor_id": "actor-arriving-resident",
@@ -730,15 +810,15 @@ class TestGameEndpoints:
             "status": "traveling",
         }
         monkeypatch.setattr(
-            "src.api.game.state.current_shard_id", lambda: "bay-commons-1"
+            "src.services.shard_travel.current_shard_id", lambda: "bay-commons-1"
         )
         monkeypatch.setattr(
-            "src.api.game.state.federation_travel.get_federated_travel",
+            "src.services.shard_travel.federation_travel.get_federated_travel",
             lambda **_kwargs: {"travel": trip},
         )
         confirmations = []
         monkeypatch.setattr(
-            "src.api.game.state.federation_travel.confirm_federated_arrival",
+            "src.services.shard_travel.federation_travel.confirm_federated_arrival",
             lambda **kwargs: confirmations.append(kwargs)
             or {"travel": {"status": "arrived"}, "idempotent": False},
         )
@@ -779,6 +859,10 @@ class TestGameEndpoints:
         db_session,
         monkeypatch,
     ):
+        monkeypatch.setattr(
+            "src.api.game.state._authorize_travel_request",
+            lambda *_args, **_kwargs: None,
+        )
         trip = {
             "travel_id": "trip-arrival-002",
             "actor_id": "actor-recovering-arrival",
@@ -791,10 +875,10 @@ class TestGameEndpoints:
             "status": "traveling",
         }
         monkeypatch.setattr(
-            "src.api.game.state.current_shard_id", lambda: "bay-commons-1"
+            "src.services.shard_travel.current_shard_id", lambda: "bay-commons-1"
         )
         monkeypatch.setattr(
-            "src.api.game.state.federation_travel.get_federated_travel",
+            "src.services.shard_travel.federation_travel.get_federated_travel",
             lambda **_kwargs: {"travel": trip},
         )
 
@@ -802,7 +886,7 @@ class TestGameEndpoints:
             raise HTTPException(status_code=503, detail="federation unavailable")
 
         monkeypatch.setattr(
-            "src.api.game.state.federation_travel.confirm_federated_arrival",
+            "src.services.shard_travel.federation_travel.confirm_federated_arrival",
             unavailable_arrival,
         )
         response = seeded_client.post(
@@ -819,7 +903,7 @@ class TestGameEndpoints:
         assert db_session.get(SessionVars, "recovering-arrival-session") is not None
 
         monkeypatch.setattr(
-            "src.api.game.state.federation_travel.confirm_federated_arrival",
+            "src.services.shard_travel.federation_travel.confirm_federated_arrival",
             lambda **_kwargs: {"travel": {"status": "arrived"}, "idempotent": True},
         )
         retry = seeded_client.post("/api/session/travel/trip-arrival-002/retry-arrival")
@@ -842,10 +926,14 @@ class TestGameEndpoints:
         monkeypatch,
     ):
         monkeypatch.setattr(
-            "src.api.game.state.current_shard_id", lambda: "bay-commons-1"
+            "src.api.game.state._authorize_travel_request",
+            lambda *_args, **_kwargs: None,
         )
         monkeypatch.setattr(
-            "src.api.game.state.federation_travel.get_federated_travel",
+            "src.services.shard_travel.current_shard_id", lambda: "bay-commons-1"
+        )
+        monkeypatch.setattr(
+            "src.services.shard_travel.federation_travel.get_federated_travel",
             lambda **_kwargs: {
                 "travel": {
                     "travel_id": "trip-arrival-003",

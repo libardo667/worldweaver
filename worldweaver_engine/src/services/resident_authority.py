@@ -273,11 +273,12 @@ def _consume_request_nonce(
         ) from exc
 
 
-def authorize_resident_bootstrap_request(
+def authorize_resident_actor_request(
     db: Session,
     *,
     actor_id: str,
     expected_audience: str,
+    required_scope: str,
     method: str,
     target: str,
     body: bytes,
@@ -285,11 +286,11 @@ def authorize_resident_bootstrap_request(
     now: int | None = None,
     max_clock_skew_seconds: int = DEFAULT_MAX_CLOCK_SKEW_SECONDS,
 ) -> VerifiedResidentRequest:
-    """Verify the first signed request before the resident has a city session.
+    """Verify a signed actor request when no live city session can authorize it.
 
     The stable public identity must already have been admitted by a separate,
     reviewed procedure. A valid request may activate the same or a newer
-    short-lived runtime generation. It cannot create an identity binding.
+    short-lived runtime generation. It cannot create a session identity binding.
     """
 
     actor = _bounded_identifier(actor_id, label="actor ID", max_length=36)
@@ -305,8 +306,7 @@ def authorize_resident_bootstrap_request(
         raise ResidentAuthorityError("invalid_proof", str(exc)) from exc
     if certificate.actor_id != actor:
         raise ResidentAuthorityError(
-            "actor_mismatch",
-            "Resident bootstrap proof belongs to another actor.",
+            "actor_mismatch", "Resident proof belongs to another actor."
         )
 
     authority = db.get(ResidentAuthority, actor)
@@ -333,7 +333,7 @@ def authorize_resident_bootstrap_request(
             expected_actor_id=actor,
             expected_runtime_generation=int(certificate.runtime_generation),
             expected_audience=expected_audience,
-            required_scope="session.bootstrap",
+            required_scope=required_scope,
             method=method,
             target=target,
             body=body,
@@ -354,6 +354,34 @@ def authorize_resident_bootstrap_request(
         max_clock_skew_seconds=max_clock_skew_seconds,
     )
     return verified
+
+
+def authorize_resident_bootstrap_request(
+    db: Session,
+    *,
+    actor_id: str,
+    expected_audience: str,
+    method: str,
+    target: str,
+    body: bytes,
+    headers: Mapping[str, str],
+    now: int | None = None,
+    max_clock_skew_seconds: int = DEFAULT_MAX_CLOCK_SKEW_SECONDS,
+) -> VerifiedResidentRequest:
+    """Verify the first signed session-bootstrap request."""
+
+    return authorize_resident_actor_request(
+        db,
+        actor_id=actor_id,
+        expected_audience=expected_audience,
+        required_scope="session.bootstrap",
+        method=method,
+        target=target,
+        body=body,
+        headers=headers,
+        now=now,
+        max_clock_skew_seconds=max_clock_skew_seconds,
+    )
 
 
 def authorize_resident_request(

@@ -7,6 +7,7 @@ from src.models import ResidentRequestNonce, SessionVars
 from src.services.resident_authority import (
     ResidentAuthorityError,
     activate_resident_generation,
+    authorize_resident_actor_request,
     authorize_resident_bootstrap_request,
     authorize_resident_request,
     bind_resident_identity,
@@ -38,7 +39,7 @@ def _certificate(identity_private, runtime_private, *, generation=1, audience=AU
         hearth_shard_id=HEARTH_ID,
         runtime_generation=generation,
         audience=audience,
-        scopes=["session.act", "session.bootstrap"],
+        scopes=["session.act", "session.bootstrap", "session.lifecycle"],
         issued_at=NOW - 60,
         expires_at=NOW + 3600,
         certificate_id=f"certificate-{generation}",
@@ -107,6 +108,36 @@ def _authorize(db_session, headers):
         headers=headers,
         now=NOW,
     )
+
+
+def test_actor_request_can_authorize_lifecycle_without_a_live_session(db_session):
+    _identity_private, runtime_private, certificate = _admit_and_bind(db_session)
+    target = "/api/session/travel/trip-123/retry-departure"
+    body = b"{}"
+    headers = signed_resident_request_headers(
+        runtime_private_key=runtime_private,
+        certificate=certificate,
+        method="POST",
+        target=target,
+        body=body,
+        timestamp=NOW,
+        nonce="travel-retry-nonce",
+    )
+
+    verified = authorize_resident_actor_request(
+        db_session,
+        actor_id=ACTOR_ID,
+        expected_audience=AUDIENCE,
+        required_scope="session.lifecycle",
+        method="POST",
+        target=target,
+        body=body,
+        headers=headers,
+        now=NOW,
+    )
+
+    assert verified.actor_id == ACTOR_ID
+    assert verified.runtime_generation == 1
 
 
 def _bootstrap_headers(runtime_private, certificate, *, nonce="bootstrap-nonce"):
