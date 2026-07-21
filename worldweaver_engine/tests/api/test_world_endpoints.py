@@ -316,6 +316,47 @@ class TestAgentSceneEndpoints:
         assert "place_character" in kinds
         assert all("label" in item and item["label"] for item in ambient)
 
+    def test_scene_does_not_turn_event_count_into_attention_narration(
+        self, client, db_session, monkeypatch
+    ):
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        db_session.add(
+            SessionVars(
+                session_id="test_resident-20260316-120000",
+                vars={"location": "Chinatown"},
+                updated_at=now,
+            )
+        )
+        db_session.add_all(
+            [
+                WorldEvent(
+                    session_id=f"public-event-{index}",
+                    event_type="action",
+                    summary=f"Public event {index}",
+                    world_state_delta={"location": "Chinatown"},
+                    created_at=now,
+                )
+                for index in range(6)
+            ]
+        )
+        db_session.commit()
+
+        monkeypatch.setattr(
+            "src.services.grounding.get_city_time_context",
+            lambda _city_id: {
+                "time_of_day": "afternoon",
+                "weather": "clear",
+                "weather_description": "clear",
+            },
+        )
+
+        response = client.get("/api/world/scene/test_resident-20260316-120000")
+
+        assert response.status_code == 200
+        ambient = response.json()["ambient_presence"]
+        assert all(item["kind"] != "event_spillover" for item in ambient)
+        assert all("ripples of attention" not in item["label"] for item in ambient)
+
 
 class TestPluralSalience:
     """Major 64 — the world offers more than one loud thing (dilution, not removal)."""
@@ -327,7 +368,6 @@ class TestPluralSalience:
             location="Somewhere",
             neighborhood={"vibe": vibe},
             current_present=present,
-            recent_event_count=0,
             time_of_day=tod,
             weather_description=weather,
         )

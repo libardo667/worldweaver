@@ -599,7 +599,6 @@ def _derive_scene_ambient_presence(
     location: str,
     neighborhood: Dict[str, Any],
     current_present: int,
-    recent_event_count: int,
     time_of_day: str,
     weather_description: str,
 ) -> List[Dict[str, Any]]:
@@ -730,17 +729,6 @@ def _derive_scene_ambient_presence(
             source="time_of_day_routine",
         )
 
-    if recent_event_count >= 5:
-        _add(
-            kind="event_spillover",
-            label="Something nearby keeps sending fresh ripples of attention through this area.",
-            intensity=min(0.9, 0.42 + (0.04 * recent_event_count)),
-            pressure_tags=["event_pull", "novelty"],
-            sensory_note="People keep glancing the same direction, arriving in twos and threes, then drifting onward.",
-            ttl_seconds=1200,
-            source="recent_event_pattern",
-        )
-
     if time_of_day == "morning" and (food_vibe or transit_vibe):
         label = (
             "The neighborhood carries a morning errand-and-work rush."
@@ -847,7 +835,9 @@ def _load_live_presence_maps(
         dedupe_key = (
             ("agent", display_name.lower())
             if is_agent
-            else ("human", actor_id) if actor_id else ("human", sid)
+            else ("human", actor_id)
+            if actor_id
+            else ("human", sid)
         )
         entry = {
             "entity_type": "agent" if is_agent else "human",
@@ -3252,7 +3242,6 @@ def get_agent_scene(
         location=location,
         neighborhood=neighborhood,
         current_present=len(present_by_sid) + (1 if location else 0),
-        recent_event_count=len(local_events),
         time_of_day=str(grounding.get("time_of_day") or "").strip(),
         weather_description=str(
             grounding.get("weather_description") or grounding.get("weather") or ""
@@ -3556,13 +3545,11 @@ def get_location_chat(
             if str(row.session_id or "").strip()
         }
         actor_ids_by_session = {
-            str(row.session_id or "")
-            .strip(): str(
+            str(row.session_id or "").strip(): str(
                 row.actor_id
                 or (_session_variables_payload(row.vars).get("actor_id"))
                 or ""
-            )
-            .strip()
+            ).strip()
             for row in db.query(SessionVars)
             .filter(SessionVars.session_id.in_(session_ids))
             .all()
