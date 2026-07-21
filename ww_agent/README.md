@@ -81,6 +81,13 @@ deterministic model proof now requests travel home, crosses the signed city leav
 second child process at the real `LocalWorld` attachment. That restart observes only the hearth registry and
 does not spend another model call.
 
+Hearth departure is an idempotent cross-process transition. The host records one stable transition ID before
+calling the city. The city atomically retires the session and stores a receipt bound to that transition,
+session, actor, and runtime generation. If the request, commit, response, or resident process fails, restart
+retries the same transition rather than rerunning the model choice. A committed response replay returns the
+original receipt; mismatched actors, generations, sessions, and transition IDs are refused. `LocalWorld` is
+constructed only after the private process checkpoint says hearth.
+
 The stdio hop is process transport, not a second world API or resident composition root. A bounded scheduled
 return method on `Resident` owns the exact appointment, process interval, attachment wrapper, core, and custody
 release. The model gym exercises normal HTTP resident proof, including shard discovery,

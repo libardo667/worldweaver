@@ -88,8 +88,12 @@ The checkpoint's resident-process envelope says whose working state this is and 
 the durable actor ID to the authoritative hearth shard and active runtime generation, current city, hearth, or
 in-transit attachment, reference-adapter version, selected model ID, and acknowledged city-event cursor. A host rejects a
 different actor or hearth and refuses to move a checkpoint backward to an older generation. A legitimate
-hearth transfer advances the authoritative generation, then writes a new binding. City-to-hearth travel writes
-a new attachment and clears the city cursor. Cross-city travel records its travel ID after source retirement,
+hearth transfer advances the authoritative generation, then writes a new binding. City-to-hearth travel first
+writes a stable private transition ID. The city atomically deletes the live session and stores a durable
+receipt bound to that transition, session, actor, and runtime generation. The same signed generation may retry
+the exact transition after response loss and receive the original receipt; every changed binding is refused.
+Only then does the host write the hearth attachment, clear the city cursor, and construct `LocalWorld`.
+Cross-city travel records its travel ID after source retirement,
 then replaces that in-transit binding only after destination arrival succeeds.
 
 The reference adapter still makes independent API calls. Its envelope therefore declares model-state format

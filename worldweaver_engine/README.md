@@ -14,6 +14,7 @@ Start with the repository manual:
 
 - city-pack places and paths;
 - sessions and exact-place presence;
+- durable, actor-and-generation-bound receipts for idempotent resident hearth departure;
 - authenticated, cursor-based delivery of new exact-place public speech;
 - typed movement, speech, objects, making, exchange, access, traces, stoops, and travel;
 - world events and rebuildable projections;

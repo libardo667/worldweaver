@@ -6,6 +6,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+import pytest
+
 
 def test_two_way_model_adapter_reads_then_returns_home_through_production_rules(
     tmp_path,
@@ -137,9 +139,105 @@ def test_two_way_model_adapter_reads_then_returns_home_through_production_rules(
     )
     assert chronology["occurred_at"] == "2026-07-22T12:00:00+00:00"
     assert chronology["detail"]["off_clock_count"] == 0
-    assert chronology["detail"]["instants"] == ["2026-07-20T12:00:00+00:00"]
+    assert chronology["detail"]["instants"] == [
+        "2026-07-20T12:00:00+00:00",
+        "2026-07-22T12:00:00+00:00",
+    ]
+    assert chronology["detail"]["row_counts"]["resident_retirement_receipt"] == 1
     assert chronology["detail"]["row_counts"]["world_event"] == 3
     assert chronology["detail"]["row_counts"]["location_chat"] == 1
     assert "6 * 7" not in completed.stdout
     assert "synthetic blue" not in completed.stdout
+    assert output.is_file()
+
+
+@pytest.mark.parametrize(
+    ("fault", "leave_statuses", "receipt_count"),
+    (
+        ("before_request", [200], 1),
+        ("before_commit", [500, 200], 1),
+        ("response_loss", [200, 200], 2),
+        ("after_hearth_checkpoint", [200], 1),
+    ),
+)
+def test_model_resident_departure_recovers_once_across_each_failure_boundary(
+    tmp_path,
+    fault,
+    leave_statuses,
+    receipt_count,
+):
+    engine_root = Path(__file__).resolve().parents[2]
+    output = tmp_path / f"model-appointment-{fault}.html"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/resident_gym.py",
+            "--episode",
+            "resident-model",
+            "--model",
+            "test/gym-read-home-v1",
+            "--model-mode",
+            "scripted-read-home",
+            "--departure-fault",
+            fault,
+            "--json",
+            "--output",
+            str(output),
+        ],
+        cwd=engine_root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(completed.stdout.split("\nVisual episode:", 1)[0])
+    records = payload["records"]
+    kinds = [record["kind"] for record in records]
+
+    assert payload["final_locations"]["Mara"] == "the hearth"
+    assert kinds.count("resident_inference_started") == 2
+    assert kinds.count("resident_inference_finished") == 2
+    assert kinds.count("resident_host_started") == 2
+    assert kinds.count("resident_attachment_checkpointed") == 1
+    assert kinds.count("resident_hearth_observed") == 1
+    assert kinds.count("resident_attachment_verified") == 1
+    fault_record = next(
+        record
+        for record in records
+        if record["kind"] == "resident_departure_fault_injected"
+    )
+    assert fault_record["detail"] == {"mode": fault}
+
+    leave_http = [
+        record
+        for record in records
+        if record["kind"] == "participant_http"
+        and record["detail"]["path"] == "/api/session/leave"
+    ]
+    assert [record["detail"]["status_code"] for record in leave_http] == leave_statuses
+    receipts = [
+        record for record in records if record["kind"] == "resident_departure_receipt"
+    ]
+    assert len(receipts) == receipt_count
+    if fault == "response_loss":
+        assert receipts[0]["detail"] == receipts[1]["detail"]
+
+    checkpoint = next(
+        record
+        for record in records
+        if record["kind"] == "resident_attachment_checkpointed"
+    )
+    assert all(
+        receipt["detail"]["transition_id"] == checkpoint["detail"]["transition_id"]
+        for receipt in receipts
+    )
+    verified = next(
+        record for record in records if record["kind"] == "resident_attachment_verified"
+    )
+    assert verified["detail"] == {
+        "attachment": "hearth",
+        "process_hosting_state": "suspended",
+        "active_city_session_count": 0,
+    }
     assert output.is_file()

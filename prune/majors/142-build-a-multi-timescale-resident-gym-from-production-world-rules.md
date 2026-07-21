@@ -244,10 +244,22 @@ a real `LocalWorld` restart, portable artifacts, and no federation coverage. The
 host-sealed identity; the exported artifacts
 deliberately do not. That is useful evidence but not a full-shard claim.
 
-The next bounded slice should inject scenario-level process and transport failures around this transition,
-then repeat a selected path against a listening server or container. Optional constructive-game capabilities
-and federation require their own explicit scenarios. Do not grow a parallel list of gym-only world abilities
-in the meantime.
+The bounded departure-failure slice is now complete. Every city-to-hearth attempt writes one private stable
+transition ID before the request. The production route atomically persists a retirement receipt bound to the
+transition, session, actor, and active runtime generation while deleting the live session. The same signed
+generation may replay the exact transition after response loss and receives the original receipt; changed
+actors, generations, sessions, or transition IDs are refused.
+
+Four deterministic model-gym cases now fail before request dispatch, before the domain commit, after commit
+with response loss, and immediately after the hearth process checkpoint. Each restarts the ordinary resident
+host. Across every case the model is called only for the original read and home choice, the departure uses one
+transition and one stored receipt, `LocalWorld` is reached once, the final process is suspended at hearth, and
+the synthetic city has no remaining presence for the actor. The response-loss case observes the same receipt
+on both successful HTTP dispatches. Retirement receipt chronology is included in the controlled-time audit.
+
+The next bounded slice should repeat a selected path against a listening server or container. Optional
+constructive-game capabilities and federation require their own explicit scenarios. Do not grow a parallel
+list of gym-only world abilities in the meantime.
 
 The controlled-time HTTP prerequisite is now closed for the routes exercised by the model appointment. Live
 requests receive `SystemClock`; the isolated gym overrides the same FastAPI dependency with its controlled
@@ -277,8 +289,9 @@ on their operational clocks.
 Gym coverage now has two explicit scales. Trustworthiness scenarios test that the apparatus tells the truth:
 production-rule parity, authorization, exact-place delivery, delayed work, stop/resume, correspondence, access,
 custody, travel, stale-decision rejection, and fault recovery. They stay small and inspectable. The first five
-have partial or complete narrow proofs; access/custody, travel, scenario-level stale decisions, and fault
-injection still need gym episodes.
+have partial or complete narrow proofs; access/custody, federated travel, and scenario-level stale decisions
+still need gym episodes. The city-to-hearth fault boundary now has request, transaction, response-loss, and
+post-checkpoint process coverage.
 
 Capability and training scenarios come later. They vary attention and timing, conversation, solitude and
 learning, plans, relationships, material life, place and travel, uncertain knowledge, long-term change, and

@@ -19,7 +19,7 @@ from datetime import datetime
 from pathlib import Path
 
 import httpx
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event as sqlalchemy_event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -32,7 +32,7 @@ from src.api.game import _state_managers  # noqa: E402
 from main import app  # noqa: E402
 from src.config import settings  # noqa: E402
 from src.database import Base, get_db  # noqa: E402
-from src.models import SessionVars  # noqa: E402
+from src.models import ResidentSessionRetirementReceipt, SessionVars  # noqa: E402
 from src.services.clock import Clock, get_world_clock  # noqa: E402
 from src.services.gym_presentation import (  # noqa: E402
     render_html,
@@ -95,7 +95,7 @@ def _temporary_gym_api(db, *, world_clock: Clock):
     app.dependency_overrides[get_db] = override_database
     app.dependency_overrides[get_world_clock] = override_world_clock
     try:
-        yield _GymAPIClient()
+        yield _GymAPIClient(db)
     finally:
         if previous_database_override is None:
             app.dependency_overrides.pop(get_db, None)
@@ -110,7 +110,28 @@ def _temporary_gym_api(db, *, world_clock: Clock):
 class _GymAPIClient:
     """Synchronously dispatch requests through FastAPI's ASGI boundary."""
 
-    def request(self, method: str, target: str, **kwargs) -> httpx.Response:
+    def __init__(self, db) -> None:
+        self._db = db
+
+    def request(
+        self,
+        method: str,
+        target: str,
+        *,
+        fail_before_domain_commit: bool = False,
+        **kwargs,
+    ) -> httpx.Response:
+        commit_count = 0
+
+        def fail_second_commit(_session) -> None:
+            nonlocal commit_count
+            commit_count += 1
+            if commit_count == 2:
+                raise RuntimeError("injected retirement failure before commit")
+
+        if fail_before_domain_commit:
+            sqlalchemy_event.listen(self._db, "before_commit", fail_second_commit)
+
         async def dispatch() -> httpx.Response:
             transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
             async with httpx.AsyncClient(
@@ -119,7 +140,15 @@ class _GymAPIClient:
             ) as client:
                 return await client.request(method, target, **kwargs)
 
-        return asyncio.run(dispatch())
+        try:
+            return asyncio.run(dispatch())
+        finally:
+            if fail_before_domain_commit:
+                sqlalchemy_event.remove(self._db, "before_commit", fail_second_commit)
+
+
+class _InjectedResidentCrash(RuntimeError):
+    """The gym intentionally stopped a resident at one durable boundary."""
 
 
 @contextmanager
@@ -157,6 +186,7 @@ def _model_adapter_command(
     model_mode: str = "live",
     command: str = "handle-return-model",
     event_id: str = "",
+    departure_fault: str = "",
 ) -> dict:
     """Run one child resident while serving its bounded world requests."""
 
@@ -215,6 +245,7 @@ def _model_adapter_command(
         process.stdin.flush()
 
     result: dict | None = None
+    leave_fault_injected = False
     for line in process.stdout:
         try:
             message = json.loads(line)
@@ -230,15 +261,29 @@ def _model_adapter_command(
             raise RuntimeError("resident adapter protocol binding is invalid")
         message_type = str(message.get("type") or "")
         if message_type == "event":
+            event_kind = str(message.get("event") or "")
             gym.record_resident_boundary(
                 expected_participant_session_id,
-                kind=str(message.get("event") or ""),
+                kind=event_kind,
                 detail=(
                     dict(message.get("detail") or {})
                     if isinstance(message.get("detail"), dict)
                     else {}
                 ),
             )
+            if (
+                departure_fault == "after_hearth_checkpoint"
+                and event_kind == "resident_attachment_checkpointed"
+            ):
+                gym.record_resident_departure_fault(
+                    expected_participant_session_id,
+                    mode=departure_fault,
+                )
+                process.kill()
+                process.wait()
+                raise _InjectedResidentCrash(
+                    "resident stopped after durable hearth checkpoint"
+                )
             continue
         if message_type == "result":
             candidate = message.get("result")
@@ -278,12 +323,31 @@ def _model_adapter_command(
             body = base64.b64decode(
                 str(payload.get("body_base64") or ""), validate=True
             )
+            leave_request = method == "POST" and target == "/api/session/leave"
+            inject_here = leave_request and not leave_fault_injected
+            if inject_here and departure_fault == "before_request":
+                leave_fault_injected = True
+                gym.record_resident_departure_fault(
+                    expected_participant_session_id,
+                    mode=departure_fault,
+                )
+                respond(request_id, ok=False, error="injected failure before request")
+                continue
             api_response = api_client.request(
                 method,
                 target,
+                fail_before_domain_commit=(
+                    inject_here and departure_fault == "before_commit"
+                ),
                 headers={str(key): str(value) for key, value in headers.items()},
                 content=body,
             )
+            if inject_here and departure_fault == "before_commit":
+                leave_fault_injected = True
+                gym.record_resident_departure_fault(
+                    expected_participant_session_id,
+                    mode=departure_fault,
+                )
             try:
                 response_payload = api_response.json()
             except ValueError:
@@ -304,6 +368,23 @@ def _model_adapter_command(
                 ),
                 response_payload=response_payload,
             )
+            if (
+                leave_request
+                and 200 <= api_response.status_code < 300
+                and isinstance(response_payload, dict)
+            ):
+                gym.record_resident_departure_receipt(
+                    expected_participant_session_id,
+                    response_payload,
+                )
+            if inject_here and departure_fault == "response_loss":
+                leave_fault_injected = True
+                gym.record_resident_departure_fault(
+                    expected_participant_session_id,
+                    mode=departure_fault,
+                )
+                respond(request_id, ok=False, error="injected response loss")
+                continue
             response = {
                 "status_code": api_response.status_code,
                 "headers": dict(api_response.headers),
@@ -452,6 +533,7 @@ def _run_model_resident_return(
     record_observer=None,
     model_id: str,
     model_mode: str = "live",
+    departure_fault: str = "",
 ):
     """Run one bounded model activation entirely inside the synthetic gym."""
 
@@ -559,97 +641,147 @@ def _run_model_resident_return(
         participant_session_id = "gym-afternoon-mara"
         with _temporary_gym_api(db, world_clock=gym.clock) as api_client:
 
-            def handle_return(event, _scene):
-                return _model_adapter_command(
+            def deliver(*, fault: str = "") -> dict:
+                current_process = json.loads(process_path.read_text(encoding="utf-8"))
+
+                def handle_return(event, _scene):
+                    return _model_adapter_command(
+                        gym,
+                        api_client=api_client,
+                        home=source_home,
+                        host_key=host_key,
+                        process_path=process_path,
+                        participant_session_id=participant_session_id,
+                        protocol_session_id=str(
+                            current_process["attachment"]["session_id"]
+                        ),
+                        now=event.due_at,
+                        model_id=model_id,
+                        model_mode=model_mode,
+                        event_id=str(event.payload["resident_event_id"]),
+                        departure_fault=fault,
+                    )
+
+                return gym.deliver_resident_return(due, handle_return)
+
+            try:
+                first_result = deliver(fault=departure_fault)
+            except _InjectedResidentCrash:
+                if departure_fault != "after_hearth_checkpoint":
+                    raise
+                first_result = None
+                checkpointed_process = _agent_artifact_command(
+                    "describe-process",
+                    "--home",
+                    str(source_home),
+                )
+                process_path.write_text(
+                    json.dumps(checkpointed_process), encoding="utf-8"
+                )
+            else:
+                first_process = first_result.get("process")
+                if not isinstance(first_process, dict):
+                    raise RuntimeError("model resident omitted its process checkpoint")
+                process_path.write_text(json.dumps(first_process), encoding="utf-8")
+
+            current_process = json.loads(process_path.read_text(encoding="utf-8"))
+            current_attachment = current_process.get("attachment")
+            if not isinstance(current_attachment, dict):
+                raise RuntimeError("model resident omitted its attachment checkpoint")
+
+            if current_attachment.get("kind") == "city":
+                retry_result = deliver()
+                if int(retry_result.get("model_call_count") or 0) != 0:
+                    raise RuntimeError("departure recovery repeated model inference")
+                final_process = retry_result.get("process")
+                if not isinstance(final_process, dict):
+                    raise RuntimeError("departure retry omitted its process checkpoint")
+                process_path.write_text(json.dumps(final_process), encoding="utf-8")
+            elif current_attachment.get("kind") == "hearth":
+                final_process = current_process
+            else:
+                raise RuntimeError("model resident stopped at an invalid attachment")
+
+            if not isinstance(final_process, dict):
+                raise RuntimeError("model resident omitted its process checkpoint")
+            attachment = final_process.get("attachment")
+            if not isinstance(attachment, dict) or attachment.get("kind") != "hearth":
+                raise RuntimeError(
+                    "model resident did not checkpoint its private hearth"
+                )
+            process_path.write_text(json.dumps(final_process), encoding="utf-8")
+            needs_hearth_restart = (
+                not departure_fault or departure_fault == "after_hearth_checkpoint"
+            )
+            if needs_hearth_restart:
+                hearth_result = _model_adapter_command(
                     gym,
                     api_client=api_client,
                     home=source_home,
                     host_key=host_key,
                     process_path=process_path,
                     participant_session_id=participant_session_id,
-                    protocol_session_id=str(
-                        process_binding["attachment"]["session_id"]
-                    ),
-                    now=event.due_at,
+                    protocol_session_id=str(attachment["session_id"]),
+                    now=gym.clock.now(),
                     model_id=model_id,
                     model_mode=model_mode,
-                    event_id=str(event.payload["resident_event_id"]),
+                    command="observe-hearth-model",
                 )
+                restarted_process = hearth_result.get("process")
+                restarted_attachment = (
+                    restarted_process.get("attachment")
+                    if isinstance(restarted_process, dict)
+                    else None
+                )
+                restarted_hosting = (
+                    restarted_process.get("hosting")
+                    if isinstance(restarted_process, dict)
+                    else None
+                )
+                if (
+                    hearth_result.get("status") != "observed"
+                    or int(hearth_result.get("model_call_count") or 0) != 0
+                    or not isinstance(restarted_attachment, dict)
+                    or restarted_attachment.get("kind") != "hearth"
+                    or not isinstance(restarted_hosting, dict)
+                    or restarted_hosting.get("state") != "suspended"
+                ):
+                    raise RuntimeError("restarted hearth observation was not clean")
+                process_path.write_text(
+                    json.dumps(restarted_process),
+                    encoding="utf-8",
+                )
+                final_process = restarted_process
 
-            result = gym.deliver_resident_return(due, handle_return)
-            final_process = result.get("process")
-            if not isinstance(final_process, dict):
-                raise RuntimeError("model resident omitted its process checkpoint")
-            attachment = final_process.get("attachment")
-            hosting = final_process.get("hosting")
+            final_attachment = final_process.get("attachment")
+            final_hosting = final_process.get("hosting")
             if (
-                not isinstance(attachment, dict)
-                or attachment.get("kind") != "hearth"
-                or str(attachment.get("session_id") or "")
+                not isinstance(final_attachment, dict)
+                or final_attachment.get("kind") != "hearth"
+                or str(final_attachment.get("session_id") or "")
                 != "gym-afternoon-actor-mara-hearth"
-                or not isinstance(hosting, dict)
-                or hosting.get("state") != "suspended"
+                or not isinstance(final_hosting, dict)
+                or final_hosting.get("state") != "suspended"
             ):
                 raise RuntimeError(
                     "model resident did not finish suspended at its private hearth"
                 )
-            process_path.write_text(json.dumps(final_process), encoding="utf-8")
             active_city_sessions = (
                 db.query(SessionVars)
                 .filter(SessionVars.actor_id == "gym-afternoon-actor-mara")
                 .count()
             )
             if active_city_sessions != 0:
-                raise RuntimeError("hearth-bound resident retained a city attachment")
+                raise RuntimeError("hearth restart opened a second city attachment")
+            if db.query(ResidentSessionRetirementReceipt).count() != 1:
+                raise RuntimeError(
+                    "resident departure did not retain exactly one receipt"
+                )
             gym.record_resident_attachment_verified(
                 participant_session_id,
                 attachment="hearth",
                 process_hosting_state="suspended",
                 active_city_session_count=active_city_sessions,
-            )
-            hearth_result = _model_adapter_command(
-                gym,
-                api_client=api_client,
-                home=source_home,
-                host_key=host_key,
-                process_path=process_path,
-                participant_session_id=participant_session_id,
-                protocol_session_id=str(attachment["session_id"]),
-                now=gym.clock.now(),
-                model_id=model_id,
-                model_mode=model_mode,
-                command="observe-hearth-model",
-            )
-            restarted_process = hearth_result.get("process")
-            restarted_attachment = (
-                restarted_process.get("attachment")
-                if isinstance(restarted_process, dict)
-                else None
-            )
-            restarted_hosting = (
-                restarted_process.get("hosting")
-                if isinstance(restarted_process, dict)
-                else None
-            )
-            if (
-                hearth_result.get("status") != "observed"
-                or int(hearth_result.get("model_call_count") or 0) != 0
-                or not isinstance(restarted_attachment, dict)
-                or restarted_attachment.get("kind") != "hearth"
-                or not isinstance(restarted_hosting, dict)
-                or restarted_hosting.get("state") != "suspended"
-            ):
-                raise RuntimeError("restarted hearth observation was not clean")
-            if (
-                db.query(SessionVars)
-                .filter(SessionVars.actor_id == "gym-afternoon-actor-mara")
-                .count()
-                != 0
-            ):
-                raise RuntimeError("hearth restart opened a second city attachment")
-            process_path.write_text(
-                json.dumps(restarted_process),
-                encoding="utf-8",
             )
         gym.acknowledge_scheduled((due.event_id,))
         updated_descriptor = _agent_artifact_command(
@@ -713,6 +845,18 @@ def main() -> int:
         default="live",
         help=argparse.SUPPRESS,
     )
+    parser.add_argument(
+        "--departure-fault",
+        choices=(
+            "",
+            "before_request",
+            "before_commit",
+            "response_loss",
+            "after_hearth_checkpoint",
+        ),
+        default="",
+        help=argparse.SUPPRESS,
+    )
     args = parser.parse_args()
 
     _state_managers.clear()
@@ -759,6 +903,7 @@ def main() -> int:
                     record_observer=show_record if stream else None,
                     model_id=model_id,
                     model_mode=args.model_mode,
+                    departure_fault=args.departure_fault,
                 )
             else:
                 result = runners[args.episode](

@@ -12,6 +12,7 @@ from src.models import (
     ResidentAuthority,
     ResidentRequestNonce,
     ResidentSessionAuthority,
+    ResidentSessionRetirementReceipt,
     SessionVars,
     ShardTravelHandoff,
     WorldEvent,
@@ -232,7 +233,10 @@ class TestGameEndpoints:
         assert anonymous.json()["detail"]["code"] == "actor_proof_required"
         assert db_session.get(SessionVars, session_id) is not None
 
-        leave_payload = {"session_id": session_id}
+        leave_payload = {
+            "session_id": session_id,
+            "transition_id": "signed-leave-transition",
+        }
         leave_body = json.dumps(leave_payload, separators=(",", ":")).encode("utf-8")
         leave_headers = signed_resident_request_headers(
             runtime_private_key=runtime_private,
@@ -250,7 +254,111 @@ class TestGameEndpoints:
         )
 
         assert left.status_code == 200, left.text
+        assert left.json()["transition_id"] == "signed-leave-transition"
+        assert left.json()["actor_id"] == actor_id
+        assert left.json()["runtime_generation"] == 1
         assert db_session.get(SessionVars, session_id) is None
+        durable = db_session.get(
+            ResidentSessionRetirementReceipt, "signed-leave-transition"
+        )
+        assert durable is not None
+        assert durable.session_id == session_id
+        assert durable.actor_id == actor_id
+        assert durable.runtime_generation == 1
+
+        def retry(payload, *, signer, runtime_certificate, nonce):
+            body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+            headers = signed_resident_request_headers(
+                runtime_private_key=signer,
+                certificate=runtime_certificate,
+                method="POST",
+                target="/api/session/leave",
+                body=body,
+                nonce=nonce,
+            )
+            headers["Content-Type"] = "application/json"
+            return seeded_client.post(
+                "/api/session/leave", content=body, headers=headers
+            )
+
+        replay = retry(
+            leave_payload,
+            signer=runtime_private,
+            runtime_certificate=certificate,
+            nonce="signed-leave-retry",
+        )
+        assert replay.status_code == 200, replay.text
+        assert replay.json() == left.json()
+        assert db_session.query(ResidentSessionRetirementReceipt).count() == 1
+
+        wrong_transition = retry(
+            {"session_id": session_id, "transition_id": "another-transition"},
+            signer=runtime_private,
+            runtime_certificate=certificate,
+            nonce="signed-leave-wrong-transition",
+        )
+        assert wrong_transition.status_code == 409
+        assert wrong_transition.json()["detail"]["code"] == (
+            "departure_receipt_mismatch"
+        )
+
+        wrong_session = retry(
+            {
+                "session_id": "another-session",
+                "transition_id": "signed-leave-transition",
+            },
+            signer=runtime_private,
+            runtime_certificate=certificate,
+            nonce="signed-leave-wrong-session",
+        )
+        assert wrong_session.status_code == 409
+        assert wrong_session.json()["detail"]["code"] == "departure_receipt_mismatch"
+
+        newer_runtime_private = Ed25519PrivateKey.generate()
+        newer_certificate = issue_runtime_certificate(
+            identity_private_key=identity_private,
+            runtime_public_key=newer_runtime_private.public_key(),
+            actor_id=actor_id,
+            hearth_shard_id="hearth:signed-leave-actor",
+            runtime_generation=2,
+            audience=current_shard_id(),
+            scopes=["session.lifecycle"],
+        )
+        wrong_generation = retry(
+            leave_payload,
+            signer=newer_runtime_private,
+            runtime_certificate=newer_certificate,
+            nonce="signed-leave-wrong-generation",
+        )
+        assert wrong_generation.status_code == 401
+        assert wrong_generation.json()["detail"]["code"] == "invalid_proof"
+
+        other_identity_private = Ed25519PrivateKey.generate()
+        other_runtime_private = Ed25519PrivateKey.generate()
+        bind_resident_identity(
+            db_session,
+            actor_id="another-resident-actor",
+            hearth_shard_id="hearth:another-resident-actor",
+            identity_public_key=encoded_public_key(other_identity_private.public_key()),
+        ).active_runtime_generation = 1
+        db_session.commit()
+        other_certificate = issue_runtime_certificate(
+            identity_private_key=other_identity_private,
+            runtime_public_key=other_runtime_private.public_key(),
+            actor_id="another-resident-actor",
+            hearth_shard_id="hearth:another-resident-actor",
+            runtime_generation=1,
+            audience=current_shard_id(),
+            scopes=["session.lifecycle"],
+        )
+        wrong_actor = retry(
+            leave_payload,
+            signer=other_runtime_private,
+            runtime_certificate=other_certificate,
+            nonce="signed-leave-wrong-actor",
+        )
+        assert wrong_actor.status_code == 401
+        assert wrong_actor.json()["detail"]["code"] == "invalid_proof"
 
     def test_signed_resident_session_requires_its_proof_to_speak(
         self, seeded_client, seeded_world_id, db_session

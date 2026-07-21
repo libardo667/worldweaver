@@ -16,7 +16,14 @@ from typing import Any, Callable, Iterable
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..models import LocationChat, SessionVars, WorldEvent, WorldFact, WorldProjection
+from ..models import (
+    LocationChat,
+    ResidentSessionRetirementReceipt,
+    SessionVars,
+    WorldEvent,
+    WorldFact,
+    WorldProjection,
+)
 from .clock import (
     Clock,
     ControlledClock,
@@ -854,6 +861,7 @@ class ProductionRuleGym:
             "resident_city_profile_loaded",
             "resident_inference_started",
             "resident_inference_finished",
+            "resident_attachment_checkpointed",
             "resident_hearth_observed",
         }
         if kind not in allowed:
@@ -902,6 +910,13 @@ class ProductionRuleGym:
                 "capability_ids": public_ids("capability_ids"),
                 "source_names": public_ids("source_names"),
             }
+        elif kind == "resident_attachment_checkpointed":
+            if set(safe_detail) != {"transition_id"}:
+                raise ValueError("resident attachment checkpoint fields are invalid")
+            transition_id = str(safe_detail.get("transition_id") or "").strip()
+            if not transition_id or len(transition_id) > 64:
+                raise ValueError("resident attachment transition ID is invalid")
+            safe_detail = {"transition_id": transition_id}
         elif kind == "resident_hearth_observed":
             if set(safe_detail) != {
                 "attachment",
@@ -965,6 +980,63 @@ class ProductionRuleGym:
             participant=participant,
             location=location,
             detail=safe_detail,
+        )
+
+    def record_resident_departure_fault(
+        self,
+        session_id: str,
+        *,
+        mode: str,
+    ) -> None:
+        """Record one deliberately injected content-free departure failure."""
+
+        if mode not in {
+            "before_request",
+            "before_commit",
+            "response_loss",
+            "after_hearth_checkpoint",
+        }:
+            raise ValueError("unsupported resident departure fault")
+        participant = self._participant(session_id)
+        self._record(
+            "resident_departure_fault_injected",
+            participant=participant,
+            location=self._participant_location(session_id),
+            detail={"mode": mode},
+        )
+
+    def record_resident_departure_receipt(
+        self,
+        session_id: str,
+        payload: dict[str, Any],
+    ) -> None:
+        """Record the public durable receipt returned by the leave route."""
+
+        participant = self._participant(session_id)
+        required = {
+            "success",
+            "message",
+            "transition_id",
+            "session_id",
+            "actor_id",
+            "runtime_generation",
+            "deleted",
+            "committed_at",
+        }
+        if set(payload) != required or payload.get("success") is not True:
+            raise ValueError("resident departure receipt is invalid")
+        self._record(
+            "resident_departure_receipt",
+            participant=participant,
+            location=self._participant_location(session_id),
+            detail={
+                "transition_id": str(payload["transition_id"]),
+                "session_id": str(payload["session_id"]),
+                "actor_id": str(payload["actor_id"]),
+                "runtime_generation": int(payload["runtime_generation"]),
+                "deleted_sessions": int(dict(payload["deleted"])["sessions"]),
+                "committed_at": str(payload["committed_at"]),
+            },
         )
 
     def record_resident_attachment_verified(
@@ -1100,6 +1172,12 @@ class ProductionRuleGym:
                 (SessionVars.session_id.in_(participant_ids))
                 | (SessionVars.session_id == self.world_id)
             )
+            .all()
+        )
+        rows.extend(
+            ("resident_retirement_receipt", row.committed_at)
+            for row in self.db.query(ResidentSessionRetirementReceipt)
+            .filter(ResidentSessionRetirementReceipt.session_id.in_(participant_ids))
             .all()
         )
         rows.extend(

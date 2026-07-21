@@ -7,7 +7,7 @@ import asyncio
 import inspect
 import logging
 import uuid
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Protocol
@@ -67,6 +67,15 @@ TickObserver = Callable[
     [ResidentIdentity, CityWorld | LocalWorld, ResidentCore, dict[str, Any], int],
     Awaitable[None] | None,
 ]
+AttachmentCheckpointObserver = Callable[
+    [ResidentIdentity, str], Awaitable[None] | None
+]
+
+
+@dataclass(frozen=True, slots=True)
+class PendingHearthDeparture:
+    transition_id: str
+    session_id: str
 
 
 def build_reference_core(
@@ -142,6 +151,7 @@ class Resident:
         pulse_model: str | None = None,
         pulse_temperature: float | None | object = _IDENTITY_TEMPERATURE,
         tick_observer: TickObserver | None = None,
+        attachment_checkpoint_observer: AttachmentCheckpointObserver | None = None,
         world_client_factory: Callable[[str], WorldWeaverClient] | None = None,
         travel_retry_seconds: float = 5.0,
         world_clock: WorldClock | None = None,
@@ -162,6 +172,7 @@ class Resident:
         self._pulse_model = str(pulse_model or "").strip() or None
         self._pulse_temperature = pulse_temperature
         self._tick_observer = tick_observer
+        self._attachment_checkpoint_observer = attachment_checkpoint_observer
         self._world_client_factory = world_client_factory or (
             lambda url: WorldWeaverClient(base_url=url)
         )
@@ -241,11 +252,21 @@ class Resident:
         if default_attachment not in {"city", "hearth"}:
             raise ValueError("default_attachment must be 'city' or 'hearth'")
         restored_attachment = self._last_attachment_kind()
+        pending_hearth_departure = self._pending_hearth_departure()
         pending_travel = self._pending_shard_travel()
         last_city_url = self._last_city_url()
         if last_city_url and last_city_url != self._client_url(self._ww):
             self._ww = self._new_world_client(last_city_url)
         self._attachment_kind = restored_attachment or default_attachment
+        if pending_hearth_departure is not None:
+            self._attachment_kind = "city"
+            self._session_id = pending_hearth_departure.session_id
+            logger.info(
+                "[%s] restored unfinished hearth departure %s",
+                self.name,
+                pending_hearth_departure.transition_id,
+            )
+            return
         if pending_travel is not None:
             self._attachment_kind = "traveling"
             self._session_id = None
@@ -341,6 +362,7 @@ class Resident:
         self._begin_process_hosting()
         world = self._build_current_world()
         try:
+            world = await self._resume_pending_hearth_departure(world)
             core = self._build_core(world, self._active_session_id())
             result = await core.handle_scheduled_return(event_id, now=now)
             await self._notify_tick(world, core, result, 1)
@@ -410,6 +432,7 @@ class Resident:
                 self._owned_world_clients.clear()
                 raise
         world = self._build_current_world()
+        world = await self._resume_pending_hearth_departure(world)
         logger.info(
             "[%s] resident host starting in %s",
             self.name,
@@ -912,23 +935,42 @@ class Resident:
     async def _enter_hearth_locked(
         self,
         city_world: CityWorld,
+        *,
+        pending: PendingHearthDeparture | None = None,
     ) -> CityWorld | LocalWorld:
-        transition_id = f"travel-{uuid.uuid4().hex}"
-        city_session_id = self._active_session_id()
-        self._record_transition(
-            "world_attachment_transition_started",
-            transition_id=transition_id,
-            from_world="city",
-            to_world="hearth",
-            from_session_id=city_session_id,
+        transition_id = (
+            pending.transition_id if pending is not None else f"travel-{uuid.uuid4().hex}"
         )
+        city_session_id = (
+            pending.session_id if pending is not None else self._active_session_id()
+        )
+        if pending is None:
+            self._record_transition(
+                "world_attachment_transition_started",
+                transition_id=transition_id,
+                from_world="city",
+                to_world="hearth",
+                from_session_id=city_session_id,
+            )
         try:
-            receipt = await self._ww.leave_session(city_session_id)
+            receipt = await self._ww.leave_session(
+                city_session_id,
+                transition_id=transition_id,
+            )
             if not bool(receipt.get("success")):
                 raise RuntimeError("city did not confirm session retirement")
+            if (
+                str(receipt.get("transition_id") or "") != transition_id
+                or str(receipt.get("session_id") or "") != city_session_id
+                or str(receipt.get("actor_id") or "")
+                != str(self._require_identity().actor_id)
+                or int(receipt.get("runtime_generation") or 0)
+                != self._runtime_generation
+            ):
+                raise RuntimeError("city returned a mismatched retirement receipt")
         except Exception as exc:
             self._record_transition(
-                "world_attachment_transition_failed",
+                "world_attachment_transition_deferred",
                 transition_id=transition_id,
                 from_world="city",
                 to_world="hearth",
@@ -947,7 +989,6 @@ class Resident:
         self._session_id = None
         self._attachment_kind = "hearth"
         self._travel_id = ""
-        hearth = self._build_hearth_world()
         self._bind_current_reference_process()
         self._record_transition(
             "world_attachment_changed",
@@ -958,8 +999,22 @@ class Resident:
             from_world_url=self._client_url(self._ww),
             to_session_id=self._active_session_id(),
         )
+        await self._notify_attachment_checkpoint(transition_id)
+        hearth = self._build_hearth_world()
         logger.info("[%s] entered private hearth", self.name)
         return hearth
+
+    async def _resume_pending_hearth_departure(
+        self,
+        world: CityWorld | LocalWorld,
+    ) -> CityWorld | LocalWorld:
+        pending = self._pending_hearth_departure()
+        if pending is None:
+            return world
+        if not isinstance(world, CityWorld):
+            raise RuntimeError("pending hearth departure requires its city attachment")
+        async with self._attachment_lock:
+            return await self._enter_hearth_locked(world, pending=pending)
 
     async def _enter_city(
         self,
@@ -1303,6 +1358,42 @@ class Resident:
         return derive_pending_shard_travel(
             load_runtime_events(self._resident_dir / "memory")
         )
+
+    def _pending_hearth_departure(self) -> PendingHearthDeparture | None:
+        pending: dict[str, PendingHearthDeparture] = {}
+        for event in load_runtime_events(self._resident_dir / "memory"):
+            event_type = str(event.get("event_type") or "").strip()
+            payload = event.get("payload")
+            if not isinstance(payload, dict):
+                continue
+            transition_id = str(payload.get("transition_id") or "").strip()
+            if not transition_id:
+                continue
+            if (
+                event_type == "world_attachment_transition_started"
+                and str(payload.get("from_world") or "").strip() == "city"
+                and str(payload.get("to_world") or "").strip() == "hearth"
+            ):
+                session_id = str(payload.get("from_session_id") or "").strip()
+                if session_id:
+                    pending[transition_id] = PendingHearthDeparture(
+                        transition_id=transition_id,
+                        session_id=session_id,
+                    )
+            elif event_type in {
+                "world_attachment_changed",
+                "world_attachment_transition_failed",
+            }:
+                pending.pop(transition_id, None)
+        return list(pending.values())[-1] if pending else None
+
+    async def _notify_attachment_checkpoint(self, transition_id: str) -> None:
+        observer = self._attachment_checkpoint_observer
+        if observer is None:
+            return
+        observed = observer(self._require_identity(), transition_id)
+        if inspect.isawaitable(observed):
+            await observed
 
     @staticmethod
     def _client_url(client: Any) -> str:

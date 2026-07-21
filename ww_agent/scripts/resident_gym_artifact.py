@@ -197,6 +197,13 @@ def _issue_runtime_certificate(args: argparse.Namespace) -> dict:
     return {"certificate_header": signer.certificate_header}
 
 
+def _describe_process(args: argparse.Namespace) -> dict:
+    process = load_resident_process_envelope(args.home.resolve() / "memory")
+    if not isinstance(process, dict):
+        raise PrivateArtifactError("resident has no process checkpoint")
+    return process
+
+
 def _parse_time(raw: str) -> datetime:
     parsed = datetime.fromisoformat(str(raw or "").strip().replace("Z", "+00:00"))
     if parsed.tzinfo is None:
@@ -476,6 +483,17 @@ async def _run_model_return(args: argparse.Namespace) -> dict[str, Any]:
             }
         )
 
+    async def observe_attachment_checkpoint(_identity, transition_id):
+        _write_protocol(
+            {
+                "protocol": _GYM_ADAPTER_PROTOCOL,
+                "protocol_version": _GYM_ADAPTER_PROTOCOL_VERSION,
+                "type": "event",
+                "event": "resident_attachment_checkpointed",
+                "detail": {"transition_id": str(transition_id)},
+            }
+        )
+
     try:
         client = await WorldWeaverClient.for_resident(
             "http://worldweaver-gym.local",
@@ -491,6 +509,7 @@ async def _run_model_return(args: argparse.Namespace) -> dict[str, Any]:
             pulse_model=model_id,
             pulse_temperature=None,
             tick_observer=observe_host_tick,
+            attachment_checkpoint_observer=observe_attachment_checkpoint,
             world_clock=controlled_clock,
         )
         await resident.start(expected_process.world_id)
@@ -656,6 +675,11 @@ def _parser() -> argparse.ArgumentParser:
     certificate.add_argument("--home", type=Path, required=True)
     certificate.add_argument("--host-key", type=Path, required=True)
     certificate.add_argument("--audience", required=True)
+    describe_process = subparsers.add_parser(
+        "describe-process",
+        help="return the content-free current resident process checkpoint",
+    )
+    describe_process.add_argument("--home", type=Path, required=True)
     handle_return = subparsers.add_parser(
         "handle-return",
         help="offer a due return to the restored reference core with a scripted wait",
@@ -708,6 +732,7 @@ def main() -> int:
             "restore": _restore,
             "export": _export,
             "issue-runtime-certificate": _issue_runtime_certificate,
+            "describe-process": _describe_process,
             "handle-return": _handle_return,
             "handle-return-model": _handle_model_return,
             "observe-hearth-model": _handle_model_return,

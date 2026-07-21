@@ -38,14 +38,22 @@ class _FakeCityClient:
         self.leave_success = leave_success
         self.base_url = base_url
         self.left: list[str] = []
+        self.leave_transitions: list[str] = []
         self.bootstrapped: list[dict] = []
         self.departures: list[dict] = []
         self.arrivals: list[dict] = []
         self.closed = False
 
-    async def leave_session(self, session_id: str) -> dict:
+    async def leave_session(self, session_id: str, *, transition_id: str) -> dict:
         self.left.append(session_id)
-        return {"success": self.leave_success, "session_id": session_id}
+        self.leave_transitions.append(transition_id)
+        return {
+            "success": self.leave_success,
+            "transition_id": transition_id,
+            "session_id": session_id,
+            "actor_id": "actor-test-resident",
+            "runtime_generation": 0,
+        }
 
     async def get_world_id(self) -> str:
         return "test-world"
@@ -239,8 +247,20 @@ def test_unconfirmed_departure_cannot_activate_the_hearth(tmp_path):
     assert resident._session_id == "test-resident-city-session"
     assert _event_types(resident)[-2:] == [
         "world_attachment_transition_started",
-        "world_attachment_transition_failed",
+        "world_attachment_transition_deferred",
     ]
+
+    client.leave_success = True
+    hearth = asyncio.run(resident._resume_pending_hearth_departure(city))
+
+    assert isinstance(hearth, LocalWorld)
+    assert client.left == [
+        "test-resident-city-session",
+        "test-resident-city-session",
+    ]
+    assert len(set(client.leave_transitions)) == 1
+    assert resident._pending_hearth_departure() is None
+    assert _event_types(resident).count("world_attachment_changed") == 1
 
 
 def test_hearth_return_bootstraps_a_fresh_city_session_for_same_actor(

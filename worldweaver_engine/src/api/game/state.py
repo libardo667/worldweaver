@@ -64,12 +64,16 @@ from ...services.resident_authority import (
     ResidentAuthorityError,
     authorize_resident_actor_request,
     authorize_resident_bootstrap_request,
+    authorize_resident_generation_request,
 )
 from ...services.session_lifecycle import (
     ResidentSessionBinding,
     SessionBootstrapCommand,
     SessionLifecycleError,
     bootstrap_session,
+    find_resident_session_retirement,
+    resident_session_retirement_result,
+    retire_resident_session_presence,
     retire_session_presence,
 )
 from ...services.shard_travel import (
@@ -103,6 +107,7 @@ class SessionLeaveRequest(BaseModel):
     """Retire one live session without deleting the history it produced."""
 
     session_id: SessionId
+    transition_id: Optional[str] = Field(default=None, min_length=1, max_length=64)
 
 
 class SessionTravelDepartureRequest(BaseModel):
@@ -711,10 +716,75 @@ def leave_session_world(
     payload: SessionLeaveRequest,
     db: Session = Depends(get_db),
     credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+    world_clock: Clock = Depends(get_world_clock),
 ):
     """Retire one live incarnation without erasing its public history."""
+    transition_id = str(payload.transition_id or "").strip()
+    session_id = str(payload.session_id)
+    if credentials.has_resident_proof and not transition_id:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "transition_id_required",
+                "message": "Resident hearth departure requires a stable transition ID.",
+            },
+        )
+
+    if transition_id:
+        try:
+            existing = find_resident_session_retirement(
+                db,
+                transition_id=transition_id,
+                session_id=session_id,
+            )
+        except SessionLifecycleError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        if existing is not None:
+            if not credentials.has_resident_proof or credentials.player is not None:
+                raise HTTPException(
+                    status_code=401,
+                    detail={
+                        "code": "resident_proof_required",
+                        "message": "Retirement receipt replay requires resident proof.",
+                    },
+                )
+            try:
+                authorize_resident_generation_request(
+                    db,
+                    actor_id=str(existing.actor_id),
+                    runtime_generation=int(existing.runtime_generation),
+                    expected_audience=current_shard_id(),
+                    required_scope="session.lifecycle",
+                    method=credentials.method,
+                    target=credentials.target,
+                    body=credentials.body,
+                    headers=credentials.resident_headers,
+                )
+            except ResidentAuthorityError as exc:
+                status_code = (
+                    409
+                    if exc.code in {"replayed_request", "retired_generation"}
+                    else 401
+                )
+                raise HTTPException(
+                    status_code=status_code,
+                    detail={"code": exc.code, "message": str(exc)},
+                ) from exc
+            if (
+                str(existing.transition_id) != transition_id
+                or str(existing.session_id) != session_id
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "departure_receipt_mismatch",
+                        "message": "Departure identifiers do not match the durable receipt.",
+                    },
+                )
+            return resident_session_retirement_result(existing).as_payload()
+
     try:
-        authorize_bound_session_actor(
+        actor = authorize_bound_session_actor(
             db,
             credentials=credentials,
             session_id=payload.session_id,
@@ -723,10 +793,20 @@ def leave_session_world(
     except ActorAuthorizationError as exc:
         raise actor_authorization_http_error(exc) from exc
 
-    return retire_session_presence(
-        db,
-        session_id=str(payload.session_id),
-    ).as_payload()
+    if transition_id and actor is not None and actor.proof_kind == "resident_signature":
+        try:
+            return retire_resident_session_presence(
+                db,
+                transition_id=transition_id,
+                session_id=session_id,
+                actor_id=actor.actor_id,
+                runtime_generation=int(actor.runtime_generation or 0),
+                now=world_clock.now(),
+            ).as_payload()
+        except SessionLifecycleError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+    return retire_session_presence(db, session_id=session_id).as_payload()
 
 
 @router.post("/session/travel/depart")

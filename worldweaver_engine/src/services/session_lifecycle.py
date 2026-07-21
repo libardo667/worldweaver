@@ -13,7 +13,13 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..models import FederationActorAuth, Player, SessionVars, WorldNode
+from ..models import (
+    FederationActorAuth,
+    Player,
+    ResidentSessionRetirementReceipt,
+    SessionVars,
+    WorldNode,
+)
 from .event_submission import WorldEventCommand, submit_world_event
 from .clock import SystemClock, utc_naive
 from .federation_identity import current_shard_id, get_actor_bundle
@@ -88,6 +94,21 @@ class SessionRetirementReceipt:
     message: str
     session_id: str
     deleted: dict[str, int]
+
+    def as_payload(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class ResidentSessionRetirementResult:
+    success: bool
+    message: str
+    transition_id: str
+    session_id: str
+    actor_id: str
+    runtime_generation: int
+    deleted: dict[str, int]
+    committed_at: datetime
 
     def as_payload(self) -> dict[str, Any]:
         return asdict(self)
@@ -194,6 +215,100 @@ def retire_session_presence(
         session_id=normalized_session_id,
         deleted=deleted,
     )
+
+
+def find_resident_session_retirement(
+    db: Session,
+    *,
+    transition_id: str,
+    session_id: str,
+) -> ResidentSessionRetirementReceipt | None:
+    """Find a durable departure by either member of its idempotency pair."""
+
+    transition = str(transition_id or "").strip()
+    session = str(session_id or "").strip()
+    by_transition = db.get(ResidentSessionRetirementReceipt, transition)
+    by_session = (
+        db.query(ResidentSessionRetirementReceipt)
+        .filter(ResidentSessionRetirementReceipt.session_id == session)
+        .one_or_none()
+    )
+    if by_transition is not None and by_session is not None:
+        if by_transition.transition_id != by_session.transition_id:
+            raise SessionLifecycleError(
+                "departure_receipt_conflict",
+                "Transition and session identify different retirement receipts.",
+                status_code=409,
+            )
+    return by_transition or by_session
+
+
+def resident_session_retirement_result(
+    receipt: ResidentSessionRetirementReceipt,
+) -> ResidentSessionRetirementResult:
+    return ResidentSessionRetirementResult(
+        success=True,
+        message="Session removed from shard.",
+        transition_id=str(receipt.transition_id),
+        session_id=str(receipt.session_id),
+        actor_id=str(receipt.actor_id),
+        runtime_generation=int(receipt.runtime_generation),
+        deleted={"sessions": int(receipt.deleted_sessions)},
+        committed_at=receipt.committed_at,
+    )
+
+
+def retire_resident_session_presence(
+    db: Session,
+    *,
+    transition_id: str,
+    session_id: str,
+    actor_id: str,
+    runtime_generation: int,
+    now: datetime | None = None,
+) -> ResidentSessionRetirementResult:
+    """Atomically persist a resident-bound receipt and retire its presence."""
+
+    transition = str(transition_id or "").strip()
+    session = str(session_id or "").strip()
+    actor = str(actor_id or "").strip()
+    if not transition or len(transition) > 64:
+        raise SessionLifecycleError(
+            "invalid_transition_id",
+            "Hearth departure transition ID is invalid.",
+            status_code=422,
+        )
+    if not session or len(session) > 64 or not actor or len(actor) > 36:
+        raise SessionLifecycleError(
+            "invalid_departure_binding",
+            "Hearth departure binding is invalid.",
+            status_code=422,
+        )
+
+    try:
+        deleted = stage_retire_session_presence(db, session)
+        if int(deleted["sessions"]) != 1:
+            raise SessionLifecycleError(
+                "session_not_present",
+                "Resident session is not present to retire.",
+                status_code=409,
+            )
+        receipt = ResidentSessionRetirementReceipt(
+            transition_id=transition,
+            session_id=session,
+            actor_id=actor,
+            runtime_generation=runtime_generation,
+            deleted_sessions=int(deleted["sessions"]),
+            committed_at=utc_naive(now or datetime.now(timezone.utc)),
+        )
+        db.add(receipt)
+        db.flush()
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    remove_cached_sessions([session])
+    return resident_session_retirement_result(receipt)
 
 
 def _stage_duplicate_agent_retirement(

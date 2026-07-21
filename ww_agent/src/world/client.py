@@ -960,11 +960,13 @@ class WorldWeaverClient:
         resp = await self._post(path, payload, timeout=60.0)
         return resp.json()
 
-    async def leave_session(self, session_id: str) -> dict[str, Any]:
+    async def leave_session(
+        self, session_id: str, *, transition_id: str
+    ) -> dict[str, Any]:
         """Retire one live city incarnation while preserving its public history."""
         resp = await self._post(
             "/api/session/leave",
-            {"session_id": session_id},
+            {"session_id": session_id, "transition_id": transition_id},
             timeout=15.0,
         )
         return resp.json()

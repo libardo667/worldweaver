@@ -113,6 +113,29 @@ class ResidentSessionAuthority(Base):
     )
 
 
+class ResidentSessionRetirementReceipt(Base):
+    """Durable proof that one resident generation retired one city presence."""
+
+    __tablename__ = "resident_session_retirement_receipts"
+    __table_args__ = (
+        CheckConstraint(
+            "runtime_generation >= 1",
+            name="ck_resident_retirement_receipts_generation",
+        ),
+        CheckConstraint(
+            "deleted_sessions >= 0",
+            name="ck_resident_retirement_receipts_deleted_sessions",
+        ),
+    )
+
+    transition_id = Column(String(64), primary_key=True)
+    session_id = Column(String(64), nullable=False, unique=True, index=True)
+    actor_id = Column(String(36), nullable=False, index=True)
+    runtime_generation = Column(Integer, nullable=False)
+    deleted_sessions = Column(Integer, nullable=False)
+    committed_at = Column(DateTime, nullable=False)
+
+
 class ResidentRequestNonce(Base):
     """Short-lived replay guard for a resident's signed city request."""
 

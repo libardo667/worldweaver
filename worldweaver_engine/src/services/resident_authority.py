@@ -454,3 +454,74 @@ def authorize_resident_request(
         max_clock_skew_seconds=max_clock_skew_seconds,
     )
     return verified
+
+
+def authorize_resident_generation_request(
+    db: Session,
+    *,
+    actor_id: str,
+    runtime_generation: int,
+    expected_audience: str,
+    required_scope: str,
+    method: str,
+    target: str,
+    body: bytes,
+    headers: Mapping[str, str],
+    now: int | None = None,
+    max_clock_skew_seconds: int = DEFAULT_MAX_CLOCK_SKEW_SECONDS,
+) -> VerifiedResidentRequest:
+    """Authorize one exact still-active generation without a live session.
+
+    Retirement retries use this after their session authority has been deleted.
+    Unlike actor bootstrap authorization, this never activates a newer runtime.
+    """
+
+    actor = _bounded_identifier(actor_id, label="actor ID", max_length=36)
+    if (
+        isinstance(runtime_generation, bool)
+        or not isinstance(runtime_generation, int)
+        or runtime_generation < 1
+    ):
+        raise ResidentAuthorityError(
+            "invalid_binding", "Resident runtime generation is invalid."
+        )
+    if db.new or db.dirty or db.deleted:
+        raise ResidentAuthorityError(
+            "authorization_session_dirty",
+            "Resident authorization must run before other database changes.",
+        )
+    authority = db.get(ResidentAuthority, actor)
+    if authority is None:
+        raise ResidentAuthorityError(
+            "identity_not_admitted", "Resident identity is not admitted by this city."
+        )
+    if authority.active_runtime_generation != runtime_generation:
+        raise ResidentAuthorityError(
+            "retired_generation", "Resident runtime generation is no longer active."
+        )
+
+    try:
+        verified = verify_resident_request(
+            identity_public_key=str(authority.identity_public_key),
+            expected_actor_id=actor,
+            expected_runtime_generation=runtime_generation,
+            expected_audience=expected_audience,
+            required_scope=required_scope,
+            method=method,
+            target=target,
+            body=body,
+            headers=headers,
+            now=now,
+            max_clock_skew_seconds=max_clock_skew_seconds,
+        )
+    except ResidentProtocolError as exc:
+        raise ResidentAuthorityError("invalid_proof", str(exc)) from exc
+
+    current_time = int(time.time()) if now is None else int(now)
+    _consume_request_nonce(
+        db,
+        verified=verified,
+        now=current_time,
+        max_clock_skew_seconds=max_clock_skew_seconds,
+    )
+    return verified

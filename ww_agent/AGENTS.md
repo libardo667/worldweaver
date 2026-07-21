@@ -23,6 +23,9 @@ inputs in the identity loader; they do not restore the old ownership model.
 - `src/resident.py` owns one resident across city and hearth attachments. It confirms public session
   retirement and only then rebuilds the core against the private hearth. A
   failed departure must leave the resident in the city; never run two cores or two active attachments.
+  Hearth departure writes one stable transition ID before its request. An uncertain failure remains pending,
+  and restart must retry that exact ID without repeating cognition. Construct `LocalWorld` only after the
+  matching durable city receipt has advanced the hearth attachment checkpoint.
 - A resident host holds `runtime.lock` for the whole waking lifetime. Homes with a hearth manifest must
   also have a matching active generation record; dormant imports and retired sources must fail before
   identity loading creates a world attachment. Legacy homes without a manifest remain supported until

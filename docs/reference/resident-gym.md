@@ -192,6 +192,18 @@ prose. The stopped process is then restarted from its hearth-bound checkpoint. I
 `LocalWorld` observation with zero additional model calls, proves that city sources were replaced by the
 hearth registry, and releases the same exclusive lease before the updated hearth is exported again.
 
+The departure edge now has explicit crash coverage. Before sending `/api/session/leave`, the resident durably
+records one transition ID. The route commits session deletion and an actor-and-generation-bound retirement
+receipt in one transaction. A retry from the same signed generation with the same session and transition gets
+the original receipt; a different actor, generation, session, or transition is refused.
+
+The isolated adapter injects four failures: before the request, before the retirement commit, after commit but
+before the response reaches the resident, and immediately after the resident checkpoints the hearth attachment
+but before constructing `LocalWorld`. Each case restarts the real resident process. The proof requires one
+retirement row, one hearth checkpoint, one `LocalWorld` observation, zero retry model calls, no live city
+session, and a suspended hearth-bound process. In the response-loss case, both successful HTTP deliveries
+carry the same stored receipt. Operational certificate and nonce checks continue to use real time.
+
 The earlier Tansy run in Alderbank was a bounded live-town smoke run caused by interpreting the next step too
 broadly. It is not resident-gym evidence, did not exercise this adapter, and must not be repeated as part of
 Major 142. No further live-town resident runs are needed before the isolated model path has its intended
@@ -242,9 +254,8 @@ outside this claim because federation itself is explicitly not exercised. Author
 nonces, rate limits, cache TTLs, process locks, model duration, and runtime metrics intentionally stay on real
 or monotonic operational time.
 
-The next trustworthiness slice is scenario-level process and transport fault injection around this transition,
-followed by a narrow repeat through a listening server or container. Federation and optional constructive-game
-capability episodes remain later slices.
+The next trustworthiness slice is a narrow repeat through a listening server or container. Federation and
+optional constructive-game capability episodes remain later slices.
 
 The database snapshot supports SQLite only and may restore only into an empty synthetic database. Its hash
 detects damage and internal mismatches; it is not a signature and does not make an envelope from an untrusted
@@ -268,12 +279,12 @@ apparatus tells the truth about what happened.
 | Identity and authorization | Model resident uses its host-sealed identity and normal signed runtime certificate for protected scene and session-retirement routes; anonymous signal access is refused; correspondence uses durable actor IDs | Cover every gym action and other proof/failure types |
 | Exact-place perception | Speech follows location and a durable cursor | Reconnect, cursor gaps, and concurrent arrival/speech ordering |
 | Delayed work | Stable scheduled IDs, controlled UTC across exercised routes and persistent chronology, explicit acknowledgement, expired-place movement refusal, and idempotent private-return retry | Add other state-changing scenario handlers and prove failed-handler retry |
-| Stop and resume | A separate reference core refuses a second model call after lost acknowledgement; the model adapter transitions through `LocalWorld`, restarts at the hearth with zero model calls, and refreshes its artifact | Live scheduled-return wiring and authenticated portable checkpoints |
+| Stop and resume | A separate reference core refuses a second model call after lost acknowledgement; the model adapter retries pending departure after restart with zero model calls, reaches `LocalWorld` once, and refreshes its artifact | Live scheduled-return wiring and authenticated portable checkpoints |
 | Correspondence | Mail survives a session change and remains pending until acknowledgement | Interruption policy, cross-shard delivery, and failure recovery |
 | Access and custody | Production services exist outside the gym | Refusal, making, carrying, giving, exchange, and stoop episodes |
-| Travel | Signed city retirement and the normal city-to-hearth attachment transition run in the model gym | Hearth-to-city return plus recoverable federated travel episodes |
+| Travel | Signed city retirement uses a stable transition and durable actor/generation receipt; the normal city-to-hearth attachment transition survives request, commit, response, and post-checkpoint failures | Hearth-to-city return plus recoverable federated travel episodes |
 | Stale information | Structural version fence exists in the reference resident | Change the world during a gym decision and prove safe reconsideration |
-| Fault recovery | Individual service rollback tests exist | Scenario-level database, process, and network fault injection |
+| Fault recovery | Model episodes inject failure before request, before commit, after committed response loss, and after the hearth checkpoint; restart proves one receipt, attachment, observation, and inference sequence | Listening-server or container repeat, then broader action faults |
 
 The command-line runner exposes these records as a live, flushed stream while retaining the final HTML and JSON
 reports. The separate-process return and model episodes emit content-safe observation and activation boundaries, making
