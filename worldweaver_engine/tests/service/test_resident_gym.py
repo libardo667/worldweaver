@@ -10,9 +10,13 @@ from sqlalchemy.pool import StaticPool
 
 from src.api.game import _state_managers
 from src.database import Base, get_db
-from src.models import LocationChat, WorldEvent
+from src.models import DirectMessage, LocationChat, WorldEvent
 from src.services.gym_presentation import render_html, render_terminal
-from src.services.resident_gym import ProductionRuleGym, run_first_conversation
+from src.services.resident_gym import (
+    ProductionRuleGym,
+    run_first_conversation,
+    run_waiting_letter,
+)
 from src.services.session_service import _session_locks, get_state_manager
 
 
@@ -135,6 +139,46 @@ def test_gym_views_label_the_mechanical_baseline_and_do_not_add_story(db_session
     assert "The display adds layout and icons, not narration." in page
     assert "Good morning. Is the footbridge open?" in terminal
     assert "Good morning. Is the footbridge open?" in page
+
+
+def test_waiting_letter_survives_session_change_until_acknowledged(db_session):
+    result = run_waiting_letter(db_session)
+
+    assert result.episode == "The Waiting Letter"
+    assert {participant.session_id for participant in result.participants} == {
+        "gym-letter-mara",
+        "gym-letter-ivo-after",
+    }
+    waiting = [record for record in result.records if record.kind == "letter_waiting"]
+    assert len(waiting) == 2
+    assert waiting[0].detail["message_id"] == waiting[1].detail["message_id"]
+    assert [record.kind for record in result.records][-2:] == [
+        "letter_acknowledged",
+        "mailbox_empty",
+    ]
+
+    message = db_session.query(DirectMessage).one()
+    assert message.recipient_actor_id == "gym-letter-actor-ivo"
+    assert message.acknowledged_at is not None
+    assert (
+        db_session.query(WorldEvent)
+        .filter(WorldEvent.event_type.like("%correspondence%"))
+        .count()
+        == 0
+    )
+
+
+def test_waiting_letter_view_has_a_fact_backed_post_trail(db_session):
+    result = run_waiting_letter(db_session)
+
+    terminal = render_terminal(result)
+    page = render_html(result)
+
+    assert "📬" in terminal
+    assert "was offered message" in terminal
+    assert "The post trail" in page
+    assert "sent" in page and "waiting" in page and "acknowledged" in page
+    assert "The moving envelope is only a visual key." in page
 
 
 def test_first_gym_episode_matches_authenticated_http_rules(db_session, monkeypatch):

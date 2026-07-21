@@ -12,12 +12,17 @@ from .resident_gym import GymEpisodeResult, GymRecord
 _ICONS = {
     "world_arranged": "🧭",
     "joined": "🚪",
+    "departed": "🌙",
     "listening_scope": "👂",
     "heard_nothing_new": "🫧",
     "heard": "👂",
     "spoke": "💬",
     "moved": "👣",
     "stayed": "•",
+    "letter_sent": "✉️",
+    "letter_waiting": "📬",
+    "letter_acknowledged": "📨",
+    "mailbox_empty": "🍃",
 }
 
 
@@ -29,6 +34,8 @@ def _record_sentence(record: GymRecord) -> str:
         return f"{place_count} connected places were arranged."
     if record.kind == "joined":
         return f"{actor} joined at {record.location}."
+    if record.kind == "departed":
+        return f"{actor}'s temporary session ended at {record.location}."
     if record.kind == "listening_scope":
         status = str(detail.get("status") or "changed")
         if status == "established":
@@ -49,6 +56,22 @@ def _record_sentence(record: GymRecord) -> str:
         return f"{actor} walked from {detail.get('from')} to {detail.get('to')}."
     if record.kind == "stayed":
         return f"{actor} remained at {record.location}."
+    if record.kind == "letter_sent":
+        return (
+            f"{actor} sent private message {detail.get('message_id')} to durable actor "
+            f"{detail.get('recipient_actor_id')}."
+        )
+    if record.kind == "letter_waiting":
+        return (
+            f"{actor} was offered message {detail.get('message_id')} from "
+            f"{detail.get('sender') or 'an unnamed sender'}: "
+            f"“{detail.get('message') or ''}”"
+        )
+    if record.kind == "letter_acknowledged":
+        message_ids = ", ".join(str(item) for item in detail.get("message_ids") or [])
+        return f"{actor} acknowledged message {message_ids or 'none'}."
+    if record.kind == "mailbox_empty":
+        return f"{actor}'s pending mailbox was empty."
     return f"{actor}: {record.kind.replace('_', ' ')}"
 
 
@@ -140,6 +163,27 @@ def render_html(result: GymEpisodeResult) -> str:
             "</li>"
         )
 
+    correspondence_kinds = {
+        record.kind for record in result.records if record.kind.startswith("letter_")
+    }
+    mail_panel = ""
+    if correspondence_kinds:
+        sent = "letter_sent" in correspondence_kinds
+        waiting = "letter_waiting" in correspondence_kinds
+        acknowledged = "letter_acknowledged" in correspondence_kinds
+        mail_panel = f"""
+    <section class="panel post-panel">
+      <h2>The post trail</h2>
+      <div class="post-route" aria-label="The production correspondence states exercised by this episode">
+        <span class="post-state {'complete' if sent else ''}"><b>✉️</b> sent</span>
+        <span class="post-path" aria-hidden="true"><span class="courier">✉</span></span>
+        <span class="post-state {'complete' if waiting else ''}"><b>📬</b> waiting</span>
+        <span class="post-path short" aria-hidden="true"></span>
+        <span class="post-state {'complete' if acknowledged else ''}"><b>📨</b> acknowledged</span>
+      </div>
+      <p class="post-note">These are stored correspondence states. The moving envelope is only a visual key.</p>
+    </section>"""
+
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -192,6 +236,15 @@ def render_html(result: GymEpisodeResult) -> str:
     .timeline li {{ display: grid; grid-template-columns: 2.4rem 2.2rem 1fr; gap: .5rem; padding: .8rem 0; border-top: 1px solid #879486; }}
     .step {{ font: 700 .85rem/2rem ui-monospace, monospace; color: var(--leaf); }}
     .icon {{ font-size: 1.35rem; }}
+    .post-route {{ display: grid; grid-template-columns: auto minmax(3rem, 1fr) auto minmax(2rem, .5fr) auto; align-items: center; gap: .7rem; }}
+    .post-state {{ display: grid; justify-items: center; gap: .25rem; min-width: 7rem; padding: .7rem; color: #59635b; border: 2px dashed #879486; border-radius: 1rem; font-weight: 800; }}
+    .post-state b {{ font-size: 2rem; }}
+    .post-state.complete {{ color: var(--ink); background: var(--moss); border: 2px solid var(--ink); }}
+    .post-path {{ position: relative; height: .35rem; border-top: 3px dotted var(--leaf); }}
+    .courier {{ position: absolute; left: 0; top: -.95rem; animation: carry 3.2s ease-in-out infinite; }}
+    .post-note {{ margin-bottom: 0; color: #45534a; font-size: .9rem; }}
+    @keyframes carry {{ 0%, 15% {{ left: 0; }} 75%, 100% {{ left: calc(100% - 1.2rem); }} }}
+    @media (prefers-reduced-motion: reduce) {{ .courier {{ animation: none; left: 50%; }} }}
     footer {{ margin-top: 2rem; color: #45534a; font-size: .95rem; }}
     @media (max-width: 650px) {{
       .world {{ flex-direction: column; gap: 1rem; }}
@@ -199,6 +252,9 @@ def render_html(result: GymEpisodeResult) -> str:
       .path {{ flex-basis: 3.5rem; width: .55rem; height: 3.5rem; }}
       .path::after {{ content: "↕"; }}
       .participants li {{ width: 100%; }}
+      .post-route {{ grid-template-columns: 1fr; }}
+      .post-path {{ width: .35rem; height: 2rem; border-top: 0; border-left: 3px dotted var(--leaf); justify-self: center; }}
+      .courier {{ display: none; }}
     }}
   </style>
 </head>
@@ -216,6 +272,7 @@ def render_html(result: GymEpisodeResult) -> str:
       <h2>Participants</h2>
       <ul class="participants">{''.join(participant_cards)}</ul>
     </section>
+    {mail_panel}
     <section class="panel">
       <h2>What happened</h2>
       <ol class="timeline">{''.join(timeline)}</ol>

@@ -23,19 +23,28 @@ if str(ENGINE_ROOT) not in sys.path:
 from src.api.game import _state_managers  # noqa: E402
 from src.database import Base  # noqa: E402
 from src.services.gym_presentation import render_html, render_terminal  # noqa: E402
-from src.services.resident_gym import run_first_conversation  # noqa: E402
+from src.services.resident_gym import (  # noqa: E402
+    run_first_conversation,
+    run_waiting_letter,
+)
 from src.services.session_service import _session_locks  # noqa: E402
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Run the first production-rule resident gym episode."
+        description="Run a deterministic production-rule resident gym episode."
+    )
+    parser.add_argument(
+        "--episode",
+        choices=("footbridge", "waiting-letter"),
+        default="footbridge",
+        help="episode to run (default: footbridge)",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=WORKSPACE_ROOT / ".runs" / "gym" / "footbridge-hello.html",
-        help="self-contained HTML result (default: .runs/gym/footbridge-hello.html)",
+        default=None,
+        help="self-contained HTML result (default: .runs/gym/<episode>.html)",
     )
     parser.add_argument(
         "--json",
@@ -56,8 +65,21 @@ def main() -> int:
 
     try:
         with session_factory() as db:
-            result = run_first_conversation(db)
-        output = args.output.expanduser().resolve()
+            result = (
+                run_waiting_letter(db)
+                if args.episode == "waiting-letter"
+                else run_first_conversation(db)
+            )
+        default_name = (
+            "waiting-letter.html"
+            if args.episode == "waiting-letter"
+            else "footbridge-hello.html"
+        )
+        output = (
+            (args.output or WORKSPACE_ROOT / ".runs" / "gym" / default_name)
+            .expanduser()
+            .resolve()
+        )
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(render_html(result), encoding="utf-8")
         if args.json:

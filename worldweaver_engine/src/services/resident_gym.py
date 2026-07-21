@@ -14,10 +14,20 @@ from typing import Any, Iterable
 
 from sqlalchemy.orm import Session
 
+from .correspondence import (
+    SendCorrespondenceCommand,
+    acknowledge_correspondence,
+    pending_correspondence,
+    send_correspondence,
+)
 from .live_signals import read_live_signals
 from .local_speech import post_local_speech
 from .movement import move_session
-from .session_lifecycle import SessionBootstrapCommand, bootstrap_session
+from .session_lifecycle import (
+    SessionBootstrapCommand,
+    bootstrap_session,
+    retire_session_presence,
+)
 from .session_service import get_state_manager, save_state
 from .world_context import build_world_context_header
 from .world_memory import seed_location_graph
@@ -184,6 +194,84 @@ class ProductionRuleGym:
         except KeyError as exc:
             raise ValueError(f"unknown gym participant: {session_id}") from exc
 
+    def retire(self, session_id: str) -> None:
+        """End one temporary presence without erasing its durable actor."""
+
+        participant = self._participant(session_id)
+        location = str(
+            get_state_manager(session_id, self.db).get_variable("location") or ""
+        )
+        receipt = retire_session_presence(self.db, session_id=session_id)
+        self._participants.pop(session_id)
+        self._cursors.pop(session_id, None)
+        self._record(
+            "departed",
+            participant=participant,
+            location=location,
+            detail={"session_id": receipt.session_id},
+        )
+
+    def send_letter(
+        self, sender_session_id: str, recipient_actor_id: str, message: str
+    ) -> int:
+        """Send private mail through the production correspondence service."""
+
+        participant = self._participant(sender_session_id)
+        receipt = send_correspondence(
+            self.db,
+            command=SendCorrespondenceCommand(
+                sender_session_id=sender_session_id,
+                recipient_actor_id=recipient_actor_id,
+                body=message,
+            ),
+        )
+        self._record(
+            "letter_sent",
+            participant=participant,
+            detail={
+                "message_id": receipt.message_id,
+                "recipient_actor_id": receipt.recipient_actor_id,
+                "message": str(message).strip(),
+            },
+        )
+        return receipt.message_id
+
+    def check_mail(self, session_id: str) -> tuple[dict[str, Any], ...]:
+        """Offer pending mail without acknowledging it."""
+
+        participant = self._participant(session_id)
+        inbox = pending_correspondence(self.db, session_id=session_id, limit=50)
+        messages = tuple(message.as_payload() for message in inbox.messages)
+        if not messages:
+            self._record("mailbox_empty", participant=participant)
+        else:
+            for message in messages:
+                self._record(
+                    "letter_waiting",
+                    participant=participant,
+                    detail={
+                        "message_id": int(message["message_id"]),
+                        "sender": str(message["sender_name"]),
+                        "message": str(message["body"]),
+                    },
+                )
+        return messages
+
+    def acknowledge_mail(self, session_id: str, message_ids: Iterable[int]) -> None:
+        """Explicitly acknowledge mail after a participant has processed it."""
+
+        participant = self._participant(session_id)
+        receipt = acknowledge_correspondence(
+            self.db,
+            session_id=session_id,
+            message_ids=message_ids,
+        )
+        self._record(
+            "letter_acknowledged",
+            participant=participant,
+            detail={"message_ids": list(receipt.acknowledged_ids)},
+        )
+
     @staticmethod
     def _cursor_from_payload(payload: dict[str, Any]) -> _SignalCursor:
         cursor = payload.get("cursor")
@@ -346,4 +434,50 @@ def run_first_conversation(db: Session) -> GymEpisodeResult:
     gym.listen(mara.session_id)
     gym.speak(mara.session_id, "There you are.")
     gym.listen(ivo.session_id)
+    return gym.result()
+
+
+def run_waiting_letter(db: Session) -> GymEpisodeResult:
+    """Run actor-addressed delivery across a temporary session change."""
+
+    gym = ProductionRuleGym(
+        db,
+        episode="The Waiting Letter",
+        world_id="gym-waiting-letter-world",
+    )
+    gym.arrange_world(("Willow Court", "Footbridge"))
+    mara = GymParticipant(
+        session_id="gym-letter-mara",
+        actor_id="gym-letter-actor-mara",
+        display_name="Mara",
+        implementation="scripted_actor",
+    )
+    ivo = GymParticipant(
+        session_id="gym-letter-ivo-before",
+        actor_id="gym-letter-actor-ivo",
+        display_name="Ivo",
+        implementation="mechanical_listener",
+    )
+    gym.join(mara, location="Willow Court")
+    gym.join(ivo, location="Footbridge")
+    message_id = gym.send_letter(
+        mara.session_id,
+        ivo.actor_id,
+        "I will wait by the willow after the rain.",
+    )
+
+    gym.retire(ivo.session_id)
+    returned_ivo = GymParticipant(
+        session_id="gym-letter-ivo-after",
+        actor_id=ivo.actor_id,
+        display_name=ivo.display_name,
+        implementation=ivo.implementation,
+    )
+    gym.join(returned_ivo, location="Footbridge")
+
+    first_offer = gym.check_mail(returned_ivo.session_id)
+    second_offer = gym.check_mail(returned_ivo.session_id)
+    if first_offer and second_offer:
+        gym.acknowledge_mail(returned_ivo.session_id, (message_id,))
+    gym.check_mail(returned_ivo.session_id)
     return gym.result()
