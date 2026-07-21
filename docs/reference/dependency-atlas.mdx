@@ -12,7 +12,7 @@ This page is a readable map of the important runtime boundaries in WorldWeaver. 
 every file and import. That kind of graph is useful for machine-assisted investigation, but it becomes too
 dense to explain the system to a person.
 
-The map was checked against the live source tree at commit `55dcc84` on July 20, 2026. The `.ua` graph was used
+The map was checked against the live source tree at commit `179b0f9` on July 20, 2026. The `.ua` graph was used
 to suggest places to inspect, but not as current truth: it describes commit `85f55f5`, from before several
 days of architectural work.
 
@@ -101,9 +101,9 @@ extracted during this audit: canonical graph anchoring now lives in `location_ro
 entry checks, session mutation, and movement-event construction live in `movement.py`.
 
 Local speech, travel, and session lifecycle are still different: substantial rule and transaction logic lives
-inside two large route files, `src/api/game/world.py` and `src/api/game/state.py`. Movement also exposes one
-separate follow-up: it currently persists session state before recording the movement event, so that pair is
-not yet one atomic database operation.
+inside two large route files, `src/api/game/world.py` and `src/api/game/state.py`. Movement's follow-up repair is
+complete: a failed single-hop or skip-through command now rolls back session state, every movement event,
+projections, facts, and the cached in-memory state together.
 
 The gym must not call those route functions in process, duplicate their logic, or write directly to the
 database. The next architectural move is to extract those rules into typed domain services used by both:

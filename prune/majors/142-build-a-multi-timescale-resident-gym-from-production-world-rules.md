@@ -48,8 +48,10 @@ The live HTTP endpoint now authenticates, calls that service, and translates its
 
 Local speech, travel, and session lifecycle still keep substantial rule and transaction logic in
 `src/api/game/world.py` and `src/api/game/state.py`. Movement also revealed that its session-state save and
-movement-event write are separate commits today. Preserve that behavior during extraction, then repair and
-test atomicity as its own change rather than hiding new transaction semantics inside a file move.
+movement-event write were separate commits. That follow-up is now repaired separately: deferred event
+submission stages enabled projections and graph facts in the caller's transaction, movement stages its final
+session state, and one commit covers the complete single-hop or skip-through command. Tests force both an
+ordinary event failure and a final-hop failure and prove that database and cached state return to the origin.
 
 Do not start the fast gym by calling route functions, copying those rules, or writing synthetic state directly.
 Continue extracting typed production services for the behaviors a first episode needs. Live routes and the gym can

@@ -17,8 +17,8 @@ WorldWeaver has three main runtime parts.
 
 Movement, speech, objects, making, exchange, access, traces, and travel use typed commands or services. The
 engine, rather than participant prose, decides whether each attempt changes canonical state and records an
-event. The transaction boundary is not yet uniform: movement currently persists session state before it records
-the movement event. Treat atomic state-and-event persistence as active repair work, not a finished guarantee.
+event. Movement now commits its session state, hop events, projections, and fact rows atomically. Other
+route-owned rule families remain under audit, so do not generalize that guarantee beyond services that test it.
 
 The old freeform action narrator is retired. `/api/action` remains only as a `410 Gone` tombstone so old
 callers fail honestly.
