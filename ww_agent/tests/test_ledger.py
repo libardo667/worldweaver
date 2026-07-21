@@ -10,6 +10,7 @@ from time import perf_counter
 import pytest
 
 from src.runtime import ledger
+from src.runtime.process_state import ResidentProcessBinding
 from src.runtime.salience import derive_arousal, derive_grief, derive_vital
 from src.runtime.substrate import derive_afterimage, derive_baseline
 
@@ -220,6 +221,51 @@ def test_rebuild_writes_versioned_current_checkpoint_atomically(tmp_path) -> Non
     }
     assert checkpoint["state"]["research_queue"][0]["query"] == "harbor light"
     assert not list(tmp_path.glob(".*.tmp"))
+
+
+def test_resident_process_envelope_matches_full_ledger_replay(tmp_path) -> None:
+    binding = ResidentProcessBinding(
+        actor_id="actor-test",
+        hearth_shard_id="hearth:actor-test",
+        runtime_generation=3,
+        attachment_kind="city",
+        world_id="world-test",
+        city_id="alderbank",
+        session_id="session-test",
+        model_id="test/model-v1",
+    )
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="reference_process_bound",
+        payload=binding.as_dict(),
+    )
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="live_signal_cursor_advanced",
+        payload={
+            "version": 1,
+            "session_id": "session-test",
+            "shard_id": "alderbank",
+            "location": "Alderbank Commons",
+            "after_id": 14,
+            "status": "acknowledged",
+            "delivered_count": 1,
+        },
+    )
+
+    checkpointed = ledger.load_resident_process_envelope(tmp_path)
+    replayed = ledger.reduce_runtime_events(
+        ledger.load_runtime_events(tmp_path)
+    ).runtime_projection["resident_process"]
+
+    assert checkpointed == replayed
+    assert checkpointed["event_cursor"] == {
+        "cursor_version": 1,
+        "session_id": "session-test",
+        "shard_id": "alderbank",
+        "location": "Alderbank Commons",
+        "after_id": 14,
+    }
 
 
 def test_new_events_have_monotonic_sequences(tmp_path) -> None:

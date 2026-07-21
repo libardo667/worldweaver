@@ -125,8 +125,12 @@ between one minute and seven days, an optional `local_speech` early-wake class, 
 and a host boundary where delivery is no longer a forced model call. The fourth slice versions the structural
 observation and private process behind every activation, discards stale state-changing choices after a final
 recheck, and keeps the retry pending across restart. Next, finish the explicit process-checkpoint envelope—
-resident, hearth generation, attachment, adapter/model version, cursor, and bounded model-state format—before
-plugging in an open-weight recurrent prototype.
+resident, hearth generation, attachment, adapter/model version, cursor, and bounded model-state format. That
+fifth slice is now complete. The current adapter honestly binds a zero-byte `none` model state, while the same
+checkpoint restores its activity, return, action receipts, retry flag, cadence, and exact-session event cursor.
+Wrong-resident and wrong-hearth loads or generation regressions fail closed. The portable ledger rebuilds the
+derived checkpoint after host transfer. Next, define and measure the smallest bounded recurrent adapter state
+before plugging in an open-weight prototype; do not substitute a provider chat transcript or unlimited cache.
 
 ### 4. Add the private-to-public making boundary
 

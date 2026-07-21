@@ -56,6 +56,12 @@ class InferenceClient:
             timeout=httpx.Timeout(timeout),
         )
 
+    @property
+    def default_model_id(self) -> str:
+        """The model identifier used when a caller supplies no override."""
+
+        return self._default_model
+
     async def complete(
         self,
         system_prompt: str,

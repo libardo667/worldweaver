@@ -6,7 +6,9 @@
   waiting and session-bound cursor restoration, keeper-whisper wake signals, optional tick-count or elapsed-time
   bounds, and read-only observers used by operational surfaces. Cursor delivery is passed to the core without
   being converted into a forced activation. A time-bound host run changes no cognitive clock; the core keeps
-  and checkpoints its own cadence.
+  and checkpoints its own cadence. Before constructing a core it binds the private checkpoint to the loaded
+  actor, authoritative hearth generation, current attachment, adapter, and selected model. A checkpoint for a
+  different actor or hearth, or a newer generation than the active hearth, fails closed.
 - `runtime/reference_core.py` — production resident loop. It observes current-place facts, accepts a
   cursor-delivered local-speech batch without fetching it again, activates on a new local signal or slow
   baseline, permits one elective read, and accepts one final action, private continuation, or wait choice. A
@@ -18,7 +20,9 @@
   completions, or action prose.
 - `runtime/process_state.py` — small versioned resident-process fields that can be shared by the reference
   adapter and later model adapters. It defines confirmed-action receipts, their exact renderer, and the
-  deterministic one-open-activity transition used by ledger replay and normal checkpoint advancement.
+  deterministic one-open-activity transition used by ledger replay and normal checkpoint advancement. It also
+  defines the process-envelope schema and projects its content-blind city-event cursor. The current stateless
+  adapter declares a zero-byte `none` model-state format.
 - `runtime/cognitive_core.py` — audited predecessor. It is not constructed by the resident host; keep it only
   as comparison and selective migration material until its remaining useful contracts are separated.
 - `runtime/ledger.py` — append-only event history and a versioned current-state checkpoint. Major 137 is
@@ -34,6 +38,8 @@
   unversioned continuation events cannot change that state. The last versioned reference activation and an
   atomically consumed scheduled return prevent restart from repeating a recent model turn. A content-blind
   stale-choice event keeps reconsideration pending across restart until the next activation begins.
+  The same projection holds the versioned resident-process envelope and exact-session local-speech cursor;
+  both incremental checkpoint advancement and complete ledger replay use the same reducer.
 - `runtime/prompt_trace.py` — legacy-core diagnostic code; it is not wired into the production reference loop.
 - `runtime/prompt_context.py` — typed available/selected/withheld source envelope and final prose renderer.
 - `runtime/information.py` — private elective source access plus the structured provider-record contract;

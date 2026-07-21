@@ -27,6 +27,12 @@ inputs in the identity loader; they do not restore the old ownership model.
   also have a matching active generation record; dormant imports and retired sources must fail before
   identity loading creates a world attachment. Legacy homes without a manifest remain supported until
   their explicit migration.
+- The private runtime checkpoint carries one versioned resident-process envelope. It binds derived working
+  state to the durable actor, authoritative hearth shard and active generation, current city/hearth
+  attachment, reference-adapter version, selected model ID, and acknowledged local-speech cursor. Reject an
+  actor/hearth mismatch or generation regression; do not silently transplant state between residents. The
+  current API-backed adapter declares model state as `none` with a zero-byte bound. A later adapter must add
+  an explicit format and size limit rather than hiding continuity in prompts, caches, or an unbounded blob.
 - A bounded one-resident run must retire its public city session and return to the hearth before releasing
   `runtime.lock`. Operational cleanup may park an existing session without running cognition; never leave
   a stopped process looking alive in the city roster.
@@ -72,8 +78,9 @@ inputs in the identity loader; they do not restore the old ownership model.
   exact-place speech cursor. Delivery supplies facts but is not itself an explicit forced wake: the core's
   private schedule decides whether `local_speech` offers an early model turn. Delivery is never a command to
   reply. Do not replay old speech as new, advance the cursor before the core acknowledges observation, or let
-  activity elsewhere in the city trigger a resident poll. Persist only content-blind cursor position, bind
-  restoration to the exact city session, and establish a new scope after hearth or cross-city travel.
+  activity elsewhere in the city trigger a resident poll. Persist only content-blind cursor position inside
+  the resident-process checkpoint, bind restoration to the exact city session, and establish a new scope
+  after hearth or cross-city travel.
 - Relationship summaries are reducer output, not a second memory store. They may use only an
   `utterance_perceived` delivery event and a canonical reply edge; their subjective claims must retain
   the supporting ledger event IDs and never turn chat text into an unsupported belief.

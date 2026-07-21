@@ -32,6 +32,13 @@ the resident's own bounded description. It survives a rebuilt core, retains its 
 open while the resident waits or acts, and closes only when the resident explicitly finishes it. It is not
 copied into city state, expanded into a hidden task queue, or reconstructed from old unversioned prose.
 
+That checkpoint now has an explicit process envelope. It names the durable actor, authoritative hearth and
+active runtime generation, current city or hearth attachment, reference-adapter version, selected model ID,
+and acknowledged local-speech cursor. Loading the checkpoint for a different actor or hearth, or moving it
+backward to an older generation, fails instead of quietly reusing the state. The current API-backed model has
+no portable hidden state, so the envelope says exactly that: format `none`, zero bytes. It does not pretend a
+chat completion is an uninterrupted process. A later recurrent adapter must declare its own bounded format.
+
 Each continuation also chooses a return between one minute and seven days and whether exact-place speech may
 offer an earlier model turn. While that return is in the future, it replaces the ordinary five-minute model
 baseline. Speech is still delivered and acknowledged when early activation is disabled; the host simply does
@@ -76,9 +83,9 @@ python dev.py resident --city ww_alderbank --resident NAME --wake --ticks 3
 Use `--duration 15m` for natural wall-clock timing. In a city, the resident waits up to twenty seconds for new
 exact-place speech before its normal refresh. The model is called when its baseline or chosen return is due,
 when an eligible local-speech event arrives, or after an explicit wake. A recent activation time survives core
-rebuild, so restart alone is not another model turn. The bounded
-runner disables the doula and parks the resident at their hearth afterward. `--park` performs cleanup without
-cognition after an interrupted run.
+rebuild, so restart alone is not another model turn. The same checkpoint restores the live-speech cursor only
+for the exact city session to which it was bound. The bounded runner disables the doula and parks the resident
+at their hearth afterward. `--park` performs cleanup without cognition after an interrupted run.
 
 Create one plain resident with a dry run first:
 

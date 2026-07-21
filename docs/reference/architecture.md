@@ -69,14 +69,28 @@ caller's own speech, and explicitly resets when the shard or place changes. Esta
 replay archived room chat. The reference host long-polls this cursor between ordinary observations and offers
 a returned speech batch directly to the core. It advances the in-memory cursor only after that observation is
 acknowledged, then records the structural cursor position—not the speech text—in the private ledger. A restart
-restores it only for the same city session. A new attachment after hearth or cross-city travel establishes a
-fresh cursor, so speech from while the resident was away is not replayed as present hearing. A timeout or
+restores it from the resident-process checkpoint only for the same city session. A new attachment after hearth
+or cross-city travel establishes a fresh cursor, so speech from while the resident was away is not replayed as
+present hearing. A timeout or
 unavailable signal endpoint falls back to the normal timer. Delivery is currently at-least-once: a crash in
 the small window between observation and cursor recording may offer the same speech again, but does not lose it.
 
 The complete ledger file is append-only and is intended to be the resident's durable event authority. A
 versioned checkpoint is intended to hold current working state so normal ticks do not replay the entire life
 history, and it can be rebuilt from the ledger.
+
+The checkpoint's resident-process envelope says whose working state this is and where it is attached. It binds
+the durable actor ID to the authoritative hearth shard and active runtime generation, current city or hearth
+attachment, reference-adapter version, selected model ID, and acknowledged city-event cursor. A host rejects a
+different actor or hearth and refuses to move a checkpoint backward to an older generation. A legitimate
+hearth transfer advances the authoritative generation, then writes a new binding. City-to-hearth travel writes
+a new attachment and clears the city cursor.
+
+The reference adapter still makes independent API calls. Its envelope therefore declares model-state format
+`none`, format version 1, byte length 0, and maximum 0. This is deliberately not a hidden transcript or cache.
+It gives a later recurrent adapter a versioned place to declare a real bounded state format without implying
+that one exists today. The selected provider model ID is useful operational evidence but may still be a
+provider-managed alias; reproducible local-model work must bind an immutable model revision.
 
 The first persistent-process slice uses that existing checkpoint rather than adding another memory file. A
 confirmed reference-loop action adds a versioned receipt containing its kind, place, target, time, resident
@@ -94,6 +108,9 @@ closes through a ledger event at the tick's chosen time. A normal append writes 
 checkpoint; an explicit rebuild removes the former projection and snapshot files. The production loop does
 not parse cold history during an ordinary tick. Complete replay remains available for recovery, migration,
 audit, and explicitly historical tools.
+
+The derived checkpoint itself is omitted from a hearth transfer package; the portable ledger carries the
+binding evidence and rebuilds the checkpoint on the destination before the new authorized generation is bound.
 
 ## Information and action are separate
 

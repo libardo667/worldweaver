@@ -19,15 +19,22 @@ from src.familiar.weather import WeatherProvider
 from src.identity.hearth_activation import (
     HearthRuntimeLease,
     acquire_hearth_runtime,
+    load_hearth_activation,
 )
+from src.identity.hearth_manifest import manifest_path
 from src.identity.growth import repair_growth_adoptions
 from src.identity.loader import IdentityLoader, ResidentIdentity
 from src.identity.hearth_permissions import secure_hearth_permissions
 from src.inference.client import InferenceClient
 from src.runtime.effectors import WorldEffector
 from src.runtime.information import InformationAccess
-from src.runtime.ledger import append_runtime_event, load_runtime_events
+from src.runtime.ledger import (
+    append_runtime_event,
+    load_resident_process_envelope,
+    load_runtime_events,
+)
 from src.runtime.naming import slugify_resident_name
+from src.runtime.process_state import ResidentProcessBinding
 from src.runtime.reference_core import ReferenceResidentCore
 from src.runtime.travel import (
     PendingShardTravel,
@@ -107,6 +114,8 @@ class Resident:
         self._travel_retry_seconds = max(0.0, float(travel_retry_seconds))
         self._owned_world_clients: list[WorldWeaverClient] = []
         self._runtime_lease: HearthRuntimeLease | None = None
+        self._hearth_shard_id = ""
+        self._runtime_generation = 0
 
     @property
     def name(self) -> str:
@@ -135,6 +144,7 @@ class Resident:
         self._resident_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         secure_hearth_permissions(self._resident_dir)
         self._runtime_lease = acquire_hearth_runtime(self._resident_dir)
+        self._load_active_hearth_coordinates()
         try:
             await self._start_attached(
                 world_id,
@@ -210,6 +220,7 @@ class Resident:
                     f"Resident {self.name} not started — call start() first"
                 )
             self._runtime_lease = acquire_hearth_runtime(self._resident_dir)
+            self._load_active_hearth_coordinates()
         try:
             await self._run_started(
                 max_ticks=max_ticks,
@@ -491,30 +502,38 @@ class Resident:
             return current_cursor, None, False
 
     def _restore_live_signal_cursor(self, session_id: str) -> LiveSignalCursor | None:
-        """Restore only the cursor belonging to this exact city attachment."""
+        """Restore the cursor bound to this exact checkpointed city attachment."""
 
         normalized_session_id = str(session_id or "").strip()
-        events = load_runtime_events(self._resident_dir / "memory")
-        for event in reversed(events):
-            if str(event.get("event_type") or "") != "live_signal_cursor_advanced":
-                continue
-            payload = event.get("payload")
-            if not isinstance(payload, dict):
-                continue
-            if str(payload.get("session_id") or "").strip() != normalized_session_id:
-                continue
-            try:
-                shard_id = str(payload["shard_id"]).strip()
-                location = str(payload["location"]).strip()
-                after_id = int(payload["after_id"])
-            except (KeyError, TypeError, ValueError):
-                continue
-            if shard_id and location and after_id >= 0:
-                return LiveSignalCursor(
-                    shard_id=shard_id,
-                    location=location,
-                    after_id=after_id,
-                )
+        envelope = load_resident_process_envelope(self._resident_dir / "memory") or {}
+        attachment = (
+            envelope.get("attachment")
+            if isinstance(envelope.get("attachment"), dict)
+            else {}
+        )
+        cursor = (
+            envelope.get("event_cursor")
+            if isinstance(envelope.get("event_cursor"), dict)
+            else {}
+        )
+        if (
+            attachment.get("kind") != "city"
+            or str(attachment.get("session_id") or "").strip() != normalized_session_id
+            or str(cursor.get("session_id") or "").strip() != normalized_session_id
+        ):
+            return None
+        try:
+            shard_id = str(cursor["shard_id"]).strip()
+            location = str(cursor["location"]).strip()
+            after_id = int(cursor["after_id"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        if shard_id and location and after_id >= 0:
+            return LiveSignalCursor(
+                shard_id=shard_id,
+                location=location,
+                after_id=after_id,
+            )
         return None
 
     def _record_live_signal_cursor(
@@ -596,6 +615,20 @@ class Resident:
             if self._pulse_temperature is _IDENTITY_TEMPERATURE
             else self._pulse_temperature
         )
+        selected_model = (
+            self._pulse_model
+            or identity.tuning.slow_model
+            or identity.tuning.fast_model
+        )
+        model_id = (
+            selected_model
+            or str(getattr(self._llm, "default_model_id", "") or "").strip()
+        )
+        if not model_id:
+            # Synthetic clients may not expose a configured model. Real
+            # InferenceClient instances always do.
+            model_id = "unresolved-client-default"
+        self._bind_reference_process(model_id=model_id, session_id=session_id)
         workshop = Workshop(self._resident_dir / "workshop")
         effector = WorldEffector(
             ww_client=world,
@@ -617,15 +650,66 @@ class Resident:
             session_id=session_id,
             effector=effector,
             information_access=information_access,
-            model=self._pulse_model
-            or identity.tuning.slow_model
-            or identity.tuning.fast_model,
+            model=selected_model,
             temperature=pulse_temperature,
             **(
                 {"tick_seconds": self._tick_seconds}
                 if self._tick_seconds is not None
                 else {}
             ),
+        )
+
+    def _load_active_hearth_coordinates(self) -> None:
+        """Read the active generation already authorized by the runtime lease."""
+
+        if not manifest_path(self._resident_dir).exists():
+            self._hearth_shard_id = ""
+            self._runtime_generation = 0
+            return
+        activation = load_hearth_activation(self._resident_dir)
+        self._hearth_shard_id = activation.hearth_shard_id
+        self._runtime_generation = activation.runtime_generation
+
+    def _bind_reference_process(self, *, model_id: str, session_id: str) -> None:
+        """Bind checkpointed process state to authoritative host/runtime facts."""
+
+        identity = self._require_identity()
+        binding = ResidentProcessBinding(
+            actor_id=identity.actor_id,
+            hearth_shard_id=self._hearth_shard_id,
+            runtime_generation=self._runtime_generation,
+            attachment_kind=self._attachment_kind,
+            world_id=self._world_id,
+            city_id=str(self._city_id or ""),
+            session_id=str(session_id or "").strip(),
+            model_id=model_id,
+        )
+        candidate = binding.as_dict()
+        current = load_resident_process_envelope(self._resident_dir / "memory")
+        if current is not None:
+            restored = ResidentProcessBinding.from_dict(current)
+            if restored.actor_id != binding.actor_id:
+                raise RuntimeError(
+                    "resident process checkpoint belongs to a different actor"
+                )
+            if (
+                restored.hearth_shard_id
+                and binding.hearth_shard_id
+                and restored.hearth_shard_id != binding.hearth_shard_id
+            ):
+                raise RuntimeError(
+                    "resident process checkpoint belongs to a different hearth"
+                )
+            if restored.runtime_generation > binding.runtime_generation:
+                raise RuntimeError(
+                    "resident process checkpoint belongs to a newer hearth generation"
+                )
+            if restored.as_dict() == candidate:
+                return
+        append_runtime_event(
+            self._resident_dir / "memory",
+            event_type="reference_process_bound",
+            payload=candidate,
         )
 
     async def _apply_travel_request(

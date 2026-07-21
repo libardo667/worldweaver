@@ -137,6 +137,26 @@ custody, access, object revisions, and other mechanical preconditions after the 
 precondition contracts should carry their own stable record revisions rather than broadening this fence into
 a prose comparison.
 
+## Fifth slice — explicit process checkpoint envelope (2026-07-20)
+
+The existing private runtime checkpoint now contains one versioned process envelope. It binds the reduced
+working state to the durable actor ID, authoritative hearth shard and active runtime generation, current city
+or hearth attachment, reference-adapter version, selected model ID, and acknowledged exact-session speech
+cursor. A different actor or hearth cannot silently reuse it, and a host cannot move it backward to an older
+generation. A legitimate newer hearth generation updates the binding; a city-to-hearth change clears the city
+cursor.
+
+The current reference adapter has no portable hidden model state. Its envelope records that fact as format
+`none`, format version 1, byte length 0, and maximum 0 instead of disguising a transcript or provider cache as
+continuity. The selected provider model ID is recorded, while documentation calls out that a provider-managed
+alias is not the immutable revision a reproducible local model will require.
+
+Synthetic tests prove checkpoint and full-ledger replay agreement, same-session cursor restoration, active
+hearth-generation binding, clean generation and attachment changes, idempotent rebinding, and rejection when
+another resident attempts to load the state. The derived checkpoint remains rebuildable rather than portable;
+the append-only ledger carries its binding evidence through an encrypted hearth package and reconstructs it on
+the destination before the new authorized generation is bound.
+
 ## Files Affected
 
 - `ww_agent/src/resident.py`
@@ -153,7 +173,7 @@ a prose comparison.
 
 ## Acceptance Criteria
 
-- [ ] One versioned private checkpoint is sufficient to stop and restore a synthetic resident process without
+- [x] One versioned private checkpoint is sufficient to stop and restore a synthetic resident process without
   reconstructing open activities from recent prose.
 - [x] After a confirmed action, the resident can later identify that action from a bounded typed receipt even
   when the ordinary scene does not show the actor its own public trace.

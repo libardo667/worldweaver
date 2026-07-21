@@ -52,8 +52,10 @@ private writing.
 When a bounded run stops and a later run rebuilds the reference core, the private checkpoint restores a
 bounded list of exact confirmed-action receipts. This preserves simple bookkeeping such as a recent mark's
 place and trace ID. It also restores one explicitly continued private activity, its stable ID, chosen return,
-and early-wake preference. It does not restore a hidden model conversation or copy action prose into the next
-prompt.
+early-wake preference, and the acknowledged local-speech cursor for that exact city session. The checkpoint is
+bound to the resident's actor ID, active hearth generation, attachment, adapter, and selected model. It fails
+if another resident tries to load it. The current model-state field is explicitly `none` and zero bytes: this
+restores structured process bookkeeping, not a hidden model conversation or action prose in the next prompt.
 
 If the current place or private checkpoint changes while the model is answering, a state-changing answer is
 discarded before it reaches the world. The run summary reports a stale choice and its structural change class,

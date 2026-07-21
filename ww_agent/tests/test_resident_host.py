@@ -4,12 +4,23 @@ import asyncio
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
+import pytest
+
 import src.resident as resident_module
 from src.familiar.local_world import LocalWorld
 from src.familiar.config import HearthConfig
+from src.identity.hearth_activation import (
+    acquire_hearth_runtime,
+    initialize_hearth_activation,
+)
+from src.identity.hearth_manifest import initialize_hearth_manifest
 from src.identity.loader import LoopTuning, ResidentIdentity
 from src.resident import Resident
-from src.runtime.ledger import load_runtime_events
+from src.runtime.ledger import (
+    load_resident_process_envelope,
+    load_runtime_checkpoint,
+    load_runtime_events,
+)
 from src.runtime.reference_core import ReferenceResidentCore
 from src.runtime.travel import PendingShardTravel, TravelRequest
 from src.world.city_world import CityWorld
@@ -652,6 +663,10 @@ def test_city_host_wakes_early_for_cursor_delivered_speech(tmp_path):
 
 def test_live_signal_cursor_restores_only_for_the_same_city_session(tmp_path):
     resident = _resident(tmp_path, _FakeCityClient())
+    resident._bind_reference_process(
+        model_id="test/model",
+        session_id="test-resident-city-session",
+    )
     cursor = LiveSignalCursor(
         shard_id="alderbank", location="Alderbank Commons", after_id=19
     )
@@ -668,6 +683,174 @@ def test_live_signal_cursor_restores_only_for_the_same_city_session(tmp_path):
 
     assert restored == cursor
     assert new_attachment is None
+
+
+def test_reference_process_checkpoint_binds_identity_attachment_and_model(tmp_path):
+    resident = _resident(tmp_path, _FakeCityClient())
+    resident._hearth_shard_id = "hearth-test"
+    resident._runtime_generation = 4
+
+    resident._bind_reference_process(
+        model_id="research/model-v1",
+        session_id="test-resident-city-session",
+    )
+    resident._bind_reference_process(
+        model_id="research/model-v1",
+        session_id="test-resident-city-session",
+    )
+
+    envelope = load_resident_process_envelope(resident._resident_dir / "memory")
+    checkpoint = load_runtime_checkpoint(resident._resident_dir / "memory")
+    assert envelope is not None
+    assert envelope["process_envelope_version"] == 1
+    assert envelope["actor_id"] == "actor-test-resident"
+    assert envelope["hearth"] == {
+        "shard_id": "hearth-test",
+        "runtime_generation": 4,
+    }
+    assert envelope["attachment"] == {
+        "kind": "city",
+        "world_id": "test-world",
+        "city_id": "",
+        "session_id": "test-resident-city-session",
+    }
+    assert envelope["adapter"] == {
+        "id": "worldweaver.reference-resident",
+        "version": 1,
+    }
+    assert envelope["model"] == {"id": "research/model-v1"}
+    assert envelope["model_state"] == {
+        "format": "none",
+        "format_version": 1,
+        "byte_length": 0,
+        "max_bytes": 0,
+    }
+    assert checkpoint["state"]["runtime_projection"]["resident_process"] == envelope
+    assert _event_types(resident).count("reference_process_bound") == 1
+
+
+def test_reference_process_uses_the_authoritative_active_hearth_generation(tmp_path):
+    resident = _resident(tmp_path, _FakeCityClient())
+    identity_dir = resident._resident_dir / "identity"
+    identity_dir.mkdir(parents=True)
+    (identity_dir / "resident_id.txt").write_text(
+        "actor-test-resident\n",
+        encoding="utf-8",
+    )
+    manifest = initialize_hearth_manifest(resident._resident_dir)
+    initialize_hearth_activation(resident._resident_dir)
+    resident._runtime_lease = acquire_hearth_runtime(resident._resident_dir)
+    try:
+        resident._load_active_hearth_coordinates()
+        resident._bind_reference_process(
+            model_id="test/model",
+            session_id="test-resident-city-session",
+        )
+    finally:
+        resident._release_runtime_lease()
+
+    envelope = load_resident_process_envelope(resident._resident_dir / "memory")
+    assert envelope["hearth"] == {
+        "shard_id": manifest.hearth_shard_id,
+        "runtime_generation": manifest.runtime_generation,
+    }
+
+
+def test_reference_process_restore_rejects_a_different_resident(tmp_path):
+    resident = _resident(tmp_path, _FakeCityClient())
+    resident._bind_reference_process(
+        model_id="test/model",
+        session_id="test-resident-city-session",
+    )
+    resident._identity = ResidentIdentity(
+        name="other",
+        actor_id="actor-other",
+        soul="You are Other.",
+        canonical_soul="You are Other.",
+        growth_soul="",
+        vibe="",
+        core="",
+        voice_seed=[],
+        tuning=LoopTuning(),
+    )
+
+    with pytest.raises(RuntimeError, match="different actor"):
+        resident._bind_reference_process(
+            model_id="test/model",
+            session_id="test-resident-city-session",
+        )
+
+
+def test_reference_process_restore_rejects_a_different_hearth(tmp_path):
+    resident = _resident(tmp_path, _FakeCityClient())
+    resident._hearth_shard_id = "hearth-original"
+    resident._runtime_generation = 4
+    resident._bind_reference_process(
+        model_id="test/model",
+        session_id="test-resident-city-session",
+    )
+    resident._hearth_shard_id = "hearth-other"
+
+    with pytest.raises(RuntimeError, match="different hearth"):
+        resident._bind_reference_process(
+            model_id="test/model",
+            session_id="test-resident-city-session",
+        )
+
+
+def test_reference_process_restore_rejects_a_generation_regression(tmp_path):
+    resident = _resident(tmp_path, _FakeCityClient())
+    resident._hearth_shard_id = "hearth-test"
+    resident._runtime_generation = 5
+    resident._bind_reference_process(
+        model_id="test/model",
+        session_id="test-resident-city-session",
+    )
+    resident._runtime_generation = 4
+
+    with pytest.raises(RuntimeError, match="newer hearth generation"):
+        resident._bind_reference_process(
+            model_id="test/model",
+            session_id="test-resident-city-session",
+        )
+
+
+def test_reference_process_generation_and_attachment_advance_without_losing_state(
+    tmp_path,
+):
+    resident = _resident(tmp_path, _FakeCityClient())
+    resident._hearth_shard_id = "hearth-test"
+    resident._runtime_generation = 4
+    resident._bind_reference_process(
+        model_id="test/model",
+        session_id="test-resident-city-session",
+    )
+    cursor = LiveSignalCursor(
+        shard_id="alderbank", location="Alderbank Commons", after_id=21
+    )
+    resident._record_live_signal_cursor(
+        previous=None,
+        current=cursor,
+        session_id="test-resident-city-session",
+        status="acknowledged",
+    )
+
+    resident._runtime_generation = 5
+    resident._bind_reference_process(
+        model_id="test/model",
+        session_id="test-resident-city-session",
+    )
+
+    advanced = load_resident_process_envelope(resident._resident_dir / "memory")
+    assert advanced["hearth"]["runtime_generation"] == 5
+    assert resident._restore_live_signal_cursor("test-resident-city-session") == cursor
+
+    resident._attachment_kind = "hearth"
+    resident._bind_reference_process(model_id="test/model", session_id="")
+
+    at_hearth = load_resident_process_envelope(resident._resident_dir / "memory")
+    assert at_hearth["attachment"]["kind"] == "hearth"
+    assert at_hearth["event_cursor"] is None
 
 
 def test_cancelling_a_live_signal_wait_releases_the_hearth_lease(tmp_path):
