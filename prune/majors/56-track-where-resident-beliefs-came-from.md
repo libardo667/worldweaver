@@ -2,9 +2,11 @@
 
 ## Status
 
-The runtime already records provenance on information sources, actions, relationship edges, world facts,
-and many subjective facts. What is missing is one clear belief record that retains its evidence and can
-represent uncertainty or disagreement without silently overwriting an earlier belief.
+The 2026-07-20 source audit made provenance visible both before and after an elective read, preserved egress
+and selection details through the prompt boundary, and removed a summary-based pseudo-history source. The
+runtime already records provenance on actions, relationship edges, world facts, and many subjective facts.
+What is still missing is one clear belief record that retains its evidence and can represent uncertainty or
+disagreement without silently overwriting an earlier belief.
 
 ## Problem
 

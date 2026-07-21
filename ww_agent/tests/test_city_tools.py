@@ -512,7 +512,9 @@ class _ReadClient:
 
 
 def test_news_source_reads_headlines():
-    registry = build_city_source_registry(client=_ReadClient())
+    from src.world.city_tools import _make_news_source
+
+    registry = InformationSourceRegistry([_make_news_source(_ReadClient())])
     res = asyncio.run(registry.read("news", ""))
     assert res["ok"] and "Fog returns to the Sunset" in _record_text(res)
     assert all(item["selection_mode"] == "chronological" for item in res["records"])
@@ -561,11 +563,11 @@ def test_full_context_grants_the_whole_catalog(tmp_path):
     assert set(registry.names) >= {
         "eats",
         "recall",
-        "news",
         "places",
         "travel",
     }
     assert "chatter" not in registry.names
+    assert "news" not in registry.names
 
 
 def test_alderbank_gets_its_declared_sources_without_san_francisco_material():
@@ -820,10 +822,13 @@ def test_chatter_excludes_the_resident_itself():
 
 
 def test_source_records_distinguish_external_and_authored_material():
-    registry = build_city_source_registry(client=_ReadClient(), session_id="s1")
-    news = asyncio.run(registry.read("news", ""))
+    from src.world.city_tools import _make_news_source
+
+    news_registry = InformationSourceRegistry([_make_news_source(_ReadClient())])
+    news = asyncio.run(news_registry.read("news", ""))
     assert news["provenance"] == "world-egress"
     assert news["egress"] is True
+    registry = build_city_source_registry(client=_ReadClient(), session_id="s1")
     assert (
         asyncio.run(registry.read("eats", "the Mission"))["provenance"]
         == "authored-reference"

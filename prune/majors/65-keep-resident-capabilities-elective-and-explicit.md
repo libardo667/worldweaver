@@ -3,8 +3,10 @@
 ## Status
 
 The shared resident runtime already has an information-source registry and explicit capabilities for city
-information, local files, recall, measurement, travel, traces, gifts, and hearth work. Exact local speech
-and direct action results are unavoidable perception; broader information is requested through a tool.
+information, local files, recall, measurement, travel, traces, gifts, and hearth work. The 2026-07-20 source
+audit now carries scope and provenance through the actual prompt and withdraws sources whose access contract
+is not real yet. Exact local speech and direct action results are unavoidable perception; broader information
+is requested through a typed read.
 
 This replaces the older idea that a system should infer hidden desires across a population and grant new
 tools without anyone knowing why. Capabilities should be understandable, scoped, and reviewable.
@@ -30,11 +32,11 @@ Each capability declares:
 The automatic prompt lists available capability names and short descriptions. Content arrives only after
 the resident chooses a source or performs an action.
 
-Embodied perception is not a capability lookup. A resident who enters a place is exposed to the basic
-local sensory field: the shape of the place, visible nearby objects, co-present people, speech occurring in
-that exact place, and material changes strong enough to be locally perceptible. The resident does not elect
-whether those signals reach its senses. It still decides what matters, what to dwell on, and whether to act.
-Broader feeds, archives, detailed records, distant places, and external networks remain elective.
+Embodied perception is not a capability lookup. The current small loop receives its exact place, co-present
+people, new speech at that place, attributed visible marks, and reachable destinations. Visible objects and
+typed environmental changes belong in this unavoidable field once their neutral projection contracts exist;
+they are not supplied today by invented scene prose. Broader feeds, archives, detailed records, distant
+places, and external networks remain elective.
 
 ## Build next
 
@@ -46,6 +48,8 @@ Broader feeds, archives, detailed records, distant places, and external networks
 6. Define how a new capability is proposed and reviewed without mining private language or rewarding a
    resident for asking a steward.
 7. Keep external egress under the stricter policy in Minor 122.
+8. Define an authenticated citywide publication channel before restoring the elective `chatter` source.
+9. Build any public-history read from typed events with evidence IDs rather than generated summaries.
 
 ## Boundaries
 
@@ -60,7 +64,8 @@ Broader feeds, archives, detailed records, distant places, and external networks
 ## Acceptance criteria
 
 - [x] Information sources are selected electively through one shared registry.
-- [x] File reading, recall, measurement, city information, travel, and traces carry source provenance.
+- [x] File reading, recall, measurement, city information, travel, and traces carry source provenance through
+  source advertisement and returned prompt material.
 - [x] World-changing actions pass through typed engine contracts.
 - [ ] Every capability has an inspectable grant, scope, provenance, and limit record.
 - [ ] A resident can inspect and revoke nonessential capabilities.

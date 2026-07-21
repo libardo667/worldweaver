@@ -79,8 +79,15 @@ audit, and explicitly historical tools.
 One provisional `read` choice reads one named information source. It does not change the world. A final `act`
 choice speaks, moves, writes, or invokes one typed world command.
 
-Information providers return structured records with source, time, locality, visibility, and freshness.
-Rendering those records into model text happens only at the inference boundary.
+Information providers return structured records with source, egress, provenance, time, locality, visibility,
+freshness, and selection method. Those terms are visible when the source is advertised and repeated with the
+returned records. Rendering records into model text happens only at the inference boundary, inside markers
+that identify the material as source content rather than runtime instructions.
+
+The production reference loop does not cache reads by default, and live or immediate records cannot enter the
+optional legacy cache. The public-RSS `news` source, the unwritable citywide `chatter` source, and the
+summary-based `investigate` source are not in the production catalog. Their replacement requirements are
+recorded in the elective-source audit and active capability work.
 
 The returned prose is available to one final inference call but is not copied into the
 permanent resident ledger. The ledger keeps a content-blind access receipt with source, outcome, provenance,

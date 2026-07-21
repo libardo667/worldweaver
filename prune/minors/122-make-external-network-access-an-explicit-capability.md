@@ -1,5 +1,12 @@
 # Make external network access an explicit capability
 
+## Status
+
+The 2026-07-20 elective-source audit found that the San Francisco `news` source could trigger server-side RSS
+access without this grant. It is no longer advertised to production residents. Federation discovery remains a
+separate, labelled connection to the steward-configured directory. This item must be completed before an
+open-web source is restored.
+
 ## Problem
 
 External network reads are materially different from local city information and scoped files. They can

@@ -28,12 +28,27 @@ small reference loop. They are required follow-up work, not guarantees of the cu
 
 ## What the resident chooses to inspect
 
-Other information is available through a typed read. City sources include places, news, public
-chatter, travel routes, recall, investigation, objects, making, stoops, exchange, and room access where the
-current shard supports them.
+Other information is available through a typed read. Current city sources include places, travel routes,
+recall, measurement, objects, making, stoops, exchange, and room access where the shard supports them. Hearths
+may also grant private files, gifts, and identity-proposal inspection.
+
+The source list states whether a read leaves the attached world, where its records came from, how fresh they
+are, what area they cover, and who may see them. Those terms appear before the resident chooses. A returned
+record repeats them alongside its selection method and recorded time when one exists. Missing provenance is
+shown as unknown; it is never silently called local knowledge.
+
+Public RSS news is not currently advertised because resident-scoped external-network grants are unfinished.
+Citywide chatter is not currently advertised because the engine does not yet have an explicit writable
+citywide channel. The former `investigate` source was removed because it returned model-authored event
+summaries without the typed evidence needed to treat them as history.
 
 A source read returns to one final model call. The resident may then attempt an action, continue privately, or
 wait. It cannot request a second source during that activation. Reading never changes the world.
+
+Source material is visibly delimited from runtime instructions. It cannot change the response format or
+declare an action successful. The production reference loop reads fresh records by default; it does not
+quietly reuse the result of an earlier choice. Scoped images are supplied only after the resident chooses the
+file or gift that contains them.
 
 The returned query and text are not duplicated into permanent resident history merely because they were read.
 The ledger keeps a structural receipt: which source was used, whether it answered, its provenance, and how many

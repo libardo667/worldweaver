@@ -1087,8 +1087,9 @@ def build_city_source_registry(
     if legacy_or_sf:
         sources.append(_EATS_SOURCE)
     if client is not None:
-        if legacy_or_sf:
-            sources.append(_make_news_source(client))
+        # Do not advertise ``news`` yet. Reading it can make the shard fetch a
+        # public RSS feed, and the resident-scoped egress grants required by
+        # Minor 122 do not exist yet.
         sources.append(_make_places_source(client))
         # Do not advertise ``chatter`` yet. The engine can read the reserved
         # ``__city__`` channel, but its current location-bound chat endpoint cannot

@@ -14,7 +14,8 @@ The project now has:
 - a small production resident loop with local speech, physical traces, one elective read, and typed actions;
 - a completed name-only Levi run showing that the small loop can notice live human speech, use shared world
   actions, and park cleanly, with two prompt-pipeline leaks found and fixed afterward;
-- citywide conversation available only through an elective information tool;
+- citywide speech absent from automatic perception, with its former elective source withheld until the
+  engine has an explicit writable citywide channel;
 - durable objects, making, giving, exchange, room access, and bounded object stoops;
 - a fictional test town, Alderbank, with four game-native resident homes and bounded human/resident play;
 - a place-centered public client;
@@ -62,6 +63,12 @@ creator can no longer apply changes. A disposable signed resident has completed 
 protected scene access, and clean leave with no model or prose involved. The supported creator now makes one
 reviewable resident at a time with only a chosen name, empty ledger, dormant hearth, public identity card, and
 host-sealed key.
+
+The elective information audit is also complete. The live prompt now shows source egress, provenance,
+freshness, locality, and visibility before a resident chooses, and repeats that context with returned records.
+The reference loop does not cache reads by default, canonical ledger keepsakes are reachable through recall,
+and file images reach only the chosen after-read call. `Investigate`, public RSS `news`, and citywide `chatter`
+are withheld until typed history, resident-scoped network grants, and a real citywide channel exist.
 
 That first run is now complete. Levi used an empty ledger and name-only identity, responded promptly to live
 human speech, and parked cleanly. It also exposed two prompt-pipeline leaks: archived room chat was treated as
