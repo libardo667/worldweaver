@@ -97,10 +97,14 @@ Both views use only synthetic utterances, service receipts, and signal reads. Th
 presentation, not narrator-authored events. The mechanical listener is a transparent fixture, not a model
 resident and not a preferred behavior policy.
 
-This completes only the first fast service-level episode. Next, repeat it through authenticated HTTP and
-compare receipts. Then extract and repair the current direct-message routes so delayed correspondence uses the
-same shared boundary. Do not add controlled time, checkpoint forks, model calls, or training records until the
-fast and HTTP paths agree.
+An automated conformance test now repeats the episode through FastAPI with two separately registered human
+actors. It verifies that an anonymous signal read is refused, supplies each actor's bearer token, and compares
+the resulting chat rows, world events, and final locations with the service-level run. They match. This is
+in-process HTTP parity, not a container or public-network proof.
+
+Next, extract and repair the current direct-message routes so delayed correspondence uses the same shared
+boundary. Do not add controlled time, checkpoint forks, model calls, or training records until correspondence
+has production-service and HTTP coverage of its delivery and acknowledgement rules.
 
 ## Files Affected
 

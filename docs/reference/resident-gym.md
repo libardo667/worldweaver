@@ -41,12 +41,16 @@ It does **not** prove that a model can converse well, remember a relationship, m
 like a person. The mechanical listener is a transparent test fixture, not a resident model and not a desired
 personality.
 
-## Next boundaries
+## HTTP conformance
 
-The next conformance version will repeat the same episode through authenticated HTTP and compare it with the
-fast service-level run. Correspondence must then be moved below the route layer and repaired before the gym
-claims to cover delayed communication. Controlled time, checkpoint forks, model adapters, and training data
-come after those shared boundaries are proven.
+An automated conformance test repeats the episode through FastAPI with two separately registered human actors.
+It proves that anonymous access is refused, supplies each actor's bearer token, and compares the resulting
+chat rows, world events, and final locations with the fast service-level episode. They match. This is an
+in-process HTTP proof, not a container or public-network test.
+
+Correspondence must now be moved below the route layer and repaired before the gym claims to cover delayed
+communication. Controlled time, checkpoint forks, model adapters, and training data come after those shared
+boundaries are proven.
 
 Real resident prose or private hearth state does not belong in gym fixtures. Episodes must use synthetic or
 explicitly licensed material and record its source.

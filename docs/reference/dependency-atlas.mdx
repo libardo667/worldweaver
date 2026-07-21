@@ -131,9 +131,11 @@ movement, location-scoped silence, and resumed delivery after reunion. Its termi
 only service receipts and exact signal reads. The mechanical listener is a transparent fixture, not a model
 resident or a claim about desirable behavior.
 
-The fast gym calls the service boundary without HTTP overhead. A slower conformance run will call the same
-feature through HTTP and compare receipts. This is how “same physics” becomes something we can test rather
-than a slogan.
+The fast gym calls the service boundary without HTTP overhead. An automated conformance test repeats the same
+episode through FastAPI with two separately registered actors and bearer-token proof. It rejects an anonymous
+read and matches the service run's chat rows, world events, and final locations. This proves in-process HTTP
+parity, not container or public-network behavior. It is how “same physics” becomes something we can test
+rather than a slogan.
 
 ## Current code anchors
 
@@ -146,7 +148,7 @@ than a slogan.
 | Resident private continuity | `ww_agent/src/runtime/ledger.py` and `process_state.py` | Live ledger and working checkpoint |
 | Resident city boundary | `ww_agent/src/world/client.py` and engine resident protocol services | Live signed request path |
 | Reusable world services | `consequence_objects.py`, `material_making.py`, `space_access.py`, `object_exchange.py`, `world_stoops.py`, `location_routes.py`, `movement.py`, `local_speech.py`, `session_lifecycle.py`, and `shard_travel.py` | Live production seam for the first gym scenarios |
-| Resident gym | `services/resident_gym.py`, `services/gym_presentation.py`, and `scripts/resident_gym.py` | First deterministic service-level episode; HTTP parity and controlled time remain |
+| Resident gym | `services/resident_gym.py`, `services/gym_presentation.py`, and `scripts/resident_gym.py` | First deterministic episode and authenticated in-process HTTP parity; controlled time remains |
 | HTTP adapters | `src/api/game/world.py` and `state.py` | Live; authenticate, validate request shapes, call services, and translate receipts |
 | Canonical event path | `event_submission.py` → `rules/reducer.py` → state/database/event services | Live; audit and simplify, do not casually delete |
 | Federation | `src/api/federation/routes.py` and federation services | Live directory, trust, discovery, and travel path |

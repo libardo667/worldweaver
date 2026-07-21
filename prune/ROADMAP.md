@@ -174,9 +174,11 @@ and stoop services.
 The first deterministic service-level episode now runs with `python dev.py gym`. A scripted participant and a
 mechanical listener share a place, exchange speech, separate, prove that old-place speech does not follow the
 listener, and reunite. Every state change and signal read uses production services, and a factual terminal and
-browser view make the run inspectable without adding narration. Next, repeat the same episode through
-authenticated HTTP and compare structural receipts. Then extract and repair correspondence before claiming
-delayed-communication coverage; accelerated time and model calls still come later.
+browser view make the run inspectable without adding narration. An automated FastAPI replay now uses two
+separately registered actors, refuses anonymous access, and matches the service run's chat rows, world events,
+and final locations. That proves in-process HTTP parity, not container or network behavior. Next, extract and
+repair correspondence before claiming delayed-communication coverage; accelerated time and model calls still
+come later.
 
 ### 8. Train several resident model families
 
