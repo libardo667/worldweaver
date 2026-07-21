@@ -54,8 +54,8 @@ class CityWorld:
     ):
         self._client = client
         self._sources = source_registry
-        # Incubation (arrival quarantine): set per tick by the core. While True, the
-        # citywide `chatter` pull is sealed — neither advertised nor runnable.
+        # Incubation (arrival quarantine): retained for the legacy core while the
+        # reference loop remains independent of that policy.
         self.incubating = False
         self._hearth_available = bool(hearth_available)
         self._pending_travel: TravelRequest | None = None
@@ -64,36 +64,27 @@ class CityWorld:
         scene = await self._client.get_scene(session_id)
         if self._sources:
             sources = self._sources.list()
-            # Incubation: the citywide `chatter` pull is the CHOSEN seam into the commons —
-            # closed until the resident is grounded, so a new arrival cannot reach for the
-            # current it would drift onto. Local-knowledge sources (eats/recall/places) stay.
+            # A legacy registry may still contain chatter. Keep its old incubation
+            # behavior even though the production builder no longer advertises it.
             if getattr(self, "incubating", False):
                 sources = [
                     source
                     for source in sources
                     if getattr(source, "name", "") != "chatter"
                 ]
-            # Provenance honesty (Minor 56): advertise local-knowledge sources as things the
-            # resident KNOWS or senses first-hand — spoken as its own knowing, never as a
-            # lookup. A future world-egress source would be advertised as a deliberate reach.
-            known = [
-                source for source in sources if source.provenance != "world-egress"
-            ]
-            egress = [
-                source for source in sources if source.provenance == "world-egress"
-            ]
             scene.affordances = list(getattr(scene, "affordances", []) or []) + [
                 WorldAffordance(
                     source_id=f"source:{source.name}",
                     name=str(source.name or "").strip(),
                     description=str(source.description or "").strip(),
-                    provenance=str(source.provenance or "local-knowledge"),
+                    egress=bool(getattr(source, "egress", False)),
+                    provenance=str(source.provenance or "unknown"),
                     freshness=str(source.freshness or "unknown"),
                     locality=str(source.locality or "unknown"),
                     visibility=str(source.visibility or "private"),
                     selection_mode=str(source.selection_mode or "query"),
                 )
-                for source in [*known, *egress]
+                for source in sources
             ]
         return scene
 
@@ -245,14 +236,6 @@ class CityWorld:
         if self._hearth_available:
             facts["travel"] += "; move home to withdraw to your private hearth"
         return facts
-
-    def bind_source_drive(self, drive: Any) -> None:
-        """Late-bind the resident's drive vector into the source registry, so ``chatter``
-        pull can rank citywide chat by soul-resonance (Major 60). The core calls this
-        once it has built the drive vector on its first tick."""
-        bind = getattr(self._sources, "bind_drive", None)
-        if callable(bind):
-            bind(drive)
 
     async def close(self) -> None:
         # The transport is shared across residents; the runner owns closing it.

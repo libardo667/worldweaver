@@ -65,7 +65,8 @@ class WorldAffordance:
     source_id: str
     name: str
     description: str
-    provenance: str = "local-knowledge"
+    egress: bool = False
+    provenance: str = "unknown"
     freshness: str = "unknown"
     locality: str = "unknown"
     visibility: str = "private"
@@ -961,9 +962,8 @@ class WorldWeaverClient:
                 source_id=str(item.get("source_id", "") or ""),
                 name=str(item.get("name", "") or ""),
                 description=str(item.get("description", "") or ""),
-                provenance=str(
-                    item.get("provenance", "local-knowledge") or "local-knowledge"
-                ),
+                egress=bool(item.get("egress", False)),
+                provenance=str(item.get("provenance", "unknown") or "unknown"),
                 freshness=str(item.get("freshness", "unknown") or "unknown"),
                 locality=str(item.get("locality", "unknown") or "unknown"),
                 visibility=str(item.get("visibility", "private") or "private"),

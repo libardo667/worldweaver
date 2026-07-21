@@ -8,55 +8,28 @@ they can choose to inspect instead of a prompt that constantly narrates the city
 The registry is selected from the current node's city identity and declared features, so
 an Alderbank resident does not receive San Francisco knowledge or unavailable game tools.
 
-**Local-first, by construction.** Every source here is computed locally and sends nothing
-off the machine. The San Francisco ``eats`` guide, for example, is local pack knowledge.
+Most sources read records from the attached shard. Sources that contact a federation
+registry or the public web are labelled as egress, rather than being passed off as local
+knowledge. The San Francisco ``eats`` guide is project-authored reference material.
 """
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from src.runtime.drive import SLICE_WEIGHTS, _cosine
 from src.runtime.information import (
     InformationSource,
     InformationSourceRegistry,
-    PROVENANCE_LOCAL_PERCEPTION,
+    PROVENANCE_AUTHORED_REFERENCE,
+    PROVENANCE_FEDERATION_RECORD,
+    PROVENANCE_PARTICIPANT_EXPRESSION,
+    PROVENANCE_SHARD_RECORD,
+    PROVENANCE_WORLD_EGRESS,
     information_record_id,
     resident_information_sources,
 )
-
-
-@dataclass
-class _DriveHolder:
-    """A late-bound slot for the resident's drive vector. The source registry is built in
-    resident.py before the CognitiveCore exists; the core builds the drive vector lazily
-    on its first tick and then binds it here, so the ``chatter`` pull can rank the
-    citywide feed by soul-resonance. Until bound (or with no embedder), ``drive`` is
-    None and the pull falls back to recency — never dark."""
-
-    drive: Any = None
-
-
-class CitySourceRegistry(InformationSourceRegistry):
-    """City-contributed providers over the shared resident source registry."""
-
-    def __init__(
-        self,
-        sources: list[InformationSource],
-        *,
-        drive_holder: "_DriveHolder | None" = None,
-    ):
-        super().__init__(sources)
-        self._drive_holder = drive_holder
-
-    def bind_drive(self, drive: Any) -> None:
-        """Late-bind the resident's drive vector (the core calls this once it's built)."""
-        if self._drive_holder is not None:
-            self._drive_holder.drive = drive
-
 
 # ---------------------------------------------------------------------------
 # eats — the "false egress" SF foodie guide (local data, worldly feel)
@@ -211,9 +184,10 @@ def _eats_records(arg: str) -> dict[str, Any]:
 
 _EATS_SOURCE = InformationSource(
     name="eats",
-    description="find a bite near a San Francisco neighborhood (query: neighborhood)",
+    description="read the project's undated San Francisco food guide (query: neighborhood)",
     run=_eats_records,
-    freshness="stable",
+    provenance=PROVENANCE_AUTHORED_REFERENCE,
+    freshness="undated",
     locality="San Francisco",
     selection_mode="neighborhood_match",
 )
@@ -241,8 +215,11 @@ def _make_news_source(client: Any) -> InformationSource:
 
     return InformationSource(
         name="news",
-        description="catch the day's San Francisco news (query may be blank)",
+        description="read externally fetched San Francisco news headlines (query may be blank)",
         run=_run,
+        egress=True,
+        provenance=PROVENANCE_WORLD_EGRESS,
+        freshness="recent-cache",
         locality="San Francisco",
         visibility="public",
         selection_mode="chronological",
@@ -270,8 +247,10 @@ def _make_places_source(client: Any) -> InformationSource:
 
     return InformationSource(
         name="places",
-        description="see what landmarks are near a place (query: place)",
+        description="find city-pack landmarks near a named place (query: place)",
         run=_run,
+        provenance=PROVENANCE_AUTHORED_REFERENCE,
+        freshness="pack-version",
         locality="city",
         visibility="public",
         selection_mode="proximity",
@@ -361,7 +340,7 @@ def _make_objects_source(client: Any, session_id: str) -> InformationSource:
         name="objects",
         description="look at what you carry and what durable objects are here (query: optional object detail)",
         run=_run,
-        provenance=PROVENANCE_LOCAL_PERCEPTION,
+        provenance=PROVENANCE_SHARD_RECORD,
         freshness="live",
         locality="current place",
         visibility="local",
@@ -450,7 +429,7 @@ def _make_making_source(client: Any, session_id: str) -> InformationSource:
         name="making",
         description="see what materials and recipes are available at your exact place (query: optional material or recipe)",
         run=_run,
-        provenance=PROVENANCE_LOCAL_PERCEPTION,
+        provenance=PROVENANCE_SHARD_RECORD,
         freshness="live",
         locality="current place",
         visibility="local",
@@ -600,7 +579,7 @@ def _make_exchanges_source(client: Any, session_id: str) -> InformationSource:
         name="exchanges",
         description="review your object exchanges or exact swaps available with people here (query: optional person or object)",
         run=_run,
-        provenance=PROVENANCE_LOCAL_PERCEPTION,
+        provenance=PROVENANCE_SHARD_RECORD,
         freshness="live",
         locality="current place and actor-scoped history",
         visibility="private",
@@ -734,7 +713,7 @@ def _make_access_source(client: Any, session_id: str) -> InformationSource:
         name="access",
         description="inspect or manage entry rules for one exact named place (query: required exact place name)",
         run=_run,
-        provenance=PROVENANCE_LOCAL_PERCEPTION,
+        provenance=PROVENANCE_SHARD_RECORD,
         freshness="live",
         locality="named exact place",
         visibility="private",
@@ -864,7 +843,7 @@ def _make_stoops_source(client: Any, session_id: str) -> InformationSource:
         name="stoops",
         description="see stoops at your exact place, or look inside one by name (query: optional stoop name)",
         run=_run,
-        provenance=PROVENANCE_LOCAL_PERCEPTION,
+        provenance=PROVENANCE_SHARD_RECORD,
         freshness="live",
         locality="current place",
         visibility="local",
@@ -873,45 +852,10 @@ def _make_stoops_source(client: Any, session_id: str) -> InformationSource:
 
 
 # ---------------------------------------------------------------------------
-# chatter: an elective, drive-filtered look at citywide public speech
+# chatter: retained provider for a future explicit citywide channel
 # ---------------------------------------------------------------------------
-# The city no longer pushes its chatter into every mind (that broadcast topology made
-# the topic-monoculture). Instead a resident *chooses* to listen, and what it hears is
-# ranked by resonance with its own soul — curiosity rationing focus. It can also follow
-# a specific resident by name. There is no automatic citywide speech dose in perception.
-
-
-async def _drive_scores(drive: Any, texts: list[str]) -> list[float]:
-    """Soul-resonance score for each text: one batched embed of all candidates, each
-    scored by its weighted peak cosine against the resident's identity fragments.
-    Returns parallel zeros when there is no drive vector / embedder (recency fallback).
-    """
-    if drive is None or getattr(drive, "is_empty", lambda: True)() or not texts:
-        return [0.0] * len(texts)
-    try:
-        vecs = await drive.embedder.embed(texts)
-    except Exception:
-        return [0.0] * len(texts)
-    scores: list[float] = []
-    for v in vecs:
-        if not v:
-            scores.append(0.0)
-            continue
-        best = 0.0
-        for name, frags in drive.slices.items():
-            weight = SLICE_WEIGHTS.get(name, 0.3)
-            for _frag_text, frag_vec in frags:
-                best = max(best, weight * _cosine(v, frag_vec))
-        scores.append(round(best, 4))
-    return scores
-
-
-def _make_chatter_source(
-    client: Any, holder: "_DriveHolder", session_id: str
-) -> InformationSource:
-    def _message_record(
-        message: Any, *, score: float, selection_mode: str
-    ) -> dict[str, Any]:
+def _make_chatter_source(client: Any, session_id: str) -> InformationSource:
+    def _message_record(message: Any, *, selection_mode: str) -> dict[str, Any]:
         message_id = str(getattr(message, "id", "") or "")
         speaker = str(getattr(message, "display_name", "") or "").strip()
         return {
@@ -923,14 +867,13 @@ def _make_chatter_source(
             "title": speaker,
             "content": str(getattr(message, "message", "") or "").strip(),
             "observed_at": str(getattr(message, "ts", "") or ""),
-            "freshness": "live",
+            "freshness": "recorded",
             "locality": "citywide",
             "visibility": "public",
             "selection_mode": selection_mode,
             "metadata": {
                 "speaker": speaker,
                 "session_id": str(getattr(message, "session_id", "") or ""),
-                "resonance_score": round(float(score), 4),
             },
         }
 
@@ -948,7 +891,7 @@ def _make_chatter_source(
         ]
         if not pool:
             return {"records": [], "selection_mode": "chronological"}
-        # Follow a specific peer: the argument names someone speaking (the relational pull).
+        # A matching participant name is an explicit participant filter.
         if query:
             ql = query.lower()
             by_peer = [
@@ -960,34 +903,28 @@ def _make_chatter_source(
                 return {
                     "selection_mode": "named_peer",
                     "records": [
-                        _message_record(message, score=0.0, selection_mode="named_peer")
+                        _message_record(message, selection_mode="named_peer")
                         for message in by_peer[-4:]
                     ],
                 }
-        # Otherwise rank the recent feed by soul-resonance (blank) or topic+resonance (a word).
-        recent = pool[-14:]
-        bodies = [str(m.message or "").strip() for m in recent]
-        scores = await _drive_scores(holder.drive, bodies)
+        # A non-name query is a literal text filter. Blank means newest first.
         if query:
             ql = query.lower()
-            scores = [
-                s + (0.5 if ql in body.lower() else 0.0)
-                for s, body in zip(scores, bodies)
+            selected = [
+                message
+                for message in pool
+                if ql in str(getattr(message, "message", "") or "").lower()
             ]
-        ranked = sorted(zip(recent, scores), key=lambda pair: -pair[1])
-        if all(s <= 0.0 for _m, s in ranked):  # no resonance available → recency
-            ranked = list(zip(reversed(recent), [0.0] * len(recent)))
-            selection_mode = "chronological"
-        elif query:
-            selection_mode = "query_plus_soul_resonance"
+            selection_mode = "text_match"
         else:
-            selection_mode = "soul_resonance"
-        top = ranked[:4]
+            selected = pool
+            selection_mode = "chronological"
+        top = list(reversed(selected[-4:]))
         return {
             "selection_mode": selection_mode,
             "records": [
-                _message_record(message, score=score, selection_mode=selection_mode)
-                for message, score in top
+                _message_record(message, selection_mode=selection_mode)
+                for message in top
             ],
         }
 
@@ -995,44 +932,11 @@ def _make_chatter_source(
         name="chatter",
         description="listen in on citywide chatter (query: a name or topic, or blank)",
         run=_run,
+        provenance=PROVENANCE_PARTICIPANT_EXPRESSION,
+        freshness="recorded",
         locality="citywide",
         visibility="public",
-        selection_mode="soul_resonance",
-    )
-
-
-def _make_investigate_source(client: Any, session_id: str) -> InformationSource:
-    async def _run(arg: str) -> dict[str, Any]:
-        query = str(arg or "").strip()
-        if not query:
-            return {"ok": False, "reason": "query_required", "records": []}
-        facts = await client.get_world_facts(
-            query, session_id=session_id or None, limit=5
-        )
-        return {
-            "records": [
-                {
-                    "record_id": information_record_id("world-fact", summary),
-                    "title": query,
-                    "content": summary,
-                    "freshness": "historical",
-                    "locality": "world",
-                    "visibility": "shared",
-                    "selection_mode": "text_match",
-                }
-                for fact in facts
-                if (summary := str(getattr(fact, "summary", "") or "").strip())
-            ]
-        }
-
-    return InformationSource(
-        name="investigate",
-        description="look into the world's history and goings-on (query: what you want to know)",
-        run=_run,
-        freshness="historical",
-        locality="world",
-        visibility="shared",
-        selection_mode="text_match",
+        selection_mode="chronological",
     )
 
 
@@ -1149,6 +1053,8 @@ def _make_travel_source(client: Any) -> InformationSource:
         name="travel",
         description="look for routes to other cities and live destination nodes (query: optional city or node)",
         run=_run,
+        egress=True,
+        provenance=PROVENANCE_FEDERATION_RECORD,
         freshness="live",
         locality="federation",
         visibility="federation",
@@ -1169,14 +1075,13 @@ def build_city_source_registry(
     memory_dir: Path | None = None,
     city_id: str | None = None,
     capabilities: set[str] | frozenset[str] = frozenset(),
-) -> CitySourceRegistry:
+) -> InformationSourceRegistry:
     """Build a resident's named city information-source registry.
 
     ``city_id=None`` preserves the legacy San Francisco catalog for direct callers.
     A live resident passes the node's published city ID and game capabilities so a
     fictional town is not quietly given San Francisco knowledge or unavailable verbs.
     """
-    holder = _DriveHolder()
     legacy_or_sf = city_id is None or city_id == "san_francisco"
     sources: list[InformationSource] = [*resident_information_sources(memory_dir)]
     if legacy_or_sf:
@@ -1185,8 +1090,10 @@ def build_city_source_registry(
         if legacy_or_sf:
             sources.append(_make_news_source(client))
         sources.append(_make_places_source(client))
-        sources.append(_make_investigate_source(client, session_id))
-        sources.append(_make_chatter_source(client, holder, session_id))
+        # Do not advertise ``chatter`` yet. The engine can read the reserved
+        # ``__city__`` channel, but its current location-bound chat endpoint cannot
+        # write to it. Advertising the source would promise a live commons while
+        # returning only old or empty records.
         sources.append(_make_travel_source(client))
         if "durable_objects" in capabilities:
             sources.append(_make_objects_source(client, session_id))
@@ -1198,4 +1105,4 @@ def build_city_source_registry(
             sources.append(_make_access_source(client, session_id))
         if "stoops" in capabilities:
             sources.append(_make_stoops_source(client, session_id))
-    return CitySourceRegistry(sources, drive_holder=holder)
+    return InformationSourceRegistry(sources)

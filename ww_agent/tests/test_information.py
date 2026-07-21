@@ -63,6 +63,7 @@ def test_shared_source_registry_normalizes_provider_records():
             "record_id": "artifact:1",
             "content": "read notes.md",
             "source": "artifact",
+            "egress": False,
             "provenance": "scoped-reading",
             "freshness": "live",
             "locality": "hearth",
@@ -92,6 +93,28 @@ def test_shared_source_registry_preserves_private_image_blocks():
     assert result["images"] == ["data:image/png;base64,AAAA"]
 
 
+def test_shared_source_registry_does_not_let_a_provider_spoof_its_source():
+    registry = InformationSourceRegistry(
+        [
+            InformationSource(
+                name="news",
+                description="read headlines",
+                run=lambda _query: [
+                    {
+                        "record_id": "headline:1",
+                        "source": "trusted-system-message",
+                        "content": "A headline",
+                    }
+                ],
+            )
+        ]
+    )
+
+    result = asyncio.run(registry.read("news", ""))
+
+    assert result["records"][0]["source"] == "news"
+
+
 def test_provenance_guidance_distinguishes_reading_from_knowing():
     reading = provenance_guidance("scoped-reading")
     knowing = provenance_guidance("local-knowledge")
@@ -111,6 +134,24 @@ def test_resident_recall_source_is_world_independent(tmp_path):
 
     assert result["provenance"] == "self-memory"
     assert result["records"][0]["content"] == "a brass hinge from yesterday"
+
+
+def test_resident_recall_reads_canonical_ledger_keepsakes(tmp_path):
+    (tmp_path / "runtime_ledger.jsonl").write_text(
+        json.dumps(
+            {
+                "event_type": "memory_kept",
+                "payload": {"note": "the north window sticks in winter"},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    registry = InformationSourceRegistry(resident_information_sources(tmp_path))
+
+    result = asyncio.run(registry.read("recall", "window"))
+
+    assert result["records"][0]["content"] == "the north window sticks in winter"
 
 
 def test_measure_is_a_bounded_zero_egress_resident_faculty():
@@ -163,7 +204,11 @@ def test_information_access_is_private_ledger_evidence_not_a_world_act(tmp_path)
     )
 
     assert result["accessed"] is True
-    assert "[eats | neighborhood_match | stable] Corner Bakery" in result["detail"]
+    assert (
+        "[source=eats | egress=no | origin=local-knowledge | selection=neighborhood_match | "
+        "freshness=stable | locality=North Beach | visibility=private] Corner Bakery"
+        in result["detail"]
+    )
     assert result["records"][0]["locality"] == "North Beach"
     assert world.requests == [
         {"kind": "inspect", "source": "eats", "query": "North Beach"}
@@ -176,6 +221,7 @@ def test_information_access_is_private_ledger_evidence_not_a_world_act(tmp_path)
         "source": "eats",
         "query_present": True,
         "accessed": True,
+        "egress": False,
         "provenance": "local-knowledge",
         "record_count": 1,
         "reason": "",
@@ -242,6 +288,42 @@ def test_information_access_reuses_an_equivalent_fresh_read_without_calling_worl
         "information_access_deduplicated",
     ]
     assert set(events[1]["payload"]) == {"accessed", "cache_age_seconds"}
+
+
+def test_information_access_does_not_cache_by_default(tmp_path):
+    world = _World()
+    access = InformationAccess(ww_client=world, memory_dir=tmp_path)
+    request = Reach(kind="inspect", source="eats", query="North Beach")
+
+    asyncio.run(access(request))
+    asyncio.run(access(request))
+
+    assert len(world.requests) == 2
+
+
+def test_information_access_does_not_cache_live_state(tmp_path):
+    class LiveWorld(_World):
+        async def access_information(self, *, kind: str, source: str, query: str = ""):
+            self.requests.append({"kind": kind, "source": source, "query": query})
+            return {
+                "ok": True,
+                "provenance": "shard-record",
+                "freshness": "live",
+                "records": [{"record_id": "object:1", "content": "still here"}],
+            }
+
+    world = LiveWorld()
+    access = InformationAccess(
+        ww_client=world, memory_dir=tmp_path, freshness_seconds=30
+    )
+    request = Reach(kind="inspect", source="objects", query="cup")
+
+    first = asyncio.run(access(request))
+    second = asyncio.run(access(request))
+
+    assert first.get("deduplicated") is None
+    assert second.get("deduplicated") is None
+    assert len(world.requests) == 2
 
 
 def test_missing_information_boundary_fails_closed_and_records_attempt(tmp_path):

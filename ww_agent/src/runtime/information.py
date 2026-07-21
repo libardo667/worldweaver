@@ -37,6 +37,11 @@ PROVENANCE_LOCAL_PERCEPTION = "local-perception"
 PROVENANCE_LOCAL_COMPUTATION = "local-computation"
 PROVENANCE_SCOPED_READING = "scoped-reading"
 PROVENANCE_WORLD_EGRESS = "world-egress"
+PROVENANCE_AUTHORED_REFERENCE = "authored-reference"
+PROVENANCE_SHARD_RECORD = "shard-record"
+PROVENANCE_PARTICIPANT_EXPRESSION = "participant-expression"
+PROVENANCE_FEDERATION_RECORD = "federation-record"
+PROVENANCE_UNKNOWN = "unknown"
 
 
 def provenance_guidance(provenance: str) -> str:
@@ -178,7 +183,7 @@ class InformationSource:
     description: str
     run: Callable[[str], Any]
     egress: bool = False
-    provenance: str = PROVENANCE_LOCAL_KNOWLEDGE
+    provenance: str = PROVENANCE_UNKNOWN
     freshness: str = "live"
     locality: str = "unknown"
     visibility: str = "private"
@@ -234,7 +239,11 @@ class InformationSourceRegistry:
                 records.append(
                     {
                         **raw,
-                        "source": str(raw.get("source") or source.name),
+                        # The registry owns the source identity. Provider content may
+                        # describe a publisher in metadata, but it cannot relabel
+                        # itself as a different resident capability.
+                        "source": source.name,
+                        "egress": bool(source.egress),
                         "provenance": str(raw.get("provenance") or source.provenance),
                         "freshness": str(raw.get("freshness") or source.freshness),
                         "locality": str(raw.get("locality") or source.locality),
@@ -293,14 +302,23 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 def _recall_records(memory_dir: Path, query: str) -> dict[str, Any]:
     """Read one resident's own selected memories and felt history."""
-    kept = [
+    legacy_kept = [
         str(item.get("note") or "").strip()
         for item in _read_jsonl(memory_dir / "kept_memory.jsonl")
     ]
-    kept = [item for item in kept if item]
+    ledger_events = _read_jsonl(memory_dir / "runtime_ledger.jsonl")
+    ledger_kept = [
+        str((event.get("payload") or {}).get("note") or "").strip()
+        for event in ledger_events
+        if str(event.get("event_type") or "") == "memory_kept"
+    ]
+    kept: list[str] = []
+    for item in [*legacy_kept, *ledger_kept]:
+        if item and item not in kept:
+            kept.append(item)
     feelings = [
         str((event.get("payload") or {}).get("felt_sense") or "").strip()
-        for event in _read_jsonl(memory_dir / "runtime_ledger.jsonl")
+        for event in ledger_events
         if str(event.get("event_type") or "") == "felt_sense_logged"
     ]
     feelings = [item for item in feelings if item]
@@ -374,6 +392,7 @@ class InformationRecord:
     source: str
     title: str
     content: str
+    egress: bool
     provenance: str
     freshness: str
     locality: str
@@ -384,7 +403,7 @@ class InformationRecord:
 
     @classmethod
     def from_dict(
-        cls, raw: dict[str, Any], *, source: str, defaults: dict[str, str] | None = None
+        cls, raw: dict[str, Any], *, source: str, defaults: dict[str, Any] | None = None
     ) -> "InformationRecord":
         defaults = dict(defaults or {})
         return cls(
@@ -392,6 +411,7 @@ class InformationRecord:
             source=str(raw.get("source") or source),
             title=str(raw.get("title") or "").strip(),
             content=str(raw.get("content") or raw.get("text") or "").strip(),
+            egress=bool(raw.get("egress", defaults.get("egress", False))),
             provenance=str(
                 raw.get("provenance") or defaults.get("provenance") or "unknown"
             ),
@@ -419,7 +439,18 @@ def render_information_records(records: list[InformationRecord]) -> str:
     """Render provider-neutral records only at the inference boundary."""
     blocks: list[str] = []
     for record in records:
-        heading = f"[{record.source} | {record.selection_mode} | {record.freshness}]"
+        heading_fields = [
+            f"source={record.source}",
+            f"egress={'yes' if record.egress else 'no'}",
+            f"origin={record.provenance}",
+            f"selection={record.selection_mode}",
+            f"freshness={record.freshness}",
+            f"locality={record.locality}",
+            f"visibility={record.visibility}",
+        ]
+        if record.observed_at:
+            heading_fields.append(f"recorded_at={record.observed_at}")
+        heading = "[" + " | ".join(heading_fields) + "]"
         if record.title:
             heading += f" {record.title}"
         blocks.append(f"{heading}\n{record.content}".rstrip())
@@ -434,7 +465,7 @@ class InformationAccess:
         *,
         ww_client: WorldWeaverClient,
         memory_dir: Path,
-        freshness_seconds: float = 30.0,
+        freshness_seconds: float = 0.0,
     ) -> None:
         self._ww = ww_client
         self._memory_dir = memory_dir
@@ -497,6 +528,7 @@ class InformationAccess:
                     else {"result": str(raw or "")}
                 )
                 defaults = {
+                    "egress": bool(payload.get("egress", False)),
                     "provenance": str(payload.get("provenance") or ""),
                     "freshness": str(payload.get("freshness") or ""),
                     "locality": str(payload.get("locality") or ""),
@@ -537,6 +569,7 @@ class InformationAccess:
                     "reach_kind": request.kind,
                     "source": request.source,
                     "query": request.query,
+                    "egress": bool(payload.get("egress", False)),
                     "provenance": str(payload.get("provenance") or ""),
                     "records": [record.to_dict() for record in records],
                     **(
@@ -569,19 +602,24 @@ class InformationAccess:
                     "detail": "The source did not answer.",
                 }
 
-        if bool(result.get("accessed")) and self._freshness_seconds > 0:
-            self._recent[key] = (time.monotonic(), copy.deepcopy(result))
-
         records = [
             record
             for record in list(result.get("records") or [])
             if isinstance(record, dict)
         ]
+        cacheable = bool(records) and all(
+            str(record.get("freshness") or "") not in {"live", "immediate"}
+            for record in records
+        )
+        if bool(result.get("accessed")) and self._freshness_seconds > 0 and cacheable:
+            self._recent[key] = (time.monotonic(), copy.deepcopy(result))
+
         receipt = {
             "reach_kind": request.kind,
             "source": request.source,
             "query_present": bool(str(request.query or "").strip()),
             "accessed": bool(result.get("accessed")),
+            "egress": bool(result.get("egress", False)),
             "provenance": str(result.get("provenance") or ""),
             "record_count": len(records),
             "reason": str(result.get("reason") or ""),

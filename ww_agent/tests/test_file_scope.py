@@ -147,7 +147,12 @@ def test_local_world_exposes_files_as_typed_private_information(tmp_path):
     ]
     files = next(item for item in scene.affordances if item.name == "files")
     assert files.provenance == "scoped-reading"
+    assert "notes.md" not in files.description
     assert isinstance(world.information_sources(), InformationSourceRegistry)
+
+    roots = asyncio.run(world.access_information(kind="read", source="files", query=""))
+    assert roots["selection_mode"] == "authorized_roots"
+    assert roots["records"][0]["content"] == "shared"
 
     result = asyncio.run(
         world.access_information(kind="read", source="files", query="notes.md")
@@ -338,6 +343,8 @@ def test_keeper_whisper_rouses_once_without_replaying_on_world_build(tmp_path):
 
     assert world.take_force_ignite() is True
     assert world.take_force_ignite() is False
+    heard = asyncio.run(world.get_location_chat("the hearth"))
+    assert [message.message for message in heard] == ["Are you there?"]
 
     rebuilt = LocalWorld(
         home_dir=home,

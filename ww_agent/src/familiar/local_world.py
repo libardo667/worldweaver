@@ -183,7 +183,6 @@ class LocalWorld:
         self.place = place
         self.keeper_name = keeper_name
         self.familiar_name = str(familiar_name or "").strip()
-        self._first_name = self.familiar_name.split(" ", 1)[0].lower()
         # Read capability (Major 50): a scoped, read-only window onto the keeper's
         # files. None for an expressive-only familiar; a FileScope for one that can
         # read the work. Writing is still the workshop's job alone.
@@ -333,6 +332,7 @@ class LocalWorld:
                 source_id=f"source:{source.name}",
                 name=source.name,
                 description=source.description,
+                egress=bool(source.egress),
                 provenance=source.provenance,
                 freshness=source.freshness,
                 locality=source.locality,
@@ -397,28 +397,11 @@ class LocalWorld:
             )
         if self._file_scope is None:
             return InformationSourceRegistry(sources)
-        sample = self._file_scope.tree(max_depth=1, max_entries=60)
-        root_names = [getattr(root, "name", "") for root in self._file_scope.roots]
-        if len(root_names) > 1:
-            # Keep every root represented so one newly shared root is not crowded out.
-            top = [
-                entry
-                for root_name in root_names
-                for entry in [
-                    item for item in sample if item.split("/", 1)[0] == root_name
-                ][:7]
-            ]
-        else:
-            top = sample[:14]
-        example = next(
-            (entry for entry in top if not entry.endswith("/")),
-            root_names[0] if root_names else "README.md",
-        )
         sources.extend(
             [
                 InformationSource(
                     name="files",
-                    description=f"read authorized private files, read-only; query with an exact path. Available now: {', '.join(top)} (for example {example})",
+                    description="read authorized private files, read-only; query blank to list roots or use an exact path",
                     run=self._read_scoped_file,
                     provenance=PROVENANCE_SCOPED_READING,
                     freshness="live",
@@ -559,16 +542,6 @@ class LocalWorld:
             "records": [record],
         }
 
-    def _as_direct(self, text: str) -> str:
-        """The keeper, alone with the familiar, is always addressing it — so a
-        whisper that doesn't already name it is delivered as a direct address.
-        This rouses the familiar reliably (perception marks it direct → social
-        pull → ignition) and leans it toward answering. The exchange ledger still
-        shows the keeper's real words; only what the familiar *perceives* is named."""
-        if self._first_name and self._first_name not in text.lower():
-            return f"{self.familiar_name}, {text}"
-        return text
-
     async def get_location_chat(
         self, location: str, since: Any = None, session_id: str | None = None
     ) -> list[_Chat]:
@@ -578,7 +551,7 @@ class LocalWorld:
             _Chat(
                 self.KEEPER_SESSION,
                 self.keeper_name,
-                self._as_direct(w["text"]),
+                w["text"],
                 w["ts"],
             )
             for w in self._recent_whispers()
@@ -677,7 +650,24 @@ class LocalWorld:
             return {"ok": False, "reason": "unknown_source", "records": []}
         raw = str(query or "").strip().strip("\"'`")
         if not raw:
-            return {"ok": False, "reason": "query_required", "records": []}
+            roots = [
+                str(getattr(root, "name", "") or "").strip()
+                for root in self._file_scope.roots
+                if str(getattr(root, "name", "") or "").strip()
+            ]
+            return {
+                "ok": True,
+                "selection_mode": "authorized_roots",
+                "records": [
+                    {
+                        "record_id": "files:authorized-roots",
+                        "title": "authorized roots",
+                        "content": "\n".join(roots)
+                        or "No authorized roots are available.",
+                        "metadata": {"root_count": len(roots)},
+                    }
+                ],
+            }
         page = 1
         page_match = _READ_PAGE_RX.search(raw)
         if page_match is not None:

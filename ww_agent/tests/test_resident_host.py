@@ -463,7 +463,7 @@ def test_world_swap_rebuilds_world_sources_without_city_leakage(tmp_path):
     city = resident._build_city_world(resident._active_session_id())
     hearth = resident._build_hearth_world()
 
-    assert "chatter" in city._sources.names
+    assert "chatter" not in city._sources.names
     assert "chatter" not in hearth.information_sources().names
     assert "eats" not in hearth.information_sources().names
     assert {"recall", "measure", "growth"} <= set(hearth.information_sources().names)

@@ -283,11 +283,6 @@ def test_recall_absent_without_a_memory_dir():
 # --- world-facing sources: read the world through the client (the server DB) ---
 
 
-class _WorldFact:
-    def __init__(self, summary: str):
-        self.summary = summary
-
-
 class _ReadClient:
     async def get_place_names(self) -> set[str]:
         return {"Alderbank Commons", "Wayfarer Back Room"}
@@ -300,17 +295,6 @@ class _ReadClient:
     ) -> list[str]:
         return (
             ["Dolores Park", "Mission Dolores"] if "mission" in location.lower() else []
-        )
-
-    async def get_world_facts(self, query: str, session_id=None, limit: int = 5):
-        return (
-            [
-                _WorldFact(
-                    f"Someone was overheard talking about {query} at the taqueria."
-                )
-            ]
-            if query
-            else []
         )
 
     async def get_world_objects(self, session_id: str) -> dict:
@@ -543,12 +527,6 @@ def test_places_source_looks_around():
     assert missing["ok"] is False and missing["reason"] == "query_required"
 
 
-def test_investigate_source_queries_the_world():
-    registry = build_city_source_registry(client=_ReadClient(), session_id="s1")
-    res = asyncio.run(registry.read("investigate", "the rust"))
-    assert "the rust" in _record_text(res) and "taqueria" in _record_text(res)
-
-
 def test_travel_source_shows_live_nodes_without_moving_the_resident():
     registry = build_city_source_registry(client=_ReadClient(), session_id="s1")
 
@@ -585,10 +563,9 @@ def test_full_context_grants_the_whole_catalog(tmp_path):
         "recall",
         "news",
         "places",
-        "investigate",
-        "chatter",
         "travel",
     }
+    assert "chatter" not in registry.names
 
 
 def test_alderbank_gets_its_declared_sources_without_san_francisco_material():
@@ -753,9 +730,8 @@ def test_stoops_source_lists_before_opening_a_named_stoop():
     assert 'target "stoop-take:entry-1"' in opened["records"][0]["content"]
 
 
-# --- chatter: the CHOSEN channel — a drive-filtered citywide pull (Major 60) ---
+# --- chatter: provider behavior retained, but not advertised until writes exist ---
 
-from src.runtime.drive import DeterministicEmbedder, DriveVector  # noqa: E402
 from src.world.client import ChatMessage  # noqa: E402
 
 
@@ -775,28 +751,21 @@ class _CityChatClient:
         return list(self._messages) if location == "__city__" else []
 
 
-def test_chatter_ranks_the_citywide_feed_by_soul_resonance():
-    # An engine-loving soul, listening to a mixed citywide feed, is drawn to the
-    # mechanic's line over the drains and the dahlias — curiosity rationing focus.
+def test_chatter_topic_query_is_a_literal_filter_without_personality_ranking():
     msgs = [
         _msg("a", "Rosa", "the storm drains on Cesar Chavez are backing up again"),
         _msg("b", "Theo", "anyone know a good engine mechanic? my motor is dead"),
         _msg("c", "Mara", "the dahlias at the corner stand are extraordinary today"),
     ]
-    registry = build_city_source_registry(client=_CityChatClient(msgs), session_id="me")
-    drive = asyncio.run(
-        DriveVector.build(
-            embedder=DeterministicEmbedder(),
-            constitution="I mend broken engines with steady hands. I love a dead motor brought back to life.",
-        )
+    from src.world.city_tools import _make_chatter_source
+
+    registry = InformationSourceRegistry(
+        [_make_chatter_source(_CityChatClient(msgs), "me")]
     )
-    registry.bind_drive(drive)
-    res = asyncio.run(registry.read("chatter", ""))
-    speakers = [item["title"] for item in res["records"]]
-    assert speakers.index("Theo") < speakers.index(
-        "Mara"
-    )  # engine line outranks dahlias
-    assert res["records"][0]["selection_mode"] == "soul_resonance"
+    res = asyncio.run(registry.read("chatter", "motor"))
+
+    assert [item["title"] for item in res["records"]] == ["Theo"]
+    assert res["records"][0]["selection_mode"] == "text_match"
 
 
 def test_chatter_follows_a_named_peer():
@@ -806,20 +775,27 @@ def test_chatter_follows_a_named_peer():
         _msg("b", "Theo", "my motor is dead"),
         _msg("a2", "Rosa", "and the gutters too"),
     ]
-    registry = build_city_source_registry(client=_CityChatClient(msgs), session_id="me")
+    from src.world.city_tools import _make_chatter_source
+
+    registry = InformationSourceRegistry(
+        [_make_chatter_source(_CityChatClient(msgs), "me")]
+    )
     res = asyncio.run(registry.read("chatter", "Rosa"))
     assert {item["title"] for item in res["records"]} == {"Rosa"}
     assert all(item["selection_mode"] == "named_peer" for item in res["records"])
 
 
-def test_chatter_falls_back_to_recency_without_a_drive_vector():
-    # No embedder/drive bound → scores are zero → newest-first recency, never dark.
+def test_chatter_blank_query_is_newest_first():
     msgs = [
         _msg("a", "Rosa", "first"),
         _msg("b", "Theo", "second"),
         _msg("c", "Mara", "third"),
     ]
-    registry = build_city_source_registry(client=_CityChatClient(msgs), session_id="me")
+    from src.world.city_tools import _make_chatter_source
+
+    registry = InformationSourceRegistry(
+        [_make_chatter_source(_CityChatClient(msgs), "me")]
+    )
     res = asyncio.run(registry.read("chatter", ""))
     speakers = [item["title"] for item in res["records"]]
     assert speakers.index("Mara") < speakers.index("Rosa")  # most-recent first
@@ -831,32 +807,67 @@ def test_chatter_excludes_the_resident_itself():
         _msg("me", "Self", "talking to myself"),
         _msg("b", "Theo", "my motor is dead"),
     ]
-    registry = build_city_source_registry(client=_CityChatClient(msgs), session_id="me")
+    from src.world.city_tools import _make_chatter_source
+
+    registry = InformationSourceRegistry(
+        [_make_chatter_source(_CityChatClient(msgs), "me")]
+    )
     res = asyncio.run(registry.read("chatter", ""))
     assert [item["title"] for item in res["records"]] == ["Theo"]
 
 
-# --- provenance-tagged source affect: knowing vs reaching (Minor 56) ---
+# --- source provenance reaches the inference boundary honestly ---
 
 
-def test_source_records_carry_a_local_knowledge_provenance_tag():
+def test_source_records_distinguish_external_and_authored_material():
     registry = build_city_source_registry(client=_ReadClient(), session_id="s1")
-    assert asyncio.run(registry.read("news", ""))["provenance"] == "local-knowledge"
+    news = asyncio.run(registry.read("news", ""))
+    assert news["provenance"] == "world-egress"
+    assert news["egress"] is True
     assert (
         asyncio.run(registry.read("eats", "the Mission"))["provenance"]
-        == "local-knowledge"
+        == "authored-reference"
     )
 
 
-def test_advertisement_frames_local_knowledge_sources_as_knowing():
+def test_advertisement_labels_authored_reference_without_calling_it_knowledge():
     world = CityWorld(_FakeClient(), build_city_source_registry())
     scene = asyncio.run(world.get_scene("sess-1"))
     eats = next(item for item in scene.affordances if item.name == "eats")
     assert eats.source_id == "source:eats"
-    assert eats.provenance == "local-knowledge"
+    assert eats.egress is False
+    assert eats.provenance == "authored-reference"
     assert (eats.freshness, eats.locality, eats.visibility, eats.selection_mode) == (
-        "stable",
+        "undated",
         "San Francisco",
         "private",
         "neighborhood_match",
     )
+
+
+def test_alderbank_sources_have_explicit_noninterpretive_origins():
+    registry = build_city_source_registry(
+        client=_ReadClient(),
+        session_id="s1",
+        city_id="alderbank",
+        capabilities={
+            "durable_objects",
+            "replenishing_materials",
+            "making",
+            "witnessed_exchange",
+            "space_permissions",
+            "stoops",
+        },
+    )
+
+    origins = {source.name: source.provenance for source in registry.list()}
+    assert origins == {
+        "measure": "local-computation",
+        "places": "authored-reference",
+        "travel": "federation-record",
+        "objects": "shard-record",
+        "making": "shard-record",
+        "exchanges": "shard-record",
+        "access": "shard-record",
+        "stoops": "shard-record",
+    }
