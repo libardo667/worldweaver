@@ -741,15 +741,28 @@ def _import_hearth_archive(
     return metadata
 
 
-def import_hearth_package(package_path: Path, resident_dir: Path) -> dict[str, Any]:
-    """Validate and atomically install a plaintext portable hearth package."""
+def import_hearth_package(
+    package_path: Path,
+    resident_dir: Path,
+    *,
+    expected_actor_id: str | None = None,
+    expected_hearth_shard_id: str | None = None,
+    expected_runtime_generation: int | None = None,
+) -> dict[str, Any]:
+    """Validate and atomically install a bound plaintext hearth package."""
     package = Path(package_path)
     target = _validate_import_target(resident_dir)
     if not package.is_file() or package.is_symlink():
         raise HearthPackageError(f"hearth package is not a regular file: {package}")
     try:
         with zipfile.ZipFile(package, "r") as archive:
-            return _import_hearth_archive(archive, target)
+            return _import_hearth_archive(
+                archive,
+                target,
+                expected_actor_id=expected_actor_id,
+                expected_hearth_shard_id=expected_hearth_shard_id,
+                expected_runtime_generation=expected_runtime_generation,
+            )
     except (OSError, zipfile.BadZipFile) as exc:
         raise HearthPackageError(f"could not open hearth package: {exc}") from exc
 

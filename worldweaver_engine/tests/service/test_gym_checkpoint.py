@@ -2,6 +2,9 @@
 # Copyright (C) 2026 Levi Banks
 
 import json
+from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 from sqlalchemy import create_engine
@@ -33,6 +36,23 @@ def _close(engine, session) -> None:
     session.close()
     engine.dispose()
     clear_session_caches()
+
+
+def _agent_artifact_command(*arguments: str) -> dict:
+    workspace = Path(__file__).resolve().parents[3]
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/resident_gym_artifact.py",
+            *arguments,
+        ],
+        cwd=workspace / "ww_agent",
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    return json.loads(completed.stdout)
 
 
 def test_quiet_interval_resumes_to_the_same_result_after_a_real_stop():
@@ -143,7 +163,7 @@ def test_participant_private_artifacts_are_bound_by_metadata_not_embedded():
             model_id="reference-policy-v1",
             private_state={
                 "custody": "participant_private",
-                "format": "external_artifact",
+                "format": "worldweaver.hearth-package",
                 "format_version": 1,
                 "artifact_id": "resident-checkpoint-17",
                 "sha256": "a" * 64,
@@ -159,7 +179,7 @@ def test_participant_private_artifacts_are_bound_by_metadata_not_embedded():
 
         assert mara["private_state"] == {
             "custody": "participant_private",
-            "format": "external_artifact",
+            "format": "worldweaver.hearth-package",
             "format_version": 1,
             "artifact_id": "resident-checkpoint-17",
             "sha256": "a" * 64,
@@ -178,3 +198,79 @@ def test_participant_private_artifacts_are_bound_by_metadata_not_embedded():
             )
     finally:
         _close(source_engine, source_db)
+
+
+def test_engine_and_private_resident_artifact_restart_across_processes(tmp_path):
+    uninterrupted_engine, uninterrupted_db = _memory_session()
+    source_engine, source_db = _memory_session()
+    target_engine, target_db = _memory_session()
+    try:
+        artifact = _agent_artifact_command(
+            "create-fixture",
+            "--home",
+            str(tmp_path / "source-resident"),
+            "--package",
+            str(tmp_path / "resident.wwhearth"),
+            "--actor-id",
+            "gym-afternoon-actor-mara",
+            "--world-id",
+            "gym-long-afternoon-world",
+            "--session-id",
+            "gym-afternoon-mara",
+            "--started-at",
+            "2026-07-20T12:00:00+00:00",
+            "--return-at",
+            "2026-07-22T12:00:00+00:00",
+        )
+        assert "synthetic blue" not in json.dumps(artifact)
+
+        clear_session_caches()
+        uninterrupted = finish_quiet_interval(
+            prepare_quiet_interval(uninterrupted_db)
+        ).as_payload()
+
+        clear_session_caches()
+        stopped = prepare_quiet_interval(source_db)
+        process = artifact["process"]
+        stopped.bind_participant_artifacts(
+            "gym-afternoon-mara",
+            adapter_id=process["adapter"]["id"],
+            adapter_version=process["adapter"]["version"],
+            model_id=process["model"]["id"],
+            private_state=artifact["descriptor"],
+        )
+        checkpoint = json.loads(json.dumps(stopped.checkpoint()))
+
+        descriptor_path = tmp_path / "descriptor.json"
+        process_path = tmp_path / "process.json"
+        descriptor_path.write_text(json.dumps(artifact["descriptor"]), encoding="utf-8")
+        process_path.write_text(json.dumps(process), encoding="utf-8")
+        resident_restore = _agent_artifact_command(
+            "restore",
+            "--package",
+            str(tmp_path / "resident.wwhearth"),
+            "--home",
+            str(tmp_path / "restored-resident"),
+            "--descriptor",
+            str(descriptor_path),
+            "--expected-process",
+            str(process_path),
+        )
+        assert resident_restore["artifact_id"] == artifact["descriptor"]["artifact_id"]
+        assert resident_restore["private_activity"]["open"] is True
+        assert "synthetic blue" not in json.dumps(resident_restore)
+
+        resumed = ProductionRuleGym.from_checkpoint(target_db, checkpoint)
+        restarted = finish_quiet_interval(resumed).as_payload()
+
+        assert restarted == uninterrupted
+        mara_binding = next(
+            participant
+            for participant in checkpoint["participants"]
+            if participant["session_id"] == "gym-afternoon-mara"
+        )
+        assert mara_binding["private_state"] == artifact["descriptor"]
+    finally:
+        _close(uninterrupted_engine, uninterrupted_db)
+        _close(source_engine, source_db)
+        _close(target_engine, target_db)

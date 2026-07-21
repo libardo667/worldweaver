@@ -124,10 +124,18 @@ targets fail before replacement.
 
 This is a narrow synthetic proof. The envelope records only an ID, digest, format, and size for externally held
 resident or model state; it does not copy private hearth content into the engine artifact. No real resident
-adapter loads that external artifact through the gym yet. The database snapshot also supports SQLite only and
-may restore only into an empty synthetic database. Its hash detects damage and internal mismatches; it is not a
-signature and does not make an envelope from an untrusted source safe. A future portable checkpoint needs an
-authenticated issuer and must verify each external artifact's bytes against its recorded digest.
+adapter activates from that external artifact through the gym yet. A separate agent process now proves the
+private half of restore: it verifies a portable hearth package's exact bytes, imports into staging, rebuilds the
+derived checkpoint from the append-only ledger, checks actor, hearth generation, attachment, session, adapter,
+and model, and only then installs the restored synthetic home. The engine never imports the agent package and
+neither its descriptor nor its restore report contains private activity prose. The restored private return is
+not yet connected to the engine queue.
+
+The database snapshot supports SQLite only and may restore only into an empty synthetic database. Its hash
+detects damage and internal mismatches; it is not a signature and does not make an envelope from an untrusted
+source safe. The plaintext local artifact proof also does not authorize cloning or waking an existing resident.
+A future portable checkpoint needs an authenticated issuer and must verify each external artifact's bytes
+against its recorded digest.
 
 ## Scenario coverage plan
 
@@ -145,7 +153,7 @@ apparatus tells the truth about what happened.
 | Identity and authorization | Anonymous signal access is refused; correspondence uses durable actor IDs | Cover every gym action and resident proof type |
 | Exact-place perception | Speech follows location and a durable cursor | Reconnect, cursor gaps, and concurrent arrival/speech ordering |
 | Delayed work | Stable scheduled IDs, controlled UTC, explicit acknowledgement | Idempotent state-changing handlers and failed-handler retry |
-| Stop and resume | Combined SQLite/queue/gym envelope reproduces one uninterrupted result | Load an actual participant-private artifact through an adapter |
+| Stop and resume | Combined engine envelope and separately held synthetic hearth artifact reproduce one uninterrupted result across processes | Connect the resident's content-free return to the host queue and activate the reference adapter |
 | Correspondence | Mail survives a session change and remains pending until acknowledgement | Interruption policy, cross-shard delivery, and failure recovery |
 | Access and custody | Production services exist outside the gym | Refusal, making, carrying, giving, exchange, and stoop episodes |
 | Travel | Production service exists outside the gym | Recoverable local and federated travel episodes |

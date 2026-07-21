@@ -148,6 +148,19 @@ smallest gym participant adapter that supplies and restores the existing private
 this binding, verifies the external artifact bytes, and keeps the trust source explicit. Do not add checkpoint
 forks, model calls, or training records until that complete adapter path is replayable.
 
+The private artifact half is now replayable across a real process boundary. It reuses the deterministic portable
+hearth package: the engine stores only format, ID, byte count, and digest, while a child agent process verifies
+the bytes, imports into staging, rebuilds the derived checkpoint from the private ledger, and checks the exact
+actor, hearth generation, attachment, city session, adapter, and model before installation. Tests reject changed
+bytes and process substitution without leaving a partial home. A combined test stops the engine episode and
+synthetic resident artifact, restores each in its own package context, and produces the same engine result as
+the uninterrupted control. The descriptor and content-safe restore report contain no private activity prose.
+
+This does not yet activate `ReferenceResidentCore`. The resident's private scheduled return survives inside the
+artifact but is not registered in the engine event queue. Connect that content-free schedule through an
+at-least-once host instruction next; acknowledgement must follow successful resident processing rather than
+directly editing its ledger from the engine side.
+
 ### Scenario coverage map — July 21, 2026
 
 Gym coverage now has two explicit scales. Trustworthiness scenarios test that the apparatus tells the truth:

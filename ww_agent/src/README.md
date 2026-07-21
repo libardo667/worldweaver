@@ -24,6 +24,11 @@
   deterministic one-open-activity transition used by ledger replay and normal checkpoint advancement. It also
   defines the process-envelope schema and projects its content-blind city-event cursor. The current stateless
   adapter declares a zero-byte `none` model-state format.
+- `runtime/private_artifact.py` — the process-boundary adapter used by the synthetic gym. It describes an
+  existing portable hearth package without exposing its path or contents, verifies exact bytes before
+  extraction, rebuilds derived state from the private ledger in staging, and installs only after actor,
+  hearth generation, attachment, session, adapter, and model all match. Its restore report contains no private
+  activity prose.
 - `runtime/cognitive_core.py` — audited predecessor. It is not constructed by the resident host; keep it only
   as comparison and selective migration material until its remaining useful contracts are separated.
 - `runtime/ledger.py` — append-only event history and a versioned current-state checkpoint. Major 137 is

@@ -45,6 +45,13 @@ interval. If a process restarts without a matching clean-stop record, the prior 
 no elapsed downtime is invented. These records describe software operation, not continuous thought or
 experience while the computer was off.
 
+The synthetic resident gym can bind that private process to the engine without importing agent code into the
+engine process. It uses the existing deterministic portable hearth package as an externally held artifact. The
+engine checkpoint receives only its format, ID, byte count, and digest. A separate agent process verifies those
+bytes, imports into staging, rebuilds the derived checkpoint from the append-only ledger, checks the exact
+resident/process binding, and only then installs the restored home. This is a local synthetic restart proof,
+not authorization to clone or wake an existing resident.
+
 Each continuation also chooses a return between one minute and seven days and whether exact-place speech may
 offer an earlier model turn. While that return is in the future, it replaces the ordinary five-minute model
 baseline. Speech is still delivered and acknowledged when early activation is disabled; the host simply does
@@ -124,6 +131,7 @@ hearths; they use the same `Resident` host and do not define a second kind of pe
 - `src/runtime/cognitive_core.py`: non-production audited predecessor retained for selective salvage
 - `src/runtime/ledger.py`: complete event history, serialized durable writes, corruption checks, and derived
   current state; remaining cold-history reader cleanup is active
+- `src/runtime/private_artifact.py`: content-safe gym binding and staged private artifact restore
 - `src/runtime/information.py`: elective typed source access
 - `src/runtime/effectors.py`: typed action boundary
 - `src/world/client.py`: engine transport

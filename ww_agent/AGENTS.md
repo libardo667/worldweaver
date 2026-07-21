@@ -33,6 +33,10 @@ inputs in the identity loader; they do not restore the old ownership model.
   actor/hearth mismatch or generation regression; do not silently transplant state between residents. The
   current API-backed adapter declares model state as `none` with a zero-byte bound. A later adapter must add
   an explicit format and size limit rather than hiding continuity in prompts, caches, or an unbounded blob.
+- Synthetic gym restart uses the existing portable hearth package as a participant-private artifact. The
+  engine may retain only its content-safe descriptor, never its path or bytes. Agent-side restore must verify
+  the descriptor before extraction, rebuild derived state from the ledger in staging, check the exact process
+  binding, and install only after success. This proof does not authorize cloning or waking a live resident.
 - A waking host interval has one random run ID and explicit `hosted`/`suspended` checkpoint transitions. A
   clean stop records its time; the next start may record the measured suspended interval. If the previous
   record still says `hosted`, classify the stop as unclean or unknown and leave elapsed downtime unset. Never

@@ -109,7 +109,7 @@ def _validate_state_descriptor(raw: Any) -> dict[str, Any]:
         ):
             raise GymCheckpointError("empty participant state descriptor is invalid")
     elif (
-        descriptor["format"] != "external_artifact"
+        descriptor["format"] != "worldweaver.hearth-package"
         or descriptor["format_version"] != 1
         or not descriptor["artifact_id"]
         or len(descriptor["sha256"]) != 64
