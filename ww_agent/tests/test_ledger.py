@@ -804,6 +804,72 @@ def test_confirmed_action_receipts_are_bounded_and_checkpoint_backed(
     assert ledger.load_recent_confirmed_actions(tmp_path) == actions
 
 
+def test_open_private_activity_is_versioned_checkpoint_state(tmp_path) -> None:
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="reference_activity_continued",
+        payload={"activity": "An old unversioned activity."},
+    )
+    assert ledger.load_open_private_activity(tmp_path) is None
+
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="reference_activity_continued",
+        payload={
+            "activity_state_version": 1,
+            "activity_id": "activity-one",
+            "activity": "Compare the two maps.",
+            "opened_at": "2026-07-20T12:00:00+00:00",
+        },
+        ts="2026-07-20T12:00:00+00:00",
+    )
+    opened = ledger.load_open_private_activity(tmp_path)
+    assert opened is not None
+    assert opened["activity_id"] == "activity-one"
+    assert opened["activity"] == "Compare the two maps."
+
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="reference_activity_finished",
+        payload={
+            "activity_state_version": 1,
+            "activity_id": "stale-activity",
+        },
+    )
+    assert ledger.load_open_private_activity(tmp_path) == opened
+
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="reference_activity_continued",
+        payload={
+            "activity_state_version": 1,
+            "activity_id": "activity-one",
+            "activity": "Annotate the clearer map.",
+            "opened_at": "2026-07-20T12:00:00+00:00",
+        },
+        ts="2026-07-20T12:05:00+00:00",
+    )
+    updated = ledger.load_open_private_activity(tmp_path)
+    assert updated is not None
+    assert updated["activity_id"] == "activity-one"
+    assert updated["activity"] == "Annotate the clearer map."
+    assert updated["opened_at"] == "2026-07-20T12:00:00+00:00"
+    assert updated["updated_at"] == "2026-07-20T12:05:00+00:00"
+
+    ledger.rebuild_runtime_artifacts(tmp_path)
+    assert ledger.load_open_private_activity(tmp_path) == updated
+
+    ledger.append_runtime_event(
+        tmp_path,
+        event_type="reference_activity_finished",
+        payload={
+            "activity_state_version": 1,
+            "activity_id": "activity-one",
+        },
+    )
+    assert ledger.load_open_private_activity(tmp_path) is None
+
+
 def test_normal_append_writes_only_the_ledger_and_checkpoint(tmp_path) -> None:
     ledger.append_runtime_event(tmp_path, event_type="first", payload={})
     ledger.append_runtime_event(tmp_path, event_type="second", payload={})

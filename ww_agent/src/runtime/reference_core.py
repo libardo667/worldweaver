@@ -12,6 +12,7 @@ existing typed world effector.
 from __future__ import annotations
 
 import logging
+import uuid
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -19,9 +20,15 @@ from typing import Any, Awaitable, Callable
 
 from src.identity.loader import ResidentIdentity
 from src.inference.client import InferenceClient
-from src.runtime.ledger import append_runtime_event, load_recent_confirmed_actions
+from src.runtime.ledger import (
+    append_runtime_event,
+    load_open_private_activity,
+    load_recent_confirmed_actions,
+)
 from src.runtime.process_state import (
+    PRIVATE_ACTIVITY_STATE_VERSION,
     ConfirmedActionReceipt,
+    OpenPrivateActivity,
     confirmed_action_payload,
     render_confirmed_action_receipt,
 )
@@ -62,11 +69,16 @@ class ReferenceDecision:
         *,
         allow_read: bool,
         source_names: set[str],
+        has_open_activity: bool = False,
     ) -> "ReferenceDecision":
         if not isinstance(raw, dict):
             raise ReferenceDecisionError("decision must be an object")
         choice = str(raw.get("choice") or "").strip().lower()
-        allowed = {*_FINAL_CHOICES, *({"read"} if allow_read else set())}
+        allowed = {
+            *_FINAL_CHOICES,
+            *({"read"} if allow_read else set()),
+            *({"finish"} if has_open_activity else set()),
+        }
         if choice not in allowed:
             raise ReferenceDecisionError(
                 f"choice must be one of {sorted(allowed)}, got {choice!r}"
@@ -76,6 +88,7 @@ class ReferenceDecision:
             "read": {"choice", "source", "query"},
             "act": {"choice", "action"},
             "continue": {"choice", "activity"},
+            "finish": {"choice"},
             "wait": {"choice"},
         }[choice]
         unexpected = set(raw) - expected_keys
@@ -122,7 +135,7 @@ class ReferenceDecision:
                 raise ReferenceDecisionError("continue.activity is too long")
             return cls(choice=choice, activity=activity)
 
-        return cls(choice="wait")
+        return cls(choice=choice)
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,6 +164,7 @@ class ReferenceObservation:
     reachable: tuple[str, ...] = ()
     sources: tuple[ReferenceSource, ...] = ()
     recent_confirmed_actions: tuple[ConfirmedActionReceipt, ...] = ()
+    open_private_activity: OpenPrivateActivity | None = None
 
     @property
     def source_names(self) -> set[str]:
@@ -391,6 +405,13 @@ def render_reference_observation(observation: ReferenceObservation) -> str:
                 for receipt in observation.recent_confirmed_actions[-5:]
             )
         )
+    if observation.open_private_activity is not None:
+        activity = observation.open_private_activity
+        lines.append(
+            "Private activity you left open:\n"
+            f"- id={activity.activity_id}\n"
+            f"- your description: {activity.activity}"
+        )
     if observation.sources:
         lines.append(
             "Information you may choose to read:\n"
@@ -467,6 +488,7 @@ class ReferenceResidentCore:
         self._offered_live_signals: tuple[LiveSignal, ...] = ()
         self._acknowledged_live_signal_ids: tuple[int, ...] = ()
         self._recent_confirmed_actions = self._load_confirmed_actions()
+        self._open_private_activity = self._load_open_activity()
         self.latest_observation: ReferenceObservation | None = None
 
     @property
@@ -504,14 +526,27 @@ class ReferenceResidentCore:
             for raw in load_recent_confirmed_actions(self._memory_dir)
         )
 
+    def _load_open_activity(self) -> OpenPrivateActivity | None:
+        raw = load_open_private_activity(self._memory_dir)
+        return OpenPrivateActivity.from_dict(raw) if raw is not None else None
+
     def _system_prompt(self, *, allow_read: bool) -> str:
         identity_text = str(
             self._identity.soul
             or self._identity.canonical_soul
             or self._identity.display_name
         ).strip()
-        choices = (
-            "read, act, continue, or wait" if allow_read else "act, continue, or wait"
+        choices = ["act", "continue"]
+        if self._open_private_activity is not None:
+            choices.append("finish")
+        choices.append("wait")
+        if allow_read:
+            choices.insert(0, "read")
+        choice_text = ", ".join(choices[:-1]) + f", or {choices[-1]}"
+        finish_instruction = (
+            ' Finish the open private activity: {"choice":"finish"}.'
+            if self._open_private_activity is not None
+            else ""
         )
         return (
             f"{identity_text}\n\n"
@@ -519,10 +554,11 @@ class ReferenceResidentCore:
             "Speaking, moving, reading, continuing privately, and doing nothing are all valid. "
             "Someone speaking here does not require a reply. "
             "Do not claim that an action succeeded; the world decides that afterward.\n\n"
-            f"Return exactly one JSON object choosing {choices}. "
+            f"Return exactly one JSON object choosing {choice_text}. "
             'Read: {"choice":"read","source":"advertised-name","query":"..."}. '
             'Act: {"choice":"act","action":{"kind":"speak|move|do|write|mark","body":"...","target":null}}. '
             'Continue privately: {"choice":"continue","activity":"..."}. '
+            f"{finish_instruction} "
             'Do nothing: {"choice":"wait"}.'
         )
 
@@ -557,6 +593,7 @@ class ReferenceResidentCore:
                 raw,
                 allow_read=allow_read,
                 source_names=source_names,
+                has_open_activity=self._open_private_activity is not None,
             )
         except ReferenceDecisionError:
             append_runtime_event(
@@ -597,6 +634,7 @@ class ReferenceResidentCore:
         observation = replace(
             observation,
             recent_confirmed_actions=self._recent_confirmed_actions,
+            open_private_activity=self._open_private_activity,
         )
         if self._offered_live_signals:
             observed_source_ids = set(observation.local_speech_ids)
@@ -784,15 +822,52 @@ class ReferenceResidentCore:
             }
 
         if decision.choice == "continue":
+            activity_id = (
+                self._open_private_activity.activity_id
+                if self._open_private_activity is not None
+                else f"activity-{uuid.uuid4().hex}"
+            )
+            opened_at = (
+                self._open_private_activity.opened_at
+                if self._open_private_activity is not None
+                else effective_now.isoformat()
+            )
             append_runtime_event(
                 self._memory_dir,
                 event_type="reference_activity_continued",
-                payload={"activity": decision.activity},
+                payload={
+                    "activity_state_version": PRIVATE_ACTIVITY_STATE_VERSION,
+                    "activity_id": activity_id,
+                    "activity": decision.activity,
+                    "opened_at": opened_at,
+                },
+                ts=effective_now,
             )
+            self._open_private_activity = self._load_open_activity()
             return {
                 "status": "completed",
                 "choice": "continue",
                 "reads": reads,
+                "activity_id": activity_id,
+            }
+
+        if decision.choice == "finish" and self._open_private_activity is not None:
+            activity_id = self._open_private_activity.activity_id
+            append_runtime_event(
+                self._memory_dir,
+                event_type="reference_activity_finished",
+                payload={
+                    "activity_state_version": PRIVATE_ACTIVITY_STATE_VERSION,
+                    "activity_id": activity_id,
+                },
+                ts=effective_now,
+            )
+            self._open_private_activity = self._load_open_activity()
+            return {
+                "status": "completed",
+                "choice": "finish",
+                "reads": reads,
+                "activity_id": activity_id,
             }
 
         append_runtime_event(

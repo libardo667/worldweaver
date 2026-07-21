@@ -10,6 +10,7 @@ from typing import Any, Protocol
 
 CONFIRMED_ACTION_RECEIPT_VERSION = 1
 CONFIRMED_ACTION_KINDS = {"speak", "move", "do", "write", "mark"}
+PRIVATE_ACTIVITY_STATE_VERSION = 1
 
 
 class ActionChoice(Protocol):
@@ -46,6 +47,82 @@ class ConfirmedActionReceipt:
             reference_kind=str(raw.get("reference_kind") or "").strip(),
             reference_id=str(raw.get("reference_id") or "").strip(),
         )
+
+
+@dataclass(frozen=True, slots=True)
+class OpenPrivateActivity:
+    """One resident-authored activity that remains open across activations."""
+
+    activity_id: str
+    activity: str
+    opened_at: str
+    updated_at: str
+
+    @classmethod
+    def from_dict(cls, raw: dict[str, Any]) -> "OpenPrivateActivity":
+        if raw.get("activity_state_version") != PRIVATE_ACTIVITY_STATE_VERSION:
+            raise ValueError("unsupported private-activity state version")
+        activity_id = str(raw.get("activity_id") or "").strip()
+        activity = str(raw.get("activity") or "").strip()
+        opened_at = str(raw.get("opened_at") or "").strip()
+        updated_at = str(raw.get("updated_at") or "").strip()
+        if not activity_id or not activity or len(activity) > 500:
+            raise ValueError("invalid private-activity state")
+        return cls(
+            activity_id=activity_id,
+            activity=activity,
+            opened_at=opened_at,
+            updated_at=updated_at,
+        )
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "activity_state_version": PRIVATE_ACTIVITY_STATE_VERSION,
+            "activity_id": self.activity_id,
+            "activity": self.activity,
+            "opened_at": self.opened_at,
+            "updated_at": self.updated_at,
+        }
+
+
+def advance_open_private_activity(
+    current: dict[str, Any] | None,
+    event: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Apply one explicitly versioned activity event without interpreting prose."""
+
+    event_type = str(event.get("event_type") or "").strip()
+    if event_type not in {
+        "reference_activity_continued",
+        "reference_activity_finished",
+    }:
+        return current
+    payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+    if payload.get("activity_state_version") != PRIVATE_ACTIVITY_STATE_VERSION:
+        return current
+    activity_id = str(payload.get("activity_id") or "").strip()
+    if not activity_id:
+        return current
+
+    if event_type == "reference_activity_finished":
+        if current and str(current.get("activity_id") or "").strip() == activity_id:
+            return None
+        return current
+
+    activity = str(payload.get("activity") or "").strip()
+    opened_at = str(payload.get("opened_at") or "").strip()
+    updated_at = str(event.get("ts") or "").strip()
+    candidate = {
+        "activity_state_version": PRIVATE_ACTIVITY_STATE_VERSION,
+        "activity_id": activity_id,
+        "activity": activity,
+        "opened_at": opened_at,
+        "updated_at": updated_at,
+    }
+    try:
+        return OpenPrivateActivity.from_dict(candidate).as_dict()
+    except ValueError:
+        return current
 
 
 def project_confirmed_action_receipt(

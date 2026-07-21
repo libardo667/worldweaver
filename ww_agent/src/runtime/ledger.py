@@ -16,7 +16,10 @@ from typing import Any, Iterator
 import fcntl
 
 from src.runtime.relations import RELATIONAL_EVENT_SCHEMA_VERSION
-from src.runtime.process_state import project_confirmed_action_receipt
+from src.runtime.process_state import (
+    advance_open_private_activity,
+    project_confirmed_action_receipt,
+)
 
 _LEDGER_FILENAME = "runtime_ledger.jsonl"
 _CHECKPOINT_FILENAME = "runtime_checkpoint.json"
@@ -32,9 +35,9 @@ _LEGACY_DERIVED_FILENAMES = {
 }
 
 CHECKPOINT_FORMAT_VERSION = 2
-REDUCER_FORMAT_VERSION = 5
+REDUCER_FORMAT_VERSION = 6
 PROJECTION_FORMAT_VERSIONS = {
-    "runtime": 2,
+    "runtime": 3,
     "subjective": 1,
     "memory": 1,
     "subjective_facts": 1,
@@ -836,6 +839,7 @@ def _build_runtime_projection(
     last_mail: dict[str, Any] | None = None
     last_research: dict[str, Any] | None = None
     recent_confirmed_actions: list[dict[str, Any]] = []
+    open_private_activity: dict[str, Any] | None = None
 
     for event in events:
         event_type = str(event.get("event_type") or "").strip()
@@ -885,6 +889,10 @@ def _build_runtime_projection(
         action_receipt = project_confirmed_action_receipt(event)
         if action_receipt is not None:
             recent_confirmed_actions.append(action_receipt)
+        open_private_activity = advance_open_private_activity(
+            open_private_activity,
+            event,
+        )
 
     return {
         "updated_at": as_of,
@@ -909,6 +917,7 @@ def _build_runtime_projection(
         "recent_confirmed_actions": recent_confirmed_actions[
             -RECENT_CONFIRMED_ACTION_LIMIT:
         ],
+        "open_private_activity": open_private_activity,
         "last_grounding": last_grounding,
         "last_movement": last_movement,
         "last_mail": last_mail,
@@ -2247,6 +2256,14 @@ def _advance_runtime_projection(
     action_receipt = project_confirmed_action_receipt(event)
     if action_receipt is not None:
         recent_confirmed_actions.append(action_receipt)
+    open_private_activity = advance_open_private_activity(
+        (
+            dict(runtime_projection["open_private_activity"])
+            if isinstance(runtime_projection.get("open_private_activity"), dict)
+            else None
+        ),
+        event,
+    )
     runtime_projection.update(
         {
             "updated_at": _replay_as_of_iso([event]),
@@ -2260,6 +2277,7 @@ def _advance_runtime_projection(
             "recent_confirmed_actions": recent_confirmed_actions[
                 -RECENT_CONFIRMED_ACTION_LIMIT:
             ],
+            "open_private_activity": open_private_activity,
         }
     )
     if event_type in {"grounding_observed", "ground_intent_executed"}:
@@ -2312,6 +2330,14 @@ def load_recent_confirmed_actions(memory_dir: Path) -> list[dict[str, Any]]:
     state = load_current_runtime_state(memory_dir)
     actions = list(state.runtime_projection.get("recent_confirmed_actions") or [])
     return deepcopy(actions[-RECENT_CONFIRMED_ACTION_LIMIT:])
+
+
+def load_open_private_activity(memory_dir: Path) -> dict[str, Any] | None:
+    """Load the one open private activity from the resident's checkpoint."""
+
+    state = load_current_runtime_state(memory_dir)
+    activity = state.runtime_projection.get("open_private_activity")
+    return deepcopy(activity) if isinstance(activity, dict) else None
 
 
 def _advance_lifecycle_state(state: dict[str, Any], event: dict[str, Any]) -> tuple[

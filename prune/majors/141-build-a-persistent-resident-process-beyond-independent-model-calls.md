@@ -72,6 +72,20 @@ second prompt contains the confirmed place, target, and trace ID without the mar
 full-ledger rebuild paths produce the same bounded list. This solves the Mira bookkeeping failure; it does not
 yet preserve open activities, resident timers, model state, or elapsed-time distinctions.
 
+## Second slice — one open private activity (2026-07-20)
+
+The reference adapter can now create and retain one explicitly continued private activity. The checkpoint
+stores a generated activity ID, the resident's exact bounded description, and open/update times. Rebuilding
+the core over the same hearth restores that record directly; it does not search recent prose or ask a model
+to summarize what was happening. Continuing changes the description while retaining the ID. Waiting or acting
+does not close it, and an explicit finish carrying the matching ID does. Old unversioned continuation events
+remain history but are not guessed into current state, while stale finish IDs cannot close newer work.
+
+Synthetic tests prove core destruction and rebuild, stable identity across an update, explicit closure,
+checkpoint/full-replay agreement, and isolation between two hearth folders. This is still a single bounded
+adapter field, not a hidden task manager or a claim that private computation ran while the host was stopped.
+Resident-chosen return time and named early-wake event classes remain the next separate slice.
+
 ## Files Affected
 
 - `ww_agent/src/resident.py`

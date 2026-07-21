@@ -37,6 +37,11 @@ inputs in the identity loader; they do not restore the old ownership model.
 - A confirmed reference-loop action writes a versioned structural receipt. The checkpoint retains at most
   twelve and the prompt may show at most five, using only kind, place, target, time, and stable identifiers.
   Never turn those receipts into model-written summaries or copy action prose into this working-state view.
+- The reference loop may keep one explicitly continued private activity in the hearth checkpoint. It has a
+  generated stable ID and at most 500 characters of resident-authored description. Continuing updates that
+  same ID; waiting, reading, acting, and interruption leave it open; only an explicit matching finish event
+  closes it. Do not infer active work from old unversioned continuation prose, create multiple hidden work
+  queues, expose the description to a city, or treat an interrupted activation as cancellation.
 - Normal resident creation is model-free and one-at-a-time. It writes a chosen name, stable ID, dormant
   hearth manifest, public identity card, and host-sealed signing key while leaving the private ledger empty.
   City admission, activation, and waking are separate operator acts. The old Doula and its model-written
@@ -81,8 +86,9 @@ inputs in the identity loader; they do not restore the old ownership model.
   Returned queries and prose are transient final-call input, not durable ledger content. Keep ordinary
   `information_accessed` receipts content-blind; the growth source may retain only its proposal record ID
   because explicit adoption depends on proof of exact inspection.
-  The reading window closes after exactly one read. The final model call may act, continue privately, or wait,
-  but cannot request a second source. Immediate embodied observation remains outside this elective-read limit.
+  The reading window closes after exactly one read. The final model call may act, continue or finish private
+  activity, or wait, but cannot request a second source. Immediate embodied observation remains outside this
+  elective-read limit.
 - Federation route discovery is an elective city source. Reading possible routes must not move a resident;
   actual city-to-city travel belongs to the resident host and must use the engine's recoverable departure
   and arrival contract before switching its WorldWeaver client.

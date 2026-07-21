@@ -26,8 +26,11 @@ The ledger holds durable lifecycle evidence and content-blind inference, informa
 versioned checkpoint provides current state without rereading the resident's full life. Records have serialized
 sequence numbers, durable writes, explicit corruption handling, deterministic replay, and open-work indexes
 that survive bounded history. An ordinary reference-loop tick does not parse cold history. Exact prompts,
-completions, read results, and action prose are not retained. A final private continuation is recorded only in
-the resident's private ledger.
+completions, read results, and action prose are not retained. A final private continuation is recorded in the
+resident's private ledger and reduced into one open checkpoint record. That record carries a generated ID and
+the resident's own bounded description. It survives a rebuilt core, retains its ID when continued, remains
+open while the resident waits or acts, and closes only when the resident explicitly finishes it. It is not
+copied into city state, expanded into a hidden task queue, or reconstructed from old unversioned prose.
 
 The checkpoint now also retains the newest twelve confirmed reference-loop actions as typed receipts. A newly
 built reference core loads them and may show the newest five as exact kind, place, target, time, and stable

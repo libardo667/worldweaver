@@ -276,6 +276,81 @@ def test_recreated_reference_core_loads_confirmed_action_receipts(tmp_path):
     assert "Things you recently did that the world confirmed:" not in other_prompt
 
 
+def test_private_activity_keeps_one_identity_across_core_rebuilds(tmp_path):
+    started = datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc)
+    first, memory_dir, _acted, _reads = _core(
+        tmp_path,
+        responses=[
+            {"choice": "continue", "activity": "Compare the two maps."},
+        ],
+    )
+
+    first_result = asyncio.run(first.tick_once(now=started))
+    activity_id = first_result["activity_id"]
+    assert activity_id.startswith("activity-")
+
+    continued, _same_memory, _acted_again, _reads_again = _core(
+        tmp_path,
+        responses=[
+            {"choice": "continue", "activity": "Annotate the clearer map."},
+        ],
+    )
+    continued_result = asyncio.run(
+        continued.tick_once(now=started + timedelta(minutes=1))
+    )
+    assert continued_result["activity_id"] == activity_id
+    assert f"id={activity_id}" in continued._llm.calls[0][1]
+    assert "your description: Compare the two maps." in continued._llm.calls[0][1]
+
+    waited, _same_memory, _acted_again, _reads_again = _core(
+        tmp_path,
+        responses=[{"choice": "wait"}],
+    )
+    asyncio.run(waited.tick_once(now=started + timedelta(minutes=2)))
+    assert "your description: Annotate the clearer map." in waited._llm.calls[0][1]
+
+    finishing, _same_memory, _acted_again, _reads_again = _core(
+        tmp_path,
+        responses=[{"choice": "finish"}],
+    )
+    finish_result = asyncio.run(finishing.tick_once(now=started + timedelta(minutes=3)))
+    assert finish_result == {
+        "status": "completed",
+        "choice": "finish",
+        "reads": 0,
+        "activity_id": activity_id,
+    }
+
+    restarted, _same_memory, _acted_again, _reads_again = _core(
+        tmp_path,
+        responses=[{"choice": "wait"}],
+    )
+    asyncio.run(restarted.tick_once(now=started + timedelta(minutes=4)))
+    assert "Private activity you left open:" not in restarted._llm.calls[0][1]
+    assert "finish" not in restarted._llm.calls[0][0]
+
+    event_types = [event["event_type"] for event in load_runtime_events(memory_dir)]
+    assert event_types.count("reference_activity_continued") == 2
+    assert event_types.count("reference_activity_finished") == 1
+
+
+def test_private_activity_does_not_cross_hearths(tmp_path):
+    first, _memory_dir, _acted, _reads = _core(
+        tmp_path,
+        responses=[{"choice": "continue", "activity": "Sort the seed packets."}],
+    )
+    asyncio.run(first.tick_once())
+
+    other, _other_memory, _other_acted, _other_reads = _core(
+        tmp_path / "other-resident",
+        responses=[{"choice": "wait"}],
+    )
+    asyncio.run(other.tick_once())
+
+    assert "Sort the seed packets." not in other._llm.calls[0][1]
+    assert "Private activity you left open:" not in other._llm.calls[0][1]
+
+
 def test_failed_after_read_inference_promotes_no_provisional_choice(tmp_path):
     core, memory_dir, acted, reads = _core(
         tmp_path,

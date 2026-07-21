@@ -118,7 +118,10 @@ that process continuity proves a human-like inner life.
 Major 141's first slice is now in place. The existing private checkpoint retains a bounded typed view of
 confirmed own actions, and a rebuilt reference core can recover exact action kind, place, target, time, and
 stable identifiers without receiving action prose. A synthetic mark survives core destruction and rebuild.
-Next, give an explicitly continued private activity a stable reference and resident-chosen return time.
+The second slice gives one explicitly continued private activity a stable ID, exact bounded resident-authored
+description, deterministic checkpoint replay, and explicit completion. It survives a rebuilt core without
+being reconstructed from recent prose and stays isolated to its hearth. Next, add a resident-chosen return
+time and a small named set of event classes that may offer an earlier activation.
 
 ### 4. Add the private-to-public making boundary
 
