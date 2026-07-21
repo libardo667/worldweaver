@@ -15,6 +15,7 @@ from src.services.gym_presentation import render_html, render_terminal
 from src.services.resident_gym import (
     ProductionRuleGym,
     run_first_conversation,
+    run_quiet_interval,
     run_waiting_letter,
 )
 from src.services.session_service import _session_locks, get_state_manager
@@ -179,6 +180,40 @@ def test_waiting_letter_view_has_a_fact_backed_post_trail(db_session):
     assert "The post trail" in page
     assert "sent" in page and "waiting" in page and "acknowledged" in page
     assert "The moving envelope is only a visual key." in page
+
+
+def test_quiet_interval_mixes_live_speech_with_a_two_day_rule(db_session):
+    result = run_quiet_interval(db_session)
+
+    assert result.schema_version == 2
+    assert [
+        record.kind
+        for record in result.records
+        if record.kind in {"sublocation_active", "sublocation_expired"}
+    ] == ["sublocation_active", "sublocation_active", "sublocation_expired"]
+    assert [
+        record.detail["elapsed_seconds"]
+        for record in result.records
+        if record.kind == "time_advanced"
+    ] == [47 * 3600, 2 * 3600]
+    heard = [record for record in result.records if record.kind == "heard"]
+    assert [record.detail["message"] for record in heard] == [
+        "I left a dry seat at the willow bench."
+    ]
+    assert result.records[0].occurred_at == "2026-07-20T12:00:00+00:00"
+    assert result.records[-1].occurred_at == "2026-07-22T13:00:00+00:00"
+
+
+def test_quiet_interval_view_marks_clock_jumps_as_display_only(db_session):
+    result = run_quiet_interval(db_session)
+
+    terminal = render_terminal(result)
+    page = render_html(result)
+
+    assert "advanced 47 hours without sleeping" in terminal
+    assert "The quiet interval" in page
+    assert "No process slept through these hours." in page
+    assert "Jul 22 13:00" in page
 
 
 def test_first_gym_episode_matches_authenticated_http_rules(db_session, monkeypatch):

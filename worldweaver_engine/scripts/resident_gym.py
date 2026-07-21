@@ -25,6 +25,7 @@ from src.database import Base  # noqa: E402
 from src.services.gym_presentation import render_html, render_terminal  # noqa: E402
 from src.services.resident_gym import (  # noqa: E402
     run_first_conversation,
+    run_quiet_interval,
     run_waiting_letter,
 )
 from src.services.session_service import _session_locks  # noqa: E402
@@ -36,7 +37,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--episode",
-        choices=("footbridge", "waiting-letter"),
+        choices=("footbridge", "waiting-letter", "quiet-interval"),
         default="footbridge",
         help="episode to run (default: footbridge)",
     )
@@ -65,16 +66,18 @@ def main() -> int:
 
     try:
         with session_factory() as db:
-            result = (
-                run_waiting_letter(db)
-                if args.episode == "waiting-letter"
-                else run_first_conversation(db)
-            )
-        default_name = (
-            "waiting-letter.html"
-            if args.episode == "waiting-letter"
-            else "footbridge-hello.html"
-        )
+            runners = {
+                "footbridge": run_first_conversation,
+                "waiting-letter": run_waiting_letter,
+                "quiet-interval": run_quiet_interval,
+            }
+            result = runners[args.episode](db)
+        default_names = {
+            "footbridge": "footbridge-hello.html",
+            "waiting-letter": "waiting-letter.html",
+            "quiet-interval": "long-afternoon.html",
+        }
+        default_name = default_names[args.episode]
         output = (
             (args.output or WORKSPACE_ROOT / ".runs" / "gym" / default_name)
             .expanduser()

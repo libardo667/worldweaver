@@ -10,10 +10,12 @@ alternate movement, speech, presence, or signal-delivery rules.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
 
 from sqlalchemy.orm import Session
 
+from .clock import Clock, ControlledClock, SystemClock
 from .correspondence import (
     SendCorrespondenceCommand,
     acknowledge_correspondence,
@@ -29,6 +31,11 @@ from .session_lifecycle import (
     retire_session_presence,
 )
 from .session_service import get_state_manager, save_state
+from .sublocations import (
+    active_sublocations,
+    create_or_refresh_ephemeral,
+    sublocation_payload,
+)
 from .world_context import build_world_context_header
 from .world_memory import seed_location_graph
 
@@ -48,6 +55,7 @@ class GymRecord:
     """One fact observed at a production service boundary."""
 
     sequence: int
+    occurred_at: str
     kind: str
     actor: str | None
     location: str | None
@@ -90,12 +98,20 @@ class _SignalCursor:
 class ProductionRuleGym:
     """Arrange and observe an episode through the live domain services."""
 
-    def __init__(self, db: Session, *, episode: str, world_id: str):
+    def __init__(
+        self,
+        db: Session,
+        *,
+        episode: str,
+        world_id: str,
+        clock: Clock | None = None,
+    ):
         self.db = db
         self.episode = str(episode or "").strip()
         self.world_id = str(world_id or "").strip()
         if not self.episode or not self.world_id:
             raise ValueError("episode and world_id are required")
+        self.clock = clock or SystemClock()
         self._locations: tuple[str, ...] = ()
         self._participants: dict[str, GymParticipant] = {}
         self._cursors: dict[str, _SignalCursor] = {}
@@ -112,12 +128,30 @@ class ProductionRuleGym:
         self._records.append(
             GymRecord(
                 sequence=len(self._records) + 1,
+                occurred_at=self.clock.now().isoformat(),
                 kind=kind,
                 actor=participant.display_name if participant is not None else None,
                 location=location,
                 detail=dict(detail or {}),
             )
         )
+
+    def advance_time(self, elapsed: timedelta) -> datetime:
+        """Advance only an explicitly controlled gym clock."""
+
+        if not isinstance(self.clock, ControlledClock):
+            raise ValueError("the live system clock cannot be advanced")
+        before = self.clock.now()
+        after = self.clock.advance(elapsed)
+        self._record(
+            "time_advanced",
+            detail={
+                "from": before.isoformat(),
+                "to": after.isoformat(),
+                "elapsed_seconds": int(elapsed.total_seconds()),
+            },
+        )
+        return after
 
     def arrange_world(self, locations: Iterable[str]) -> None:
         """Create a bounded synthetic setting with production seeding helpers."""
@@ -272,6 +306,66 @@ class ProductionRuleGym:
             detail={"message_ids": list(receipt.acknowledged_ids)},
         )
 
+    def create_sublocation(
+        self,
+        session_id: str,
+        *,
+        label: str,
+        ttl_seconds: int,
+    ) -> str:
+        """Create a bounded child place using the production lifetime rule."""
+
+        participant = self._participant(session_id)
+        parent_location = str(
+            get_state_manager(session_id, self.db).get_variable("location") or ""
+        )
+        row = create_or_refresh_ephemeral(
+            self.db,
+            parent_location=parent_location,
+            label=label,
+            created_by_session=session_id,
+            ttl_seconds=ttl_seconds,
+            now=self.clock.now(),
+        )
+        self.db.commit()
+        self.db.refresh(row)
+        payload = sublocation_payload(row)
+        self._record(
+            "sublocation_created",
+            participant=participant,
+            location=parent_location,
+            detail={
+                "sublocation_id": payload["sublocation_id"],
+                "label": payload["label"],
+                "expires_at": payload["expires_at"],
+            },
+        )
+        return str(payload["sublocation_id"])
+
+    def inspect_sublocation(
+        self,
+        *,
+        parent_location: str,
+        sublocation_id: str,
+    ) -> bool:
+        """Ask the production lifetime rule whether a child place is still active."""
+
+        active_ids = {
+            str(sublocation_payload(row)["sublocation_id"])
+            for row in active_sublocations(
+                self.db,
+                parent_location=parent_location,
+                now=self.clock.now(),
+            )
+        }
+        active = sublocation_id in active_ids
+        self._record(
+            "sublocation_active" if active else "sublocation_expired",
+            location=parent_location,
+            detail={"sublocation_id": sublocation_id},
+        )
+        return active
+
     @staticmethod
     def _cursor_from_payload(payload: dict[str, Any]) -> _SignalCursor:
         cursor = payload.get("cursor")
@@ -379,7 +473,7 @@ class ProductionRuleGym:
         }
         return GymEpisodeResult(
             schema="worldweaver.resident-gym.episode",
-            schema_version=1,
+            schema_version=2,
             episode=self.episode,
             world_id=self.world_id,
             locations=self._locations,
@@ -396,6 +490,7 @@ def run_first_conversation(db: Session) -> GymEpisodeResult:
         db,
         episode="The Footbridge Hello",
         world_id="gym-footbridge-world",
+        clock=ControlledClock(datetime(2026, 7, 20, 9, 0, tzinfo=timezone.utc)),
     )
     gym.arrange_world(("Willow Court", "Footbridge"))
 
@@ -444,6 +539,7 @@ def run_waiting_letter(db: Session) -> GymEpisodeResult:
         db,
         episode="The Waiting Letter",
         world_id="gym-waiting-letter-world",
+        clock=ControlledClock(datetime(2026, 7, 20, 9, 0, tzinfo=timezone.utc)),
     )
     gym.arrange_world(("Willow Court", "Footbridge"))
     mara = GymParticipant(
@@ -480,4 +576,46 @@ def run_waiting_letter(db: Session) -> GymEpisodeResult:
     if first_offer and second_offer:
         gym.acknowledge_mail(returned_ivo.session_id, (message_id,))
     gym.check_mail(returned_ivo.session_id)
+    return gym.result()
+
+
+def run_quiet_interval(db: Session) -> GymEpisodeResult:
+    """Mix a live exchange with a skipped two-day production lifetime."""
+
+    gym = ProductionRuleGym(
+        db,
+        episode="The Long Afternoon",
+        world_id="gym-long-afternoon-world",
+        clock=ControlledClock(datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc)),
+    )
+    gym.arrange_world(("Willow Court", "Footbridge"))
+    mara = GymParticipant(
+        session_id="gym-afternoon-mara",
+        actor_id="gym-afternoon-actor-mara",
+        display_name="Mara",
+        implementation="scripted_actor",
+    )
+    ivo = GymParticipant(
+        session_id="gym-afternoon-ivo",
+        actor_id="gym-afternoon-actor-ivo",
+        display_name="Ivo",
+        implementation="mechanical_listener",
+    )
+    gym.join(mara, location="Willow Court")
+    gym.join(ivo, location="Willow Court")
+    gym.listen(mara.session_id)
+    gym.listen(ivo.session_id)
+    gym.speak(mara.session_id, "I left a dry seat at the willow bench.")
+    gym.listen(ivo.session_id)
+
+    bench_id = gym.create_sublocation(
+        mara.session_id,
+        label="willow bench",
+        ttl_seconds=2 * 86400,
+    )
+    gym.inspect_sublocation(parent_location="Willow Court", sublocation_id=bench_id)
+    gym.advance_time(timedelta(hours=47))
+    gym.inspect_sublocation(parent_location="Willow Court", sublocation_id=bench_id)
+    gym.advance_time(timedelta(hours=2))
+    gym.inspect_sublocation(parent_location="Willow Court", sublocation_id=bench_id)
     return gym.result()

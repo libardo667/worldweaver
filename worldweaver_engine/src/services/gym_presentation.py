@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from html import escape
 
 from .resident_gym import GymEpisodeResult, GymRecord
@@ -23,7 +24,18 @@ _ICONS = {
     "letter_waiting": "📬",
     "letter_acknowledged": "📨",
     "mailbox_empty": "🍃",
+    "time_advanced": "⏩",
+    "sublocation_created": "🪑",
+    "sublocation_active": "🌱",
+    "sublocation_expired": "🍂",
 }
+
+
+def _record_time(record: GymRecord) -> str:
+    try:
+        return datetime.fromisoformat(record.occurred_at).strftime("%b %d %H:%M")
+    except ValueError:
+        return record.occurred_at
 
 
 def _record_sentence(record: GymRecord) -> str:
@@ -72,6 +84,20 @@ def _record_sentence(record: GymRecord) -> str:
         return f"{actor} acknowledged message {message_ids or 'none'}."
     if record.kind == "mailbox_empty":
         return f"{actor}'s pending mailbox was empty."
+    if record.kind == "time_advanced":
+        hours = int(detail.get("elapsed_seconds") or 0) // 3600
+        return f"The controlled clock advanced {hours} hours without sleeping."
+    if record.kind == "sublocation_created":
+        return (
+            f"{actor} created {detail.get('label')} under {record.location}; "
+            f"it expires at {detail.get('expires_at')}."
+        )
+    if record.kind == "sublocation_active":
+        return f"{detail.get('sublocation_id')} was still active at {record.location}."
+    if record.kind == "sublocation_expired":
+        return (
+            f"{detail.get('sublocation_id')} was no longer active at {record.location}."
+        )
     return f"{actor}: {record.kind.replace('_', ' ')}"
 
 
@@ -97,7 +123,10 @@ def render_terminal(result: GymEpisodeResult) -> str:
     ]
     for record in result.records:
         icon = _ICONS.get(record.kind, "·")
-        lines.append(f"  {record.sequence:02d} {icon}  {_record_sentence(record)}")
+        lines.append(
+            f"  {record.sequence:02d} {icon}  {_record_time(record)}  "
+            f"{_record_sentence(record)}"
+        )
     lines.extend(
         [
             "",
@@ -159,6 +188,7 @@ def render_html(result: GymEpisodeResult) -> str:
             "<li>"
             f'<span class="step">{record.sequence:02d}</span>'
             f'<span class="icon">{icon}</span>'
+            f'<time datetime="{escape(record.occurred_at)}">{escape(_record_time(record))}</time>'
             f"<span>{escape(_record_sentence(record))}</span>"
             "</li>"
         )
@@ -182,6 +212,21 @@ def render_html(result: GymEpisodeResult) -> str:
         <span class="post-state {'complete' if acknowledged else ''}"><b>📨</b> acknowledged</span>
       </div>
       <p class="post-note">These are stored correspondence states. The moving envelope is only a visual key.</p>
+    </section>"""
+
+    time_jumps = [record for record in result.records if record.kind == "time_advanced"]
+    time_panel = ""
+    if time_jumps:
+        jump_cards = "".join(
+            '<span class="time-jump"><b>☀️ ··· 🌙 ··· ☀️</b>'
+            f"{escape(_record_sentence(record))}</span>"
+            for record in time_jumps
+        )
+        time_panel = f"""
+    <section class="panel time-panel">
+      <h2>The quiet interval</h2>
+      <div class="time-route">{jump_cards}</div>
+      <p class="post-note">The test clock moved directly. No process slept through these hours.</p>
     </section>"""
 
     return f"""<!doctype html>
@@ -233,9 +278,10 @@ def render_html(result: GymEpisodeResult) -> str:
     .participants {{ display: flex; flex-wrap: wrap; gap: .7rem; }}
     .participants li {{ display: flex; align-items: center; gap: .45rem; padding: .5rem .8rem; background: var(--moss); border-radius: .7rem; }}
     .participants small {{ color: #45534a; margin-left: .3rem; }}
-    .timeline li {{ display: grid; grid-template-columns: 2.4rem 2.2rem 1fr; gap: .5rem; padding: .8rem 0; border-top: 1px solid #879486; }}
+    .timeline li {{ display: grid; grid-template-columns: 2.4rem 2.2rem 7rem 1fr; gap: .5rem; padding: .8rem 0; border-top: 1px solid #879486; }}
     .step {{ font: 700 .85rem/2rem ui-monospace, monospace; color: var(--leaf); }}
     .icon {{ font-size: 1.35rem; }}
+    .timeline time {{ color: #526056; font: 700 .78rem/2rem ui-monospace, monospace; }}
     .post-route {{ display: grid; grid-template-columns: auto minmax(3rem, 1fr) auto minmax(2rem, .5fr) auto; align-items: center; gap: .7rem; }}
     .post-state {{ display: grid; justify-items: center; gap: .25rem; min-width: 7rem; padding: .7rem; color: #59635b; border: 2px dashed #879486; border-radius: 1rem; font-weight: 800; }}
     .post-state b {{ font-size: 2rem; }}
@@ -243,6 +289,9 @@ def render_html(result: GymEpisodeResult) -> str:
     .post-path {{ position: relative; height: .35rem; border-top: 3px dotted var(--leaf); }}
     .courier {{ position: absolute; left: 0; top: -.95rem; animation: carry 3.2s ease-in-out infinite; }}
     .post-note {{ margin-bottom: 0; color: #45534a; font-size: .9rem; }}
+    .time-route {{ display: flex; flex-wrap: wrap; gap: 1rem; }}
+    .time-jump {{ flex: 1 1 18rem; display: grid; gap: .5rem; padding: 1rem; background: #e8f0e1; border: 2px solid var(--ink); border-radius: 1rem; }}
+    .time-jump b {{ color: var(--leaf); letter-spacing: .2em; }}
     @keyframes carry {{ 0%, 15% {{ left: 0; }} 75%, 100% {{ left: calc(100% - 1.2rem); }} }}
     @media (prefers-reduced-motion: reduce) {{ .courier {{ animation: none; left: 50%; }} }}
     footer {{ margin-top: 2rem; color: #45534a; font-size: .95rem; }}
@@ -252,6 +301,9 @@ def render_html(result: GymEpisodeResult) -> str:
       .path {{ flex-basis: 3.5rem; width: .55rem; height: 3.5rem; }}
       .path::after {{ content: "↕"; }}
       .participants li {{ width: 100%; }}
+      .timeline li {{ grid-template-columns: 2rem 2rem 1fr; }}
+      .timeline time {{ grid-column: 3; line-height: 1.2; }}
+      .timeline li > span:last-child {{ grid-column: 1 / -1; }}
       .post-route {{ grid-template-columns: 1fr; }}
       .post-path {{ width: .35rem; height: 2rem; border-top: 0; border-left: 3px dotted var(--leaf); justify-self: center; }}
       .courier {{ display: none; }}
@@ -273,6 +325,7 @@ def render_html(result: GymEpisodeResult) -> str:
       <ul class="participants">{''.join(participant_cards)}</ul>
     </section>
     {mail_panel}
+    {time_panel}
     <section class="panel">
       <h2>What happened</h2>
       <ol class="timeline">{''.join(timeline)}</ol>
