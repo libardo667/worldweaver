@@ -22,7 +22,7 @@
       .small { fill: #cbd5e1; font: 400 21px Inter, system-ui, sans-serif; text-anchor: middle; }
       .code { fill: #e2e8f0; font: 500 19px ui-monospace, SFMono-Regular, Consolas, monospace; text-anchor: middle; }
       .edge-label { fill: #ffffff; font: 650 21px Inter, system-ui, sans-serif; text-anchor: middle; paint-order: stroke; stroke: #050b14; stroke-width: 9; }
-      .arrow { fill: none; stroke: #f8fafc; stroke-width: 6; marker-end: url(#arrow); }
+      .arrow { fill: none; stroke: #f8fafc; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; marker-end: url(#ww-dependency-arrowhead); }
       .arrow-blue { stroke: #38bdf8; }
       .arrow-green { stroke: #4ade80; }
       .arrow-purple { stroke: #e879f9; stroke-dasharray: 18 12; }
@@ -31,8 +31,8 @@
       .pill { fill: #172033; stroke-width: 3; }
       .pill-text { fill: #ffffff; font: 650 20px Inter, system-ui, sans-serif; text-anchor: middle; }
     </style>
-    <marker id="arrow" markerWidth="18" markerHeight="18" refX="14" refY="6" orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L0,12 L15,6 z" fill="context-stroke"/>
+    <marker id="ww-dependency-arrowhead" viewBox="0 0 20 16" markerWidth="20" markerHeight="16" refX="19" refY="8" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M1,1 L19,8 L1,15 z" fill="context-stroke"/>
     </marker>
   </defs>
 
@@ -177,8 +177,8 @@
     <text class="small" x="800" y="1254">typed action attempt</text>
     <text class="small" x="800" y="1285">confirmed receipt</text>
 
-    <path class="arrow arrow-blue" d="M835 1100 L800 1165"/>
-    <path class="arrow arrow-blue" d="M875 1100 L420 1165"/>
+    <path class="arrow arrow-blue" d="M850 1100 V1135 H410 V1152"/>
+    <path class="arrow arrow-blue" d="M970 1100 V1135 H800 V1152"/>
 
     <rect class="node node-live" x="380" y="1340" width="440" height="55" rx="18"/>
     <text class="small" x="600" y="1376">signed city client → public boundary</text>
@@ -218,8 +218,8 @@
     <text class="small" x="1855" y="1244">change one event</text>
     <text class="small" x="1855" y="1275">compare later structure</text>
 
-    <path class="arrow arrow-purple" d="M1960 1095 V1130 H1445 V1155"/>
-    <path class="arrow arrow-purple" d="M1620 1233 H1675"/>
+    <path class="arrow arrow-purple" d="M1960 1095 V1125 H1445 V1142"/>
+    <path class="arrow arrow-purple" d="M1620 1233 H1662"/>
 
     <rect class="node node-future" x="1420" y="1340" width="460" height="55" rx="18"/>
     <text class="small" x="1650" y="1376">synthetic trajectories → separate scoring</text>
