@@ -96,6 +96,12 @@ export type EntryInfo = {
   entry_nodes: EntryNode[];
 };
 
+export type CurrentSession = {
+  active: boolean;
+  session_id: string | null;
+  location: string | null;
+};
+
 export type PlaceContext = {
   location: string;
   city_id: string;

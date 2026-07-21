@@ -165,6 +165,14 @@ class SessionBootstrapResponse(BaseModel):
     bootstrap_diagnostics: Optional[Dict[str, Any]] = None
 
 
+class CurrentSessionResponse(BaseModel):
+    """The authenticated human actor's one live session on this shard, if any."""
+
+    active: bool
+    session_id: Optional[SessionId] = None
+    location: Optional[str] = None
+
+
 class WorldFactItem(BaseModel):
     """Single world-fact assertion from structured LLM output."""
 

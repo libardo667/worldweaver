@@ -9,6 +9,7 @@
 import type {
   AuthResponse,
   ChatMessage,
+  CurrentSession,
   DurableObjectView,
   EntryInfo,
   Grounding,
@@ -171,6 +172,10 @@ async function patchJson<T>(path: string, body: unknown): Promise<T> {
 
 export function getTerms(): Promise<{ terms: string }> {
   return getJson("/api/auth/terms");
+}
+
+export function getCurrentSession(): Promise<CurrentSession> {
+  return getJson("/api/session/current", undefined, true);
 }
 
 export function postRegister(input: { email: string; password: string; password_confirmation: string; terms_accepted: boolean }): Promise<AuthResponse> {

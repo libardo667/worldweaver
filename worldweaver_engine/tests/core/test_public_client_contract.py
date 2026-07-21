@@ -44,6 +44,20 @@ def test_public_client_authenticates_participant_scoped_reads():
         assert call in source
 
 
+def test_public_client_recovers_the_authenticated_actors_existing_session():
+    source = PUBLIC_API.read_text(encoding="utf-8")
+    join = (PUBLIC_COMPONENTS / "JoinFlow.tsx").read_text(encoding="utf-8")
+    store = (ENGINE_ROOT / "client-public" / "src" / "session" / "store.ts").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'getJson("/api/session/current", undefined, true)' in source
+    assert "const existing = await getCurrentSession()" in join
+    assert "setSessionId(existing.session_id)" in join
+    assert "setStandingPlace(existing.location)" in join
+    assert "export function setSessionId" in store
+
+
 def test_public_client_keeps_actor_password_recovery_on_the_public_entry_path():
     source = PUBLIC_API.read_text(encoding="utf-8")
     app = (ENGINE_ROOT / "client-public" / "src" / "App.tsx").read_text(

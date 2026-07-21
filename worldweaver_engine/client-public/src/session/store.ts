@@ -69,8 +69,12 @@ export function getSessionId(): string | null {
 
 export function mintSessionId(): string {
   const id = `ww-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  localStorage.setItem(localKey(SESSION_KEY), id);
+  setSessionId(id);
   return id;
+}
+
+export function setSessionId(sessionId: string): void {
+  localStorage.setItem(localKey(SESSION_KEY), sessionId);
 }
 
 export function getStandingPlace(): string | null {

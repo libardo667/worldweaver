@@ -4,6 +4,8 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import {
+  ApiError,
+  getCurrentSession,
   getTerms,
   patchProfile,
   postLogin,
@@ -15,7 +17,14 @@ import {
   postVerifyEmail,
 } from "../api/ww";
 import type { AuthResponse, EntryInfo } from "../api/types";
-import { getPlayer, mintSessionId, setJwt, setPlayer, setStandingPlace } from "../session/store";
+import {
+  getPlayer,
+  mintSessionId,
+  setJwt,
+  setPlayer,
+  setSessionId,
+  setStandingPlace,
+} from "../session/store";
 
 type Props = {
   entry: EntryInfo | null;
@@ -117,8 +126,31 @@ export function JoinFlow({ entry, suggestedPlace, onJoined, onClose, arrival }: 
       await arrival.onAuthenticated();
       return;
     }
+    const existing = await getCurrentSession();
+    if (existing.active) {
+      if (!existing.session_id || !existing.location) {
+        throw new Error("Your existing town session could not be recovered safely.");
+      }
+      setSessionId(existing.session_id);
+      setStandingPlace(existing.location);
+      onJoined(existing.location, auth.display_name);
+      return;
+    }
     const sessionId = mintSessionId();
-    await postSessionBootstrap(sessionId, entry!.world_id, auth.display_name, place!);
+    try {
+      await postSessionBootstrap(sessionId, entry!.world_id, auth.display_name, place!);
+    } catch (cause) {
+      // Another browser may have entered after the check above. Recover only
+      // the session authenticated as this same actor; never adopt an ID from
+      // an error message.
+      if (!(cause instanceof ApiError) || cause.status !== 409) throw cause;
+      const raced = await getCurrentSession();
+      if (!raced.active || !raced.session_id || !raced.location) throw cause;
+      setSessionId(raced.session_id);
+      setStandingPlace(raced.location);
+      onJoined(raced.location, auth.display_name);
+      return;
+    }
     setStandingPlace(place!);
     onJoined(place!, auth.display_name);
   }

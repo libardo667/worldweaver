@@ -44,8 +44,9 @@ from ...models import (
     WorldTrace,
     WorldStoop,
 )
-from ...services.auth_service import get_current_player_strict
+from ...services.auth_service import get_current_player_strict, require_player
 from ...models.schemas import (
+    CurrentSessionResponse,
     SessionBootstrapRequest,
     SessionBootstrapResponse,
     SessionId,
@@ -970,6 +971,34 @@ def get_world_id():
     """
     wid = _read_world_id()
     return {"world_id": wid, "seeded": bool(wid)}
+
+
+@router.get("/session/current", response_model=CurrentSessionResponse)
+def get_current_human_session(
+    db: Session = Depends(get_db),
+    player: Player = Depends(require_player),
+):
+    """Recover this actor's existing local presence after browser state is lost."""
+
+    actor_id = str(player.actor_id or "").strip()
+    if not actor_id:
+        raise HTTPException(
+            status_code=409, detail="This player has no durable actor identity."
+        )
+    live_session = (
+        db.query(SessionVars).filter(SessionVars.actor_id == actor_id).first()
+    )
+    if live_session is None:
+        return CurrentSessionResponse(active=False)
+    location = str(
+        get_state_manager(str(live_session.session_id), db).get_variable("location")
+        or ""
+    ).strip()
+    return CurrentSessionResponse(
+        active=True,
+        session_id=str(live_session.session_id),
+        location=location or None,
+    )
 
 
 @router.post("/session/bootstrap", response_model=SessionBootstrapResponse)

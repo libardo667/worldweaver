@@ -501,6 +501,62 @@ def test_ordinary_bootstrap_rejects_a_second_local_session_for_one_actor(
     assert db_session.get(SessionVars, "already-here-two") is None
 
 
+def test_authenticated_actor_can_recover_existing_local_session(
+    seeded_client,
+    seeded_world_id,
+    db_session,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        "src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None
+    )
+    register = seeded_client.post(
+        "/api/auth/register",
+        json={
+            "email": "recover-session@example.com",
+            "username": "recoversession",
+            "display_name": "Recover Session",
+            "password": "supersecret1",
+            "terms_accepted": True,
+        },
+    )
+    headers = {"Authorization": f"Bearer {register.json()['token']}"}
+
+    anonymous = seeded_client.get("/api/session/current")
+    assert anonymous.status_code == 401
+
+    absent = seeded_client.get("/api/session/current", headers=headers)
+    assert absent.status_code == 200
+    assert absent.json() == {"active": False, "session_id": None, "location": None}
+
+    entered = seeded_client.post(
+        "/api/session/bootstrap",
+        json={
+            "session_id": "recover-existing-session",
+            "world_id": seeded_world_id,
+            "player_role": "Recover Session",
+            "bootstrap_source": "commons_client",
+            "entry_location": "Recovery Gate",
+        },
+        headers=headers,
+    )
+    assert entered.status_code == 200
+
+    recovered = seeded_client.get("/api/session/current", headers=headers)
+    assert recovered.status_code == 200
+    assert recovered.json() == {
+        "active": True,
+        "session_id": "recover-existing-session",
+        "location": "Recovery Gate",
+    }
+    assert (
+        db_session.query(SessionVars)
+        .filter(SessionVars.actor_id == register.json()["actor_id"])
+        .count()
+        == 1
+    )
+
+
 def test_login_normalizes_legacy_visitor_passes(client, db_session, monkeypatch):
     monkeypatch.setattr(
         "src.api.auth.routes.send_welcome_email", lambda *_args, **_kwargs: None
