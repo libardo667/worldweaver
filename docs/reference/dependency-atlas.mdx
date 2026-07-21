@@ -137,6 +137,12 @@ read and matches the service run's chat rows, world events, and final locations.
 parity, not container or public-network behavior. It is how “same physics” becomes something we can test
 rather than a slogan.
 
+`python dev.py gym --episode waiting-letter` exercises the extracted private-correspondence service. A message
+is addressed to Ivo's durable actor ID, survives the end of one temporary session, is offered twice after a new
+session joins, and remains pending until explicit acknowledgement. Its HTML report adds a whimsical post trail,
+but every displayed state comes from a service receipt. The current reference resident uses the same pending,
+process, then acknowledge sequence.
+
 ## Current code anchors
 
 | Area | Current composition root or boundary | Status |
@@ -147,8 +153,8 @@ rather than a slogan.
 | Resident decision loop | `ww_agent/src/runtime/reference_core.py` | Live reference adapter |
 | Resident private continuity | `ww_agent/src/runtime/ledger.py` and `process_state.py` | Live ledger and working checkpoint |
 | Resident city boundary | `ww_agent/src/world/client.py` and engine resident protocol services | Live signed request path |
-| Reusable world services | `consequence_objects.py`, `material_making.py`, `space_access.py`, `object_exchange.py`, `world_stoops.py`, `location_routes.py`, `movement.py`, `local_speech.py`, `session_lifecycle.py`, and `shard_travel.py` | Live production seam for the first gym scenarios |
-| Resident gym | `services/resident_gym.py`, `services/gym_presentation.py`, and `scripts/resident_gym.py` | First deterministic episode and authenticated in-process HTTP parity; controlled time remains |
+| Reusable world services | `consequence_objects.py`, `material_making.py`, `space_access.py`, `object_exchange.py`, `world_stoops.py`, `location_routes.py`, `movement.py`, `local_speech.py`, `correspondence.py`, `session_lifecycle.py`, and `shard_travel.py` | Live production seam for the first gym scenarios |
+| Resident gym | `services/resident_gym.py`, `services/gym_presentation.py`, and `scripts/resident_gym.py` | Local speech/movement and delayed-correspondence episodes; controlled time remains |
 | HTTP adapters | `src/api/game/world.py` and `state.py` | Live; authenticate, validate request shapes, call services, and translate receipts |
 | Canonical event path | `event_submission.py` → `rules/reducer.py` → state/database/event services | Live; audit and simplify, do not casually delete |
 | Federation | `src/api/federation/routes.py` and federation services | Live directory, trust, discovery, and travel path |

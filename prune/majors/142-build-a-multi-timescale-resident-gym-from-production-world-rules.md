@@ -102,9 +102,22 @@ actors. It verifies that an anonymous signal read is refused, supplies each acto
 the resulting chat rows, world events, and final locations with the service-level run. They match. This is
 in-process HTTP parity, not a container or public-network proof.
 
-Next, extract and repair the current direct-message routes so delayed correspondence uses the same shared
-boundary. Do not add controlled time, checkpoint forks, model calls, or training records until correspondence
-has production-service and HTTP coverage of its delivery and acknowledgement rules.
+The correspondence prerequisite is now extracted and repaired. Local private messages are addressed to durable
+actor IDs, require exact human or signed-resident proof, remain pending when read, and disappear from the
+pending inbox only after explicit recipient acknowledgement. The old unauthenticated name- and session-based
+routes return `410 Gone`. The reference resident sees pending correspondence during an activation, records no
+private message prose in its runtime evidence, and acknowledges only after successful inference. Unknown names
+are refused rather than guessed as recipients.
+
+`python dev.py gym --episode waiting-letter` now exercises that boundary. Mara sends a synthetic letter, Ivo's
+temporary session ends, and Ivo returns under a new session with the same durable actor ID. Two reads return the
+same waiting letter, explicit acknowledgement consumes it, and the final read is empty. The HTML view presents
+the service states as a small animated post trail; the animation adds no world event. Cross-shard delivery and
+the human correspondence interface remain open.
+
+Next, introduce one injected clock below the production time-dependent rules and use it for a mixed-time
+episode. Do not add checkpoint forks, model calls, or training records until the controlled clock can skip a
+quiet interval without changing ordinary live-shard behavior.
 
 ## Files Affected
 

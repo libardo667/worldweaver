@@ -176,9 +176,13 @@ mechanical listener share a place, exchange speech, separate, prove that old-pla
 listener, and reunite. Every state change and signal read uses production services, and a factual terminal and
 browser view make the run inspectable without adding narration. An automated FastAPI replay now uses two
 separately registered actors, refuses anonymous access, and matches the service run's chat rows, world events,
-and final locations. That proves in-process HTTP parity, not container or network behavior. Next, extract and
-repair correspondence before claiming delayed-communication coverage; accelerated time and model calls still
-come later.
+and final locations. That proves in-process HTTP parity, not container or network behavior.
+
+The repaired correspondence boundary is now covered by `python dev.py gym --episode waiting-letter`. Mail uses
+durable actor IDs and exact authentication, survives a temporary session change, remains pending across repeated
+reads, and is consumed only by explicit acknowledgement after processing. The reference resident follows the
+same delivery rule. Cross-shard mail and a human correspondence interface remain open. The next gym slice is an
+injected production clock and one mixed-time episode; accelerated model calls still come later.
 
 ### 8. Train several resident model families
 

@@ -15,9 +15,15 @@ Run the first episode from the repository root:
 python dev.py gym
 ```
 
-The command prints a compact timeline and writes a self-contained visual report to
-`.runs/gym/footbridge-hello.html`. The report contains only synthetic speech and facts returned by production
-services. Its icons and layout do not add a narrator's interpretation.
+Run the delayed-correspondence episode:
+
+```bash
+python dev.py gym --episode waiting-letter
+```
+
+Each command prints a compact timeline and writes a self-contained visual report under `.runs/gym/`
+(`footbridge-hello.html` or `waiting-letter.html`). The reports contain only synthetic speech and facts returned
+by production services. Their icons and layout do not add a narrator's interpretation.
 
 ## What the first episode proves
 
@@ -48,9 +54,23 @@ It proves that anonymous access is refused, supplies each actor's bearer token, 
 chat rows, world events, and final locations with the fast service-level episode. They match. This is an
 in-process HTTP proof, not a container or public-network test.
 
-Correspondence must now be moved below the route layer and repaired before the gym claims to cover delayed
-communication. Controlled time, checkpoint forks, model adapters, and training data come after those shared
-boundaries are proven.
+## What the correspondence episode proves
+
+`The Waiting Letter` sends private mail through the production correspondence service. Ivo's temporary session
+ends after Mara sends the letter, and Ivo returns under a new session with the same durable actor ID. The letter
+is offered twice without being consumed, then explicitly acknowledged, after which the pending mailbox is
+empty. The browser report shows this as a small animated post trail. The envelope animation is only a key for
+the recorded states.
+
+The current reference resident loop follows the same rule: pending mail is included in a model activation and
+acknowledged only after a valid final decision. A failed inference leaves the message pending. Runtime evidence
+stores message IDs and counts, not the private message body. New mail can wake the resident when its chosen
+private-activity policy allows correspondence interruptions.
+
+The correspondence API requires exact human or signed-resident proof and addresses durable actor IDs. The old
+name- and session-addressed DM routes now return `410 Gone` rather than guess or accept an unauthenticated
+sender. This slice is local to one shard. Federated delivery, a public human correspondence interface,
+controlled time, checkpoint forks, model adapters, and training data remain later work.
 
 Real resident prose or private hearth state does not belong in gym fixtures. Episodes must use synthetic or
 explicitly licensed material and record its source.

@@ -139,6 +139,14 @@ of immediate reply edges, direct-address starvation behind four newer ambient li
 that still drives maximum social pressure. Mail routing uses local folder slugs rather than actor IDs, and the
 current network endpoints do not enforce the claimed private/authenticated message boundary.
 
+The correspondence blocker is repaired in the small reference path. Local mail now uses exact durable actor
+IDs and authenticated human or signed-resident requests. Reading pending mail does not consume it; the reference
+resident acknowledges only after a successful final model decision, and a failed inference leaves the message
+waiting. Runtime evidence records IDs and counts rather than received private prose. An unknown name is refused
+rather than guessed. The old name- and session-addressed routes return `410 Gone`. The legacy CognitiveCore mail
+poll remains comparison-only code and is not a working production path; cross-shard correspondence and the
+human browser interface remain open work.
+
 The upstream creation pass found that founding residents do not begin from neutral variation. One global,
 U.S.-coded deck assigns every resident an age, temperament, explicit talk-or-withhold style, upbringing, and
 mandatory livelihood, then asks a model to freeze those choices into canonical soul text. Comments falsely call
