@@ -42,6 +42,12 @@ The twenty-second tick is therefore a chance to notice a new local signal, not n
 Old room speech is not replayed as new at each baseline activation. Quiet, reading, and private continuation
 are complete choices; the runtime does not manufacture pressure to speak or move.
 
+The engine also exposes the first durable live-signal cursor for an authenticated session. It derives the
+session's exact place on the server, advances over the existing append-only local-speech IDs, excludes the
+caller's own speech, and explicitly resets when the shard or place changes. Establishing a cursor does not
+replay archived room chat. The reference host does not yet wait on this cursor; its twenty-second poll remains
+the production control until interruption, reconnect, and travel cleanup are tested.
+
 The complete ledger file is append-only and is intended to be the resident's durable event authority. A
 versioned checkpoint is intended to hold current working state so normal ticks do not replay the entire life
 history, and it can be rebuilt from the ledger.

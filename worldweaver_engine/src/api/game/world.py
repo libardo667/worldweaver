@@ -36,6 +36,7 @@ from ...models.schemas import (
 )
 from ...services.event_submission import WorldEventCommand, submit_world_event
 from ...services.federation_identity import current_shard_id
+from ...services.live_signals import LiveSignalError, read_live_signals
 from ...services.actor_authority import (
     ActorAuthorizationError,
     RequestActorCredentials,
@@ -3449,6 +3450,41 @@ class PostChatRequest(BaseModel):
     session_id: str = Field(..., min_length=1, max_length=64)
     message: str = Field(..., min_length=1, max_length=500)
     display_name: Optional[str] = Field(default=None, max_length=200)
+
+
+@router.get("/world/session/{session_id}/signals")
+def get_live_signals(
+    session_id: str,
+    after: Optional[int] = Query(default=None, ge=0),
+    cursor_shard: Optional[str] = Query(default=None, max_length=80),
+    cursor_location: Optional[str] = Query(default=None, max_length=200),
+    limit: int = Query(default=50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    credentials: RequestActorCredentials = Depends(get_request_actor_credentials),
+):
+    """Read durable new signals at the caller's current exact place.
+
+    The current location comes from the authenticated session rather than from a
+    caller-selected path.  An empty request establishes a cursor without
+    replaying archived room speech as a live event.
+    """
+
+    _authorize_bound_actor_or_http(db, credentials=credentials, session_id=session_id)
+    try:
+        return read_live_signals(
+            db,
+            session_id=session_id,
+            after_id=after,
+            cursor_shard=str(cursor_shard or "").strip() or None,
+            cursor_location=str(cursor_location or "").strip() or None,
+            limit=limit,
+        )
+    except LiveSignalError as exc:
+        status_code = 404 if exc.code == "session_not_found" else 409
+        raise HTTPException(
+            status_code=status_code,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from exc
 
 
 @router.get("/world/location/{location}/chat")

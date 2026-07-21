@@ -1457,6 +1457,109 @@ class TestWorldEventLedgerEndpoints:
         assert retired_chat["actor_id"] == "actor-speaker"
         assert retired_chat["session_id"] == "speaker-session"
 
+    def test_live_signal_cursor_is_exact_place_ordered_and_explicitly_reset(
+        self, client, db_session
+    ):
+        db_session.add_all(
+            [
+                SessionVars(
+                    session_id="signal-reader",
+                    actor_id="actor-reader",
+                    vars={"location": "Cafe", "actor_id": "actor-reader"},
+                ),
+                SessionVars(
+                    session_id="signal-speaker",
+                    actor_id="actor-speaker",
+                    vars={"location": "Cafe", "actor_id": "actor-speaker"},
+                ),
+                SessionVars(
+                    session_id="distant-speaker",
+                    actor_id="actor-distant",
+                    vars={"location": "Elsewhere", "actor_id": "actor-distant"},
+                ),
+            ]
+        )
+        db_session.commit()
+
+        established = client.get("/api/world/session/signal-reader/signals")
+        assert established.status_code == 200
+        cursor = established.json()["cursor"]
+        assert established.json()["cursor_status"] == "established"
+        assert established.json()["events"] == []
+        assert cursor["location"] == "Cafe"
+
+        own = client.post(
+            "/api/world/location/Cafe/chat",
+            json={"session_id": "signal-reader", "message": "My own words."},
+        )
+        nearby = client.post(
+            "/api/world/location/Cafe/chat",
+            json={"session_id": "signal-speaker", "message": "A nearby hello."},
+        )
+        distant = client.post(
+            "/api/world/location/Elsewhere/chat",
+            json={"session_id": "distant-speaker", "message": "Far away."},
+        )
+        assert own.status_code == nearby.status_code == distant.status_code == 200
+
+        current = client.get(
+            "/api/world/session/signal-reader/signals",
+            params={
+                "after": cursor["after_id"],
+                "cursor_shard": cursor["shard_id"],
+                "cursor_location": cursor["location"],
+            },
+        )
+        assert current.status_code == 200
+        payload = current.json()
+        assert payload["cursor_status"] == "current"
+        assert [event["message"] for event in payload["events"]] == ["A nearby hello."]
+        assert payload["events"][0]["id"] == nearby.json()["id"]
+        assert payload["cursor"]["after_id"] >= own.json()["id"]
+
+        reader = db_session.get(SessionVars, "signal-reader")
+        assert reader is not None
+        reader.vars = {**dict(reader.vars or {}), "location": "Elsewhere"}
+        db_session.commit()
+        changed = client.get(
+            "/api/world/session/signal-reader/signals",
+            params={
+                "after": payload["cursor"]["after_id"],
+                "cursor_shard": payload["cursor"]["shard_id"],
+                "cursor_location": payload["cursor"]["location"],
+            },
+        )
+        assert changed.status_code == 200, changed.text
+        assert changed.json()["cursor_status"] == "scope_changed"
+        assert changed.json()["cursor"]["location"] == "Elsewhere"
+        assert changed.json()["events"] == []
+
+        reset_cursor = changed.json()["cursor"]
+        gap = client.get(
+            "/api/world/session/signal-reader/signals",
+            params={
+                "after": reset_cursor["after_id"] + 1000,
+                "cursor_shard": reset_cursor["shard_id"],
+                "cursor_location": reset_cursor["location"],
+            },
+        )
+        assert gap.status_code == 200
+        assert gap.json()["cursor_status"] == "retention_gap"
+        assert gap.json()["retention"] == "gap"
+
+    def test_live_signal_cursor_rejects_an_incomplete_scope(self, client, db_session):
+        db_session.add(
+            SessionVars(session_id="signal-reader", vars={"location": "Cafe"})
+        )
+        db_session.commit()
+
+        response = client.get(
+            "/api/world/session/signal-reader/signals", params={"after": 0}
+        )
+
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "incomplete_cursor"
+
     def test_player_dm_stays_private_and_does_not_touch_public_ledger(
         self, client, db_session
     ):
