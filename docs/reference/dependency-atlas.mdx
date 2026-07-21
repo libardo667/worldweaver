@@ -12,7 +12,7 @@ This page is a readable map of the important runtime boundaries in WorldWeaver. 
 every file and import. That kind of graph is useful for machine-assisted investigation, but it becomes too
 dense to explain the system to a person.
 
-The map was checked against the live source tree at commit `62588d0` on July 20, 2026. The `.ua` graph was used
+The map was checked against the live source tree at commit `0f9a727` on July 20, 2026. The `.ua` graph was used
 to suggest places to inspect, but not as current truth: it describes commit `85f55f5`, from before several
 days of architectural work.
 
@@ -91,28 +91,33 @@ This gives us fast longitudinal tests without pretending that an LLM call is con
 also test a recurrent model later: its bounded private state would simply become another versioned part of the
 resident checkpoint.
 
-## The main seam that must be repaired first
-
-The engine is only partly ready to be reused this way.
+## The production seam the gym can now use
 
 Object custody, making, access, exchange, stoops, movement, local speech, and session lifecycle have service
 modules below the HTTP layer. Their routes mostly translate a request, call a service, and return a result.
 Movement uses `location_routes.py` and `movement.py`; public speech uses `local_speech.py`; joining and leaving
-a shard now use `session_lifecycle.py`.
+a shard use `session_lifecycle.py`; recoverable cross-node travel uses `shard_travel.py`.
 
-Inter-city travel is the remaining large route-owned family. Movement's follow-up repair is complete: a failed
-single-hop or skip-through command now rolls back session state, every movement event, projections, facts, and
-the cached in-memory state together. The local-speech extraction found a similar split write: the chat row was
-committed and listeners were notified before its event was attempted, while event failure was silently ignored.
-It now commits the message, event, projection, and fact in one transaction, and only then wakes listeners.
+Movement's follow-up repair is complete: a failed single-hop or skip-through command now rolls back session
+state, every movement event, projections, facts, and cached state together. The local-speech extraction found
+a similar split write: the chat row was committed and listeners were notified before its event was attempted,
+while event failure was silently ignored. It now commits the message, event, projection, and fact in one
+transaction, and only then wakes listeners.
 
 Session bootstrap exposed a destructive cleanup rule: retiring an older duplicate agent presence also deleted
 its public events and facts. It now removes only the stale live presence and preserves the history. A new
 session commits its state, bootstrap event, human or resident authority binding, and duplicate-presence
 retirement together. An occupied session ID is refused rather than overwritten.
 
-The gym must not call those route functions in process, duplicate their logic, or write directly to the
-database. The next architectural move is to extract those rules into typed domain services used by both:
+Travel then exposed two cross-node faults. Its final local departure and arrival events were best-effort logs
+written after the local handoff was already marked complete, so a failure became permanent. Travel endpoints
+also ignored resident signatures, and destination arrival did not bind the new session to the resident's
+active runtime generation. Travel now requires exact human or resident authority, carries the verified
+resident binding into destination bootstrap, and keeps a handoff retryable until its local status and event
+commit together. Remote federation confirmation remains a separate, explicitly recoverable network step.
+
+The gym must not call route functions in process, duplicate their logic, or write directly to the database.
+The first gym slice can now add a small adapter over the typed production services:
 
 ```text
 live HTTP route ─┐
@@ -134,8 +139,8 @@ than a slogan.
 | Resident decision loop | `ww_agent/src/runtime/reference_core.py` | Live reference adapter |
 | Resident private continuity | `ww_agent/src/runtime/ledger.py` and `process_state.py` | Live ledger and working checkpoint |
 | Resident city boundary | `ww_agent/src/world/client.py` and engine resident protocol services | Live signed request path |
-| Reusable world services | `consequence_objects.py`, `material_making.py`, `space_access.py`, `object_exchange.py`, `world_stoops.py`, `location_routes.py`, `movement.py`, `local_speech.py`, and `session_lifecycle.py` | Live and closest to the needed gym seam |
-| Crowded HTTP-owned rules | `src/api/game/state.py` | Live; inter-city travel still needs extraction |
+| Reusable world services | `consequence_objects.py`, `material_making.py`, `space_access.py`, `object_exchange.py`, `world_stoops.py`, `location_routes.py`, `movement.py`, `local_speech.py`, `session_lifecycle.py`, and `shard_travel.py` | Live production seam for the first gym scenarios |
+| HTTP adapters | `src/api/game/world.py` and `state.py` | Live; authenticate, validate request shapes, call services, and translate receipts |
 | Canonical event path | `event_submission.py` → `rules/reducer.py` → state/database/event services | Live; audit and simplify, do not casually delete |
 | Federation | `src/api/federation/routes.py` and federation services | Live directory, trust, discovery, and travel path |
 | Shard deployment | `shards/ww_world/` and `shards/ww_alderbank/` | Current local reference deployment |

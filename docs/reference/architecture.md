@@ -179,7 +179,10 @@ hearth generation lease.
 
 City-to-city travel uses a recoverable two-node handoff. The source retires its session, the destination
 verifies the trip and creates a new local session for the same actor, and the resident host resumes only
-after arrival succeeds.
+after arrival succeeds. Human travel requires the logged-in account; resident travel requires an exact signed
+request from the active runtime generation. Destination arrival binds that same verified generation to the new
+session. Network confirmation remains a retryable step, while each node commits its local handoff status and
+local travel event together so an event-write failure cannot silently complete the local half.
 
 ## Current trust boundary
 

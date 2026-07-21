@@ -39,7 +39,7 @@ periods by advancing an injected clock directly to the next scheduled event.
 9. Publish a held-out benchmark with unseen cities, paraphrased observations, renamed internal fields,
    different event orderings, and repeated trials. Keep the training scenarios separate.
 
-### Current boundary finding and first three extractions — July 20, 2026
+### Current boundary finding and completed prerequisite extraction — July 20, 2026
 
 The first source audit found an uneven production seam. Object custody, making, access, exchange, and stoops
 already put most business rules in service modules below HTTP. The first extraction moved canonical place
@@ -48,7 +48,8 @@ The live HTTP endpoint now authenticates, calls that service, and translates its
 
 Local speech now lives in `services/local_speech.py`; its route authenticates and translates the service's
 typed receipt or refusal. Session entry and retirement now live in `services/session_lifecycle.py`. Inter-city
-travel remains the large route-owned family in `src/api/game/state.py`.
+travel now lives in `services/shard_travel.py`; its route gathers exact human or resident proof and translates
+typed service receipts.
 
 Movement revealed that its session-state save and movement-event write were separate commits. That follow-up
 is repaired: deferred event submission stages enabled projections and graph facts in the caller's transaction,
@@ -68,11 +69,20 @@ also refuses to overwrite an occupied session ID and commits the new state, boot
 resident authority binding, and duplicate retirement as one local transaction. Tests force event and resident
 binding failures and prove that neither a half-created session nor a half-created arrival event survives.
 
+Travel exposed the distributed version of the split-write problem. The federation could confirm a departure
+or arrival, the local handoff could be marked complete, and then a best-effort local event could fail forever.
+The service now keeps the local handoff in its prior retryable state unless the local status and event commit
+together; retrying an already-confirmed remote transition is safe. Tests force both final-event failures and
+prove that retry produces one event. The extraction also found that travel routes ignored resident signatures
+and destination bootstrap did not bind the new session to the active resident generation. Initial departure,
+retries, and arrival now require human login or exact resident proof, and verified resident arrival creates or
+repairs the destination session binding.
+
 Do not start the fast gym by calling route functions, copying those rules, or writing synthetic state directly.
-Continue extracting typed production services for the behaviors a first episode needs. Live routes and the gym can
-then call the same services, while a slower containerized conformance run checks that HTTP and in-process
-receipts still agree. The maintained dependency atlas and the plain-language episode design live in
-`docs/reference/dependency-atlas.mdx`.
+The prerequisite production seam now exists for a first episode. Build the smallest deterministic adapter over
+the services, then repeat that same episode through HTTP and compare receipts before adding accelerated time,
+forking, model calls, or training data. The maintained dependency atlas and the plain-language episode design
+live in `docs/reference/dependency-atlas.mdx`.
 
 ## Files Affected
 

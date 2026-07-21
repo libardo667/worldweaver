@@ -167,7 +167,10 @@ Use Major 142 to exercise production world rules under an injected clock. Keep l
 at measured interactive speed, skip quiet intervals, and fork synthetic checkpoints to compare later
 consequences. Use scripted background actors where possible and score separate software competencies—not
 speech, movement, compliance, or engagement. Publish held-out scenarios before using the gym to improve a
-model.
+model. The prerequisite extraction is now complete for the first scenario: movement, local speech, session
+lifecycle, and recoverable signed travel sit below HTTP beside the existing object, making, access, exchange,
+and stoop services. Start with one deterministic service-level episode and one slower HTTP conformance version
+of the same episode before adding accelerated time or model calls.
 
 ### 8. Train several resident model families
 
