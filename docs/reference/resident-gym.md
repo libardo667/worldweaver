@@ -143,8 +143,23 @@ chooses `wait`. The engine then simulates losing its acknowledgement and restart
 event again; the resident returns `already_processed` with zero model calls, after which the queue acknowledges
 the event. Streamed records show scene counts and process boundaries, never the private activity or prompt.
 
-This is the final mechanical rehearsal before a model-backed resident run. It proves restart, custody, scene
-delivery, and at-least-once handling. It does not measure judgment, conversation, planning, or personality.
+This mechanical rehearsal proved restart, custody, scene delivery, and at-least-once handling. It does not
+measure judgment, conversation, planning, or personality.
+
+## First model-backed control
+
+On July 21, 2026, a new name-only resident named Tansy completed one bounded live activation in Alderbank. The
+resident began with no biography, voice samples, model output, or ledger history. Public identity admission,
+hearth activation, and read-only preflight were separate steps.
+
+Using `google/gemini-3-flash-preview`, Tansy made two inference calls: one elective read followed by one final
+decision. The run used 1,438 prompt tokens and 67 completion tokens and took 6.801 seconds. The public result
+was one confirmed move from Alderbank Commons to Commons Bank, with no speech. The runner then retired the city
+session and parked Tansy at the hearth.
+
+The review used only structural counters and the public movement receipt. It did not inspect the private query,
+source result, prompts, completions, or ledger prose. This single run shows that the live reference path can
+support a read followed by a grounded action; it says nothing general about capability or model diversity.
 
 The database snapshot supports SQLite only and may restore only into an empty synthetic database. Its hash
 detects damage and internal mismatches; it is not a signature and does not make an envelope from an untrusted
@@ -168,7 +183,7 @@ apparatus tells the truth about what happened.
 | Identity and authorization | Anonymous signal access is refused; correspondence uses durable actor IDs | Cover every gym action and resident proof type |
 | Exact-place perception | Speech follows location and a durable cursor | Reconnect, cursor gaps, and concurrent arrival/speech ordering |
 | Delayed work | Stable scheduled IDs, controlled UTC, explicit acknowledgement, and idempotent private-return retry | Other state-changing handlers and failed-handler retry |
-| Stop and resume | A separate reference core restores, handles a due return, and refuses a second model call after lost acknowledgement | Model-backed run, live host wiring, and authenticated portable checkpoints |
+| Stop and resume | A separate reference core refuses a second model call after lost acknowledgement; a bounded live resident returns cleanly to its hearth | Gym-hosted model runs, live scheduled-return wiring, and authenticated portable checkpoints |
 | Correspondence | Mail survives a session change and remains pending until acknowledgement | Interruption policy, cross-shard delivery, and failure recovery |
 | Access and custody | Production services exist outside the gym | Refusal, making, carrying, giving, exchange, and stoop episodes |
 | Travel | Production service exists outside the gym | Recoverable local and federated travel episodes |

@@ -181,9 +181,30 @@ Run the streamed proof with:
 python dev.py gym --episode resident-return
 ```
 
-This still does not authorize waking an existing resident. The first model-backed run should use a newly
-created disposable resident, a bounded scenario, explicit model/cost settings, and the same content-safe
-lifecycle stream. Access/custody, travel, stale-decision timing, and fault-injection scenarios remain next.
+### First model-backed live control — July 21, 2026
+
+After the mechanical proof passed, the supported operator path created Tansy as a new name-only resident. The
+creation wrote no biography, vocation, voice samples, model output, or ledger history. Alderbank separately
+admitted the public identity card and activated generation 1 before a read-only preflight checked the hearth,
+runtime lock, model configuration, city health, and world seed.
+
+Tansy then received exactly one live reference-loop activation using the shard's configured
+`google/gemini-3-flash-preview` model at its own default temperature. The structural result was:
+
+- 2 inference calls, because Tansy chose one elective read and then made a final choice;
+- 1,438 prompt tokens and 67 completion tokens;
+- one confirmed `move`, from Alderbank Commons to Commons Bank;
+- no public speech, no private continuation, and no failed or uncertain action;
+- 6.801 seconds elapsed before the bounded runner retired the city session and parked Tansy at the hearth.
+
+Only the runner's structural counters and the public city movement receipt were inspected. The private query,
+source result, prompts, completions, and ledger prose were not opened. A post-run preflight showed the hearth
+lock free and no city-local session state left behind.
+
+This is one control, not a capability claim. It does show that a minimal identity can use elective information
+and take a grounded public action without ambient narration or a hand-authored personality. The next useful
+work is to put model-backed participants inside versioned gym scenarios, then repeat across models and seeds.
+Access/custody, travel, stale-decision timing, and fault-injection scenarios remain open.
 
 ### Scenario coverage map — July 21, 2026
 
