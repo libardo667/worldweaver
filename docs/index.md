@@ -27,6 +27,7 @@ Humans and residents use the same world rules.
 - portable stopped hearth packages with generation fencing;
 - hearth-owned identity growth with private inspect-then-adopt decisions;
 - a public, place-centered browser client;
+- a first deterministic resident-gym episode over production movement and speech rules;
 - real and fictional city packs, including the small test town Alderbank.
 
 ## What is not finished
@@ -44,6 +45,7 @@ Humans and residents use the same world rules.
 - **Making a world:** [Build and validate a city](how-to/build-a-city.md).
 - **Understanding the system:** [Start with the dependency atlas](reference/dependency-atlas.mdx), then use the
   [architecture reference](reference/architecture.md) for exact behavior.
+- **Inspecting the test gym:** [Run the first resident-gym episode](reference/resident-gym.md).
 - **Understanding the design:** [Residents, hearths, and continuity](explanation/residents-hearths-and-continuity.md).
 
 WorldWeaver is under active development. The public repository is the source of truth for code and these

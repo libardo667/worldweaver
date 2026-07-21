@@ -40,11 +40,12 @@ Federation connects separately operated directories and city shards through admi
 signed requests. A resident's city attachment can move from one shard to another, but only one city attachment
 may be active at a time.
 
-The planned gym sits beside these runtime parts. It should drive the same participant and world-rule
-boundaries under a controlled clock. Production must not depend on the gym, and the gym must not gain a private
-shortcut into production state.
+The first gym adapter now sits beside these runtime parts. It drives session entry, movement, local speech,
+and exact-place signal delivery through production services. Later slices should extend that same boundary
+under a controlled clock. Production must not depend on the gym, and the gym must not gain a private shortcut
+into production state.
 
-## What the gym would feel like in practice
+## What the full gym should feel like in practice
 
 Picture a small, resettable town inside a laboratory. It is not a simplified pretend town. Its objects,
 doors, speech, travel, permissions, receipts, and consequences follow the same code as a live shard.
@@ -116,8 +117,8 @@ active runtime generation. Travel now requires exact human or resident authority
 resident binding into destination bootstrap, and keeps a handoff retryable until its local status and event
 commit together. Remote federation confirmation remains a separate, explicitly recoverable network step.
 
-The gym must not call route functions in process, duplicate their logic, or write directly to the database.
-The first gym slice can now add a small adapter over the typed production services:
+The gym must not call route functions in process, duplicate their logic, or let scenario actors write directly
+to the database. The first gym slice now provides a small adapter over the typed production services:
 
 ```text
 live HTTP route ─┐
@@ -125,8 +126,13 @@ live HTTP route ─┐
 gym adapter ─────┘
 ```
 
-The fast gym can then call the service boundary without HTTP overhead. A slower conformance run can call the
-same feature through HTTP and compare receipts. This is how “same physics” becomes something we can test rather
+`python dev.py gym` runs `The Footbridge Hello`: two synthetic participants prove co-present speech, reply,
+movement, location-scoped silence, and resumed delivery after reunion. Its terminal and browser views render
+only service receipts and exact signal reads. The mechanical listener is a transparent fixture, not a model
+resident or a claim about desirable behavior.
+
+The fast gym calls the service boundary without HTTP overhead. A slower conformance run will call the same
+feature through HTTP and compare receipts. This is how “same physics” becomes something we can test rather
 than a slogan.
 
 ## Current code anchors
@@ -140,6 +146,7 @@ than a slogan.
 | Resident private continuity | `ww_agent/src/runtime/ledger.py` and `process_state.py` | Live ledger and working checkpoint |
 | Resident city boundary | `ww_agent/src/world/client.py` and engine resident protocol services | Live signed request path |
 | Reusable world services | `consequence_objects.py`, `material_making.py`, `space_access.py`, `object_exchange.py`, `world_stoops.py`, `location_routes.py`, `movement.py`, `local_speech.py`, `session_lifecycle.py`, and `shard_travel.py` | Live production seam for the first gym scenarios |
+| Resident gym | `services/resident_gym.py`, `services/gym_presentation.py`, and `scripts/resident_gym.py` | First deterministic service-level episode; HTTP parity and controlled time remain |
 | HTTP adapters | `src/api/game/world.py` and `state.py` | Live; authenticate, validate request shapes, call services, and translate receipts |
 | Canonical event path | `event_submission.py` → `rules/reducer.py` → state/database/event services | Live; audit and simplify, do not casually delete |
 | Federation | `src/api/federation/routes.py` and federation services | Live directory, trust, discovery, and travel path |

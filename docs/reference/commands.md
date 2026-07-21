@@ -88,11 +88,15 @@ Creation is dry-run-first and makes one dormant, empty-ledger resident at a time
 ## Steward and research tools
 
 ```bash
+python dev.py gym
 python dev.py space-policy --city CITY --location "Exact Place" --controller-resident NAME
 python dev.py resident-authority --city CITY list
 python dev.py resident-authority --city CITY admit RESIDENT_IDENTITY.json --reason "REVIEW"
 python dev.py conversation-health --city CITY --since-hours 24
 python dev.py run PATH [args...]
 ```
+
+`gym` runs the first deterministic production-rule episode without a model or live shard. It prints a factual
+timeline and writes a self-contained visual report under `.runs/gym/`.
 
 Use `python dev.py COMMAND --help` for the complete option list.

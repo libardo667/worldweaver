@@ -84,6 +84,24 @@ the services, then repeat that same episode through HTTP and compare receipts be
 forking, model calls, or training data. The maintained dependency atlas and the plain-language episode design
 live in `docs/reference/dependency-atlas.mdx`.
 
+### First executable episode — July 20, 2026
+
+`python dev.py gym` now runs `The Footbridge Hello` against a temporary database. A scripted participant and
+a mechanical listener enter through session bootstrap, establish present-time speech cursors, exchange local
+speech, walk apart, prove that speech at the old place does not follow the listener, and resume delivery after
+they meet again. The adapter calls `bootstrap_session`, `post_local_speech`, `move_session`, and
+`read_live_signals`; it contains no alternate action or perception rules.
+
+The command prints a compact structural timeline and writes a self-contained HTML view under `.runs/gym/`.
+Both views use only synthetic utterances, service receipts, and signal reads. Their icons and layout are
+presentation, not narrator-authored events. The mechanical listener is a transparent fixture, not a model
+resident and not a preferred behavior policy.
+
+This completes only the first fast service-level episode. Next, repeat it through authenticated HTTP and
+compare receipts. Then extract and repair the current direct-message routes so delayed correspondence uses the
+same shared boundary. Do not add controlled time, checkpoint forks, model calls, or training records until the
+fast and HTTP paths agree.
+
 ## Files Affected
 
 - `worldweaver_engine/src/services/state/`

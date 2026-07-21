@@ -167,10 +167,16 @@ Use Major 142 to exercise production world rules under an injected clock. Keep l
 at measured interactive speed, skip quiet intervals, and fork synthetic checkpoints to compare later
 consequences. Use scripted background actors where possible and score separate software competencies—not
 speech, movement, compliance, or engagement. Publish held-out scenarios before using the gym to improve a
-model. The prerequisite extraction is now complete for the first scenario: movement, local speech, session
+model. The prerequisite extraction is complete for the first scenario: movement, local speech, session
 lifecycle, and recoverable signed travel sit below HTTP beside the existing object, making, access, exchange,
-and stoop services. Start with one deterministic service-level episode and one slower HTTP conformance version
-of the same episode before adding accelerated time or model calls.
+and stoop services.
+
+The first deterministic service-level episode now runs with `python dev.py gym`. A scripted participant and a
+mechanical listener share a place, exchange speech, separate, prove that old-place speech does not follow the
+listener, and reunite. Every state change and signal read uses production services, and a factual terminal and
+browser view make the run inspectable without adding narration. Next, repeat the same episode through
+authenticated HTTP and compare structural receipts. Then extract and repair correspondence before claiming
+delayed-communication coverage; accelerated time and model calls still come later.
 
 ### 8. Train several resident model families
 
