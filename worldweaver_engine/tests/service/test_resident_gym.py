@@ -196,6 +196,16 @@ def test_quiet_interval_mixes_live_speech_with_a_two_day_rule(db_session):
         for record in result.records
         if record.kind == "time_advanced"
     ] == [47 * 3600, 2 * 3600]
+    assert [
+        record.detail["event_id"]
+        for record in result.records
+        if record.kind == "scheduled_event_offered"
+    ] == ["scheduled-00000001", "scheduled-00000002"]
+    assert [
+        record.detail["event_ids"]
+        for record in result.records
+        if record.kind == "scheduled_event_acknowledged"
+    ] == [["scheduled-00000001"], ["scheduled-00000002"]]
     heard = [record for record in result.records if record.kind == "heard"]
     assert [record.detail["message"] for record in heard] == [
         "I left a dry seat at the willow bench."

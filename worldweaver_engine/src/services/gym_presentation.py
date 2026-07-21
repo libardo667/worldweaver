@@ -28,6 +28,9 @@ _ICONS = {
     "sublocation_created": "🪑",
     "sublocation_active": "🌱",
     "sublocation_expired": "🍂",
+    "scheduled_event_created": "🗓️",
+    "scheduled_event_offered": "🔔",
+    "scheduled_event_acknowledged": "✅",
 }
 
 
@@ -98,6 +101,18 @@ def _record_sentence(record: GymRecord) -> str:
         return (
             f"{detail.get('sublocation_id')} was no longer active at {record.location}."
         )
+    if record.kind == "scheduled_event_created":
+        return (
+            f"{detail.get('event_id')} scheduled {detail.get('event_kind')} for "
+            f"{detail.get('due_at')}."
+        )
+    if record.kind == "scheduled_event_offered":
+        return (
+            f"{detail.get('event_id')} was offered for " f"{detail.get('event_kind')}."
+        )
+    if record.kind == "scheduled_event_acknowledged":
+        event_ids = ", ".join(str(item) for item in detail.get("event_ids") or [])
+        return f"The queue acknowledged {event_ids or 'no scheduled event'}."
     return f"{actor}: {record.kind.replace('_', ' ')}"
 
 

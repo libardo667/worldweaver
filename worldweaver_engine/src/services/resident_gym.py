@@ -15,7 +15,13 @@ from typing import Any, Iterable
 
 from sqlalchemy.orm import Session
 
-from .clock import Clock, ControlledClock, SystemClock
+from .clock import (
+    Clock,
+    ControlledClock,
+    ScheduledEvent,
+    ScheduledEventQueue,
+    SystemClock,
+)
 from .correspondence import (
     SendCorrespondenceCommand,
     acknowledge_correspondence,
@@ -112,6 +118,11 @@ class ProductionRuleGym:
         if not self.episode or not self.world_id:
             raise ValueError("episode and world_id are required")
         self.clock = clock or SystemClock()
+        self._scheduled = (
+            ScheduledEventQueue(self.clock)
+            if isinstance(self.clock, ControlledClock)
+            else None
+        )
         self._locations: tuple[str, ...] = ()
         self._participants: dict[str, GymParticipant] = {}
         self._cursors: dict[str, _SignalCursor] = {}
@@ -136,22 +147,75 @@ class ProductionRuleGym:
             )
         )
 
-    def advance_time(self, elapsed: timedelta) -> datetime:
-        """Advance only an explicitly controlled gym clock."""
+    def _scheduled_queue(self) -> ScheduledEventQueue:
+        if self._scheduled is None:
+            raise ValueError("scheduled gym events require a controlled clock")
+        return self._scheduled
 
-        if not isinstance(self.clock, ControlledClock):
-            raise ValueError("the live system clock cannot be advanced")
-        before = self.clock.now()
-        after = self.clock.advance(elapsed)
+    def schedule_in(
+        self,
+        elapsed: timedelta,
+        *,
+        kind: str,
+        payload: dict[str, Any] | None = None,
+    ) -> ScheduledEvent:
+        """Schedule one structural instruction relative to current gym time."""
+
+        event = self._scheduled_queue().schedule_at(
+            self.clock.now() + elapsed,
+            kind=kind,
+            payload=payload,
+        )
         self._record(
-            "time_advanced",
+            "scheduled_event_created",
             detail={
-                "from": before.isoformat(),
-                "to": after.isoformat(),
-                "elapsed_seconds": int(elapsed.total_seconds()),
+                "event_id": event.event_id,
+                "event_kind": event.kind,
+                "due_at": event.due_at.isoformat(),
             },
         )
-        return after
+        return event
+
+    def offer_next_scheduled(self) -> tuple[ScheduledEvent, ...]:
+        """Move to the next deadline and offer it without consuming it."""
+
+        before = self.clock.now()
+        events = self._scheduled_queue().advance_to_next()
+        after = self.clock.now()
+        if after > before:
+            self._record(
+                "time_advanced",
+                detail={
+                    "from": before.isoformat(),
+                    "to": after.isoformat(),
+                    "elapsed_seconds": int((after - before).total_seconds()),
+                },
+            )
+        for event in events:
+            self._record(
+                "scheduled_event_offered",
+                detail={
+                    "event_id": event.event_id,
+                    "event_kind": event.kind,
+                    "due_at": event.due_at.isoformat(),
+                },
+            )
+        return events
+
+    def acknowledge_scheduled(self, event_ids: Iterable[str]) -> tuple[str, ...]:
+        """Consume exact due instructions after their handlers succeed."""
+
+        acknowledged = self._scheduled_queue().acknowledge(event_ids)
+        self._record(
+            "scheduled_event_acknowledged",
+            detail={"event_ids": list(acknowledged)},
+        )
+        return acknowledged
+
+    def scheduled_checkpoint(self) -> dict[str, Any]:
+        """Return the queue's complete JSON-safe restart checkpoint."""
+
+        return self._scheduled_queue().as_payload()
 
     def arrange_world(self, locations: Iterable[str]) -> None:
         """Create a bounded synthetic setting with production seeding helpers."""
@@ -614,8 +678,23 @@ def run_quiet_interval(db: Session) -> GymEpisodeResult:
         ttl_seconds=2 * 86400,
     )
     gym.inspect_sublocation(parent_location="Willow Court", sublocation_id=bench_id)
-    gym.advance_time(timedelta(hours=47))
-    gym.inspect_sublocation(parent_location="Willow Court", sublocation_id=bench_id)
-    gym.advance_time(timedelta(hours=2))
-    gym.inspect_sublocation(parent_location="Willow Court", sublocation_id=bench_id)
+    gym.schedule_in(
+        timedelta(hours=47),
+        kind="inspect_sublocation",
+        payload={"parent_location": "Willow Court", "sublocation_id": bench_id},
+    )
+    gym.schedule_in(
+        timedelta(hours=49),
+        kind="inspect_sublocation",
+        payload={"parent_location": "Willow Court", "sublocation_id": bench_id},
+    )
+    while gym.scheduled_checkpoint()["pending"]:
+        for event in gym.offer_next_scheduled():
+            if event.kind != "inspect_sublocation":
+                raise ValueError(f"unsupported gym event: {event.kind}")
+            gym.inspect_sublocation(
+                parent_location=str(event.payload["parent_location"]),
+                sublocation_id=str(event.payload["sublocation_id"]),
+            )
+            gym.acknowledge_scheduled((event.event_id,))
     return gym.result()
