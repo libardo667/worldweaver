@@ -377,8 +377,18 @@ Extending the time audit to the material rows found one production leak: when tw
 same injected instant, SQLAlchemy considered `updated_at` unchanged and its server `onupdate` substituted wall
 time. Consequence, exchange, and stoop mutations now force the injected value into those updates; material pool
 updates do the same. The completed loopback run audits object, pool, exchange, access, stoop, receipt, event,
-session, and retirement timestamps with no off-clock row. The remaining stack begins with simultaneously
-hosted model residents, then federated travel.
+session, and retirement timestamps with no off-clock row.
+
+The simultaneous-resident slice is now complete as `--episode resident-duet`. `Two Voices at the Worktable`
+gives Mara and Ivo independent synthetic hearths, host keys, runtime certificates, process checkpoints, child
+processes, clients, and ephemeral loopback servers while both occupy one exact place in one synthetic shard.
+The coordinator prepares both due activations before releasing their hosts through a rendezvous. In each of
+two waves, both `resident_host_started` records precede either finish record. The first wave persists exactly
+two signed local-speech writes; after one controlled minute, both residents' ordinary clients receive both
+messages and electively read the normal measure source. Both finish suspended with one city attachment, and
+the chronology audit finds no off-clock row. This required removing the last observer-side access to the
+coordinator SQLAlchemy session from loopback worker threads. The remaining stack is recoverable federated
+travel.
 
 The controlled-time HTTP prerequisite is now closed for the routes exercised by the model appointment. Live
 requests receive `SystemClock`; the isolated gym overrides the same FastAPI dependency with its controlled

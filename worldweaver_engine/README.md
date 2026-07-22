@@ -38,6 +38,12 @@ stoops. Its audit follows canonical receipts and attachments, then confirms city
 private hearth gift grant after retirement. Repeated material mutations at one controlled instant also remain
 on injected world time rather than falling through to database wall-time updates.
 
+The `resident-duet` episode starts two separate normal resident hosts, each with its own synthetic hearth,
+identity, certificate, process checkpoint, child process, and loopback server. Their production requests use
+request-scoped sessions against one synthetic shard. Two controlled waves prove both host processes overlap,
+both signed speech writes persist, both residents later receive the two exact-place messages, and both finish
+suspended with exactly one city attachment.
+
 ## Source layout
 
 - `src/api/`: FastAPI routes

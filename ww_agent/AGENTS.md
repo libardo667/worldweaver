@@ -56,6 +56,10 @@ inputs in the identity loader; they do not restore the old ownership model.
   not scrape or retain prompts, completions, exception messages, read queries or results, private activity prose,
   stderr, or resident artifacts. Loopback requests use request-scoped database sessions; never share the
   scenario coordinator's SQLAlchemy session with Uvicorn or FastAPI worker threads.
+- A same-shard concurrent gym scenario must give every resident an independent home, host key, certificate,
+  process checkpoint, child process, client, and transport endpoint. Prepare and finish scheduled activations
+  on the coordinator thread; request workers may append content-safe records but must not use the coordinator's
+  SQLAlchemy session.
 - Multi-activation gym scenarios must reopen the same stopped synthetic home through the normal `Resident`
   host for every interval and carry its exact process checkpoint forward. World events and correspondence must
   be committed before an activation at the injected instant. A resident who legitimately reaches the hearth

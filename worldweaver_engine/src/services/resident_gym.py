@@ -300,6 +300,7 @@ class ProductionRuleGym:
         )
         self._locations: tuple[str, ...] = ()
         self._participants: dict[str, GymParticipant] = {}
+        self._last_locations: dict[str, str] = {}
         self._participant_checkpoints: dict[str, GymParticipantCheckpoint] = {}
         self._cursors: dict[str, _SignalCursor] = {}
         self._records: list[GymRecord] = []
@@ -569,6 +570,7 @@ class ProductionRuleGym:
             now=self.clock.now(),
         )
         self._participants[participant.session_id] = participant
+        self._last_locations[participant.session_id] = location
         self._participant_checkpoints[participant.session_id] = (
             GymParticipantCheckpoint(
                 session_id=participant.session_id,
@@ -627,14 +629,22 @@ class ProductionRuleGym:
         """Read a live location or retain the last structural attachment location."""
 
         if self.db.get(SessionVars, session_id) is not None:
-            return str(
+            location = str(
                 get_state_manager(session_id, self.db).get_variable("location") or ""
             )
+            self._last_locations[session_id] = location
+            return location
         participant = self._participant(session_id)
         for record in reversed(self._records):
             if record.actor == participant.display_name and record.location:
                 return str(record.location)
         return ""
+
+    def _record_location(self, session_id: str) -> str:
+        """Read the last canonical location without touching a shared DB session."""
+
+        self._participant(session_id)
+        return str(self._last_locations.get(session_id) or "")
 
     def participant_location(self, session_id: str) -> str:
         """Return one participant's current structural attachment location."""
@@ -1084,8 +1094,10 @@ class ProductionRuleGym:
         location = (
             str(safe_detail["location"])
             if kind == "resident_hearth_observed"
-            else self._participant_location(session_id)
+            else self._record_location(session_id)
         )
+        if kind == "resident_hearth_observed":
+            self._last_locations[session_id] = location
         self._record(
             kind,
             participant=participant,
@@ -1112,7 +1124,7 @@ class ProductionRuleGym:
         self._record(
             "resident_departure_fault_injected",
             participant=participant,
-            location=self._participant_location(session_id),
+            location=self._record_location(session_id),
             detail={"mode": mode},
         )
 
@@ -1130,7 +1142,7 @@ class ProductionRuleGym:
         self._record(
             "resident_loopback_transport_started",
             participant=participant,
-            location=self._participant_location(session_id),
+            location=self._record_location(session_id),
             detail={"network": "ipv4_loopback", "scheme": "http"},
         )
 
@@ -1157,7 +1169,7 @@ class ProductionRuleGym:
         self._record(
             "resident_departure_receipt",
             participant=participant,
-            location=self._participant_location(session_id),
+            location=self._record_location(session_id),
             detail={
                 "transition_id": str(payload["transition_id"]),
                 "session_id": str(payload["session_id"]),
@@ -1190,12 +1202,69 @@ class ProductionRuleGym:
             location=(
                 "the hearth"
                 if attachment == "hearth"
-                else self._participant_location(session_id)
+                else self._record_location(session_id)
             ),
             detail={
                 "attachment": attachment,
                 "process_hosting_state": process_hosting_state,
                 "active_city_session_count": active_city_session_count,
+            },
+        )
+
+    def record_simultaneous_resident_hosts(
+        self,
+        session_ids: Iterable[str],
+        *,
+        wave: int,
+    ) -> None:
+        """Prove multiple independent resident hosts overlapped one gym wave."""
+
+        normalized = tuple(
+            dict.fromkeys(str(item or "").strip() for item in session_ids)
+        )
+        if len(normalized) < 2 or any(not item for item in normalized):
+            raise ValueError("simultaneous resident proof requires distinct sessions")
+        participants = tuple(self._participant(item) for item in normalized)
+        if any(
+            participant.implementation != "reference_resident_model"
+            for participant in participants
+        ):
+            raise ValueError("simultaneous resident proof requires model residents")
+
+        starts: list[GymRecord] = []
+        finishes: list[GymRecord] = []
+        for participant in participants:
+            starts.append(
+                next(
+                    record
+                    for record in reversed(self._records)
+                    if record.actor == participant.display_name
+                    and record.kind == "resident_host_started"
+                )
+            )
+            finishes.append(
+                next(
+                    record
+                    for record in reversed(self._records)
+                    if record.actor == participant.display_name
+                    and record.kind == "resident_host_finished"
+                )
+            )
+        if max(record.sequence for record in starts) >= min(
+            record.sequence for record in finishes
+        ):
+            raise ValueError("resident host processes did not overlap")
+        locations = {self._record_location(item) for item in normalized}
+        if len(locations) != 1 or not next(iter(locations)):
+            raise ValueError("simultaneous residents did not share one place")
+        self._record(
+            "resident_concurrency_verified",
+            location=next(iter(locations)),
+            detail={
+                "wave": int(wave),
+                "resident_count": len(participants),
+                "process_count": len(participants),
+                "session_ids": sorted(normalized),
             },
         )
 
@@ -1217,7 +1286,7 @@ class ProductionRuleGym:
         status = int(status_code)
         if request_method not in {"GET", "POST"} or not path.startswith("/"):
             raise ValueError("gym participant HTTP receipt is invalid")
-        location = self._participant_location(session_id)
+        location = self._record_location(session_id)
         self._record(
             "participant_http",
             participant=participant,
@@ -1359,6 +1428,8 @@ class ProductionRuleGym:
                     ),
                 },
             )
+            if destination:
+                self._last_locations[session_id] = destination
 
     def audit_world_chronology(self) -> dict[str, Any]:
         """Prove exercised persistent world rows use recorded gym instants."""
@@ -1760,12 +1831,8 @@ class ProductionRuleGym:
             )
         return result
 
-    def deliver_resident_tick(
-        self,
-        event: ScheduledEvent,
-        handler: Callable[[ScheduledEvent, dict[str, Any]], dict[str, Any]],
-    ) -> dict[str, Any]:
-        """Run one normal bounded host tick for a due synthetic world event."""
+    def begin_resident_tick(self, event: ScheduledEvent) -> dict[str, Any]:
+        """Prepare one due host tick on the gym coordinator's DB session."""
 
         if event.kind != "resident_host_tick":
             raise ValueError("scheduled event is not a resident host tick")
@@ -1783,16 +1850,38 @@ class ProductionRuleGym:
             location=str(scene.get("location") or ""),
             detail={"event_id": event.event_id, "week_step": step},
         )
-        try:
-            result = handler(event, scene)
-        except Exception as exc:
-            self._record(
-                "resident_activation_interrupted",
-                participant=participant,
-                location=str(scene.get("location") or ""),
-                detail={"event_id": event.event_id, "reason": type(exc).__name__},
-            )
-            raise
+        return scene
+
+    def interrupt_resident_tick(
+        self,
+        event: ScheduledEvent,
+        scene: dict[str, Any],
+        exc: Exception,
+    ) -> None:
+        """Record a prepared host tick that failed outside the coordinator."""
+
+        session_id = str(event.payload.get("session_id") or "").strip()
+        participant = self._participant(session_id)
+        self._record(
+            "resident_activation_interrupted",
+            participant=participant,
+            location=str(scene.get("location") or ""),
+            detail={"event_id": event.event_id, "reason": type(exc).__name__},
+        )
+
+    def finish_resident_tick(
+        self,
+        event: ScheduledEvent,
+        scene: dict[str, Any],
+        result: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Validate and finish one host tick on the coordinator's DB session."""
+
+        session_id = str(event.payload.get("session_id") or "").strip()
+        step = int(event.payload.get("step") or 0)
+        participant = self._participant(session_id)
+        if not isinstance(scene, dict):
+            raise ValueError("resident tick scene must be an object")
         if not isinstance(result, dict):
             raise ValueError("resident tick handler must return an object")
         if str(result.get("event_id") or "") != event.event_id:
@@ -1814,6 +1903,21 @@ class ProductionRuleGym:
         if status != "processed":
             raise ValueError(f"resident tick was not consumable: {status or 'unknown'}")
         return result
+
+    def deliver_resident_tick(
+        self,
+        event: ScheduledEvent,
+        handler: Callable[[ScheduledEvent, dict[str, Any]], dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Run one normal bounded host tick for a due synthetic world event."""
+
+        scene = self.begin_resident_tick(event)
+        try:
+            result = handler(event, scene)
+        except Exception as exc:
+            self.interrupt_resident_tick(event, scene, exc)
+            raise
+        return self.finish_resident_tick(event, scene, result)
 
     def skip_resident_tick(self, event: ScheduledEvent, *, reason: str) -> None:
         """Record that a due week tick had no valid city attachment to wake."""
@@ -1874,6 +1978,7 @@ class ProductionRuleGym:
                 "route": list(receipt.route),
             },
         )
+        self._last_locations[session_id] = receipt.to_location
         return {
             "moved": receipt.moved,
             "from_location": receipt.from_location,
@@ -2124,6 +2229,10 @@ class ProductionRuleGym:
         gym._participant_checkpoints = checkpoint_by_session
         gym._cursors = cursors
         gym._records = list(records)
+        gym._last_locations = {
+            session_id: gym._participant_location(session_id)
+            for session_id in participant_by_session
+        }
         return gym
 
     def result(self) -> GymEpisodeResult:

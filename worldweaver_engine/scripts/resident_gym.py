@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, suppress
 import json
 import os
@@ -43,6 +44,7 @@ from src.config import settings  # noqa: E402
 from src.database import Base, configure_sqlite_connection, get_db  # noqa: E402
 from src.models import (  # noqa: E402
     DurableObject,
+    LocationChat,
     ObjectExchange,
     ResidentSessionRetirementReceipt,
     SessionVars,
@@ -325,7 +327,6 @@ class _ObservedLoopbackApp:
                 response_payload = json.loads(b"".join(response_parts))
             except (json.JSONDecodeError, UnicodeDecodeError):
                 response_payload = None
-            self._gym.db.expire_all()
             self._gym.record_participant_http(
                 self._participant_session_id,
                 method=str(scope.get("method") or ""),
@@ -489,7 +490,9 @@ def _model_adapter_command(
     scripted_source: str = "",
     scripted_query: str = "",
     scripted_target: str = "",
+    scripted_body: str = "",
     scripted_action_kind: str = "do",
+    start_barrier: threading.Barrier | None = None,
 ) -> dict:
     """Run one child resident while serving its bounded world requests."""
 
@@ -526,6 +529,8 @@ def _model_adapter_command(
         arguments.extend(("--scripted-query", scripted_query))
     if scripted_target:
         arguments.extend(("--scripted-target", scripted_target))
+    if scripted_body:
+        arguments.extend(("--scripted-body", scripted_body))
     if scripted_action_kind != "do":
         arguments.extend(("--scripted-action-kind", scripted_action_kind))
     process = subprocess.Popen(
@@ -595,6 +600,14 @@ def _model_adapter_command(
             except Exception:
                 _stop_adapter_process(process)
                 raise
+            if event_kind == "resident_host_started" and start_barrier is not None:
+                try:
+                    start_barrier.wait(timeout=30)
+                except threading.BrokenBarrierError as exc:
+                    _stop_adapter_process(process)
+                    raise RuntimeError(
+                        "simultaneous resident hosts did not rendezvous"
+                    ) from exc
             if (
                 departure_fault == "after_hearth_checkpoint"
                 and event_kind == "resident_attachment_checkpointed"
@@ -1891,6 +1904,320 @@ def _run_willow_week(
         return gym.result()
 
 
+def _run_resident_duet(
+    db,
+    *,
+    session_factory=None,
+    record_observer=None,
+    transport_mode: str = "loopback",
+):
+    """Overlap two normal resident processes inside one shared synthetic shard."""
+
+    if session_factory is None:
+        raise RuntimeError("resident-duet requires a request-scoped session factory")
+    if transport_mode != "loopback":
+        raise ValueError("resident-duet requires loopback transport")
+
+    started_at = datetime(2026, 7, 21, 18, 0, tzinfo=timezone.utc)
+    model_id = "test/resident-duet-v1"
+    residents = (
+        {
+            "name": "Mara",
+            "session_id": "gym-duet-mara",
+            "actor_id": "gym-duet-actor-mara",
+            "speech": "I am here at the worktable.",
+        },
+        {
+            "name": "Ivo",
+            "session_id": "gym-duet-ivo",
+            "actor_id": "gym-duet-actor-ivo",
+            "speech": "I am here with you at the worktable.",
+        },
+    )
+    with (
+        tempfile.TemporaryDirectory(prefix="worldweaver-gym-duet-") as raw_temp,
+        _temporary_gym_node_configuration(),
+    ):
+        temp = Path(raw_temp)
+        runtime: dict[str, dict] = {}
+        gym = ProductionRuleGym(
+            db,
+            episode="Two Voices at the Worktable",
+            world_id="gym-resident-duet-world",
+            clock=ControlledClock(started_at),
+            scenario_id="resident-duet",
+            scenario_version=1,
+            scenario_seed=0,
+            record_observer=record_observer,
+        )
+        gym.arrange_world(("Commons Worktable", "Lantern Square"))
+        audience = current_shard_id()
+
+        for resident in residents:
+            name = str(resident["name"])
+            session_id = str(resident["session_id"])
+            actor_id = str(resident["actor_id"])
+            home = temp / name.lower()
+            package = temp / f"{name.lower()}-before.wwhearth"
+            host_key = temp / f"{name.lower()}-host.key"
+            artifact = _agent_artifact_command(
+                "create-fixture",
+                "--home",
+                str(home),
+                "--package",
+                str(package),
+                "--host-key",
+                str(host_key),
+                "--actor-id",
+                actor_id,
+                "--display-name",
+                name,
+                "--world-id",
+                "gym-resident-duet-world",
+                "--session-id",
+                session_id,
+                "--model-id",
+                model_id,
+                "--started-at",
+                started_at.isoformat(),
+                "--return-at",
+                (started_at + timedelta(days=30)).isoformat(),
+            )
+            process = artifact.get("process")
+            identity = artifact.get("identity")
+            if not isinstance(process, dict) or not isinstance(identity, dict):
+                raise RuntimeError("resident-duet fixture is incomplete")
+            process_path = temp / f"{name.lower()}-process.json"
+            process_path.write_text(json.dumps(process), encoding="utf-8")
+            runtime[session_id] = {
+                "home": home,
+                "host_key": host_key,
+                "process_path": process_path,
+                "artifact": artifact,
+            }
+            gym.join(
+                GymParticipant(
+                    session_id=session_id,
+                    actor_id=actor_id,
+                    display_name=name,
+                    implementation="reference_resident_model",
+                ),
+                location="Commons Worktable",
+            )
+            gym.bind_participant_artifacts(
+                session_id,
+                adapter_id=str(process["adapter"]["id"]),
+                adapter_version=int(process["adapter"]["version"]),
+                model_id=str(process["model"]["id"]),
+                private_state=artifact["descriptor"],
+            )
+            certificate_result = _agent_artifact_command(
+                "issue-runtime-certificate",
+                "--home",
+                str(home),
+                "--host-key",
+                str(host_key),
+                "--audience",
+                audience,
+            )
+            certificate = ResidentRuntimeCertificate.decode_header(
+                str(certificate_result.get("certificate_header") or "").strip()
+            )
+            bind_resident_identity(
+                db,
+                actor_id=str(identity.get("actor_id") or ""),
+                hearth_shard_id=str(identity.get("hearth_shard_id") or ""),
+                identity_public_key=str(identity.get("identity_public_key") or ""),
+                recovery_policy_version=int(
+                    identity.get("recovery_policy_version") or 0
+                ),
+                admission_reason="synthetic resident-duet fixture",
+                admitted_by="resident-gym",
+            )
+            activate_resident_generation(
+                db,
+                certificate=certificate,
+                expected_audience=audience,
+            )
+            bind_resident_session(
+                db,
+                session_id=session_id,
+                actor_id=actor_id,
+                runtime_generation=certificate.runtime_generation,
+            )
+        db.commit()
+
+        for wave in range(2):
+            for resident in residents:
+                gym.schedule_in(
+                    timedelta(minutes=wave),
+                    kind="resident_host_tick",
+                    payload={
+                        "session_id": str(resident["session_id"]),
+                        "step": wave,
+                    },
+                )
+
+        while gym.scheduled_checkpoint()["pending"]:
+            due_events = gym.offer_next_scheduled()
+            wave = int(due_events[0].payload.get("step") or 0)
+            if len(due_events) != len(residents) or any(
+                event.kind != "resident_host_tick"
+                or int(event.payload.get("step") or 0) != wave
+                for event in due_events
+            ):
+                raise RuntimeError("resident-duet wave was not offered atomically")
+            scenes = {
+                event.event_id: gym.begin_resident_tick(event) for event in due_events
+            }
+            start_barrier = threading.Barrier(len(due_events))
+            endpoints: dict[str, str] = {}
+            contexts = []
+            try:
+                for event in due_events:
+                    session_id = str(event.payload["session_id"])
+                    context = _temporary_gym_loopback(
+                        db,
+                        session_factory=session_factory,
+                        world_clock=gym.clock,
+                        gym=gym,
+                        participant_session_id=session_id,
+                    )
+                    endpoints[session_id] = context.__enter__()
+                    contexts.append(context)
+
+                def invoke(event) -> dict:
+                    session_id = str(event.payload["session_id"])
+                    resident = next(
+                        item for item in residents if item["session_id"] == session_id
+                    )
+                    binding = runtime[session_id]
+                    process = json.loads(
+                        Path(binding["process_path"]).read_text(encoding="utf-8")
+                    )
+                    attachment = process.get("attachment")
+                    if not isinstance(attachment, dict):
+                        raise RuntimeError("resident-duet attachment is invalid")
+                    result = _model_adapter_command(
+                        gym,
+                        api_client=None,
+                        home=Path(binding["home"]),
+                        host_key=Path(binding["host_key"]),
+                        process_path=Path(binding["process_path"]),
+                        participant_session_id=session_id,
+                        protocol_session_id=str(attachment.get("session_id") or ""),
+                        now=event.due_at,
+                        model_id=model_id,
+                        model_mode="scripted-gym-command",
+                        command="run-tick-model",
+                        event_id=event.event_id,
+                        scenario_step=wave,
+                        transport_mode="loopback",
+                        base_url=endpoints[session_id],
+                        scripted_source="measure" if wave == 1 else "",
+                        scripted_query="1 + 1" if wave == 1 else "",
+                        scripted_body=(str(resident["speech"]) if wave == 0 else ""),
+                        scripted_action_kind="speak" if wave == 0 else "do",
+                        start_barrier=start_barrier,
+                    )
+                    updated = result.get("process")
+                    if not isinstance(updated, dict):
+                        raise RuntimeError(
+                            "resident-duet activation omitted its process"
+                        )
+                    Path(binding["process_path"]).write_text(
+                        json.dumps(updated), encoding="utf-8"
+                    )
+                    return result
+
+                with ThreadPoolExecutor(max_workers=len(due_events)) as executor:
+                    futures = {
+                        event.event_id: executor.submit(invoke, event)
+                        for event in due_events
+                    }
+                    results = {
+                        event_id: future.result()
+                        for event_id, future in futures.items()
+                    }
+            except Exception as exc:
+                start_barrier.abort()
+                for event in due_events:
+                    gym.interrupt_resident_tick(event, scenes[event.event_id], exc)
+                raise
+            finally:
+                for context in reversed(contexts):
+                    context.__exit__(None, None, None)
+
+            for event in due_events:
+                gym.finish_resident_tick(
+                    event,
+                    scenes[event.event_id],
+                    results[event.event_id],
+                )
+            gym.record_simultaneous_resident_hosts(
+                (str(event.payload["session_id"]) for event in due_events),
+                wave=wave,
+            )
+            gym.acknowledge_scheduled(event.event_id for event in due_events)
+
+        db.expire_all()
+        if (
+            db.query(LocationChat)
+            .filter(LocationChat.actor_id.in_([item["actor_id"] for item in residents]))
+            .count()
+            != 2
+        ):
+            raise RuntimeError("resident-duet did not persist exactly two speeches")
+        if (
+            db.query(SessionVars)
+            .filter(
+                SessionVars.session_id.in_([item["session_id"] for item in residents])
+            )
+            .count()
+            != 2
+        ):
+            raise RuntimeError("resident-duet attachment count is inconsistent")
+        for resident in residents:
+            session_id = str(resident["session_id"])
+            binding = runtime[session_id]
+            process = json.loads(
+                Path(binding["process_path"]).read_text(encoding="utf-8")
+            )
+            attachment = process.get("attachment")
+            hosting = process.get("hosting")
+            if (
+                not isinstance(attachment, dict)
+                or attachment.get("kind") != "city"
+                or attachment.get("session_id") != session_id
+                or not isinstance(hosting, dict)
+                or hosting.get("state") != "suspended"
+            ):
+                raise RuntimeError("resident-duet process checkpoint is inconsistent")
+            gym.record_resident_attachment_verified(
+                session_id,
+                attachment="city",
+                process_hosting_state="suspended",
+                active_city_session_count=1,
+            )
+            artifact = binding["artifact"]
+            updated_descriptor = _agent_artifact_command(
+                "export",
+                "--home",
+                str(binding["home"]),
+                "--package",
+                str(temp / f"{str(resident['name']).lower()}-after.wwhearth"),
+            )
+            gym.bind_participant_artifacts(
+                session_id,
+                adapter_id=str(artifact["process"]["adapter"]["id"]),
+                adapter_version=int(artifact["process"]["adapter"]["version"]),
+                model_id=str(artifact["process"]["model"]["id"]),
+                private_state=updated_descriptor,
+            )
+        gym.audit_world_chronology()
+        return gym.result()
+
+
 def _run_material_day(
     db,
     *,
@@ -2342,6 +2669,7 @@ def main() -> int:
             "willow-fork",
             "willow-week",
             "material-day",
+            "resident-duet",
         ),
         default="footbridge",
         help="episode to run (default: footbridge)",
@@ -2433,6 +2761,7 @@ def main() -> int:
         "willow-fork": "The Forked Invitation",
         "willow-week": "Willow Week",
         "material-day": "The Commons Worktable",
+        "resident-duet": "Two Voices at the Worktable",
     }
     if stream:
         print(render_terminal_stream_header(episode_titles[args.episode]), flush=True)
@@ -2448,7 +2777,16 @@ def main() -> int:
                 "quiet-interval": run_quiet_interval,
                 "resident-return": _run_scripted_resident_return,
             }
-            if args.episode == "material-day":
+            if args.episode == "resident-duet":
+                if args.departure_fault or args.transport_fault:
+                    parser.error("The resident duet does not accept fault modes")
+                result = _run_resident_duet(
+                    db,
+                    session_factory=session_factory,
+                    record_observer=show_record if stream else None,
+                    transport_mode=args.transport_mode,
+                )
+            elif args.episode == "material-day":
                 if args.departure_fault or args.transport_fault:
                     parser.error("The Commons Worktable does not accept fault modes")
                 result = _run_material_day(
@@ -2513,6 +2851,7 @@ def main() -> int:
             "willow-fork": "forked-invitation.html",
             "willow-week": "willow-week.html",
             "material-day": "commons-worktable.html",
+            "resident-duet": "resident-duet.html",
         }
         default_name = default_names[args.episode]
         output = (

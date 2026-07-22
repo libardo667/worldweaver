@@ -46,7 +46,9 @@
   parsers, shard discovery, and request signing. The gym's versioned stdio protocol carries the client's exact
   HTTP bytes to the actual FastAPI application over the parent-owned synthetic database; it is transport, not
   another world-rule implementation. The normal resident host reads the public shard experience and city-pack
-  preview through this client before constructing its city information-source registry.
+  preview through this client before constructing its city information-source registry. Concurrent gym
+  residents each retain an independent client, certificate, process, and loopback endpoint; they share only
+  the synthetic shard reached through production request-scoped FastAPI sessions.
 - `runtime/cognitive_core.py` — audited predecessor. It is not constructed by the resident host; keep it only
   as comparison and selective migration material until its remaining useful contracts are separated.
 - `runtime/ledger.py` — append-only event history and a versioned current-state checkpoint. Major 137 is

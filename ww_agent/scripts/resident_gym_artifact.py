@@ -506,19 +506,25 @@ class _ScriptedGymCommandModel:
         source: str = "",
         query: str = "",
         target: str = "",
+        body: str = "",
         action_kind: str = "do",
     ) -> None:
         self.default_model_id = model_id
         self.source = str(source or "").strip()
         self.query = str(query or "").strip()
         self.target = str(target or "").strip()
+        self.body = str(body or "").strip()
         self.action_kind = str(action_kind or "do").strip().lower()
-        if self.action_kind not in {"do", "move"}:
+        if self.action_kind not in {"do", "move", "speak"}:
             raise ValueError("scripted gym command action kind is invalid")
-        if bool(self.source) == bool(self.target):
+        if bool(self.source) == bool(self.target or self.body):
             raise ValueError(
-                "scripted gym command requires exactly one source or target"
+                "scripted gym command requires exactly one source or action"
             )
+        if self.action_kind == "move" and not self.target:
+            raise ValueError("scripted gym movement requires a target")
+        if self.action_kind == "speak" and not self.body:
+            raise ValueError("scripted gym speech requires a body")
         self.total_calls = 0
         self.total_prompt_tokens = 0
         self.total_completion_tokens = 0
@@ -533,8 +539,10 @@ class _ScriptedGymCommandModel:
             "choice": "act",
             "action": {
                 "kind": self.action_kind,
-                "body": "" if self.action_kind == "move" else self.target,
-                "target": self.target,
+                "body": (
+                    "" if self.action_kind == "move" else self.body or self.target
+                ),
+                "target": self.target or None,
             },
         }
 
@@ -635,6 +643,7 @@ async def _run_model_return(args: argparse.Namespace) -> dict[str, Any]:
             source=str(args.scripted_source or ""),
             query=str(args.scripted_query or ""),
             target=str(args.scripted_target or ""),
+            body=str(args.scripted_body or ""),
             action_kind=str(args.scripted_action_kind or "do"),
         )
     else:
@@ -1015,6 +1024,7 @@ def _parser() -> argparse.ArgumentParser:
     model_return.add_argument("--scripted-source", default="", help=argparse.SUPPRESS)
     model_return.add_argument("--scripted-query", default="", help=argparse.SUPPRESS)
     model_return.add_argument("--scripted-target", default="", help=argparse.SUPPRESS)
+    model_return.add_argument("--scripted-body", default="", help=argparse.SUPPRESS)
     model_return.add_argument(
         "--scripted-action-kind", default="do", help=argparse.SUPPRESS
     )
@@ -1076,6 +1086,9 @@ def _parser() -> argparse.ArgumentParser:
         "--scripted-target", default="", help=argparse.SUPPRESS
     )
     hearth_observation.add_argument(
+        "--scripted-body", default="", help=argparse.SUPPRESS
+    )
+    hearth_observation.add_argument(
         "--scripted-action-kind", default="do", help=argparse.SUPPRESS
     )
     tick = subparsers.add_parser(
@@ -1107,6 +1120,7 @@ def _parser() -> argparse.ArgumentParser:
     tick.add_argument("--scripted-source", default="", help=argparse.SUPPRESS)
     tick.add_argument("--scripted-query", default="", help=argparse.SUPPRESS)
     tick.add_argument("--scripted-target", default="", help=argparse.SUPPRESS)
+    tick.add_argument("--scripted-body", default="", help=argparse.SUPPRESS)
     tick.add_argument("--scripted-action-kind", default="do", help=argparse.SUPPRESS)
     tick.add_argument("--transport-fault", default="", help=argparse.SUPPRESS)
     return parser

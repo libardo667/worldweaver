@@ -111,6 +111,12 @@ remain on stdio. Duplicate request IDs, malformed messages or responses, and une
 rejected and the child is reaped. A real external model may legitimately finish in the city rather than travel
 home, so the result reports the attachment actually checkpointed instead of inventing a hearth transition.
 
+`Two Voices at the Worktable` runs that same normal-host path twice at once. Each model participant has an
+independent hearth, signing key, certificate, checkpoint, process, client, and loopback endpoint while sharing
+one synthetic shard and exact place. A parent-side rendezvous proves both child hosts are live before either
+structural finish is accepted. The second controlled wave proves both clients receive the two ordinary signed
+speech writes from the first wave; no agent-side database shortcut is introduced.
+
 Resident world time is explicit at the host boundary. Production hosts default to real UTC. A controlled gym
 activation injects the same world instant into normal reference-core ticks and `LocalWorld` grounding, whisper
 freshness, scene events, private reads, and voice records. Runtime leases, retry sleeps, certificate validity,

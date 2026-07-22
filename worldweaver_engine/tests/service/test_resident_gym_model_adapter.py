@@ -9,6 +9,83 @@ import sys
 import pytest
 
 
+def test_resident_duet_overlaps_two_model_hosts_in_one_shared_shard(tmp_path):
+    engine_root = Path(__file__).resolve().parents[2]
+    output = tmp_path / "resident-duet.html"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/resident_gym.py",
+            "--episode",
+            "resident-duet",
+            "--transport-mode",
+            "loopback",
+            "--json",
+            "--output",
+            str(output),
+        ],
+        cwd=engine_root,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=180,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(completed.stdout.split("\nVisual episode:", 1)[0])
+    records = payload["records"]
+    concurrency = [
+        record
+        for record in records
+        if record["kind"] == "resident_concurrency_verified"
+    ]
+    later_speech = [
+        record
+        for record in records
+        if record["kind"] == "participant_speech_ready"
+        and record["occurred_at"] == "2026-07-21T18:01:00+00:00"
+    ]
+    attachments = [
+        record for record in records if record["kind"] == "resident_attachment_verified"
+    ]
+
+    assert payload["episode"] == "Two Voices at the Worktable"
+    assert [item["display_name"] for item in payload["participants"]] == [
+        "Mara",
+        "Ivo",
+    ]
+    assert all(
+        item["implementation"] == "reference_resident_model"
+        for item in payload["participants"]
+    )
+    assert payload["final_locations"] == {
+        "Mara": "Commons Worktable",
+        "Ivo": "Commons Worktable",
+    }
+    assert [record["detail"]["wave"] for record in concurrency] == [0, 1]
+    assert all(record["detail"]["resident_count"] == 2 for record in concurrency)
+    assert all(record["detail"]["process_count"] == 2 for record in concurrency)
+    assert len(later_speech) >= 2
+    assert {record["actor"] for record in later_speech} == {"Mara", "Ivo"}
+    assert all(record["detail"]["message_count"] == 2 for record in later_speech)
+    assert len(attachments) == 2
+    assert all(
+        record["detail"]
+        == {
+            "attachment": "city",
+            "process_hosting_state": "suspended",
+            "active_city_session_count": 1,
+        }
+        for record in attachments
+    )
+    chronology = next(
+        record for record in records if record["kind"] == "world_chronology_audited"
+    )
+    assert chronology["detail"]["row_counts"]["location_chat"] == 2
+    assert chronology["detail"]["off_clock_count"] == 0
+    assert output.is_file()
+
+
 def test_counterfactual_fork_restores_one_checkpoint_and_private_artifact_twice(
     tmp_path,
 ):
