@@ -40,6 +40,17 @@ export WW_INFERENCE_KEY=... WW_INFERENCE_MODEL=google/gemini-3.5-flash
 python dev.py gym --episode resident-model
 ```
 
+Repeat that path inside a freshly built disposable image, with the resident still crossing a real loopback
+HTTP socket:
+
+```bash
+python dev.py gym --container --episode resident-model
+```
+
+The image contains the production engine and agent packages. Local `.env` files, resident homes, databases,
+and prior reports are excluded from its build context. Selected inference settings enter only as runtime
+environment variables, and only the finished report directory is mounted back to the host.
+
 The model episode creates a disposable synthetic hearth under a temporary directory and exports portable
 checkpoints before and after activation. It does not admit, clone, or wake a resident in Alderbank or any other
 live town.
@@ -233,6 +244,7 @@ being reported as a full temporary shard. For the current model episode it says 
 | Boundary | Current model episode |
 | --- | --- |
 | Engine rules | Actual FastAPI routes and production service functions |
+| Infrastructure | Host processes or a freshly built disposable combined image; both keep the engine and resident in separate processes and use the same loopback HTTP mode |
 | World state | Synthetic SQLite database |
 | Resident composition | Normal `Resident` host and its shared production reference core |
 | Participant transport | Ordinary `WorldWeaverClient` HTTP carried over generic stdio bytes, or a real ephemeral IPv4 loopback connection |
@@ -271,11 +283,18 @@ outside this claim because federation itself is explicitly not exercised. Author
 nonces, rate limits, cache TTLs, process locks, model duration, and runtime metrics intentionally stay on real
 or monotonic operational time.
 
-Episode schema version 9 adds the loopback transport record and makes city-versus-hearth fidelity conditional
-on the attachment the model actually checkpointed.
+Episode schema version 9 added the loopback transport record and made city-versus-hearth fidelity conditional
+on the attachment the model actually checkpointed. Version 10 records whether the episode ran as host
+processes or inside the disposable combined image.
 
-The next infrastructure slice is a container repeat. Federation and optional constructive-game capability
-episodes remain later slices.
+The container repeat uses the same synthetic database, controlled clock, normal resident host, separate agent
+child, host-sealed identity, runtime certificate, and real loopback FastAPI route. A deterministic acceptance
+run reaches `LocalWorld` through the ordinary retirement transition. A real `google/gemini-3.5-flash` run also
+completed inside the image on July 21, 2026: it made two model calls, selected an elective read and then
+`continue`, and retired its synthetic city session back to its disposable hearth. No live-town resident ran.
+
+The next infrastructure slice is batch execution and structural aggregation. Federation and optional
+constructive-game capability episodes remain later slices.
 
 The database snapshot supports SQLite only and may restore only into an empty synthetic database. Its hash
 detects damage and internal mismatches; it is not a signature and does not make an envelope from an untrusted
@@ -295,7 +314,7 @@ apparatus tells the truth about what happened.
 
 | Boundary | Current proof | Remaining proof |
 | --- | --- | --- |
-| Production-rule parity | Footbridge episode matches an authenticated in-process HTTP replay; model direct and signed-HTTP scenes agree at one controlled instant; the full transition also passes through a real loopback Uvicorn server | Repeat selected paths against a running container |
+| Production-rule parity | Footbridge episode matches an authenticated in-process HTTP replay; model direct and signed-HTTP scenes agree at one controlled instant; the full transition also passes through a real loopback Uvicorn server inside host processes and a disposable combined image | Split engine and resident into independently managed containers when multi-resident orchestration requires it |
 | Identity and authorization | Model resident uses its host-sealed identity and normal signed runtime certificate for protected scene and session-retirement routes; anonymous signal access is refused; correspondence uses durable actor IDs | Cover every gym action and other proof/failure types |
 | Exact-place perception | Speech follows location and a durable cursor | Reconnect, cursor gaps, and concurrent arrival/speech ordering |
 | Delayed work | Stable scheduled IDs, controlled UTC across exercised routes and persistent chronology, explicit acknowledgement, expired-place movement refusal, and idempotent private-return retry | Add other state-changing scenario handlers and prove failed-handler retry |
@@ -304,7 +323,7 @@ apparatus tells the truth about what happened.
 | Access and custody | Production services exist outside the gym | Refusal, making, carrying, giving, exchange, and stoop episodes |
 | Travel | Signed city retirement uses a stable transition and durable actor/generation receipt; the normal city-to-hearth attachment transition survives request, commit, response, and post-checkpoint failures | Hearth-to-city return plus recoverable federated travel episodes |
 | Stale information | Structural version fence exists in the reference resident | Change the world during a gym decision and prove safe reconsideration |
-| Fault recovery | Model episodes inject failure before request, before commit, after committed response loss, and after the hearth checkpoint; malformed, replayed, and dead-child transports fail closed | Container repeat, then broader action faults |
+| Fault recovery | Model episodes inject failure before request, before commit, after committed response loss, and after the hearth checkpoint; malformed, replayed, and dead-child transports fail closed; the clean transition repeats in a disposable image | Broader action faults and cross-container process loss |
 
 The command-line runner exposes these records as a live, flushed stream while retaining the final HTML and JSON
 reports. The separate-process return and model episodes emit content-safe observation and activation boundaries, making

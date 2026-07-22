@@ -38,10 +38,11 @@ def test_two_way_model_adapter_reads_then_returns_home_through_production_rules(
     payload = json.loads(completed.stdout.split("\nVisual episode:", 1)[0])
     records = payload["records"]
 
-    assert payload["schema_version"] == 9
+    assert payload["schema_version"] == 10
     assert payload["final_locations"]["Mara"] == "the hearth"
     assert payload["fidelity"] == {
         "engine_rules": "production_fastapi_routes_and_services",
+        "infrastructure": "host_process",
         "world_state": "synthetic_sqlite",
         "resident_composition": "normal_resident_host_and_reference_core",
         "participant_transport": "worldweaver_client_http_via_stdio",

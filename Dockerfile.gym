@@ -1,0 +1,19 @@
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    WW_GYM_INFRASTRUCTURE=disposable_container
+
+WORKDIR /workspace
+
+COPY worldweaver_engine/requirements.txt /tmp/worldweaver-engine-requirements.txt
+RUN pip install --no-cache-dir -r /tmp/worldweaver-engine-requirements.txt
+
+COPY ww_agent /workspace/ww_agent
+RUN pip install --no-cache-dir /workspace/ww_agent
+
+COPY worldweaver_engine /workspace/worldweaver_engine
+WORKDIR /workspace/worldweaver_engine
+
+ENTRYPOINT ["python", "scripts/resident_gym.py"]

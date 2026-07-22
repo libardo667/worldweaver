@@ -42,8 +42,10 @@ inputs in the identity loader; they do not restore the old ownership model.
   binding, and install only after success. This proof does not authorize cloning or waking a live resident.
 - The separate-process gym protocol treats request IDs as single-use. Child death, invalid framing, unknown
   message types, request replay, and mismatched responses must fail closed and reap the child. The loopback
-  variant changes only HTTP transport; identity custody, `Resident`, `WorldWeaverClient`, and the reference
-  core remain the same owners.
+  and disposable-container variants change only process and HTTP infrastructure; identity custody, `Resident`,
+  `WorldWeaverClient`, the reference core, synthetic database, and controlled world clock remain the same
+  owners. Container images must exclude local resident homes and inference configuration from their build
+  context; selected inference settings enter only at runtime.
 - A waking host interval has one random run ID and explicit `hosted`/`suspended` checkpoint transitions. A
   clean stop records its time; the next start may record the measured suspended interval. If the previous
   record still says `hosted`, classify the stop as unclean or unknown and leave elapsed downtime unset. Never

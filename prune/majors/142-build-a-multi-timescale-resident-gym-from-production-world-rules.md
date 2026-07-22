@@ -269,9 +269,18 @@ every non-hearth model choice as interrupted travel. No prompt, completion, or p
 trajectory, and no live-town resident ran. Episode schema version 9 records the selected transport and the
 attachment fidelity actually achieved.
 
-The next bounded infrastructure slice is a container repeat. Optional constructive-game capabilities and
-federation require their own explicit scenarios. Do not grow a parallel list of gym-only world abilities in
-the meantime.
+The disposable-container repeat is now complete. `python dev.py gym --container` builds a combined image from
+the production engine and agent packages while excluding local `.env` files, resident homes, databases, and
+prior reports. The container still starts the resident as a separate child and crosses the real loopback
+FastAPI socket; inference configuration enters only at runtime and only the report directory is mounted out.
+Episode schema version 10 distinguishes host-process from disposable-container infrastructure. Both the
+deterministic city-to-hearth acceptance case and one real `google/gemini-3.5-flash` activation completed in the
+image. The live model made two calls, selected an elective read and then `continue`, and retired its synthetic
+city presence to its disposable hearth. No live-town resident ran.
+
+The next bounded infrastructure slice is batch execution with a structural aggregate report. Optional
+constructive-game capabilities and federation require their own explicit scenarios. Do not grow a parallel
+list of gym-only world abilities in the meantime.
 
 The controlled-time HTTP prerequisite is now closed for the routes exercised by the model appointment. Live
 requests receive `SystemClock`; the isolated gym overrides the same FastAPI dependency with its controlled

@@ -24,6 +24,7 @@ REQUIREMENTS = ROOT / "requirements.txt"
 _SENSITIVE_FLAGS = frozenset({"--token", "--password", "--api-key", "--secret"})
 ENGINE_PYTHON_SCOPE = ("src", "tests", "scripts", "alembic", "main.py")
 AGENT_PYTHON_SCOPE = ("src", "tests", "scripts")
+GYM_IMAGE = "worldweaver-resident-gym:dev"
 
 
 def _duration_seconds(value: str) -> float:
@@ -77,6 +78,99 @@ def _agent_runtime_env() -> dict[str, str]:
         if value is not None and key not in runtime_env:
             runtime_env[key] = value
     return runtime_env
+
+
+def _gym(arguments: list[str]) -> int:
+    """Run the gym on the host or inside its disposable combined image."""
+
+    runtime_env = _agent_runtime_env()
+    if "--container" not in arguments:
+        return _run(
+            [sys.executable, "scripts/resident_gym.py", *arguments],
+            cwd=ENGINE_DIR,
+            env=runtime_env,
+        )
+
+    if shutil.which("docker") is None:
+        print("Docker is required for --container.", file=sys.stderr)
+        return 2
+
+    container_arguments = list(arguments)
+    container_arguments.remove("--container")
+    output: Path | None = None
+    if "--output" in container_arguments:
+        output_index = container_arguments.index("--output")
+        if output_index + 1 >= len(container_arguments):
+            print("--output requires a path.", file=sys.stderr)
+            return 2
+        output = Path(container_arguments[output_index + 1]).expanduser().resolve()
+        del container_arguments[output_index : output_index + 2]
+    if output is None:
+        episode = "footbridge"
+        if "--episode" in container_arguments:
+            episode_index = container_arguments.index("--episode")
+            if episode_index + 1 >= len(container_arguments):
+                print("--episode requires a value.", file=sys.stderr)
+                return 2
+            episode = container_arguments[episode_index + 1]
+        default_names = {
+            "footbridge": "footbridge-hello-container.html",
+            "waiting-letter": "waiting-letter-container.html",
+            "quiet-interval": "long-afternoon-container.html",
+            "resident-return": "kept-appointment-container.html",
+            "resident-model": "model-appointment-container.html",
+        }
+        output = (
+            ROOT
+            / ".runs"
+            / "gym"
+            / default_names.get(episode, f"{episode}-container.html")
+        )
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    built = _run(
+        [
+            "docker",
+            "build",
+            "--file",
+            str(ROOT / "Dockerfile.gym"),
+            "--tag",
+            GYM_IMAGE,
+            str(ROOT),
+        ],
+        env=runtime_env,
+    )
+    if built != 0:
+        return built
+
+    docker_arguments = ["docker", "run", "--rm"]
+    if (
+        not str(runtime_env.get("OPENROUTER_API_KEY") or "").strip()
+        and str(runtime_env.get("WW_INFERENCE_KEY") or "").strip()
+    ):
+        runtime_env["OPENROUTER_API_KEY"] = runtime_env["WW_INFERENCE_KEY"]
+    for name in (
+        "OPENROUTER_API_KEY",
+        "WW_INFERENCE_KEY",
+        "WW_INFERENCE_URL",
+        "WW_INFERENCE_MODEL",
+        "WW_INFERENCE_TIMEOUT",
+    ):
+        if str(runtime_env.get(name) or "").strip():
+            docker_arguments.extend(("--env", name))
+    docker_arguments.extend(
+        (
+            "--volume",
+            f"{output.parent}:/output",
+            GYM_IMAGE,
+            *container_arguments,
+            "--transport-mode",
+            "loopback",
+            "--output",
+            f"/output/{output.name}",
+        )
+    )
+    return _run(docker_arguments, env=runtime_env)
 
 
 def _run(
@@ -1335,6 +1429,7 @@ def _help() -> None:
                                         build a private draft and preview outside published packs
   python dev.py city-studio             open the private browser editor on this computer
   python dev.py gym                     run the first deterministic production-rule gym episode
+  python dev.py gym --container         repeat an episode inside a disposable combined image
   python dev.py run <script> [args...]  run a repository Python script
 
 Other commands are passed to worldweaver_engine/scripts/dev.py, so commands such as
@@ -1388,11 +1483,7 @@ def main() -> int:
     if command == "city-studio":
         return _run([sys.executable, "scripts/city_studio.py", *rest], cwd=ENGINE_DIR)
     if command == "gym":
-        return _run(
-            [sys.executable, "scripts/resident_gym.py", *rest],
-            cwd=ENGINE_DIR,
-            env=_agent_runtime_env(),
-        )
+        return _gym(rest)
     if command == "agent":
         return _run([sys.executable, "-m", "src.main", *rest], cwd=AGENT_DIR)
     if command == "engine":

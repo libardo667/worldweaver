@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
+import os
 import threading
 from typing import Any, Callable, Iterable
 
@@ -235,6 +236,7 @@ class GymFidelityProfile:
     """Machine-readable boundary on what one episode may claim to represent."""
 
     engine_rules: str
+    infrastructure: str
     world_state: str
     resident_composition: str
     participant_transport: str
@@ -1639,7 +1641,7 @@ class ProductionRuleGym:
         )
         return GymEpisodeResult(
             schema="worldweaver.resident-gym.episode",
-            schema_version=9,
+            schema_version=10,
             episode=self.episode,
             world_id=self.world_id,
             locations=self._locations,
@@ -1649,6 +1651,11 @@ class ProductionRuleGym:
                     "production_fastapi_routes_and_services"
                     if model_resident
                     else "production_services"
+                ),
+                infrastructure=(
+                    "disposable_container"
+                    if os.environ.get("WW_GYM_INFRASTRUCTURE") == "disposable_container"
+                    else "host_process"
                 ),
                 world_state="synthetic_sqlite",
                 resident_composition=(
