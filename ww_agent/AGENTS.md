@@ -46,6 +46,10 @@ inputs in the identity loader; they do not restore the old ownership model.
   `WorldWeaverClient`, the reference core, synthetic database, and controlled world clock remain the same
   owners. Container images must exclude local resident homes and inference configuration from their build
   context; selected inference settings enter only at runtime.
+- Gym batches run each resident episode in an independent process and synthetic database. Aggregates may
+  retain only whitelisted structural fields such as model ID, usage counts, choice kind, attachment, canonical
+  receipt counts, HTTP status counts, timing, and report name. They must not scrape or retain prompts,
+  completions, read queries or results, private activity prose, stderr, or resident artifacts.
 - A waking host interval has one random run ID and explicit `hosted`/`suspended` checkpoint transitions. A
   clean stop records its time; the next start may record the measured suspended interval. If the previous
   record still says `hosted`, classify the stop as unclean or unknown and leave elapsed downtime unset. Never

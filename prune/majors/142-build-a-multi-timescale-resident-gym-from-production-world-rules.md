@@ -278,9 +278,19 @@ deterministic city-to-hearth acceptance case and one real `google/gemini-3.5-fla
 image. The live model made two calls, selected an elective read and then `continue`, and retired its synthetic
 city presence to its disposable hearth. No live-town resident ran.
 
-The next bounded infrastructure slice is batch execution with a structural aggregate report. Optional
-constructive-game capabilities and federation require their own explicit scenarios. Do not grow a parallel
-list of gym-only world abilities in the meantime.
+Batch execution and structural aggregation are now complete. `python dev.py gym-batch` runs each member in an
+independent process, resident home, synthetic database, and controlled clock; `--container` repeats the batch
+inside the disposable image. Models are repeatable arguments, batches are bounded to 100 runs per model and
+concurrency 16, and successful members keep their normal episode reports. The aggregate whitelist contains
+only model and usage counts, choice kind, attachment, final location, canonical receipt and HTTP counts,
+off-clock count, duration, infrastructure, transport, and report filename. Failures retain only run ID, model
+ID, duration, and return code. It never copies prompts, completions, read queries or results, private activity
+prose, stderr, or resident artifacts. A two-member container proof produced four model calls, two durable
+retirements, 26 successful HTTP requests, and no failures or off-clock rows.
+
+The next bounded scenario slice is the multi-activation Willow Week. Optional constructive-game capabilities
+and federation require their own explicit scenarios. Do not grow a parallel list of gym-only world abilities
+in the meantime.
 
 The controlled-time HTTP prerequisite is now closed for the routes exercised by the model appointment. Live
 requests receive `SystemClock`; the isolated gym overrides the same FastAPI dependency with its controlled

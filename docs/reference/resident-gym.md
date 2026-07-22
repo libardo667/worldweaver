@@ -51,6 +51,20 @@ The image contains the production engine and agent packages. Local `.env` files,
 and prior reports are excluded from its build context. Selected inference settings enter only as runtime
 environment variables, and only the finished report directory is mounted back to the host.
 
+Run independent copies concurrently and produce one structural aggregate:
+
+```bash
+python dev.py gym-batch --runs-per-model 20 --concurrency 4
+python dev.py gym-batch --container --runs-per-model 20 --concurrency 4
+```
+
+Repeat `--model MODEL_ID` to compare model families. Every member gets its own process, temporary resident
+home, synthetic database, controlled clock, and ordinary episode report. The aggregate records only model ID,
+model-call and token counts, choice kind, attachment and final location, retirement and HTTP counts,
+off-clock rows, duration, infrastructure, transport, and report filename. Failed members contribute only run
+ID, model ID, duration, and return code. Prompts, completions, read queries and results, private activity prose,
+stderr, and resident artifacts are not copied into the aggregate.
+
 The model episode creates a disposable synthetic hearth under a temporary directory and exports portable
 checkpoints before and after activation. It does not admit, clone, or wake a resident in Alderbank or any other
 live town.
@@ -293,8 +307,14 @@ run reaches `LocalWorld` through the ordinary retirement transition. A real `goo
 completed inside the image on July 21, 2026: it made two model calls, selected an elective read and then
 `continue`, and retired its synthetic city session back to its disposable hearth. No live-town resident ran.
 
-The next infrastructure slice is batch execution and structural aggregation. Federation and optional
-constructive-game capability episodes remain later slices.
+Batch execution and structural aggregation are now available on the host and in the disposable image. The
+runner bounds batches to 100 episodes per model and concurrency to 16, isolates every member in its own process
+and database, and writes `aggregate.json`, `aggregate.html`, and one ordinary report per successful member.
+A two-member container acceptance run completed with four model calls, two retirement receipts, 26 successful
+signed/public HTTP requests, and zero failed or off-clock rows.
+
+The next scenario slice is the multi-activation Willow Week. Federation and optional constructive-game
+capability episodes remain later slices.
 
 The database snapshot supports SQLite only and may restore only into an empty synthetic database. Its hash
 detects damage and internal mismatches; it is not a signature and does not make an envelope from an untrusted

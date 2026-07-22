@@ -128,36 +128,11 @@ def _gym(arguments: list[str]) -> int:
         )
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    built = _run(
-        [
-            "docker",
-            "build",
-            "--file",
-            str(ROOT / "Dockerfile.gym"),
-            "--tag",
-            GYM_IMAGE,
-            str(ROOT),
-        ],
-        env=runtime_env,
-    )
+    built = _build_gym_image(runtime_env)
     if built != 0:
         return built
 
-    docker_arguments = ["docker", "run", "--rm"]
-    if (
-        not str(runtime_env.get("OPENROUTER_API_KEY") or "").strip()
-        and str(runtime_env.get("WW_INFERENCE_KEY") or "").strip()
-    ):
-        runtime_env["OPENROUTER_API_KEY"] = runtime_env["WW_INFERENCE_KEY"]
-    for name in (
-        "OPENROUTER_API_KEY",
-        "WW_INFERENCE_KEY",
-        "WW_INFERENCE_URL",
-        "WW_INFERENCE_MODEL",
-        "WW_INFERENCE_TIMEOUT",
-    ):
-        if str(runtime_env.get(name) or "").strip():
-            docker_arguments.extend(("--env", name))
+    docker_arguments = ["docker", "run", "--rm", *_gym_container_env(runtime_env)]
     docker_arguments.extend(
         (
             "--volume",
@@ -171,6 +146,93 @@ def _gym(arguments: list[str]) -> int:
         )
     )
     return _run(docker_arguments, env=runtime_env)
+
+
+def _build_gym_image(runtime_env: dict[str, str]) -> int:
+    return _run(
+        [
+            "docker",
+            "build",
+            "--file",
+            str(ROOT / "Dockerfile.gym"),
+            "--tag",
+            GYM_IMAGE,
+            str(ROOT),
+        ],
+        env=runtime_env,
+    )
+
+
+def _gym_container_env(runtime_env: dict[str, str]) -> list[str]:
+    if (
+        not str(runtime_env.get("OPENROUTER_API_KEY") or "").strip()
+        and str(runtime_env.get("WW_INFERENCE_KEY") or "").strip()
+    ):
+        runtime_env["OPENROUTER_API_KEY"] = runtime_env["WW_INFERENCE_KEY"]
+    arguments: list[str] = []
+    for name in (
+        "OPENROUTER_API_KEY",
+        "WW_INFERENCE_KEY",
+        "WW_INFERENCE_URL",
+        "WW_INFERENCE_MODEL",
+        "WW_INFERENCE_TIMEOUT",
+    ):
+        if str(runtime_env.get(name) or "").strip():
+            arguments.extend(("--env", name))
+    return arguments
+
+
+def _gym_batch(arguments: list[str]) -> int:
+    """Run independent model gym episodes and aggregate structural outcomes."""
+
+    runtime_env = _agent_runtime_env()
+    if "--container" not in arguments:
+        return _run(
+            [sys.executable, "scripts/resident_gym_batch.py", *arguments],
+            cwd=ENGINE_DIR,
+            env=runtime_env,
+        )
+    if shutil.which("docker") is None:
+        print("Docker is required for --container.", file=sys.stderr)
+        return 2
+
+    container_arguments = list(arguments)
+    container_arguments.remove("--container")
+    output_dir: Path | None = None
+    if "--output-dir" in container_arguments:
+        output_index = container_arguments.index("--output-dir")
+        if output_index + 1 >= len(container_arguments):
+            print("--output-dir requires a path.", file=sys.stderr)
+            return 2
+        output_dir = Path(container_arguments[output_index + 1]).expanduser().resolve()
+        del container_arguments[output_index : output_index + 2]
+    if output_dir is None:
+        output_dir = ROOT / ".runs" / "gym" / "batch-container"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    built = _build_gym_image(runtime_env)
+    if built != 0:
+        return built
+    return _run(
+        [
+            "docker",
+            "run",
+            "--rm",
+            *_gym_container_env(runtime_env),
+            "--volume",
+            f"{output_dir}:/output",
+            "--entrypoint",
+            "python",
+            GYM_IMAGE,
+            "scripts/resident_gym_batch.py",
+            *container_arguments,
+            "--transport-mode",
+            "loopback",
+            "--output-dir",
+            "/output",
+        ],
+        env=runtime_env,
+    )
 
 
 def _run(
@@ -1430,6 +1492,7 @@ def _help() -> None:
   python dev.py city-studio             open the private browser editor on this computer
   python dev.py gym                     run the first deterministic production-rule gym episode
   python dev.py gym --container         repeat an episode inside a disposable combined image
+  python dev.py gym-batch               run independent model episodes and aggregate outcomes
   python dev.py run <script> [args...]  run a repository Python script
 
 Other commands are passed to worldweaver_engine/scripts/dev.py, so commands such as
@@ -1484,6 +1547,8 @@ def main() -> int:
         return _run([sys.executable, "scripts/city_studio.py", *rest], cwd=ENGINE_DIR)
     if command == "gym":
         return _gym(rest)
+    if command == "gym-batch":
+        return _gym_batch(rest)
     if command == "agent":
         return _run([sys.executable, "-m", "src.main", *rest], cwd=AGENT_DIR)
     if command == "engine":

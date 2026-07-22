@@ -85,3 +85,44 @@ def test_model_path_repeats_inside_disposable_container(tmp_path):
         timeout=60,
     )
     assert image_check.returncode == 0, image_check.stderr
+
+
+@pytest.mark.skipif(
+    os.environ.get("WW_RUN_CONTAINER_TESTS") != "1",
+    reason="set WW_RUN_CONTAINER_TESTS=1 for the Docker acceptance proof",
+)
+def test_batch_runner_aggregates_independent_container_members(tmp_path):
+    workspace = Path(__file__).resolve().parents[3]
+    output_dir = tmp_path / "batch"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "dev.py",
+            "gym-batch",
+            "--container",
+            "--runs-per-model",
+            "2",
+            "--concurrency",
+            "2",
+            "--model",
+            "test/gym-read-home-v1",
+            "--model-mode",
+            "scripted-read-home",
+            "--output-dir",
+            str(output_dir),
+        ],
+        cwd=workspace,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=600,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    aggregate = json.loads((output_dir / "aggregate.json").read_text(encoding="utf-8"))
+    assert aggregate["configuration"]["infrastructure"] == "disposable_container"
+    assert aggregate["totals"]["completed_runs"] == 2
+    assert aggregate["totals"]["model_calls"] == 4
+    assert aggregate["totals"]["retirement_receipts"] == 2
+    assert aggregate["totals"]["http_errors"] == 0
+    assert aggregate["totals"]["off_clock_rows"] == 0
