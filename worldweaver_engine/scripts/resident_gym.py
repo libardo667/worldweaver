@@ -41,7 +41,14 @@ from src.api.game import _state_managers  # noqa: E402
 from main import app  # noqa: E402
 from src.config import settings  # noqa: E402
 from src.database import Base, configure_sqlite_connection, get_db  # noqa: E402
-from src.models import ResidentSessionRetirementReceipt, SessionVars  # noqa: E402
+from src.models import (  # noqa: E402
+    DurableObject,
+    ObjectExchange,
+    ResidentSessionRetirementReceipt,
+    SessionVars,
+    SpaceAccessRequest,
+    StoopObjectEntry,
+)
 from src.services.clock import Clock, ControlledClock, get_world_clock  # noqa: E402
 from src.services.gym_batch import summarize_episode  # noqa: E402
 from src.services.gym_counterfactual import (  # noqa: E402
@@ -76,6 +83,17 @@ from src.services.resident_authority import (  # noqa: E402
 )
 from src.services.resident_protocol import ResidentRuntimeCertificate  # noqa: E402
 from src.services.session_service import _session_locks  # noqa: E402
+from src.services.consequence_objects import found_durable_object  # noqa: E402
+from src.services.material_making import initialize_material_pools  # noqa: E402
+from src.services.object_exchange import accept_object_exchange  # noqa: E402
+from src.services.space_access import (  # noqa: E402
+    found_space_policy,
+    resolve_access_request,
+)
+from src.services.world_stoops import (  # noqa: E402
+    found_world_stoop,
+    take_stoop_object,
+)
 
 
 def _agent_artifact_command(*arguments: str) -> dict:
@@ -425,8 +443,8 @@ def _stop_adapter_process(process: subprocess.Popen[str]) -> None:
 
 
 @contextmanager
-def _temporary_gym_node_configuration():
-    """Publish a synthetic commons identity through ordinary node settings."""
+def _temporary_gym_node_configuration(*, shard_experience_path: Path | None = None):
+    """Publish a synthetic node identity through ordinary node settings."""
 
     previous = {
         "city_id": settings.city_id,
@@ -437,7 +455,11 @@ def _temporary_gym_node_configuration():
     settings.city_id = "resident_gym"
     settings.shard_id = "resident-gym"
     settings.shard_type = "city"
-    settings.shard_experience_path = None
+    settings.shard_experience_path = (
+        str(shard_experience_path.resolve())
+        if shard_experience_path is not None
+        else None
+    )
     try:
         yield
     finally:
@@ -464,6 +486,10 @@ def _model_adapter_command(
     transport_fault: str = "",
     transport_mode: str = "stdio",
     base_url: str = "http://worldweaver-gym.local",
+    scripted_source: str = "",
+    scripted_query: str = "",
+    scripted_target: str = "",
+    scripted_action_kind: str = "do",
 ) -> dict:
     """Run one child resident while serving its bounded world requests."""
 
@@ -494,6 +520,14 @@ def _model_adapter_command(
     ]
     if event_id:
         arguments.extend(("--event-id", event_id))
+    if scripted_source:
+        arguments.extend(("--scripted-source", scripted_source))
+    if scripted_query:
+        arguments.extend(("--scripted-query", scripted_query))
+    if scripted_target:
+        arguments.extend(("--scripted-target", scripted_target))
+    if scripted_action_kind != "do":
+        arguments.extend(("--scripted-action-kind", scripted_action_kind))
     process = subprocess.Popen(
         arguments,
         cwd=WORKSPACE_ROOT / "ww_agent",
@@ -1857,6 +1891,442 @@ def _run_willow_week(
         return gym.result()
 
 
+def _run_material_day(
+    db,
+    *,
+    session_factory=None,
+    record_observer=None,
+    transport_mode: str = "stdio",
+):
+    """Exercise material life through one normal resident and canonical receipts."""
+
+    started_at = datetime(2026, 7, 21, 9, 0, tzinfo=timezone.utc)
+    mara_session = "gym-material-mara"
+    mara_actor = "gym-material-actor-mara"
+    ivo_session = "gym-material-ivo"
+    ivo_actor = "gym-material-actor-ivo"
+    model_id = "test/material-command-v1"
+    if session_factory is None:
+        raise RuntimeError("material-day requires a request-scoped session factory")
+    with tempfile.TemporaryDirectory(prefix="worldweaver-gym-material-") as raw_temp:
+        temp = Path(raw_temp)
+        declaration = json.loads(
+            (ENGINE_ROOT / "data/rulesets/private_constructive_game.v1.example.json")
+            .read_text(encoding="utf-8")
+            .replace("Alderbank Workshop", "Commons Worktable")
+        )
+        declaration_path = temp / "material-shard-experience.json"
+        declaration_path.write_text(
+            json.dumps(declaration, sort_keys=True), encoding="utf-8"
+        )
+        with _temporary_gym_node_configuration(shard_experience_path=declaration_path):
+            source_home = temp / "mara"
+            source_package = temp / "mara-before.wwhearth"
+            host_key = temp / "mara-host.key"
+            artifact = _agent_artifact_command(
+                "create-fixture",
+                "--home",
+                str(source_home),
+                "--package",
+                str(source_package),
+                "--host-key",
+                str(host_key),
+                "--actor-id",
+                mara_actor,
+                "--display-name",
+                "Mara",
+                "--world-id",
+                "gym-material-world",
+                "--session-id",
+                mara_session,
+                "--model-id",
+                model_id,
+                "--started-at",
+                started_at.isoformat(),
+                "--return-at",
+                (started_at + timedelta(days=30)).isoformat(),
+            )
+            process_binding = artifact["process"]
+            process_path = temp / "process.json"
+            process_path.write_text(json.dumps(process_binding), encoding="utf-8")
+
+            # This is a private hearth gift, deliberately distinct from an
+            # object given in the shard. It becomes visible only after Mara goes home.
+            source_home.joinpath("hearth.json").write_text(
+                json.dumps({"gifts": True}), encoding="utf-8"
+            )
+            given_dir = source_home / "workshop" / "given"
+            given_dir.mkdir(parents=True, exist_ok=True)
+            given_dir.joinpath("worktable-note.txt").write_text(
+                "A private note carried into the hearth after the material exercise.\n",
+                encoding="utf-8",
+            )
+            source_home.joinpath("given.jsonl").write_text(
+                json.dumps(
+                    {
+                        "ts": started_at.isoformat(),
+                        "file": "worktable-note.txt",
+                        "note": "A private gift waiting at home.",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            gym = ProductionRuleGym(
+                db,
+                episode="The Commons Worktable",
+                world_id="gym-material-world",
+                clock=ControlledClock(started_at),
+                scenario_id="material-day",
+                scenario_version=1,
+                scenario_seed=0,
+                record_observer=record_observer,
+            )
+            gym.arrange_world(("Commons Worktable", "Garden Studio", "Lantern Square"))
+            gym.join(
+                GymParticipant(
+                    session_id=mara_session,
+                    actor_id=mara_actor,
+                    display_name="Mara",
+                    implementation="reference_resident_model",
+                ),
+                location="Commons Worktable",
+            )
+            gym.join(
+                GymParticipant(
+                    session_id=ivo_session,
+                    actor_id=ivo_actor,
+                    display_name="Ivo",
+                    implementation="scripted_actor",
+                ),
+                location="Commons Worktable",
+            )
+            gym.bind_participant_artifacts(
+                mara_session,
+                adapter_id=process_binding["adapter"]["id"],
+                adapter_version=process_binding["adapter"]["version"],
+                model_id=process_binding["model"]["id"],
+                private_state=artifact["descriptor"],
+            )
+            identity = artifact.get("identity")
+            if not isinstance(identity, dict):
+                raise RuntimeError("material fixture omitted resident identity proof")
+            audience = current_shard_id()
+            certificate_result = _agent_artifact_command(
+                "issue-runtime-certificate",
+                "--home",
+                str(source_home),
+                "--host-key",
+                str(host_key),
+                "--audience",
+                audience,
+            )
+            certificate = ResidentRuntimeCertificate.decode_header(
+                str(certificate_result.get("certificate_header") or "").strip()
+            )
+            bind_resident_identity(
+                db,
+                actor_id=str(identity.get("actor_id") or ""),
+                hearth_shard_id=str(identity.get("hearth_shard_id") or ""),
+                identity_public_key=str(identity.get("identity_public_key") or ""),
+                recovery_policy_version=int(
+                    identity.get("recovery_policy_version") or 0
+                ),
+                admission_reason="synthetic material-day fixture",
+                admitted_by="resident-gym",
+            )
+            activate_resident_generation(
+                db, certificate=certificate, expected_audience=audience
+            )
+            bind_resident_session(
+                db,
+                session_id=mara_session,
+                actor_id=mara_actor,
+                runtime_generation=certificate.runtime_generation,
+            )
+            db.commit()
+
+            initialize_material_pools(db, now=gym.clock.now())
+            ivo_token_id = found_durable_object(
+                db,
+                session_id=ivo_session,
+                idempotency_key="material-seed-ivo-token",
+                name="Ivo's ash token",
+                description="A smooth ash token seeded for one exact exchange.",
+                object_kind="wooden_token",
+                provenance_ref="resident-gym:material-day:ivo-token",
+                now=gym.clock.now(),
+            ).object["object_id"]
+            found_world_stoop(
+                db,
+                stoop_id="lantern-stoop",
+                title="The Lantern Stoop",
+                prompt="Leave one thing only by choosing to let a visitor take it.",
+                location="Commons Worktable",
+                capacity=3,
+            )
+            found_space_policy(
+                db,
+                location="Garden Studio",
+                controller_actor_id=ivo_actor,
+                mode="requestable",
+                note="Entry is decided one request at a time.",
+            )
+            db.commit()
+
+            if transport_mode == "stdio":
+                transport_context = _temporary_gym_api(db, world_clock=gym.clock)
+            elif transport_mode == "loopback":
+                if session_factory is None:
+                    raise RuntimeError(
+                        "loopback transport requires a database session factory"
+                    )
+                transport_context = _temporary_gym_loopback(
+                    db,
+                    session_factory=session_factory,
+                    world_clock=gym.clock,
+                    gym=gym,
+                    participant_session_id=mara_session,
+                )
+            else:
+                raise ValueError("unsupported material-day transport")
+
+            with transport_context as transport_endpoint:
+                api_client = (
+                    transport_endpoint
+                    if isinstance(transport_endpoint, _GymAPIClient)
+                    else None
+                )
+                base_url = (
+                    "http://worldweaver-gym.local"
+                    if api_client is not None
+                    else str(transport_endpoint)
+                )
+                minute = 0
+
+                def activate(
+                    *,
+                    source: str = "",
+                    query: str = "",
+                    target: str = "",
+                    action_kind: str = "do",
+                    expected_failure: bool = False,
+                ) -> dict | None:
+                    nonlocal minute
+                    refusal_count_before = sum(
+                        record.kind == "participant_access_refused"
+                        for record in gym.result().records
+                    )
+                    location_before = gym.participant_location(mara_session)
+                    minute += 1
+                    event = gym.schedule_in(
+                        timedelta(minutes=minute),
+                        kind="resident_host_tick",
+                        payload={"session_id": mara_session, "step": minute},
+                    )
+                    offered = gym.offer_next_scheduled()
+                    if offered != (event,):
+                        raise RuntimeError("material command scheduler drifted")
+
+                    def invoke(_event, _scene):
+                        process = json.loads(process_path.read_text(encoding="utf-8"))
+                        attachment = process.get("attachment")
+                        if not isinstance(attachment, dict):
+                            raise RuntimeError(
+                                "material process omitted its attachment"
+                            )
+                        result = _model_adapter_command(
+                            gym,
+                            api_client=api_client,
+                            home=source_home,
+                            host_key=host_key,
+                            process_path=process_path,
+                            participant_session_id=mara_session,
+                            protocol_session_id=str(
+                                attachment.get("session_id") or mara_session
+                            ),
+                            now=event.due_at,
+                            model_id=model_id,
+                            model_mode="scripted-gym-command",
+                            command="run-tick-model",
+                            event_id=event.event_id,
+                            scenario_step=minute,
+                            transport_mode=transport_mode,
+                            base_url=base_url,
+                            scripted_source=source,
+                            scripted_query=query,
+                            scripted_target=target,
+                            scripted_action_kind=action_kind,
+                        )
+                        updated = result.get("process")
+                        if not isinstance(updated, dict):
+                            raise RuntimeError(
+                                "material activation omitted its process"
+                            )
+                        process_path.write_text(json.dumps(updated), encoding="utf-8")
+                        return result
+
+                    try:
+                        result = gym.deliver_resident_tick(event, invoke)
+                    except RuntimeError:
+                        if not expected_failure:
+                            raise
+                        result = None
+                    finally:
+                        gym.acknowledge_scheduled((event.event_id,))
+                    if expected_failure:
+                        refusal_count_after = sum(
+                            record.kind == "participant_access_refused"
+                            for record in gym.result().records
+                        )
+                        if (
+                            refusal_count_after != refusal_count_before + 1
+                            or gym.participant_location(mara_session) != location_before
+                        ):
+                            raise RuntimeError(
+                                "expected material command refusal did not hold"
+                            )
+                    return result
+
+                for source, query in (
+                    ("making", ""),
+                    ("objects", ""),
+                    ("exchanges", ""),
+                    ("access", "Garden Studio"),
+                    ("stoops", ""),
+                ):
+                    activate(source=source, query=query)
+
+                activate(target="recipe:small_clay_cup")
+                activate(target="recipe:wooden_token")
+                db.expire_all()
+                mara_objects = {
+                    str(row.name): str(row.object_id)
+                    for row in db.query(DurableObject)
+                    .filter(DurableObject.created_by_actor_id == mara_actor)
+                    .all()
+                }
+                mara_cup_id = mara_objects["Small clay cup"]
+                mara_token_id = mara_objects["Wooden token"]
+
+                activate(target=f"object-give:{mara_cup_id}:{ivo_session}")
+                activate(
+                    target=(
+                        f"exchange-offer:{ivo_session}:{mara_token_id}:{ivo_token_id}"
+                    )
+                )
+                db.expire_all()
+                exchange_id = str(db.query(ObjectExchange).one().exchange_id)
+                accept_object_exchange(
+                    db,
+                    session_id=ivo_session,
+                    exchange_id=exchange_id,
+                    idempotency_key="material-ivo-accept",
+                    now=gym.clock.now(),
+                )
+                db.commit()
+
+                activate(target=f"stoop-leave:lantern-stoop:{ivo_token_id}")
+                db.expire_all()
+                entry_id = str(db.query(StoopObjectEntry).one().entry_id)
+                take_stoop_object(
+                    db,
+                    session_id=ivo_session,
+                    entry_id=entry_id,
+                    idempotency_key="material-ivo-stoop-take",
+                    now=gym.clock.now(),
+                )
+                db.commit()
+
+                activate(target="access-request:Garden Studio")
+                db.expire_all()
+                request_id = str(db.query(SpaceAccessRequest).one().request_id)
+                resolve_access_request(
+                    db,
+                    session_id=ivo_session,
+                    request_id=request_id,
+                    decision="denied",
+                    idempotency_key="material-ivo-deny",
+                    now=gym.clock.now(),
+                )
+                db.commit()
+                activate(
+                    target="Garden Studio",
+                    action_kind="move",
+                    expected_failure=True,
+                )
+
+                gym.audit_material_capabilities()
+                activate(target="home", action_kind="move")
+                final_process = json.loads(process_path.read_text(encoding="utf-8"))
+                final_attachment = final_process.get("attachment")
+                final_hosting = final_process.get("hosting")
+                if not isinstance(final_attachment, dict) or not isinstance(
+                    final_hosting, dict
+                ):
+                    raise RuntimeError("material process final checkpoint is invalid")
+
+                hearth_result = _model_adapter_command(
+                    gym,
+                    api_client=api_client,
+                    home=source_home,
+                    host_key=host_key,
+                    process_path=process_path,
+                    participant_session_id=mara_session,
+                    protocol_session_id=mara_session,
+                    now=gym.clock.now(),
+                    model_id=model_id,
+                    model_mode="scripted-gym-command",
+                    command="observe-hearth-model",
+                    transport_mode=transport_mode,
+                    base_url=base_url,
+                    scripted_source="gifts",
+                )
+                if int(hearth_result.get("model_call_count") or 0) != 0:
+                    raise RuntimeError("final hearth observation called the model")
+                hearth_observation = next(
+                    (
+                        record
+                        for record in reversed(gym.result().records)
+                        if record.kind == "resident_hearth_observed"
+                    ),
+                    None,
+                )
+                if hearth_observation is None or "gifts" not in set(
+                    hearth_observation.detail.get("source_names") or []
+                ):
+                    raise RuntimeError("hearth gift capability was not attached")
+                active_sessions = (
+                    db.query(SessionVars)
+                    .filter(SessionVars.session_id == mara_session)
+                    .count()
+                )
+                gym.record_resident_attachment_verified(
+                    mara_session,
+                    attachment=str(final_attachment.get("kind") or ""),
+                    process_hosting_state=str(final_hosting.get("state") or ""),
+                    active_city_session_count=active_sessions,
+                )
+
+            updated_descriptor = _agent_artifact_command(
+                "export",
+                "--home",
+                str(source_home),
+                "--package",
+                str(temp / "mara-after.wwhearth"),
+            )
+            gym.bind_participant_artifacts(
+                mara_session,
+                adapter_id=process_binding["adapter"]["id"],
+                adapter_version=process_binding["adapter"]["version"],
+                model_id=process_binding["model"]["id"],
+                private_state=updated_descriptor,
+            )
+            gym.audit_world_chronology()
+            return gym.result()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Run a deterministic production-rule resident gym episode."
@@ -1871,6 +2341,7 @@ def main() -> int:
             "resident-model",
             "willow-fork",
             "willow-week",
+            "material-day",
         ),
         default="footbridge",
         help="episode to run (default: footbridge)",
@@ -1961,6 +2432,7 @@ def main() -> int:
         "resident-model": "The Model Appointment",
         "willow-fork": "The Forked Invitation",
         "willow-week": "Willow Week",
+        "material-day": "The Commons Worktable",
     }
     if stream:
         print(render_terminal_stream_header(episode_titles[args.episode]), flush=True)
@@ -1976,7 +2448,16 @@ def main() -> int:
                 "quiet-interval": run_quiet_interval,
                 "resident-return": _run_scripted_resident_return,
             }
-            if args.episode in {"resident-model", "willow-fork", "willow-week"}:
+            if args.episode == "material-day":
+                if args.departure_fault or args.transport_fault:
+                    parser.error("The Commons Worktable does not accept fault modes")
+                result = _run_material_day(
+                    db,
+                    session_factory=session_factory,
+                    record_observer=show_record if stream else None,
+                    transport_mode=args.transport_mode,
+                )
+            elif args.episode in {"resident-model", "willow-fork", "willow-week"}:
                 model_id = str(
                     args.model or os.environ.get("WW_INFERENCE_MODEL", "")
                 ).strip()
@@ -2031,6 +2512,7 @@ def main() -> int:
             "resident-model": "model-appointment.html",
             "willow-fork": "forked-invitation.html",
             "willow-week": "willow-week.html",
+            "material-day": "commons-worktable.html",
         }
         default_name = default_names[args.episode]
         output = (

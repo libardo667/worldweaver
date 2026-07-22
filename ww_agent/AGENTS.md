@@ -75,6 +75,8 @@ inputs in the identity loader; they do not restore the old ownership model.
   a stopped process looking alive in the city roster.
 - Resident experience and world-side timestamps use the host's injected world clock. Production defaults to
   real UTC; controlled gym activations pass their scheduled instant through normal core ticks and `LocalWorld`.
+  A gym scheduler may explicitly force only the first tick of one bounded host activation; the option defaults
+  off, does not persist, and may not turn later polling or delivered speech into commanded model calls.
   Do not move runtime leases, retry sleeps, process-duration bounds, certificate validity, request nonces, or
   inference latency onto that controlled clock.
 - `scripts/familiar.py` is an operational adapter around `src.resident.Resident`, not another composition

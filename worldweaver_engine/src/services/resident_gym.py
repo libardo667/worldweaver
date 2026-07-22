@@ -19,10 +19,19 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..models import (
+    ConsequenceReceipt,
     DirectMessage,
+    DurableObject,
+    ExchangeReceipt,
     LocationChat,
+    MaterialPool,
+    ObjectExchange,
     ResidentSessionRetirementReceipt,
     SessionVars,
+    SpaceAccessReceipt,
+    SpaceAccessRequest,
+    StoopObjectEntry,
+    StoopReceipt,
     WorldEvent,
     WorldFact,
     WorldProjection,
@@ -1221,6 +1230,73 @@ class ProductionRuleGym:
             },
         )
 
+        source_paths = {
+            "/api/world/objects": "objects",
+            "/api/world/making": "making",
+            "/api/world/exchanges": "exchanges",
+            "/api/world/access": "access",
+            "/api/world/stoops": "stoops",
+        }
+        source_name = source_paths.get(path)
+        if (
+            request_method == "GET"
+            and source_name is not None
+            and 200 <= status < 300
+            and isinstance(response_payload, dict)
+        ):
+            count = 1
+            for field in ("count", "objects", "exchanges", "stoops", "materials"):
+                value = response_payload.get(field)
+                if isinstance(value, int):
+                    count = value
+                    break
+                if isinstance(value, list):
+                    count = len(value)
+                    break
+            self._record(
+                "participant_capability_source_ready",
+                participant=participant,
+                location=location,
+                detail={"source": source_name, "record_count": count},
+            )
+
+        if (
+            request_method == "POST"
+            and 200 <= status < 300
+            and isinstance(response_payload, dict)
+        ):
+            receipt = response_payload.get("receipt")
+            receipt_payload = receipt if isinstance(receipt, dict) else {}
+            receipt_id = str(receipt_payload.get("receipt_id") or "").strip()
+            operation = str(receipt_payload.get("operation") or "").strip()
+            if receipt_id and operation:
+                self._record(
+                    "participant_capability_receipt",
+                    participant=participant,
+                    location=location,
+                    detail={
+                        "operation": operation,
+                        "receipt_id": receipt_id,
+                        "replayed": bool(response_payload.get("replayed")),
+                    },
+                )
+
+        if (
+            request_method == "POST"
+            and status == 403
+            and isinstance(response_payload, dict)
+        ):
+            raw_detail = response_payload.get("detail")
+            detail_payload = raw_detail if isinstance(raw_detail, dict) else {}
+            code = str(detail_payload.get("code") or "").strip()
+            if code in {"space_access_required", "space_closed"}:
+                self._record(
+                    "participant_access_refused",
+                    participant=participant,
+                    location=location,
+                    detail={"code": code, "status_code": status},
+                )
+
         if (
             request_method == "GET"
             and path == f"/api/world/scene/{session_id}"
@@ -1326,6 +1402,110 @@ class ProductionRuleGym:
             .filter(ResidentSessionRetirementReceipt.session_id.in_(participant_ids))
             .all()
         )
+        participant_actor_ids = tuple(
+            participant.actor_id for participant in self._participants.values()
+        )
+        rows.extend(
+            ("consequence_receipt", str(row.receipt_id), row.created_at)
+            for row in self.db.query(ConsequenceReceipt)
+            .filter(ConsequenceReceipt.actor_id.in_(participant_actor_ids))
+            .all()
+        )
+        rows.extend(
+            ("exchange_receipt", str(row.receipt_id), row.created_at)
+            for row in self.db.query(ExchangeReceipt)
+            .filter(ExchangeReceipt.actor_id.in_(participant_actor_ids))
+            .all()
+        )
+        rows.extend(
+            ("space_access_receipt", str(row.receipt_id), row.created_at)
+            for row in self.db.query(SpaceAccessReceipt)
+            .filter(SpaceAccessReceipt.actor_id.in_(participant_actor_ids))
+            .all()
+        )
+        rows.extend(
+            ("stoop_receipt", str(row.receipt_id), row.created_at)
+            for row in self.db.query(StoopReceipt)
+            .filter(StoopReceipt.actor_id.in_(participant_actor_ids))
+            .all()
+        )
+        durable_objects = (
+            self.db.query(DurableObject)
+            .filter(DurableObject.created_by_actor_id.in_(participant_actor_ids))
+            .all()
+        )
+        rows.extend(
+            (
+                "durable_object_created",
+                f"{row.object_id}:{row.name}",
+                row.created_at,
+            )
+            for row in durable_objects
+        )
+        rows.extend(
+            (
+                "durable_object_updated",
+                f"{row.object_id}:{row.name}",
+                row.updated_at,
+            )
+            for row in durable_objects
+        )
+        exchanges = (
+            self.db.query(ObjectExchange)
+            .filter(
+                (ObjectExchange.proposer_actor_id.in_(participant_actor_ids))
+                | (ObjectExchange.recipient_actor_id.in_(participant_actor_ids))
+            )
+            .all()
+        )
+        rows.extend(
+            ("object_exchange_created", str(row.exchange_id), row.created_at)
+            for row in exchanges
+        )
+        rows.extend(
+            ("object_exchange_resolved", str(row.exchange_id), row.resolved_at)
+            for row in exchanges
+            if row.resolved_at is not None
+        )
+        stoop_entries = (
+            self.db.query(StoopObjectEntry)
+            .filter(
+                (StoopObjectEntry.left_by_actor_id.in_(participant_actor_ids))
+                | (StoopObjectEntry.taken_by_actor_id.in_(participant_actor_ids))
+            )
+            .all()
+        )
+        rows.extend(
+            ("stoop_entry_created", str(row.entry_id), row.created_at)
+            for row in stoop_entries
+        )
+        rows.extend(
+            ("stoop_entry_resolved", str(row.entry_id), row.resolved_at)
+            for row in stoop_entries
+            if row.resolved_at is not None
+        )
+        access_requests = (
+            self.db.query(SpaceAccessRequest)
+            .filter(SpaceAccessRequest.requester_actor_id.in_(participant_actor_ids))
+            .all()
+        )
+        rows.extend(
+            ("space_access_request_created", str(row.request_id), row.created_at)
+            for row in access_requests
+        )
+        rows.extend(
+            ("space_access_request_resolved", str(row.request_id), row.resolved_at)
+            for row in access_requests
+            if row.resolved_at is not None
+        )
+        rows.extend(
+            ("material_pool_replenished", str(row.id), row.last_replenished_at)
+            for row in self.db.query(MaterialPool).all()
+        )
+        rows.extend(
+            ("material_pool_updated", str(row.id), row.updated_at)
+            for row in self.db.query(MaterialPool).all()
+        )
         correspondence = (
             self.db.query(DirectMessage)
             .filter(
@@ -1390,6 +1570,117 @@ class ProductionRuleGym:
             "off_clock_count": 0,
         }
         self._record("world_chronology_audited", detail=detail)
+        return detail
+
+    def audit_material_capabilities(self) -> dict[str, Any]:
+        """Prove the material episode crossed each canonical durable boundary."""
+
+        participant_actor_ids = {
+            participant.actor_id for participant in self._participants.values()
+        }
+        consequence = (
+            self.db.query(ConsequenceReceipt)
+            .filter(ConsequenceReceipt.actor_id.in_(participant_actor_ids))
+            .all()
+        )
+        exchange = (
+            self.db.query(ExchangeReceipt)
+            .filter(ExchangeReceipt.actor_id.in_(participant_actor_ids))
+            .all()
+        )
+        access = (
+            self.db.query(SpaceAccessReceipt)
+            .filter(SpaceAccessReceipt.actor_id.in_(participant_actor_ids))
+            .all()
+        )
+        stoop = (
+            self.db.query(StoopReceipt)
+            .filter(StoopReceipt.actor_id.in_(participant_actor_ids))
+            .all()
+        )
+        operations = {
+            *(str(row.operation) for row in consequence),
+            *(str(row.operation) for row in exchange),
+            *(str(row.operation) for row in access),
+            *(str(row.operation) for row in stoop),
+        }
+        required = {
+            "object_made",
+            "object_given",
+            "object_exchange_offered",
+            "object_exchange_completed",
+            "space_access_requested",
+            "space_access_denied",
+            "stoop_object_left",
+            "stoop_object_taken",
+        }
+        missing = sorted(required - operations)
+        objects = self.db.query(DurableObject).all()
+        invalid_attachments = sorted(
+            str(row.object_id)
+            for row in objects
+            if (row.custodian_actor_id is None) == (row.location is None)
+        )
+        receipt_ids = [
+            str(row.receipt_id)
+            for rows in (consequence, exchange, access, stoop)
+            for row in rows
+        ]
+        completed_exchanges = (
+            self.db.query(ObjectExchange)
+            .filter(ObjectExchange.status == "completed")
+            .count()
+        )
+        denied_requests = (
+            self.db.query(SpaceAccessRequest)
+            .filter(SpaceAccessRequest.status == "denied")
+            .count()
+        )
+        taken_stoop_entries = (
+            self.db.query(StoopObjectEntry)
+            .filter(StoopObjectEntry.status == "taken")
+            .count()
+        )
+        refusal_count = sum(
+            record.kind == "participant_access_refused" for record in self._records
+        )
+        source_names = {
+            str(record.detail.get("source") or "")
+            for record in self._records
+            if record.kind == "participant_capability_source_ready"
+        }
+        required_sources = {"objects", "making", "exchanges", "access", "stoops"}
+        if (
+            missing
+            or invalid_attachments
+            or len(receipt_ids) != len(set(receipt_ids))
+            or completed_exchanges != 1
+            or denied_requests != 1
+            or taken_stoop_entries != 1
+            or refusal_count != 1
+            or not required_sources.issubset(source_names)
+        ):
+            raise RuntimeError(
+                "material capability audit failed: "
+                f"missing={missing!r} invalid_attachments={invalid_attachments!r} "
+                f"sources={sorted(source_names)!r} completed_exchanges={completed_exchanges} "
+                f"denied_requests={denied_requests} taken_stoop_entries={taken_stoop_entries} "
+                f"refusals={refusal_count}"
+            )
+        detail = {
+            "operations": sorted(operations),
+            "source_names": sorted(source_names),
+            "durable_object_count": len(objects),
+            "material_pool_count": self.db.query(MaterialPool).count(),
+            "receipt_count": len(receipt_ids),
+            "completed_exchange_count": completed_exchanges,
+            "denied_access_request_count": denied_requests,
+            "taken_stoop_entry_count": taken_stoop_entries,
+            "access_refusal_count": refusal_count,
+            "duplicate_receipt_count": 0,
+            "invalid_attachment_count": 0,
+        }
+        self._record("material_capabilities_audited", detail=detail)
         return detail
 
     def deliver_resident_return(

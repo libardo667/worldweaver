@@ -99,8 +99,10 @@ return method on `Resident` owns the exact appointment, process interval, attach
 release. The model gym exercises normal HTTP resident proof, including shard discovery,
 runtime-certificate signing, city admission, generation/session binding, verification, and nonce consumption.
 It now exercises both the node-published commons source registry and its replacement by the private hearth
-registry after confirmed departure. It still does not enable optional constructive-game capabilities or
-contact federation. The default transport does not cross a listening socket; its episode fidelity metadata
+registry after confirmed departure. `The Commons Worktable` additionally publishes the optional constructive
+game declaration: the same normal host reads the object, making, exchange, access, and stoop sources and sends
+their typed commands through signed production routes. Federation remains a separate boundary. The default
+transport does not cross a listening socket; its episode fidelity metadata
 names the selected transport.
 
 A second conformance mode replaces the stdio HTTP hop with an ephemeral Uvicorn server bound to IPv4 loopback.
@@ -113,6 +115,8 @@ Resident world time is explicit at the host boundary. Production hosts default t
 activation injects the same world instant into normal reference-core ticks and `LocalWorld` grounding, whisper
 freshness, scene events, private reads, and voice records. Runtime leases, retry sleeps, certificate validity,
 request nonces, inference latency, and measured process duration retain their real or monotonic clocks.
+A purposeful gym event may request a one-shot initial ignition on its bounded normal host run. The option is
+off by default, is not checkpointed, and does not change later polling or local-speech wake policy.
 
 Each model activation is also tied to structural versions of what the resident was shown and the private
 checkpoint state it began from. After the final model response, the adapter checks the current place and

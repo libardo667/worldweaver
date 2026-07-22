@@ -302,6 +302,7 @@ class Resident:
         max_duration_seconds: float | None = None,
         pause_seconds: float | None = None,
         park_at_hearth_on_stop: bool = False,
+        force_initial_ignite: bool = False,
     ) -> None:
         """Run the one resident core while holding its exclusive hearth lease."""
         if self._runtime_lease is None:
@@ -316,6 +317,7 @@ class Resident:
                 max_ticks=max_ticks,
                 max_duration_seconds=max_duration_seconds,
                 pause_seconds=pause_seconds,
+                force_initial_ignite=force_initial_ignite,
             )
         finally:
             try:
@@ -401,6 +403,7 @@ class Resident:
         max_ticks: int = 0,
         max_duration_seconds: float | None = None,
         pause_seconds: float | None = None,
+        force_initial_ignite: bool = False,
     ) -> None:
         """
         Run the resident's small reference loop. Returns when they stop or a
@@ -462,7 +465,9 @@ class Resident:
                             if callable(offer_signals):
                                 offer_signals(pending_signals.events)
                         force_ignite = (
-                            self._take_force_ignite(world) or cursor_recovery_wake
+                            (bool(force_initial_ignite) and tick_count == 0)
+                            or self._take_force_ignite(world)
+                            or cursor_recovery_wake
                         )
                         cursor_recovery_wake = False
                         result = await core.tick_once(

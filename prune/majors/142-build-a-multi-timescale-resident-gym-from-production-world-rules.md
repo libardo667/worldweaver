@@ -363,6 +363,23 @@ causal behavioral effect from one stochastic pair.
 After that, optional constructive-game capabilities and federation require their own explicit scenarios; do not
 grow a parallel list of gym-only world abilities in the meantime.
 
+The constructive-game scenario is now complete as `--episode material-day`. `The Commons Worktable` publishes
+the real game declaration and gives Mara's normal resident host the resulting `objects`, `making`, `exchanges`,
+`access`, and `stoops` sources. Signed typed effectors make two objects, give one, offer an exact exchange,
+leave an object on a stoop, request entry, and receive a real `403 space_access_required`; Ivo's transparent
+scripted service actions accept the exchange, take the stoop object, and deny the request. The structural audit
+finds three singly attached durable objects, two material pools, ten unique receipts, one completed exchange,
+one denied request, one taken stoop entry, and no duplicate attachment or receipt. Mara then retires the city
+session and a zero-model-call restart proves that city material sources disappeared while the explicitly
+granted private `gifts` source appeared at `LocalWorld`.
+
+Extending the time audit to the material rows found one production leak: when two object mutations shared the
+same injected instant, SQLAlchemy considered `updated_at` unchanged and its server `onupdate` substituted wall
+time. Consequence, exchange, and stoop mutations now force the injected value into those updates; material pool
+updates do the same. The completed loopback run audits object, pool, exchange, access, stoop, receipt, event,
+session, and retirement timestamps with no off-clock row. The remaining stack begins with simultaneously
+hosted model residents, then federated travel.
+
 The controlled-time HTTP prerequisite is now closed for the routes exercised by the model appointment. Live
 requests receive `SystemClock`; the isolated gym overrides the same FastAPI dependency with its controlled
 clock. Scene building, sublocation listing and creation, and movement resolution therefore agree at one virtual
@@ -391,8 +408,8 @@ on their operational clocks.
 Gym coverage now has two explicit scales. Trustworthiness scenarios test that the apparatus tells the truth:
 production-rule parity, authorization, exact-place delivery, delayed work, stop/resume, correspondence, access,
 custody, travel, stale-decision rejection, and fault recovery. They stay small and inspectable. The first five
-have partial or complete narrow proofs; access/custody, federated travel, and scenario-level stale decisions
-still need gym episodes. The city-to-hearth fault boundary now has request, transaction, response-loss, and
+have partial or complete narrow proofs; access/custody now have a complete material-day proof, while federated
+travel and scenario-level stale decisions still need gym episodes. The city-to-hearth fault boundary now has request, transaction, response-loss, and
 post-checkpoint process coverage.
 
 Capability and training scenarios come later. They vary attention and timing, conversation, solitude and

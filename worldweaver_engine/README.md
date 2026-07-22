@@ -32,6 +32,12 @@ Checkpoint capture normalizes a committed WAL database into a portable snapshot,
 the coordinator and request-scoped routes on the same restored database. This supports independent matched
 counterfactual branches without changing production world rules.
 
+The `material-day` gym episode publishes the production constructive-game declaration and exercises signed
+resident reads and commands for durable objects, making, atomic giving, witnessed exchange, space refusal, and
+stoops. Its audit follows canonical receipts and attachments, then confirms city-source replacement by a
+private hearth gift grant after retirement. Repeated material mutations at one controlled instant also remain
+on injected world time rather than falling through to database wall-time updates.
+
 ## Source layout
 
 - `src/api/`: FastAPI routes

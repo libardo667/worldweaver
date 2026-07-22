@@ -11,6 +11,7 @@ from typing import Any
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from ..models import DurableObject, ExchangeReceipt, ObjectExchange, SessionVars
 from .clock import utc_naive
@@ -478,6 +479,9 @@ def accept_object_exchange(
         exchange.resolved_at = _utcnow(now)
         offered.updated_at = _utcnow(now)
         requested.updated_at = _utcnow(now)
+        if now is not None:
+            flag_modified(offered, "updated_at")
+            flag_modified(requested, "updated_at")
         db.flush()
         payload = _exchange_payload(exchange, offered=offered, requested=requested)
         return _finish_exchange_command(

@@ -45,6 +45,13 @@ Fork one stopped model resident and synthetic world into a matched pair:
 python dev.py gym --episode willow-fork --transport-mode loopback
 ```
 
+Run the constructive material-life conformance episode:
+
+```bash
+python dev.py gym --episode material-day --transport-mode loopback
+python dev.py gym --container --episode material-day --transport-mode loopback
+```
+
 Run one real model-backed activation inside the isolated gym:
 
 ```bash
@@ -82,6 +89,34 @@ results, private activity prose, stderr, and resident artifacts are not copied i
 The model episode creates a disposable synthetic hearth under a temporary directory and exports portable
 checkpoints before and after activation. It does not admit, clone, or wake a resident in Alderbank or any other
 live town.
+
+## The Commons Worktable
+
+`The Commons Worktable` publishes the production constructive-game declaration on a disposable shard and
+lets one normally hosted resident discover its actual capability registry. Mara electively reads the
+`objects`, `making`, `exchanges`, `access`, and `stoops` sources, then uses the ordinary reference-core
+effectors and signed `WorldWeaverClient` routes. Ivo is a transparent scripted counterpart; simultaneous
+model-backed participants remain a separate concurrency scenario.
+
+The deterministic conformance path makes a clay cup and wooden token, gives the cup, offers and completes one
+exact object swap, voluntarily leaves the received token on a bounded stoop, and lets the other actor take it.
+It also requests entry to a requestable studio, records the controller's denial, and attempts the ordinary
+movement route. That route returns a signed `403 space_access_required` and leaves the resident at the
+worktable. These changes exist only through canonical objects, custody fields, revisions, events, and ten
+unique consequence, exchange, access, and stoop receipts; scenario prose cannot mutate them.
+
+The city object handoff and the private hearth gift are deliberately different. Giving changes shard-local
+custody through the atomic object route. A hearth gift is a resident-owned file plus private delivery notice.
+After the signed city retirement, a zero-model-call restart proves that the five city material sources are
+gone and the explicitly granted `gifts` source is present on the real `LocalWorld` attachment. The scenario
+does not claim that a city object crossed the hearth boundary.
+
+The episode's structural audit requires exactly one completed exchange, one denied request, one taken stoop
+entry, one access refusal, no duplicate receipt, and exactly one attachment per durable object. Its chronology
+audit also covers object creation/update, material pools, exchanges, access requests, stoop entries, every
+receipt, world events, sessions, and retirement. A repeated command at one controlled instant exposed and
+closed a production SQLAlchemy `onupdate` fallback that had substituted wall time for an explicitly injected
+object timestamp.
 
 ## Willow Week
 
@@ -153,7 +188,7 @@ outcome.
 
 Each command prints a compact timeline and writes a self-contained visual report under `.runs/gym/`
 (`footbridge-hello.html`, `waiting-letter.html`, `long-afternoon.html`, `kept-appointment.html`,
-`model-appointment.html`, or `willow-week.html`). The reports
+`model-appointment.html`, `willow-week.html`, or `commons-worktable.html`). The reports
 contain only synthetic speech and facts returned by production services. Their icons and layout do not add a
 narrator's interpretation.
 

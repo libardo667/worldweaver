@@ -195,6 +195,30 @@ def test_resident_host_passes_injected_world_time_to_normal_ticks(tmp_path):
     assert observed == [instant]
 
 
+def test_controlled_host_activation_can_force_only_its_initial_tick(tmp_path):
+    resident = _resident(tmp_path, _FakeCityClient())
+    forced: list[bool] = []
+
+    class _Core:
+        tick_seconds = 0.0
+
+        async def tick_once(self, *, now=None, force_ignite=False):
+            forced.append(bool(force_ignite))
+            return {"status": "completed"}
+
+    resident._build_core = lambda world, session_id: _Core()
+
+    asyncio.run(
+        resident.run(
+            max_ticks=2,
+            pause_seconds=0.0,
+            force_initial_ignite=True,
+        )
+    )
+
+    assert forced == [True, False]
+
+
 def test_bounded_scheduled_return_uses_host_interval_and_releases_custody(tmp_path):
     resident = _resident(tmp_path, _FakeCityClient())
     resident._runtime_lease = acquire_hearth_runtime(resident._resident_dir)

@@ -11,6 +11,7 @@ from typing import Any
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from ..models import (
     DurableObject,
@@ -514,6 +515,8 @@ def leave_object_on_stoop(
         object_row.placed_by_actor_id = None
         object_row.revision = int(object_row.revision or 1) + 1
         object_row.updated_at = _utcnow(now)
+        if now is not None:
+            flag_modified(object_row, "updated_at")
         entry = StoopObjectEntry(
             stoop_id=str(stoop.stoop_id),
             object_id=str(object_row.object_id),
@@ -615,6 +618,8 @@ def _resolve_stoop_entry(
         object_row.placed_by_actor_id = None
         object_row.revision = int(object_row.revision or 1) + 1
         object_row.updated_at = _utcnow(now)
+        if now is not None:
+            flag_modified(object_row, "updated_at")
         entry.status = resolution
         entry.taken_by_actor_id = context.actor_id if resolution == "taken" else None
         entry.resolved_at = _utcnow(now)

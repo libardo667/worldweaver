@@ -19,6 +19,7 @@ from typing import Any, Mapping
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from ..models import ConsequenceReceipt, DurableObject, SessionVars, StoopObjectEntry
 from .clock import utc_naive
@@ -260,6 +261,11 @@ def _complete_consequence(
         if object_row.created_at is None:
             object_row.created_at = current
         object_row.updated_at = current
+        # The same controlled instant may legitimately contain more than one
+        # structural command. Keep the explicit value in the UPDATE even when
+        # it compares equal to the previous value, or SQLAlchemy's server-side
+        # onupdate clock would substitute wall time.
+        flag_modified(object_row, "updated_at")
     event_receipt = submit_world_event(
         db,
         WorldEventCommand(
@@ -289,6 +295,12 @@ def _complete_consequence(
     )
     if provenance_event:
         object_row.provenance_event_id = event_receipt.event_id
+        if now is not None:
+            # Event submission flushes a new object before its event ID exists.
+            # Mark the injected instant dirty again so the provenance UPDATE
+            # cannot fall through to the column's production wall-time onupdate.
+            object_row.updated_at = utc_naive(now)
+            flag_modified(object_row, "updated_at")
     db.flush()
     db.refresh(object_row)
     after = durable_object_payload(object_row)

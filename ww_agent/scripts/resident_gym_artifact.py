@@ -496,6 +496,52 @@ class _ScriptedWeekModel:
         return None
 
 
+class _ScriptedGymCommandModel:
+    """Deterministically select one real city source or one advertised effector."""
+
+    def __init__(
+        self,
+        *,
+        model_id: str,
+        source: str = "",
+        query: str = "",
+        target: str = "",
+        action_kind: str = "do",
+    ) -> None:
+        self.default_model_id = model_id
+        self.source = str(source or "").strip()
+        self.query = str(query or "").strip()
+        self.target = str(target or "").strip()
+        self.action_kind = str(action_kind or "do").strip().lower()
+        if self.action_kind not in {"do", "move"}:
+            raise ValueError("scripted gym command action kind is invalid")
+        if bool(self.source) == bool(self.target):
+            raise ValueError(
+                "scripted gym command requires exactly one source or target"
+            )
+        self.total_calls = 0
+        self.total_prompt_tokens = 0
+        self.total_completion_tokens = 0
+
+    async def complete_json(self, *_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        self.total_calls += 1
+        if self.source and self.total_calls == 1:
+            return {"choice": "read", "source": self.source, "query": self.query}
+        if self.source:
+            return {"choice": "wait"}
+        return {
+            "choice": "act",
+            "action": {
+                "kind": self.action_kind,
+                "body": "" if self.action_kind == "move" else self.target,
+                "target": self.target,
+            },
+        }
+
+    async def close(self) -> None:
+        return None
+
+
 class _ObservedModel:
     """Emit only content-free inference boundaries across the gym protocol."""
 
@@ -582,6 +628,14 @@ async def _run_model_return(args: argparse.Namespace) -> dict[str, Any]:
         raw_model = _ScriptedWeekModel(
             model_id=model_id,
             step=int(args.scenario_step),
+        )
+    elif args.model_mode == "scripted-gym-command":
+        raw_model = _ScriptedGymCommandModel(
+            model_id=model_id,
+            source=str(args.scripted_source or ""),
+            query=str(args.scripted_query or ""),
+            target=str(args.scripted_target or ""),
+            action_kind=str(args.scripted_action_kind or "do"),
         )
     else:
         key = os.environ.get("WW_INFERENCE_KEY", "").strip()
@@ -717,7 +771,11 @@ async def _run_model_return(args: argparse.Namespace) -> dict[str, Any]:
                     raise PrivateArtifactError(
                         "hearth observation requires a hearth-bound process"
                     )
-            await resident.run(max_ticks=1, pause_seconds=0.0)
+            await resident.run(
+                max_ticks=1,
+                pause_seconds=0.0,
+                force_initial_ignite=args.command == "run-tick-model",
+            )
             if args.command == "observe-hearth-model":
                 result = {
                     "status": "observed",
@@ -928,7 +986,13 @@ def _parser() -> argparse.ArgumentParser:
     )
     model_return.add_argument(
         "--model-mode",
-        choices=("live", "scripted-read-home", "scripted-read-move", "scripted-week"),
+        choices=(
+            "live",
+            "scripted-read-home",
+            "scripted-read-move",
+            "scripted-week",
+            "scripted-gym-command",
+        ),
         default="live",
         help=argparse.SUPPRESS,
     )
@@ -947,6 +1011,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     model_return.add_argument(
         "--scenario-step", type=int, default=0, help=argparse.SUPPRESS
+    )
+    model_return.add_argument("--scripted-source", default="", help=argparse.SUPPRESS)
+    model_return.add_argument("--scripted-query", default="", help=argparse.SUPPRESS)
+    model_return.add_argument("--scripted-target", default="", help=argparse.SUPPRESS)
+    model_return.add_argument(
+        "--scripted-action-kind", default="do", help=argparse.SUPPRESS
     )
     hearth_observation = subparsers.add_parser(
         "observe-hearth-model",
@@ -970,7 +1040,13 @@ def _parser() -> argparse.ArgumentParser:
     )
     hearth_observation.add_argument(
         "--model-mode",
-        choices=("live", "scripted-read-home", "scripted-read-move", "scripted-week"),
+        choices=(
+            "live",
+            "scripted-read-home",
+            "scripted-read-move",
+            "scripted-week",
+            "scripted-gym-command",
+        ),
         default="live",
         help=argparse.SUPPRESS,
     )
@@ -990,6 +1066,18 @@ def _parser() -> argparse.ArgumentParser:
     hearth_observation.add_argument(
         "--scenario-step", type=int, default=0, help=argparse.SUPPRESS
     )
+    hearth_observation.add_argument(
+        "--scripted-source", default="", help=argparse.SUPPRESS
+    )
+    hearth_observation.add_argument(
+        "--scripted-query", default="", help=argparse.SUPPRESS
+    )
+    hearth_observation.add_argument(
+        "--scripted-target", default="", help=argparse.SUPPRESS
+    )
+    hearth_observation.add_argument(
+        "--scripted-action-kind", default="do", help=argparse.SUPPRESS
+    )
     tick = subparsers.add_parser(
         "run-tick-model",
         help="run one normally hosted model activation for a synthetic scenario event",
@@ -1006,10 +1094,20 @@ def _parser() -> argparse.ArgumentParser:
     tick.add_argument("--base-url", default="http://worldweaver-gym.local")
     tick.add_argument(
         "--model-mode",
-        choices=("live", "scripted-read-home", "scripted-read-move", "scripted-week"),
+        choices=(
+            "live",
+            "scripted-read-home",
+            "scripted-read-move",
+            "scripted-week",
+            "scripted-gym-command",
+        ),
         default="live",
     )
     tick.add_argument("--scenario-step", type=int, default=0)
+    tick.add_argument("--scripted-source", default="", help=argparse.SUPPRESS)
+    tick.add_argument("--scripted-query", default="", help=argparse.SUPPRESS)
+    tick.add_argument("--scripted-target", default="", help=argparse.SUPPRESS)
+    tick.add_argument("--scripted-action-kind", default="do", help=argparse.SUPPRESS)
     tick.add_argument("--transport-fault", default="", help=argparse.SUPPRESS)
     return parser
 

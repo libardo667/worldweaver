@@ -98,13 +98,15 @@ def test_making_consumes_material_and_creates_evidence_backed_object(
     db_session, game_rules
 ):
     _session(db_session)
-    initialize_material_pools(db_session)
+    made_at = datetime(2026, 7, 18, 12, 34, tzinfo=timezone.utc)
+    initialize_material_pools(db_session, now=made_at)
 
     result = make_durable_object(
         db_session,
         session_id="maker-session",
         recipe_id="small_clay_cup",
         idempotency_key="make-cup-1",
+        now=made_at,
     )
 
     clay = (
@@ -119,6 +121,8 @@ def test_making_consumes_material_and_creates_evidence_backed_object(
     assert object_row is not None
     assert object_row.custodian_actor_id == "actor-maker"
     assert object_row.provenance_kind == "recipe"
+    assert object_row.created_at == made_at.replace(tzinfo=None)
+    assert object_row.updated_at == made_at.replace(tzinfo=None)
     assert object_row.provenance_ref == "private-constructive-town@0.1.0:small_clay_cup"
     assert object_row.provenance_event_id == event.id
     assert event.event_type == "object_made"

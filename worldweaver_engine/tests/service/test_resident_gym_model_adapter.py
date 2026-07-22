@@ -542,3 +542,103 @@ def test_willow_week_runs_six_host_intervals_across_seven_controlled_days(tmp_pa
         "active_city_session_count": 0,
     }
     assert output.is_file()
+
+
+def test_material_day_uses_resident_effectors_receipts_refusal_and_hearth_gift(
+    tmp_path,
+):
+    engine_root = Path(__file__).resolve().parents[2]
+    output = tmp_path / "commons-worktable.html"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/resident_gym.py",
+            "--episode",
+            "material-day",
+            "--transport-mode",
+            "loopback",
+            "--json",
+            "--output",
+            str(output),
+        ],
+        cwd=engine_root,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=180,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(completed.stdout.split("\nVisual episode:", 1)[0])
+    records = payload["records"]
+    material = next(
+        record
+        for record in records
+        if record["kind"] == "material_capabilities_audited"
+    )["detail"]
+    hearth = next(
+        record for record in records if record["kind"] == "resident_hearth_observed"
+    )["detail"]
+    chronology = next(
+        record for record in records if record["kind"] == "world_chronology_audited"
+    )["detail"]
+
+    assert payload["episode"] == "The Commons Worktable"
+    assert payload["final_locations"] == {
+        "Mara": "the hearth",
+        "Ivo": "Commons Worktable",
+    }
+    assert payload["fidelity"]["participant_transport"] == (
+        "worldweaver_client_http_via_loopback"
+    )
+    assert material == {
+        "operations": [
+            "object_exchange_completed",
+            "object_exchange_offered",
+            "object_founded",
+            "object_given",
+            "object_made",
+            "space_access_denied",
+            "space_access_requested",
+            "stoop_object_left",
+            "stoop_object_taken",
+        ],
+        "source_names": ["access", "exchanges", "making", "objects", "stoops"],
+        "durable_object_count": 3,
+        "material_pool_count": 2,
+        "receipt_count": 10,
+        "completed_exchange_count": 1,
+        "denied_access_request_count": 1,
+        "taken_stoop_entry_count": 1,
+        "access_refusal_count": 1,
+        "duplicate_receipt_count": 0,
+        "invalid_attachment_count": 0,
+    }
+    refusal = next(
+        record for record in records if record["kind"] == "participant_access_refused"
+    )
+    assert refusal["detail"] == {
+        "code": "space_access_required",
+        "status_code": 403,
+    }
+    assert hearth["attachment"] == "hearth"
+    assert "gifts" in hearth["source_names"]
+    assert not {"access", "exchanges", "making", "objects", "stoops"}.intersection(
+        hearth["source_names"]
+    )
+    final_host = [
+        record for record in records if record["kind"] == "resident_host_finished"
+    ][-1]
+    final_inference = [
+        record for record in records if record["kind"] == "resident_inference_started"
+    ]
+    assert final_host["location"] == "the hearth"
+    assert final_inference[-1]["sequence"] < next(
+        record["sequence"]
+        for record in records
+        if record["kind"] == "resident_departure_receipt"
+    )
+    assert chronology["off_clock_count"] == 0
+    assert chronology["row_counts"]["durable_object_updated"] == 3
+    assert chronology["row_counts"]["material_pool_updated"] == 2
+    assert output.is_file()

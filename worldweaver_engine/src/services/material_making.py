@@ -10,6 +10,7 @@ from typing import Any
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from ..models import DurableObject, MaterialPool
 from .consequence_objects import (
@@ -315,6 +316,9 @@ def make_durable_object(
                 )
             pool.available_units = effective - units
             pool.last_replenished_at = advanced_at
+            if now is not None:
+                pool.updated_at = made_at
+                flag_modified(pool, "updated_at")
             material_changes[material_id] = {
                 "before_units": effective,
                 "consumed_units": int(units),

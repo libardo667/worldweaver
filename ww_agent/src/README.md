@@ -7,6 +7,8 @@
   bounds, and read-only observers used by operational surfaces. Cursor delivery is passed to the core without
   being converted into a forced activation. The host supplies an explicit world clock to normal core ticks and
   `LocalWorld`; production defaults to real UTC and controlled gym activations inject their scheduled instant.
+  A bounded controlled event can explicitly force only its first host tick; that switch defaults off and is
+  neither persisted nor inferred from ordinary speech delivery.
   Elapsed process bounds and waits remain monotonic or real. Before constructing a core it binds the private
   checkpoint to the loaded actor, authoritative hearth generation, current attachment (including an unfinished
   city handoff), adapter,
