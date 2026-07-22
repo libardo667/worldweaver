@@ -94,6 +94,12 @@ retries the same transition rather than rerunning the model choice. A committed 
 original receipt; mismatched actors, generations, sessions, and transition IDs are refused. `LocalWorld` is
 constructed only after the private process checkpoint says hearth.
 
+Inter-city recovery now has the same host ownership. A destination client is created with
+`WorldWeaverClient.for_resident`, which discovers the new shard audience and issues a fresh runtime certificate
+from the same host-sealed identity; it is not an unsigned generic client. Source retirement checkpoints the
+`traveling` attachment before destination contact, destination arrival checkpoints the new city attachment,
+and a dedicated recovery run can finish that pending handoff and suspend without making another model call.
+
 The stdio hop is process transport, not a second world API or resident composition root. A bounded scheduled
 return method on `Resident` owns the exact appointment, process interval, attachment wrapper, core, and custody
 release. The model gym exercises normal HTTP resident proof, including shard discovery,

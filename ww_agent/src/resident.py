@@ -68,6 +68,7 @@ TickObserver = Callable[
     Awaitable[None] | None,
 ]
 AttachmentCheckpointObserver = Callable[[ResidentIdentity, str], Awaitable[None] | None]
+WorldClientFactory = Callable[[str], WorldWeaverClient | Awaitable[WorldWeaverClient]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,7 +151,8 @@ class Resident:
         pulse_temperature: float | None | object = _IDENTITY_TEMPERATURE,
         tick_observer: TickObserver | None = None,
         attachment_checkpoint_observer: AttachmentCheckpointObserver | None = None,
-        world_client_factory: Callable[[str], WorldWeaverClient] | None = None,
+        world_client_factory: WorldClientFactory | None = None,
+        host_transport_private_key_path: str | Path | None = None,
         travel_retry_seconds: float = 5.0,
         world_clock: WorldClock | None = None,
     ):
@@ -171,9 +173,8 @@ class Resident:
         self._pulse_temperature = pulse_temperature
         self._tick_observer = tick_observer
         self._attachment_checkpoint_observer = attachment_checkpoint_observer
-        self._world_client_factory = world_client_factory or (
-            lambda url: WorldWeaverClient(base_url=url)
-        )
+        self._world_client_factory = world_client_factory
+        self._host_transport_private_key_path = host_transport_private_key_path
         self._travel_retry_seconds = max(0.0, float(travel_retry_seconds))
         self._world_clock = world_clock or SystemWorldClock()
         self._owned_world_clients: list[WorldWeaverClient] = []
@@ -254,7 +255,7 @@ class Resident:
         pending_travel = self._pending_shard_travel()
         last_city_url = self._last_city_url()
         if last_city_url and last_city_url != self._client_url(self._ww):
-            self._ww = self._new_world_client(last_city_url)
+            self._ww = await self._new_world_client(last_city_url)
         self._attachment_kind = restored_attachment or default_attachment
         if pending_hearth_departure is not None:
             self._attachment_kind = "city"
@@ -337,6 +338,28 @@ class Resident:
             await self._park_current_city_at_hearth()
         finally:
             self._release_runtime_lease()
+
+    async def resume_pending_travel_and_stop(self) -> bool:
+        """Resume one durable city handoff without running another model turn."""
+
+        if self._runtime_lease is None or self._identity is None:
+            raise RuntimeError(f"Resident {self.name} not started — call start() first")
+        pending = self._pending_shard_travel()
+        if pending is None or self._attachment_kind != "traveling":
+            raise RuntimeError(f"Resident {self.name} has no pending city travel")
+        self._begin_process_hosting()
+        try:
+            return await self._resume_inter_shard_travel(pending)
+        finally:
+            try:
+                for client in list(self._owned_world_clients):
+                    await client.close()
+                self._owned_world_clients.clear()
+            finally:
+                try:
+                    self._suspend_process_hosting()
+                finally:
+                    self._release_runtime_lease()
 
     async def run_scheduled_return(
         self,
@@ -1121,7 +1144,7 @@ class Resident:
             and pending.source_url
             and self._client_url(source_client) != pending.source_url
         ):
-            source_client = self._new_world_client(pending.source_url)
+            source_client = await self._new_world_client(pending.source_url)
         if not pending.source_departed:
             self._ww = source_client
 
@@ -1157,6 +1180,7 @@ class Resident:
                         self._attachment_kind = "traveling"
                         self._travel_id = pending.travel_id
                         self._bind_current_reference_process()
+                        await self._notify_attachment_checkpoint(pending.transition_id)
                         break
             except asyncio.CancelledError:
                 raise
@@ -1198,7 +1222,7 @@ class Resident:
         if not destination_url:
             raise RuntimeError(f"Travel {pending.travel_id} has no destination URL")
 
-        destination_client = self._new_world_client(destination_url)
+        destination_client = await self._new_world_client(destination_url)
         while True:
             try:
                 receipt = await destination_client.arrive_session_from_travel(
@@ -1240,6 +1264,7 @@ class Resident:
                         to_session_id=pending.destination_session_id,
                         destination_shard=pending.destination_shard,
                     )
+                    await self._notify_attachment_checkpoint(pending.transition_id)
                     if (
                         previous_client in self._owned_world_clients
                         and previous_client is not destination_client
@@ -1404,8 +1429,21 @@ class Resident:
     def _client_url(client: Any) -> str:
         return str(getattr(client, "base_url", "") or "").strip().rstrip("/")
 
-    def _new_world_client(self, url: str) -> WorldWeaverClient:
-        client = self._world_client_factory(str(url or "").strip().rstrip("/"))
+    async def _new_world_client(self, url: str) -> WorldWeaverClient:
+        endpoint = str(url or "").strip().rstrip("/")
+        if self._world_client_factory is None:
+            client_or_awaitable = WorldWeaverClient.for_resident(
+                endpoint,
+                self._resident_dir,
+                host_transport_private_key_path=(self._host_transport_private_key_path),
+            )
+        else:
+            client_or_awaitable = self._world_client_factory(endpoint)
+        client = (
+            await client_or_awaitable
+            if inspect.isawaitable(client_or_awaitable)
+            else client_or_awaitable
+        )
         self._owned_world_clients.append(client)
         return client
 

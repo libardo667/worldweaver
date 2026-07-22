@@ -390,6 +390,13 @@ the chronology audit finds no off-clock row. This required removing the last obs
 coordinator SQLAlchemy session from loopback worker threads. The remaining stack is recoverable federated
 travel.
 
+Federation preparation exposed one runtime prerequisite. The normal host previously created its destination
+`WorldWeaverClient` without resident signing, even though the destination arrival route correctly requires a
+certificate for that destination audience. Destination clients now use the resident-aware factory and the same
+host-sealed identity to issue audience-specific proof. The host also checkpoints once after source retirement
+as `traveling` and once after destination attachment, and exposes a no-cognition recovery run for an unfinished
+trip. The remaining acceptance is the three-node gym traversal and injected restart itself.
+
 The controlled-time HTTP prerequisite is now closed for the routes exercised by the model appointment. Live
 requests receive `SystemClock`; the isolated gym overrides the same FastAPI dependency with its controlled
 clock. Scene building, sublocation listing and creation, and movement resolution therefore agree at one virtual

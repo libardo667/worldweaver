@@ -25,7 +25,12 @@ from src.runtime.reference_core import ReferenceResidentCore
 from src.runtime.travel import PendingShardTravel, TravelRequest
 from src.runtime.world_clock import FixedWorldClock
 from src.world.city_world import CityWorld
-from src.world.client import LiveSignal, LiveSignalBatch, LiveSignalCursor
+from src.world.client import (
+    LiveSignal,
+    LiveSignalBatch,
+    LiveSignalCursor,
+    WorldWeaverClient,
+)
 
 
 class _FakeCityClient:
@@ -346,12 +351,16 @@ def test_city_to_city_travel_retires_source_then_swaps_one_host_to_destination(
 ):
     source = _FakeCityClient()
     destination = _FakeCityClient(base_url="https://destination.example")
+    checkpoints: list[str] = []
     resident = Resident(
         tmp_path / "resident",
         source,
         llm=object(),
         world_client_factory=lambda _url: destination,
         travel_retry_seconds=0,
+        attachment_checkpoint_observer=(
+            lambda _identity, transition_id: checkpoints.append(transition_id)
+        ),
     )
     resident._identity = _identity()
     resident._identity.growth_soul = "I carry this change between cities."
@@ -406,6 +415,46 @@ def test_city_to_city_travel_retires_source_then_swaps_one_host_to_destination(
     ]
     assert process_events[0]["payload"]["attachment"]["travel_id"]
     assert process_events[1]["payload"]["attachment"]["travel_id"] == ""
+    assert len(checkpoints) == 2
+    assert checkpoints[0] == checkpoints[1]
+
+
+def test_default_destination_client_reissues_resident_proof_for_new_audience(
+    tmp_path, monkeypatch
+):
+    source = _FakeCityClient()
+    destination = _FakeCityClient(base_url="https://destination.example")
+    host_key = tmp_path / "host.key"
+    calls: list[tuple[str, object, object]] = []
+
+    async def for_resident(base_url, resident_dir, **kwargs):
+        calls.append(
+            (
+                base_url,
+                resident_dir,
+                kwargs.get("host_transport_private_key_path"),
+            )
+        )
+        return destination
+
+    monkeypatch.setattr(WorldWeaverClient, "for_resident", for_resident)
+    resident = Resident(
+        tmp_path / "resident",
+        source,
+        llm=object(),
+        host_transport_private_key_path=host_key,
+    )
+
+    created = asyncio.run(resident._new_world_client("https://destination.example/"))
+
+    assert created is destination
+    assert calls == [
+        (
+            "https://destination.example",
+            tmp_path / "resident",
+            host_key,
+        )
+    ]
 
 
 def test_city_profile_selects_local_sources_and_refreshes_after_attachment(tmp_path):

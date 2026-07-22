@@ -81,7 +81,9 @@
 - `runtime/effectors.py` — sends final typed action attempts to concrete world rules.
 - `runtime/travel.py` — classifies world travel separately from ordinary movement and derives unfinished
   city handoffs from ledger evidence; worlds signal intent and `resident.py` performs or resumes the
-  lifecycle change without running cognition between nodes.
+  lifecycle change without running cognition between nodes. The host rebuilds a signed resident client for
+  each destination audience, checkpoints both the durable `traveling` state and the arrived city state, and
+  can resume an unfinished handoff without entering the cognitive loop.
 - `runtime/memory.py`, `drive.py`, `anchors.py`, `incubation.py`, `circadian.py` — supporting substrate
   state. These are modules inside the unified runtime, not independent schedulers.
 - `identity/growth.py`, `identity/resident_creation.py`, `runtime/workshop.py`, `runtime/doula.py` —

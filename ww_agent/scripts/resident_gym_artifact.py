@@ -625,7 +625,9 @@ async def _run_model_return(args: argparse.Namespace) -> dict[str, Any]:
         raise PrivateArtifactError("restored resident process binding does not match")
 
     model_id = expected_process.model_id
-    if args.model_mode in {"scripted-read-home", "scripted-read-move"}:
+    if args.command == "resume-travel-model":
+        raw_model: Any = _ScriptedWaitModel()
+    elif args.model_mode in {"scripted-read-home", "scripted-read-move"}:
         raw_model: Any = _ScriptedReadActModel(
             model_id=model_id,
             target=(
@@ -762,6 +764,7 @@ async def _run_model_return(args: argparse.Namespace) -> dict[str, Any]:
             pulse_temperature=None,
             tick_observer=observe_host_tick,
             attachment_checkpoint_observer=observe_attachment_checkpoint,
+            host_transport_private_key_path=args.host_key.resolve(),
             world_clock=controlled_clock,
         )
         await resident.start(expected_process.world_id)
@@ -774,7 +777,16 @@ async def _run_model_return(args: argparse.Namespace) -> dict[str, Any]:
                 "detail": {},
             }
         )
-        if args.command in {"observe-hearth-model", "run-tick-model"}:
+        if args.command == "resume-travel-model":
+            completed = await resident.resume_pending_travel_and_stop()
+            result = {
+                "status": "processed" if completed else "deferred",
+                "event_id": str(args.event_id or ""),
+                "activation_status": "travel_resumed" if completed else "deferred",
+                "choice": "none",
+            }
+            scheduled_return = None
+        elif args.command in {"observe-hearth-model", "run-tick-model"}:
             if expected_process.attachment_kind != "hearth":
                 if args.command == "observe-hearth-model":
                     raise PrivateArtifactError(
@@ -1123,6 +1135,30 @@ def _parser() -> argparse.ArgumentParser:
     tick.add_argument("--scripted-body", default="", help=argparse.SUPPRESS)
     tick.add_argument("--scripted-action-kind", default="do", help=argparse.SUPPRESS)
     tick.add_argument("--transport-fault", default="", help=argparse.SUPPRESS)
+    travel_resume = subparsers.add_parser(
+        "resume-travel-model",
+        help="resume a durable inter-city handoff without another model turn",
+    )
+    travel_resume.add_argument("--home", type=Path, required=True)
+    travel_resume.add_argument("--expected-process", type=Path, required=True)
+    travel_resume.add_argument("--event-id", default="")
+    travel_resume.add_argument("--now", required=True)
+    travel_resume.add_argument("--model", default="")
+    travel_resume.add_argument("--host-key", type=Path, required=True)
+    travel_resume.add_argument(
+        "--transport-mode", choices=("stdio", "loopback"), default="loopback"
+    )
+    travel_resume.add_argument("--base-url", required=True)
+    travel_resume.add_argument("--model-mode", default="scripted-gym-command")
+    travel_resume.add_argument("--scenario-step", type=int, default=0)
+    travel_resume.add_argument("--scripted-source", default="", help=argparse.SUPPRESS)
+    travel_resume.add_argument("--scripted-query", default="", help=argparse.SUPPRESS)
+    travel_resume.add_argument("--scripted-target", default="", help=argparse.SUPPRESS)
+    travel_resume.add_argument("--scripted-body", default="", help=argparse.SUPPRESS)
+    travel_resume.add_argument(
+        "--scripted-action-kind", default="do", help=argparse.SUPPRESS
+    )
+    travel_resume.add_argument("--transport-fault", default="", help=argparse.SUPPRESS)
     return parser
 
 
@@ -1132,6 +1168,7 @@ def main() -> int:
         "handle-return-model",
         "observe-hearth-model",
         "run-tick-model",
+        "resume-travel-model",
     }
     try:
         handlers = {

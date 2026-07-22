@@ -60,6 +60,10 @@ inputs in the identity loader; they do not restore the old ownership model.
   process checkpoint, child process, client, and transport endpoint. Prepare and finish scheduled activations
   on the coordinator thread; request workers may append content-safe records but must not use the coordinator's
   SQLAlchemy session.
+- Inter-city travel must create destination clients through the resident-aware factory so each node receives a
+  certificate for its own audience. Checkpoint after source retirement and after destination attachment. A
+  restart that finds `traveling` resumes that exact handoff without another model turn or a second source
+  session.
 - Multi-activation gym scenarios must reopen the same stopped synthetic home through the normal `Resident`
   host for every interval and carry its exact process checkpoint forward. World events and correspondence must
   be committed before an activation at the injected instant. A resident who legitimately reaches the hearth
