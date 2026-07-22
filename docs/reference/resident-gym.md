@@ -367,10 +367,18 @@ cohort: 12 completed and eight failed. It exposed shared-session SQLite misuse a
 timestamp fallbacks above. After those repairs, an eight-member host-process confirmation completed eight of
 eight runs with 77 model calls, 25 content-free inference failures, 405 HTTP requests, no off-clock rows, and
 one valid 422 client refusal from an elective places read. There were no 5xx server errors, and every resident
-retained exactly one suspended city attachment. A clean 20-member disposable-container confirmation is the
-next acceptance run.
+retained exactly one suspended city attachment.
 
-After that scaled confirmation, the next scenario slice is a counterfactual Willow Week fork. Optional
+The clean 20-member disposable-container confirmation then completed all 20 runs with no process failures. It
+made 195 external-model calls across 20 isolated hearths and synthetic databases, spanning 1,080 real loopback
+HTTP requests and 176,986 tokens. Fifty-three inference attempts failed before producing a consumable decision;
+the later scheduled intervals still ran. The aggregate found zero off-clock rows, zero 5xx server errors, one
+valid 422 refusal, no failure classes, and exactly one suspended city attachment per resident. Final locations
+were Footbridge once, Market Hall 13 times, and Willow Court six times. No model chose to leave the synthetic
+city in this cohort, so the aggregate correctly contains no retirement receipt rather than forcing a hearth
+ending.
+
+The next scenario slice is a counterfactual Willow Week fork. Optional
 constructive-game capabilities, concurrent model residents, and federation remain later slices.
 
 The database snapshot supports SQLite only and may restore only into an empty synthetic database. Its hash

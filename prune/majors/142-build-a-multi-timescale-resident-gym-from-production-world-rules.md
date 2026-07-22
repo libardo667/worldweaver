@@ -324,9 +324,18 @@ attachment per resident. One request was a valid 422 refusal after an elective p
 query; there were no 5xx server errors. Batch schema 4 therefore retains total HTTP non-successes while splitting
 4xx refusals from 5xx errors, and failed members expose only their bounded failure class rather than stderr.
 
-The next bounded acceptance is the clean 20-member disposable-container Willow Week cohort. Then add a
-counterfactual fork. Optional constructive-game capabilities and federation require their own explicit
-scenarios; do not grow a parallel list of gym-only world abilities in the meantime.
+The clean 20-member disposable-container Willow Week cohort then completed all 20 runs with no process
+failures. It made 195 external-model calls across 20 isolated hearths and synthetic databases, spanning 1,080
+real loopback HTTP requests and 176,986 tokens. Fifty-three inference attempts failed before producing a
+consumable decision; later scheduled intervals still ran. The aggregate found zero off-clock rows, zero 5xx
+server errors, one valid 422 refusal, no failure classes, and exactly one suspended city attachment per
+resident. Final locations were Footbridge once, Market Hall 13 times, and Willow Court six times. No model chose
+to leave the synthetic city in this cohort, so the aggregate correctly contains no retirement receipt rather
+than forcing a hearth ending.
+
+The next bounded slice is a checkpointed counterfactual Willow Week fork. Optional constructive-game
+capabilities and federation require their own explicit scenarios; do not grow a parallel list of gym-only world
+abilities in the meantime.
 
 The controlled-time HTTP prerequisite is now closed for the routes exercised by the model appointment. Live
 requests receive `SystemClock`; the isolated gym overrides the same FastAPI dependency with its controlled
