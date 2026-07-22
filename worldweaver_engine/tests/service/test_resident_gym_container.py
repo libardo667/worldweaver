@@ -91,6 +91,47 @@ def test_model_path_repeats_inside_disposable_container(tmp_path):
     os.environ.get("WW_RUN_CONTAINER_TESTS") != "1",
     reason="set WW_RUN_CONTAINER_TESTS=1 for the Docker acceptance proof",
 )
+def test_federated_journey_repeats_inside_disposable_container(tmp_path):
+    workspace = Path(__file__).resolve().parents[3]
+    output = tmp_path / "federated-journey-container.html"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "dev.py",
+            "gym",
+            "--container",
+            "--episode",
+            "federated-journey",
+            "--json",
+            "--output",
+            str(output),
+        ],
+        cwd=workspace,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=600,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    json_start = completed.stdout.find('{\n  "schema"')
+    json_end = completed.stdout.find("\nVisual episode:", json_start)
+    assert json_start >= 0 and json_end > json_start, completed.stdout
+    payload = json.loads(completed.stdout[json_start:json_end])
+    assert payload["final_locations"] == {"Mara": "Pearl District"}
+    assert payload["fidelity"]["infrastructure"] == (
+        "disposable_container_with_three_loopback_node_processes"
+    )
+    assert payload["fidelity"]["federation"] == (
+        "signed_recoverable_source_directory_destination"
+    )
+    assert output.is_file()
+
+
+@pytest.mark.skipif(
+    os.environ.get("WW_RUN_CONTAINER_TESTS") != "1",
+    reason="set WW_RUN_CONTAINER_TESTS=1 for the Docker acceptance proof",
+)
 def test_batch_runner_aggregates_independent_container_members(tmp_path):
     workspace = Path(__file__).resolve().parents[3]
     output_dir = tmp_path / "batch"

@@ -107,7 +107,9 @@ runtime-certificate signing, city admission, generation/session binding, verific
 It now exercises both the node-published commons source registry and its replacement by the private hearth
 registry after confirmed departure. `The Commons Worktable` additionally publishes the optional constructive
 game declaration: the same normal host reads the object, making, exchange, access, and stoop sources and sends
-their typed commands through signed production routes. Federation remains a separate boundary. The default
+their typed commands through signed production routes. `The Coast Starlight` separately kills the child after
+a signed source departure, restores the traveling checkpoint, reissues destination-audience proof, and reaches
+one destination session without a second model call. The default
 transport does not cross a listening socket; its episode fidelity metadata
 names the selected transport.
 

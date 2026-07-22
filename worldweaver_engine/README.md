@@ -44,6 +44,11 @@ request-scoped sessions against one synthetic shard. Two controlled waves prove 
 both signed speech writes persist, both residents later receive the two exact-place messages, and both finish
 suspended with exactly one city attachment.
 
+The `federated-journey` episode starts a disposable directory plus San Francisco and Portland engine processes,
+each with its own database and signed node identity. It kills the normal resident host after durable source
+retirement, then restarts from the traveling checkpoint and proves one signed destination attachment with no
+second model call or source presence. The same three-process topology also runs inside the disposable gym image.
+
 ## Source layout
 
 - `src/api/`: FastAPI routes

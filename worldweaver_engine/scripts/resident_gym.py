@@ -44,12 +44,19 @@ from src.config import settings  # noqa: E402
 from src.database import Base, configure_sqlite_connection, get_db  # noqa: E402
 from src.models import (  # noqa: E402
     DurableObject,
+    FederationActor,
+    FederationResident,
+    FederationShard,
+    FederationTraveler,
     LocationChat,
     ObjectExchange,
+    ResidentAuthority,
     ResidentSessionRetirementReceipt,
     SessionVars,
+    ShardTravelHandoff,
     SpaceAccessRequest,
     StoopObjectEntry,
+    WorldEvent,
 )
 from src.services.clock import Clock, ControlledClock, get_world_clock  # noqa: E402
 from src.services.gym_batch import summarize_episode  # noqa: E402
@@ -78,6 +85,7 @@ from src.services.resident_gym import (  # noqa: E402
     run_waiting_letter,
 )
 from src.services.federation_identity import current_shard_id  # noqa: E402
+from src.services.federation_node_auth import generate_node_identity  # noqa: E402
 from src.services.resident_authority import (  # noqa: E402
     activate_resident_generation,
     bind_resident_identity,
@@ -427,6 +435,136 @@ def _temporary_gym_loopback(
                 raise RuntimeError("gym loopback server did not stop")
 
 
+def _isolated_database(database_path: Path):
+    """Create one file-backed node database before its server imports the app."""
+
+    node_engine = create_engine(
+        f"sqlite+pysqlite:///{database_path}",
+        connect_args={"check_same_thread": False},
+    )
+    sqlalchemy_event.listen(node_engine, "connect", configure_sqlite_connection)
+    Base.metadata.create_all(node_engine)
+    return node_engine, sessionmaker(
+        bind=node_engine,
+        autoflush=False,
+        autocommit=False,
+    )
+
+
+def _free_loopback_port() -> int:
+    """Reserve and release one loopback port for a disposable node process."""
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        listener.bind(("127.0.0.1", 0))
+        return int(listener.getsockname()[1])
+
+
+@contextmanager
+def _temporary_gym_node_server(
+    *,
+    port: int,
+    audit_path: Path,
+    environment: dict[str, str],
+):
+    """Run one production-route node in an independently configured process."""
+
+    child_environment = os.environ.copy()
+    child_environment.update(environment)
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "scripts/resident_gym_node_server.py",
+            "--port",
+            str(port),
+            "--audit",
+            str(audit_path),
+        ],
+        cwd=ENGINE_ROOT,
+        env=child_environment,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    endpoint = f"http://127.0.0.1:{port}"
+    deadline = time.monotonic() + 20.0
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            stdout, stderr = process.communicate()
+            raise RuntimeError(
+                "gym node server exited before readiness: "
+                + (stderr.strip() or stdout.strip() or "unknown startup error")
+            )
+        try:
+            response = httpx.get(f"{endpoint}/health", timeout=0.5)
+            if response.status_code == 200:
+                break
+        except httpx.HTTPError:
+            pass
+        time.sleep(0.02)
+    else:
+        _stop_adapter_process(process)
+        raise RuntimeError("gym node server did not become ready")
+    try:
+        yield endpoint
+    finally:
+        if process.poll() is None:
+            process.terminate()
+        try:
+            process.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.communicate()
+
+
+def _node_environment(
+    *,
+    database_path: Path,
+    shard_id: str,
+    shard_type: str,
+    city_id: str,
+    public_url: str,
+    world_id_path: Path,
+    federation_url: str = "",
+    node_private_key_path: Path | None = None,
+) -> dict[str, str]:
+    """Build the explicit process environment for one isolated gym node."""
+
+    environment = {
+        "PYTEST_CURRENT_TEST": "resident-gym-federation",
+        "WW_DATABASE_URL": f"sqlite+pysqlite:///{database_path}",
+        "SHARD_ID": shard_id,
+        "SHARD_TYPE": shard_type,
+        "CITY_ID": city_id,
+        "WW_PUBLIC_URL": public_url,
+        "WW_CLIENT_URL": public_url,
+        "WW_WORLD_ID_FILE": str(world_id_path),
+        "WW_SESSION_CONSISTENCY_MODE": "database",
+        "WW_JWT_SECRET": "resident-gym-disposable-node-secret",
+        "WW_DATA_ENCRYPTION_KEY": "resident-gym-disposable-node-encryption",
+        "WW_AUTH_RATE_LIMIT_PER_MINUTE": "0",
+        "FEDERATION_PULSE_INTERVAL_SECONDS": "300",
+    }
+    if federation_url:
+        environment["FEDERATION_URL"] = federation_url
+    if node_private_key_path is not None:
+        environment["WW_NODE_PRIVATE_KEY_PATH"] = str(node_private_key_path)
+    return environment
+
+
+def _read_http_audit(path: Path) -> list[dict]:
+    """Read one content-safe node audit after flushing each completed request."""
+
+    if not path.exists():
+        return []
+    records = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        value = json.loads(line)
+        if not isinstance(value, dict):
+            raise RuntimeError("gym node HTTP audit is malformed")
+        records.append(value)
+    return records
+
+
 class _InjectedResidentCrash(RuntimeError):
     """The gym intentionally stopped a resident at one durable boundary."""
 
@@ -444,7 +582,13 @@ def _stop_adapter_process(process: subprocess.Popen[str]) -> None:
 
 
 @contextmanager
-def _temporary_gym_node_configuration(*, shard_experience_path: Path | None = None):
+def _temporary_gym_node_configuration(
+    *,
+    shard_experience_path: Path | None = None,
+    city_id: str = "resident_gym",
+    shard_id: str = "resident-gym",
+    shard_type: str = "city",
+):
     """Publish a synthetic node identity through ordinary node settings."""
 
     previous = {
@@ -453,9 +597,9 @@ def _temporary_gym_node_configuration(*, shard_experience_path: Path | None = No
         "shard_type": settings.shard_type,
         "shard_experience_path": settings.shard_experience_path,
     }
-    settings.city_id = "resident_gym"
-    settings.shard_id = "resident-gym"
-    settings.shard_type = "city"
+    settings.city_id = city_id
+    settings.shard_id = shard_id
+    settings.shard_type = shard_type
     settings.shard_experience_path = (
         str(shard_experience_path.resolve())
         if shard_experience_path is not None
@@ -484,6 +628,7 @@ def _model_adapter_command(
     event_id: str = "",
     scenario_step: int = 0,
     departure_fault: str = "",
+    federation_fault: str = "",
     transport_fault: str = "",
     transport_mode: str = "stdio",
     base_url: str = "http://worldweaver-gym.local",
@@ -570,6 +715,7 @@ def _model_adapter_command(
 
     result: dict | None = None
     leave_fault_injected = False
+    federation_fault_injected = False
     seen_request_ids: set[str] = set()
     for line in process.stdout:
         try:
@@ -619,6 +765,20 @@ def _model_adapter_command(
                 _stop_adapter_process(process)
                 raise _InjectedResidentCrash(
                     "resident stopped after durable hearth checkpoint"
+                )
+            if (
+                federation_fault == "after_source_departure"
+                and not federation_fault_injected
+                and event_kind == "resident_attachment_checkpointed"
+            ):
+                federation_fault_injected = True
+                gym.record_resident_federation_fault(
+                    expected_participant_session_id,
+                    mode=federation_fault,
+                )
+                _stop_adapter_process(process)
+                raise _InjectedResidentCrash(
+                    "resident stopped after durable source departure"
                 )
             continue
         if message_type == "result":
@@ -2654,6 +2814,593 @@ def _run_material_day(
             return gym.result()
 
 
+def _run_federated_journey(
+    _db,
+    *,
+    session_factory=None,
+    record_observer=None,
+    transport_mode: str = "loopback",
+):
+    """Crash and recover one signed resident journey across three real nodes."""
+
+    if transport_mode != "loopback":
+        raise ValueError("federated-journey requires loopback transport")
+    started_at = datetime(2026, 7, 21, 15, 0, tzinfo=timezone.utc)
+    actor_id = "gym-federated-actor-mara"
+    source_session_id = "gym-federated-source-mara"
+    source_shard = "bay-gym"
+    destination_shard = "rose-gym"
+    source_world_id = "gym-federated-bay-world"
+    destination_world_id = "gym-federated-rose-world"
+    model_id = "test/federated-journey-v1"
+
+    with tempfile.TemporaryDirectory(prefix="worldweaver-gym-federation-") as raw:
+        temp = Path(raw)
+        source_database = temp / "source.sqlite3"
+        destination_database = temp / "destination.sqlite3"
+        root_database = temp / "root.sqlite3"
+        source_engine, source_factory = _isolated_database(source_database)
+        destination_engine, destination_factory = _isolated_database(
+            destination_database
+        )
+        root_engine, root_factory = _isolated_database(root_database)
+        source_port = _free_loopback_port()
+        destination_port = _free_loopback_port()
+        root_port = _free_loopback_port()
+        source_url = f"http://127.0.0.1:{source_port}"
+        destination_url = f"http://127.0.0.1:{destination_port}"
+        root_url = f"http://127.0.0.1:{root_port}"
+
+        source_key = temp / "source-node.key"
+        destination_key = temp / "destination-node.key"
+        source_descriptor = generate_node_identity(
+            private_key_path=source_key,
+            descriptor_path=temp / "source-node.json",
+            node_id=source_shard,
+            shard_type="city",
+            city_id="san_francisco",
+        )
+        destination_descriptor = generate_node_identity(
+            private_key_path=destination_key,
+            descriptor_path=temp / "destination-node.json",
+            node_id=destination_shard,
+            shard_type="city",
+            city_id="portland",
+        )
+
+        home = temp / "mara"
+        host_key = temp / "mara-host.key"
+        artifact = _agent_artifact_command(
+            "create-fixture",
+            "--home",
+            str(home),
+            "--package",
+            str(temp / "mara-before.wwhearth"),
+            "--host-key",
+            str(host_key),
+            "--actor-id",
+            actor_id,
+            "--display-name",
+            "Mara",
+            "--world-id",
+            source_world_id,
+            "--session-id",
+            source_session_id,
+            "--model-id",
+            model_id,
+            "--started-at",
+            started_at.isoformat(),
+            "--return-at",
+            (started_at + timedelta(days=30)).isoformat(),
+        )
+        process = artifact.get("process")
+        identity = artifact.get("identity")
+        if not isinstance(process, dict) or not isinstance(identity, dict):
+            raise RuntimeError("federation fixture is incomplete")
+        process_path = temp / "process.json"
+        process_path.write_text(json.dumps(process), encoding="utf-8")
+
+        with source_factory() as source_db:
+            with _temporary_gym_node_configuration(
+                city_id="san_francisco",
+                shard_id=source_shard,
+            ):
+                gym = ProductionRuleGym(
+                    source_db,
+                    episode="The Coast Starlight",
+                    world_id=source_world_id,
+                    clock=ControlledClock(started_at),
+                    scenario_id="federated-journey",
+                    scenario_version=1,
+                    scenario_seed=0,
+                    record_observer=record_observer,
+                )
+                gym.arrange_world(("embarcadero", "soma"))
+                gym.join(
+                    GymParticipant(
+                        session_id=source_session_id,
+                        actor_id=actor_id,
+                        display_name="Mara",
+                        implementation="reference_resident_model",
+                    ),
+                    location="embarcadero",
+                )
+                gym.bind_participant_artifacts(
+                    source_session_id,
+                    adapter_id=str(process["adapter"]["id"]),
+                    adapter_version=int(process["adapter"]["version"]),
+                    model_id=str(process["model"]["id"]),
+                    private_state=artifact["descriptor"],
+                )
+                source_certificate_result = _agent_artifact_command(
+                    "issue-runtime-certificate",
+                    "--home",
+                    str(home),
+                    "--host-key",
+                    str(host_key),
+                    "--audience",
+                    source_shard,
+                )
+                source_certificate = ResidentRuntimeCertificate.decode_header(
+                    str(source_certificate_result["certificate_header"])
+                )
+                bind_resident_identity(
+                    source_db,
+                    actor_id=actor_id,
+                    hearth_shard_id=str(identity["hearth_shard_id"]),
+                    identity_public_key=str(identity["identity_public_key"]),
+                    recovery_policy_version=int(identity["recovery_policy_version"]),
+                    admission_reason="synthetic federated resident gym fixture",
+                    admitted_by="resident-gym",
+                )
+                activate_resident_generation(
+                    source_db,
+                    certificate=source_certificate,
+                    expected_audience=source_shard,
+                )
+                bind_resident_session(
+                    source_db,
+                    session_id=source_session_id,
+                    actor_id=actor_id,
+                    runtime_generation=source_certificate.runtime_generation,
+                )
+                source_db.commit()
+
+            with destination_factory() as destination_db:
+                with _temporary_gym_node_configuration(
+                    city_id="portland",
+                    shard_id=destination_shard,
+                ):
+                    destination_gym = ProductionRuleGym(
+                        destination_db,
+                        episode="The Coast Starlight Destination",
+                        world_id=destination_world_id,
+                        clock=ControlledClock(started_at),
+                        scenario_id="federated-journey-destination",
+                    )
+                    destination_gym.arrange_world(
+                        ("pearl-district", "old-town-chinatown")
+                    )
+                    bind_resident_identity(
+                        destination_db,
+                        actor_id=actor_id,
+                        hearth_shard_id=str(identity["hearth_shard_id"]),
+                        identity_public_key=str(identity["identity_public_key"]),
+                        recovery_policy_version=int(
+                            identity["recovery_policy_version"]
+                        ),
+                        admission_reason="synthetic federated resident gym fixture",
+                        admitted_by="resident-gym",
+                    )
+                    destination_db.commit()
+
+            wall_now = datetime.now(timezone.utc)
+            with root_factory() as root_db:
+                for node_id, node_url, city_id, descriptor in (
+                    (
+                        source_shard,
+                        source_url,
+                        "san_francisco",
+                        source_descriptor,
+                    ),
+                    (
+                        destination_shard,
+                        destination_url,
+                        "portland",
+                        destination_descriptor,
+                    ),
+                ):
+                    root_db.add(
+                        FederationShard(
+                            shard_id=node_id,
+                            shard_url=node_url,
+                            client_url=node_url,
+                            shard_type="city",
+                            city_id=city_id,
+                            public_key=str(descriptor["public_key"]),
+                            identity_bound_at=wall_now,
+                            admission_state="approved",
+                            admitted_at=wall_now,
+                            last_pulse_ts=wall_now,
+                            last_pulse_seq=1,
+                        )
+                    )
+                root_db.add(
+                    FederationActor(
+                        actor_id=actor_id,
+                        actor_type="agent",
+                        display_name="Mara",
+                        home_shard=str(identity["hearth_shard_id"]),
+                        current_shard=source_shard,
+                        status="active",
+                        origin="resident-gym",
+                    )
+                )
+                root_db.add(
+                    FederationResident(
+                        resident_id=actor_id,
+                        name="Mara",
+                        home_shard=str(identity["hearth_shard_id"]),
+                        current_shard=source_shard,
+                        resident_type="agent",
+                        status="active",
+                    )
+                )
+                root_db.commit()
+
+            source_world_file = temp / "source-world-id.txt"
+            destination_world_file = temp / "destination-world-id.txt"
+            root_world_file = temp / "root-world-id.txt"
+            source_world_file.write_text(source_world_id, encoding="utf-8")
+            destination_world_file.write_text(destination_world_id, encoding="utf-8")
+            root_world_file.write_text("gym-federation-root-world", encoding="utf-8")
+            root_audit = temp / "root-http.jsonl"
+            source_audit = temp / "source-http.jsonl"
+            destination_audit = temp / "destination-http.jsonl"
+
+            root_environment = _node_environment(
+                database_path=root_database,
+                shard_id="gym-federation-root",
+                shard_type="world",
+                city_id="world",
+                public_url=root_url,
+                world_id_path=root_world_file,
+            )
+            source_environment = _node_environment(
+                database_path=source_database,
+                shard_id=source_shard,
+                shard_type="city",
+                city_id="san_francisco",
+                public_url=source_url,
+                world_id_path=source_world_file,
+                federation_url=root_url,
+                node_private_key_path=source_key,
+            )
+            destination_environment = _node_environment(
+                database_path=destination_database,
+                shard_id=destination_shard,
+                shard_type="city",
+                city_id="portland",
+                public_url=destination_url,
+                world_id_path=destination_world_file,
+                federation_url=root_url,
+                node_private_key_path=destination_key,
+            )
+
+            with (
+                _temporary_gym_node_server(
+                    port=root_port,
+                    audit_path=root_audit,
+                    environment=root_environment,
+                ),
+                _temporary_gym_node_server(
+                    port=source_port,
+                    audit_path=source_audit,
+                    environment=source_environment,
+                ),
+            ):
+                gym.record_resident_transport(
+                    source_session_id,
+                    transport="loopback_http",
+                )
+                try:
+                    _model_adapter_command(
+                        gym,
+                        api_client=None,
+                        home=home,
+                        host_key=host_key,
+                        process_path=process_path,
+                        participant_session_id=source_session_id,
+                        protocol_session_id=source_session_id,
+                        now=started_at,
+                        model_id=model_id,
+                        model_mode="scripted-gym-command",
+                        command="run-tick-model",
+                        event_id="federated-departure-tick",
+                        federation_fault="after_source_departure",
+                        transport_mode="loopback",
+                        base_url=source_url,
+                        scripted_target=f"travel to {destination_shard}",
+                        scripted_action_kind="move",
+                    )
+                except _InjectedResidentCrash:
+                    checkpointed = _agent_artifact_command(
+                        "describe-process",
+                        "--home",
+                        str(home),
+                    )
+                    process_path.write_text(json.dumps(checkpointed), encoding="utf-8")
+                else:
+                    raise RuntimeError(
+                        "federated resident was not stopped after source departure"
+                    )
+                attachment = checkpointed.get("attachment")
+                if (
+                    not isinstance(attachment, dict)
+                    or attachment.get("kind") != "traveling"
+                    or not str(attachment.get("travel_id") or "").strip()
+                ):
+                    raise RuntimeError(
+                        "federated resident did not durably checkpoint travel"
+                    )
+                travel_id = str(attachment["travel_id"])
+                source_db.expire_all()
+                source_handoff = source_db.get(ShardTravelHandoff, travel_id)
+                if (
+                    source_handoff is None
+                    or source_handoff.status != "traveling"
+                    or source_db.get(SessionVars, source_session_id) is not None
+                ):
+                    raise RuntimeError(
+                        "source node did not durably retire the traveler"
+                    )
+
+                with _temporary_gym_node_server(
+                    port=destination_port,
+                    audit_path=destination_audit,
+                    environment=destination_environment,
+                ):
+                    recovery_result = _model_adapter_command(
+                        gym,
+                        api_client=None,
+                        home=home,
+                        host_key=host_key,
+                        process_path=process_path,
+                        participant_session_id=source_session_id,
+                        protocol_session_id=source_session_id,
+                        now=started_at + timedelta(hours=18),
+                        model_id=model_id,
+                        model_mode="scripted-gym-command",
+                        command="resume-travel-model",
+                        transport_mode="loopback",
+                        base_url=source_url,
+                    )
+
+            final_process = recovery_result.get("process")
+            if not isinstance(final_process, dict):
+                raise RuntimeError("travel recovery omitted its process checkpoint")
+            final_attachment = final_process.get("attachment")
+            final_hosting = final_process.get("hosting")
+            if (
+                not isinstance(final_attachment, dict)
+                or final_attachment.get("kind") != "city"
+                or not isinstance(final_hosting, dict)
+                or final_hosting.get("state") != "suspended"
+            ):
+                raise RuntimeError("travel recovery process checkpoint is inconsistent")
+            destination_session_id = str(final_attachment.get("session_id") or "")
+            if (
+                not destination_session_id
+                or destination_session_id == source_session_id
+            ):
+                raise RuntimeError("travel recovery did not create a new incarnation")
+
+            source_db.expire_all()
+            source_handoff = source_db.get(ShardTravelHandoff, travel_id)
+            source_session_count = (
+                source_db.query(SessionVars)
+                .filter(SessionVars.actor_id == actor_id)
+                .count()
+            )
+            source_departures = (
+                source_db.query(WorldEvent)
+                .filter(
+                    WorldEvent.event_type == "cross_shard_departure",
+                    WorldEvent.session_id == source_session_id,
+                )
+                .count()
+            )
+            with destination_factory() as destination_db:
+                destination_handoff = destination_db.get(ShardTravelHandoff, travel_id)
+                destination_sessions = (
+                    destination_db.query(SessionVars)
+                    .filter(SessionVars.actor_id == actor_id)
+                    .all()
+                )
+                destination_arrivals = (
+                    destination_db.query(WorldEvent)
+                    .filter(
+                        WorldEvent.event_type == "cross_shard_arrival",
+                        WorldEvent.session_id == destination_session_id,
+                    )
+                    .count()
+                )
+                destination_location = ""
+                if len(destination_sessions) == 1:
+                    raw_vars = destination_sessions[0].vars
+                    if isinstance(raw_vars, dict):
+                        variables = raw_vars.get("variables")
+                        if isinstance(variables, dict):
+                            destination_location = str(variables.get("location") or "")
+                destination_authority = destination_db.get(ResidentAuthority, actor_id)
+            with root_factory() as root_db:
+                traveler = (
+                    root_db.query(FederationTraveler)
+                    .filter(FederationTraveler.travel_id == travel_id)
+                    .one_or_none()
+                )
+                root_actor = root_db.get(FederationActor, actor_id)
+                root_resident = root_db.get(FederationResident, actor_id)
+
+            inference_count = sum(
+                1
+                for record in gym.result().records
+                if record.kind == "resident_inference_finished"
+            )
+            if (
+                source_handoff is None
+                or destination_handoff is None
+                or traveler is None
+                or root_actor is None
+                or root_resident is None
+                or destination_authority is None
+                or destination_authority.active_runtime_generation
+                != source_certificate.runtime_generation
+                or source_departures != 1
+                or destination_arrivals != 1
+                or destination_session_id != str(destination_handoff.session_id or "")
+                or destination_location != "Pearl District"
+                or root_actor.current_shard != destination_shard
+                or root_actor.status != "active"
+                or root_resident.current_shard != destination_shard
+                or root_resident.status != "active"
+                or inference_count != 1
+            ):
+                raise RuntimeError(
+                    "federated journey durable state is inconsistent: "
+                    + json.dumps(
+                        {
+                            "source_handoff": getattr(source_handoff, "status", None),
+                            "destination_handoff": getattr(
+                                destination_handoff, "status", None
+                            ),
+                            "federation": getattr(traveler, "status", None),
+                            "source_departures": source_departures,
+                            "destination_arrivals": destination_arrivals,
+                            "destination_session_count": len(destination_sessions),
+                            "destination_session_match": destination_session_id
+                            == str(
+                                getattr(destination_handoff, "session_id", "") or ""
+                            ),
+                            "destination_location": destination_location,
+                            "root_actor": (
+                                getattr(root_actor, "current_shard", None),
+                                getattr(root_actor, "status", None),
+                            ),
+                            "root_resident": (
+                                getattr(root_resident, "current_shard", None),
+                                getattr(root_resident, "status", None),
+                            ),
+                            "destination_generation": getattr(
+                                destination_authority,
+                                "active_runtime_generation",
+                                None,
+                            ),
+                            "expected_generation": source_certificate.runtime_generation,
+                            "inference_count": inference_count,
+                        },
+                        sort_keys=True,
+                    )
+                )
+
+            audits = {
+                "source": _read_http_audit(source_audit),
+                "destination": _read_http_audit(destination_audit),
+                "root": _read_http_audit(root_audit),
+            }
+
+            def audited(
+                node: str,
+                *,
+                method: str,
+                path: str,
+                proof: str,
+            ) -> bool:
+                return any(
+                    item.get("method") == method
+                    and item.get("path") == path
+                    and 200 <= int(item.get("status_code") or 0) < 300
+                    and item.get(proof) is True
+                    for item in audits[node]
+                )
+
+            if (
+                any(
+                    int(item.get("status_code") or 0) >= 500
+                    for items in audits.values()
+                    for item in items
+                )
+                or not audited(
+                    "source",
+                    method="POST",
+                    path="/api/session/travel/depart",
+                    proof="resident_proof",
+                )
+                or not audited(
+                    "destination",
+                    method="POST",
+                    path="/api/session/travel/arrive",
+                    proof="resident_proof",
+                )
+                or not audited(
+                    "root",
+                    method="POST",
+                    path="/api/federation/travel/start",
+                    proof="node_proof",
+                )
+                or not audited(
+                    "root",
+                    method="POST",
+                    path=f"/api/federation/travel/{travel_id}/depart",
+                    proof="node_proof",
+                )
+                or not audited(
+                    "root",
+                    method="POST",
+                    path=f"/api/federation/travel/{travel_id}/arrive",
+                    proof="node_proof",
+                )
+            ):
+                raise RuntimeError("federated journey HTTP proof is incomplete")
+
+            gym.record_federated_travel_verified(
+                source_session_id,
+                travel_id=travel_id,
+                source_shard=source_shard,
+                destination_shard=destination_shard,
+                destination_session_id=destination_session_id,
+                destination_location=destination_location,
+                source_handoff_status=str(source_handoff.status),
+                destination_handoff_status=str(destination_handoff.status),
+                federation_status=str(traveler.status),
+                model_call_count=inference_count,
+                recovery_model_call_count=int(
+                    recovery_result.get("model_call_count") or 0
+                ),
+                source_session_count=source_session_count,
+                destination_session_count=len(destination_sessions),
+            )
+            updated_descriptor = _agent_artifact_command(
+                "export",
+                "--home",
+                str(home),
+                "--package",
+                str(temp / "mara-after.wwhearth"),
+            )
+            gym.bind_participant_artifacts(
+                source_session_id,
+                adapter_id=str(process["adapter"]["id"]),
+                adapter_version=int(process["adapter"]["version"]),
+                model_id=str(process["model"]["id"]),
+                private_state=updated_descriptor,
+            )
+            result = gym.result()
+        source_engine.dispose()
+        destination_engine.dispose()
+        root_engine.dispose()
+        return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Run a deterministic production-rule resident gym episode."
@@ -2670,6 +3417,7 @@ def main() -> int:
             "willow-week",
             "material-day",
             "resident-duet",
+            "federated-journey",
         ),
         default="footbridge",
         help="episode to run (default: footbridge)",
@@ -2762,6 +3510,7 @@ def main() -> int:
         "willow-week": "Willow Week",
         "material-day": "The Commons Worktable",
         "resident-duet": "Two Voices at the Worktable",
+        "federated-journey": "The Coast Starlight",
     }
     if stream:
         print(render_terminal_stream_header(episode_titles[args.episode]), flush=True)
@@ -2777,7 +3526,16 @@ def main() -> int:
                 "quiet-interval": run_quiet_interval,
                 "resident-return": _run_scripted_resident_return,
             }
-            if args.episode == "resident-duet":
+            if args.episode == "federated-journey":
+                if args.departure_fault or args.transport_fault:
+                    parser.error("The Coast Starlight does not accept fault modes")
+                result = _run_federated_journey(
+                    db,
+                    session_factory=session_factory,
+                    record_observer=show_record if stream else None,
+                    transport_mode=args.transport_mode,
+                )
+            elif args.episode == "resident-duet":
                 if args.departure_fault or args.transport_fault:
                     parser.error("The resident duet does not accept fault modes")
                 result = _run_resident_duet(
@@ -2852,6 +3610,7 @@ def main() -> int:
             "willow-week": "willow-week.html",
             "material-day": "commons-worktable.html",
             "resident-duet": "resident-duet.html",
+            "federated-journey": "federated-journey.html",
         }
         default_name = default_names[args.episode]
         output = (

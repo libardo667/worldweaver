@@ -121,6 +121,7 @@ def _gym(arguments: list[str]) -> int:
             "resident-model": "model-appointment-container.html",
             "willow-week": "willow-week-container.html",
             "material-day": "commons-worktable-container.html",
+            "federated-journey": "federated-journey-container.html",
         }
         output = (
             ROOT

@@ -9,6 +9,61 @@ import sys
 import pytest
 
 
+def test_federated_journey_recovers_across_three_signed_node_processes(tmp_path):
+    engine_root = Path(__file__).resolve().parents[2]
+    output = tmp_path / "federated-journey.html"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/resident_gym.py",
+            "--episode",
+            "federated-journey",
+            "--transport-mode",
+            "loopback",
+            "--json",
+            "--output",
+            str(output),
+        ],
+        cwd=engine_root,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=180,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(completed.stdout.split("\nVisual episode:", 1)[0])
+    records = payload["records"]
+    verification = next(
+        record for record in records if record["kind"] == "federated_travel_verified"
+    )
+
+    assert payload["episode"] == "The Coast Starlight"
+    assert payload["final_locations"] == {"Mara": "Pearl District"}
+    assert payload["fidelity"]["infrastructure"] == ("three_loopback_node_processes")
+    assert payload["fidelity"]["world_state"] == "three_isolated_sqlite_nodes"
+    assert payload["fidelity"]["federation"] == (
+        "signed_recoverable_source_directory_destination"
+    )
+    assert [record["kind"] for record in records].count(
+        "resident_inference_finished"
+    ) == 1
+    assert [record["kind"] for record in records].count(
+        "resident_federation_fault_injected"
+    ) == 1
+    assert [record["kind"] for record in records].count(
+        "resident_attachment_checkpointed"
+    ) == 2
+    assert verification["detail"]["source_handoff_status"] == "traveling"
+    assert verification["detail"]["destination_handoff_status"] == "arrived"
+    assert verification["detail"]["federation_status"] == "arrived"
+    assert verification["detail"]["model_call_count"] == 1
+    assert verification["detail"]["recovery_model_call_count"] == 0
+    assert verification["detail"]["source_session_count"] == 0
+    assert verification["detail"]["destination_session_count"] == 1
+    assert output.is_file()
+
+
 def test_resident_duet_overlaps_two_model_hosts_in_one_shared_shard(tmp_path):
     engine_root = Path(__file__).resolve().parents[2]
     output = tmp_path / "resident-duet.html"

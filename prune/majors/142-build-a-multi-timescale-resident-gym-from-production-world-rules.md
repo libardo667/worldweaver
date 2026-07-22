@@ -395,7 +395,19 @@ Federation preparation exposed one runtime prerequisite. The normal host previou
 certificate for that destination audience. Destination clients now use the resident-aware factory and the same
 host-sealed identity to issue audience-specific proof. The host also checkpoints once after source retirement
 as `traveling` and once after destination attachment, and exposes a no-cognition recovery run for an unfinished
-trip. The remaining acceptance is the three-node gym traversal and injected restart itself.
+trip.
+
+That acceptance is now complete as `--episode federated-journey`. `The Coast Starlight` runs a federation
+directory, San Francisco source, and Portland destination as three independently configured production engine
+processes with separate databases and node keys. Mara makes one explicit model-backed travel decision. After
+the source has durably retired her session, recorded departure, and confirmed `traveling` at the directory,
+the gym kills the child at its traveling checkpoint while Portland is still offline. A restarted child reads
+the same private ledger, creates a signed destination client for the Portland audience, arrives at Pearl
+District, and suspends without another model call. The audit requires zero source sessions, exactly one
+destination session, matching local and directory handoffs, exactly one departure and arrival event, resident
+proof on both city routes, node proof on directory start/depart/arrive, and no 5xx response. The same topology
+runs inside the disposable combined image; the three node processes are still independently configured within
+that container boundary.
 
 The controlled-time HTTP prerequisite is now closed for the routes exercised by the model appointment. Live
 requests receive `SystemClock`; the isolated gym overrides the same FastAPI dependency with its controlled
@@ -410,8 +422,8 @@ events, fact validity, and projection updates accept the same explicit world ins
 episode result, the gym audits every exercised row against the trajectory's controlled instants and refuses the
 result if any row silently used wall time. Correspondence, traces, polls, grounding, durable objects, making,
 exchange, stoop, and access HTTP commands now receive this dependency as well, so future capability scenarios
-do not need another time architecture. Federation transfer records remain outside the claim alongside the
-federation boundary itself. Security expiry, replay guards, rate limits, cache freshness, process timing, and
+do not need another time architecture. Federation transfer records remain outside the controlled-time claim
+and use operational time. Security expiry, replay guards, rate limits, cache freshness, process timing, and
 model latency deliberately remain real or monotonic.
 
 The resident half now has its matching clock seam. `Resident` and `LocalWorld` default to real UTC, while the
@@ -425,9 +437,10 @@ on their operational clocks.
 Gym coverage now has two explicit scales. Trustworthiness scenarios test that the apparatus tells the truth:
 production-rule parity, authorization, exact-place delivery, delayed work, stop/resume, correspondence, access,
 custody, travel, stale-decision rejection, and fault recovery. They stay small and inspectable. The first five
-have partial or complete narrow proofs; access/custody now have a complete material-day proof, while federated
-travel and scenario-level stale decisions still need gym episodes. The city-to-hearth fault boundary now has request, transaction, response-loss, and
-post-checkpoint process coverage.
+have partial or complete narrow proofs; access/custody now have a complete material-day proof, and federated
+travel has a three-node crash-recovery proof. Scenario-level stale decisions still need a gym episode. The
+city-to-hearth fault boundary has request, transaction, response-loss, and post-checkpoint process coverage;
+city-to-city travel has post-source-retirement process-loss coverage.
 
 Capability and training scenarios come later. They vary attention and timing, conversation, solitude and
 learning, plans, relationships, material life, place and travel, uncertain knowledge, long-term change, and

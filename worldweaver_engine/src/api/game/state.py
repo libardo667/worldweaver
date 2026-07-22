@@ -425,17 +425,24 @@ _WORLD_ID_FILE = os.path.join(
 )
 
 
+def _world_id_file() -> str:
+    """Return the ordinary city file or an explicitly isolated runtime path."""
+
+    return str(os.environ.get("WW_WORLD_ID_FILE") or _WORLD_ID_FILE).strip()
+
+
 def _read_world_id() -> str:
     try:
-        with open(_WORLD_ID_FILE, encoding="utf-8") as f:
+        with open(_world_id_file(), encoding="utf-8") as f:
             return f.read().strip()
     except FileNotFoundError:
         return ""
 
 
 def _write_world_id(world_id: str) -> None:
-    os.makedirs(os.path.dirname(_WORLD_ID_FILE), exist_ok=True)
-    with open(_WORLD_ID_FILE, "w", encoding="utf-8") as f:
+    path = _world_id_file()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
         f.write(world_id)
 
 

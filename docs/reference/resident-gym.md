@@ -58,6 +58,13 @@ Overlap two independently hosted model residents in one synthetic shard:
 python dev.py gym --episode resident-duet --transport-mode loopback
 ```
 
+Crash and recover one resident across a disposable federation directory and two city nodes:
+
+```bash
+python dev.py gym --episode federated-journey --transport-mode loopback
+python dev.py gym --container --episode federated-journey
+```
+
 Run one real model-backed activation inside the isolated gym:
 
 ```bash
@@ -139,7 +146,29 @@ the second simultaneous wave lets both residents receive the two persisted exact
 read the normal `measure` source. The proof requires both host-start records to precede either host-finish
 record in each wave, exactly two city sessions and two speech rows, one suspended city checkpoint per resident,
 and no off-clock persistent row. This is a deterministic concurrency conformance test, not evidence about how
-two external models converse. Federated travel remains a separate distributed-system scenario.
+two external models converse. Federated travel is exercised separately by `The Coast Starlight`.
+
+## The Coast Starlight
+
+`federated-journey` starts three independently configured production engine processes on loopback: a federation
+directory, a San Francisco source shard, and a Portland destination shard. Each has its own file-backed SQLite
+database; each city has its own node signing key and public directory registration. Mara begins through her
+normal resident host at San Francisco's real city-pack departure hub and chooses one explicit trip using the
+ordinary travel source and typed move effector.
+
+The source calls the signed federation start and departure routes, commits its local `traveling` handoff,
+persists one departure event, and retires Mara's source session. The gym then kills the resident child at the
+first durable traveling-attachment checkpoint, before the destination server exists. A fresh child restores
+the private ledger, reissues destination-audience resident proof from the same host-sealed identity, calls the
+signed Portland arrival route, and suspends at one new city attachment in Pearl District. Recovery performs
+zero model calls; the whole journey performs exactly one.
+
+The acceptance record requires one source handoff at `traveling`, one destination handoff and one directory
+traveler at `arrived`, zero source sessions, exactly one destination session, one departure event, one arrival
+event, and matching active directory projections at Portland. A content-safe audit separately proves resident
+signatures on both city routes and node signatures on directory start, depart, and arrive, with no 5xx response.
+Federation timestamps and signature expiry remain real operational time; the scenario narrative and resident
+decision use controlled time.
 
 ## Willow Week
 
@@ -398,23 +427,23 @@ being reported as a full temporary shard. For the current model episode it says 
 | Boundary | Current model episode |
 | --- | --- |
 | Engine rules | Actual FastAPI routes and production service functions |
-| Infrastructure | Host processes or a freshly built disposable combined image; both keep the engine and resident in separate processes and use the same loopback HTTP mode |
-| World state | Synthetic SQLite database |
+| Infrastructure | Host processes or a freshly built disposable combined image; the federation episode adds three independently configured loopback engine processes inside that boundary |
+| World state | Synthetic SQLite database; the federation episode uses one isolated database per directory/source/destination node |
 | Resident composition | Normal `Resident` host and its shared production reference core |
 | Participant transport | Ordinary `WorldWeaverClient` HTTP carried over generic stdio bytes, or a real ephemeral IPv4 loopback connection |
 | Resident authorization | Host-sealed identity, signed runtime certificate, bound generation/session, and normal request verification |
 | Information sources | City registry is built from the node-published identity and capabilities; it is replaced by the actual `LocalWorld` registry only after confirmed departure |
-| World time | One controlled instant governs exercised engine routes and persistence plus reference-core and `LocalWorld` observation; live engine and resident hosts default to system UTC |
+| World time | One controlled instant governs ordinary single-shard scenarios; federation coordination, proof expiry, and process operation deliberately retain real time |
 | Hearth | Reports either the proven `LocalWorld` transition/restart or the model's retained suspended city attachment |
-| Federation | Not exercised |
+| Federation | `federated-journey` exercises signed discovery, source retirement, crash recovery, destination arrival, and directory projection updates |
 
 The model gym now enters through the same `Resident` owner as an ordinary host. Identity loading, hearth
 activation and exclusive custody, session resume, public city-profile discovery, source construction, process
 binding, core composition, and clean suspension are production host paths. The HTTP API and resident
 authorization path are production paths too. The generic stdio hop remains process transport rather than a
 second world API. The loopback mode serves the same app through a real local socket. An episode may enter the
-real `LocalWorld` after confirmed departure or remain suspended at its valid city attachment; it still does not
-activate optional game capabilities or contact federation.
+real `LocalWorld` after confirmed departure, remain suspended at its valid city attachment, or recover a
+pending city-to-city handoff against isolated federation nodes.
 
 Real loopback requests use one request-scoped SQLAlchemy session each, while the scenario coordinator keeps a
 separate session over the same temporary file-backed SQLite database. The disposable database enables the same
@@ -442,8 +471,8 @@ turns any remaining implicit session timestamp into a failed episode before it c
 
 The same FastAPI dependency is threaded through correspondence, physical traces, doula polls, grounding,
 objects, making, exchanges, stoops, and access commands. Those capabilities still need their own behavioral gym
-scenarios, but they no longer require a separate clock architecture. Federation handoff chronology remains
-outside this claim because federation itself is explicitly not exercised. Authorization expiry, request
+scenarios, but they no longer require a separate clock architecture. Federation handoff chronology uses
+operational wall time and is explicitly labeled separately from the controlled scenario chronology. Authorization expiry, request
 nonces, rate limits, cache TTLs, process locks, model duration, and runtime metrics intentionally stay on real
 or monotonic operational time.
 
@@ -479,8 +508,9 @@ were Footbridge once, Market Hall 13 times, and Willow Court six times. No model
 city in this cohort, so the aggregate correctly contains no retirement receipt rather than forcing a hearth
 ending.
 
-Counterfactual forks, constructive-game capabilities, and concurrent model residents now have explicit
-scenarios. Recoverable federation remains the next infrastructure slice.
+Counterfactual forks, constructive-game capabilities, concurrent model residents, and recoverable federation
+now have explicit scenarios. Multi-resident cross-shard overlap and independently containerized nodes remain
+later distributed-system extensions.
 
 The database snapshot supports SQLite only and may restore only into an empty synthetic database. Its hash
 detects damage and internal mismatches; it is not a signature and does not make an envelope from an untrusted
@@ -500,16 +530,16 @@ apparatus tells the truth about what happened.
 
 | Boundary | Current proof | Remaining proof |
 | --- | --- | --- |
-| Production-rule parity | Footbridge episode matches an authenticated in-process HTTP replay; model direct and signed-HTTP scenes agree at one controlled instant; the full transition also passes through a real loopback Uvicorn server inside host processes and a disposable combined image; two independent resident hosts overlap against request-scoped production routes on one shard | Split federation nodes and residents into independently managed processes or containers |
+| Production-rule parity | Footbridge episode matches an authenticated in-process HTTP replay; model direct and signed-HTTP scenes agree at one controlled instant; the full transition also passes through a real loopback Uvicorn server inside host processes and a disposable combined image; two independent resident hosts overlap against request-scoped production routes on one shard; three independently configured node processes exercise federation routes | Split nodes into independently managed containers or hosts |
 | Identity and authorization | Model resident uses its host-sealed identity and normal signed runtime certificate for protected scene and session-retirement routes; anonymous signal access is refused; correspondence uses durable actor IDs | Cover every gym action and other proof/failure types |
 | Exact-place perception | Speech follows location and a durable cursor; two simultaneous resident hosts persist separate utterances and both receive the pair on their next controlled activation | Reconnect, cursor gaps, and concurrent arrival/movement ordering |
 | Delayed work | Stable scheduled IDs, controlled UTC across exercised routes and persistent chronology, explicit acknowledgement, expired-place movement refusal, and idempotent private-return retry | Add other state-changing scenario handlers and prove failed-handler retry |
 | Stop and resume | A separate reference core refuses a second model call after lost acknowledgement; the model adapter retries pending departure after restart with zero model calls, reaches `LocalWorld` once, and refreshes its artifact | Live scheduled-return wiring and authenticated portable checkpoints |
 | Correspondence | Mail survives a session change and remains pending until acknowledgement | Interruption policy, cross-shard delivery, and failure recovery |
 | Access and custody | The material-day episode covers refusal, making, atomic giving, witnessed exchange, and bounded stoop leave/take through signed production routes and unique durable receipts | Cross-process failure injection around material mutations |
-| Travel | Signed city retirement uses a stable transition and durable actor/generation receipt; the normal city-to-hearth attachment transition survives request, commit, response, and post-checkpoint failures | Hearth-to-city return plus recoverable federated travel episodes |
+| Travel | Signed city retirement uses a stable transition and durable actor/generation receipt; the normal city-to-hearth transition survives request, commit, response, and post-checkpoint failures; a signed source-directory-destination trip survives child death after source retirement and reaches exactly one Portland attachment without another model call | Hearth-to-city return and simultaneous multi-resident cross-shard travel |
 | Stale information | Structural version fence exists in the reference resident | Change the world during a gym decision and prove safe reconsideration |
-| Fault recovery | Model episodes inject failure before request, before commit, after committed response loss, and after the hearth checkpoint; malformed, replayed, and dead-child transports fail closed; the clean transition repeats in a disposable image | Broader action faults and cross-container process loss |
+| Fault recovery | Model episodes inject failure before request, before commit, after committed response loss, after the hearth checkpoint, and after federated source retirement; malformed, replayed, and dead-child transports fail closed; both hearth and federation transitions repeat in a disposable image | Broader action faults and cross-container process loss |
 
 The command-line runner exposes these records as a live, flushed stream while retaining the final HTML and JSON
 reports. The separate-process return and model episodes emit content-safe observation and activation boundaries, making

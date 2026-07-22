@@ -302,6 +302,9 @@ class _ScriptedWaitModel:
         self.call_count += 1
         return {"choice": "wait"}
 
+    async def close(self) -> None:
+        return None
+
 
 async def _refuse_effect(*_args, **_kwargs) -> dict:
     raise RuntimeError("the scripted wait fixture may not perform an action or read")
@@ -1182,6 +1185,7 @@ def main() -> int:
             "handle-return-model": _handle_model_return,
             "observe-hearth-model": _handle_model_return,
             "run-tick-model": _handle_model_return,
+            "resume-travel-model": _handle_model_return,
         }
         result = handlers[args.command](args)
     except (OSError, PrivateArtifactError, ValueError) as exc:

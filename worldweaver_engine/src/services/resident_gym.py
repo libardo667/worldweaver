@@ -1146,6 +1146,80 @@ class ProductionRuleGym:
             detail={"network": "ipv4_loopback", "scheme": "http"},
         )
 
+    def record_resident_federation_fault(
+        self,
+        session_id: str,
+        *,
+        mode: str,
+    ) -> None:
+        """Record one deliberate process loss after durable source departure."""
+
+        if mode != "after_source_departure":
+            raise ValueError("unsupported resident federation fault")
+        participant = self._participant(session_id)
+        self._record(
+            "resident_federation_fault_injected",
+            participant=participant,
+            location=self._record_location(session_id),
+            detail={"mode": mode},
+        )
+
+    def record_federated_travel_verified(
+        self,
+        session_id: str,
+        *,
+        travel_id: str,
+        source_shard: str,
+        destination_shard: str,
+        destination_session_id: str,
+        destination_location: str,
+        source_handoff_status: str,
+        destination_handoff_status: str,
+        federation_status: str,
+        model_call_count: int,
+        recovery_model_call_count: int,
+        source_session_count: int,
+        destination_session_count: int,
+    ) -> None:
+        """Prove one crash-recovered signed journey across three live nodes."""
+
+        values = {
+            "travel_id": travel_id,
+            "source_shard": source_shard,
+            "destination_shard": destination_shard,
+            "destination_session_id": destination_session_id,
+            "destination_location": destination_location,
+        }
+        if any(not str(value or "").strip() for value in values.values()):
+            raise ValueError("federated travel verification is incomplete")
+        if (
+            source_handoff_status != "traveling"
+            or destination_handoff_status != "arrived"
+            or federation_status != "arrived"
+            or model_call_count != 1
+            or recovery_model_call_count != 0
+            or source_session_count != 0
+            or destination_session_count != 1
+        ):
+            raise ValueError("federated travel verification failed")
+        participant = self._participant(session_id)
+        self._last_locations[session_id] = destination_location
+        self._record(
+            "federated_travel_verified",
+            participant=participant,
+            location=destination_location,
+            detail={
+                **values,
+                "source_handoff_status": source_handoff_status,
+                "destination_handoff_status": destination_handoff_status,
+                "federation_status": federation_status,
+                "model_call_count": model_call_count,
+                "recovery_model_call_count": recovery_model_call_count,
+                "source_session_count": source_session_count,
+                "destination_session_count": destination_session_count,
+            },
+        )
+
     def record_resident_departure_receipt(
         self,
         session_id: str,
@@ -2255,6 +2329,9 @@ class ProductionRuleGym:
             and record.detail.get("attachment") == "hearth"
             for record in self._records
         )
+        federated_model_travel = any(
+            record.kind == "federated_travel_verified" for record in self._records
+        )
         reference_resident = model_resident or any(
             implementation.startswith("reference_resident_")
             for implementation in implementations
@@ -2273,11 +2350,25 @@ class ProductionRuleGym:
                     else "production_services"
                 ),
                 infrastructure=(
-                    "disposable_container"
-                    if os.environ.get("WW_GYM_INFRASTRUCTURE") == "disposable_container"
-                    else "host_process"
+                    (
+                        "disposable_container_with_three_loopback_node_processes"
+                        if os.environ.get("WW_GYM_INFRASTRUCTURE")
+                        == "disposable_container"
+                        else "three_loopback_node_processes"
+                    )
+                    if federated_model_travel
+                    else (
+                        "disposable_container"
+                        if os.environ.get("WW_GYM_INFRASTRUCTURE")
+                        == "disposable_container"
+                        else "host_process"
+                    )
                 ),
-                world_state="synthetic_sqlite",
+                world_state=(
+                    "three_isolated_sqlite_nodes"
+                    if federated_model_travel
+                    else "synthetic_sqlite"
+                ),
                 resident_composition=(
                     "normal_resident_host_and_reference_core"
                     if model_resident
@@ -2309,12 +2400,16 @@ class ProductionRuleGym:
                     else "not_exercised"
                 ),
                 world_time=(
-                    "controlled_clock_across_engine_and_resident_world_state"
-                    if model_resident and isinstance(self.clock, ControlledClock)
+                    "controlled_scenario_time_with_operational_federation_time"
+                    if federated_model_travel
                     else (
-                        "controlled_clock_in_exercised_production_services"
-                        if isinstance(self.clock, ControlledClock)
-                        else "system_utc"
+                        "controlled_clock_across_engine_and_resident_world_state"
+                        if model_resident and isinstance(self.clock, ControlledClock)
+                        else (
+                            "controlled_clock_in_exercised_production_services"
+                            if isinstance(self.clock, ControlledClock)
+                            else "system_utc"
+                        )
                     )
                 ),
                 hearth_attachment=(
@@ -2330,7 +2425,11 @@ class ProductionRuleGym:
                         else "not_exercised"
                     )
                 ),
-                federation="not_exercised",
+                federation=(
+                    "signed_recoverable_source_directory_destination"
+                    if federated_model_travel
+                    else "not_exercised"
+                ),
             ),
             final_locations=final_locations,
             records=tuple(self._records),

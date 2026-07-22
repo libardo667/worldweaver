@@ -1,8 +1,19 @@
 from pathlib import Path
 
 from src.config import settings
+from src.api.game.state import _read_world_id, _write_world_id
 from src.models import MaterialPool, WorldEdge, WorldNode, WorldStoop
 from src.services.city_pack_seeder import _pack_entry_location
+
+
+def test_world_id_file_can_be_isolated_per_node_process(tmp_path, monkeypatch):
+    world_id_file = tmp_path / "node-world-id.txt"
+    monkeypatch.setenv("WW_WORLD_ID_FILE", str(world_id_file))
+
+    _write_world_id("isolated-node-world")
+
+    assert _read_world_id() == "isolated-node-world"
+    assert world_id_file.read_text(encoding="utf-8") == "isolated-node-world"
 
 
 def test_city_pack_entry_uses_its_travel_hub_or_first_canonical_place():
