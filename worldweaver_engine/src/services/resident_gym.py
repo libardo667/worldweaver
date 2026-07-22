@@ -1244,6 +1244,25 @@ class ProductionRuleGym:
             )
 
         if (
+            request_method == "GET"
+            and path.startswith("/api/world/location/")
+            and path.endswith("/chat")
+            and 200 <= status < 300
+            and isinstance(response_payload, dict)
+        ):
+            messages = response_payload.get("messages")
+            self._record(
+                "participant_speech_ready",
+                participant=participant,
+                location=str(response_payload.get("location") or location),
+                detail={
+                    "message_count": (
+                        len(messages) if isinstance(messages, list) else 0
+                    )
+                },
+            )
+
+        if (
             request_method == "POST"
             and path == "/api/game/move"
             and 200 <= status < 300

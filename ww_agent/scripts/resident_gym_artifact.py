@@ -11,10 +11,12 @@ import asyncio
 import base64
 import json
 import os
+import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+import uuid
 
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 import httpx
@@ -28,6 +30,12 @@ from src.identity.hearth_activation import initialize_hearth_activation  # noqa:
 from src.identity.hearth_package import export_hearth_package  # noqa: E402
 from src.identity.resident_identity_custody import (  # noqa: E402
     initialize_resident_identity_custody,
+)
+from src.identity.resident_identity import (  # noqa: E402
+    load_resident_identity_descriptor,
+)
+from src.identity.resident_key_seal import (  # noqa: E402
+    SEALED_RESIDENT_IDENTITY_FILENAME,
 )
 from src.inference.client import InferenceClient  # noqa: E402
 from src.identity.loader import LoopTuning, ResidentIdentity  # noqa: E402
@@ -179,6 +187,57 @@ def _restore(args: argparse.Namespace) -> dict:
         descriptor=descriptor,
         expected_process=process,
     )
+
+
+def _restore_synthetic_fork(args: argparse.Namespace) -> dict:
+    """Restore one synthetic branch without weakening portable hearth custody."""
+
+    descriptor = _read_object(args.descriptor.resolve())
+    process = ResidentProcessBinding.from_dict(
+        _read_object(args.expected_process.resolve())
+    )
+    source_home = args.source_home.resolve()
+    target_home = args.home.resolve()
+    source_identity = load_resident_identity_descriptor(source_home)
+    source_seal = (
+        source_home / "identity" / SEALED_RESIDENT_IDENTITY_FILENAME
+    ).resolve()
+    source_session = source_home / "session_id.txt"
+    if (
+        source_identity.actor_id != process.actor_id
+        or process.attachment_kind != "city"
+        or not source_session.is_file()
+        or source_session.read_text(encoding="utf-8").strip() != process.session_id
+        or not source_seal.is_file()
+        or target_home.exists()
+        or target_home.is_symlink()
+    ):
+        raise PrivateArtifactError("synthetic fork source binding is invalid")
+    staging = target_home.parent / f".{target_home.name}.fork-{uuid.uuid4().hex}"
+    try:
+        report = restore_private_artifact(
+            args.package.resolve(),
+            staging,
+            descriptor=descriptor,
+            expected_process=process,
+        )
+        target_identity = load_resident_identity_descriptor(staging)
+        if source_identity != target_identity:
+            raise PrivateArtifactError(
+                "synthetic fork identity does not match its source"
+            )
+        target_seal = staging / "identity" / SEALED_RESIDENT_IDENTITY_FILENAME
+        shutil.copyfile(source_seal, target_seal)
+        target_seal.chmod(0o600)
+        (staging / "session_id.txt").write_text(
+            f"{process.session_id}\n", encoding="utf-8"
+        )
+        initialize_hearth_activation(staging)
+        staging.rename(target_home)
+    except Exception:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    return {**report, "synthetic_fork_custody": "installed"}
 
 
 def _export(args: argparse.Namespace) -> dict:
@@ -810,6 +869,15 @@ def _parser() -> argparse.ArgumentParser:
     restore.add_argument("--home", type=Path, required=True)
     restore.add_argument("--descriptor", type=Path, required=True)
     restore.add_argument("--expected-process", type=Path, required=True)
+    fork_restore = subparsers.add_parser(
+        "restore-synthetic-fork",
+        help="restore one explicitly synthetic counterfactual branch",
+    )
+    fork_restore.add_argument("--package", type=Path, required=True)
+    fork_restore.add_argument("--home", type=Path, required=True)
+    fork_restore.add_argument("--descriptor", type=Path, required=True)
+    fork_restore.add_argument("--expected-process", type=Path, required=True)
+    fork_restore.add_argument("--source-home", type=Path, required=True)
     export = subparsers.add_parser(
         "export",
         help="export an updated stopped synthetic home for the engine checkpoint",
@@ -957,6 +1025,7 @@ def main() -> int:
         handlers = {
             "create-fixture": _create_fixture,
             "restore": _restore,
+            "restore-synthetic-fork": _restore_synthetic_fork,
             "export": _export,
             "issue-runtime-certificate": _issue_runtime_certificate,
             "describe-process": _describe_process,

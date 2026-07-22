@@ -43,6 +43,15 @@ from src.config import settings  # noqa: E402
 from src.database import Base, configure_sqlite_connection, get_db  # noqa: E402
 from src.models import ResidentSessionRetirementReceipt, SessionVars  # noqa: E402
 from src.services.clock import Clock, ControlledClock, get_world_clock  # noqa: E402
+from src.services.gym_batch import summarize_episode  # noqa: E402
+from src.services.gym_counterfactual import (  # noqa: E402
+    GymCounterfactualBranch,
+    GymCounterfactualResult,
+)
+from src.services.gym_counterfactual_presentation import (  # noqa: E402
+    render_counterfactual_html,
+    render_counterfactual_terminal,
+)
 from src.services.gym_presentation import (  # noqa: E402
     render_html,
     render_terminal,
@@ -701,6 +710,29 @@ def _memory_database():
     return engine, sessionmaker(bind=engine)()
 
 
+@contextmanager
+def _temporary_branch_database(path: Path):
+    """Open one file-backed fork database with production SQLite settings."""
+
+    engine = create_engine(
+        f"sqlite+pysqlite:///{path}",
+        connect_args={"check_same_thread": False},
+    )
+    sqlalchemy_event.listen(engine, "connect", configure_sqlite_connection)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    sqlalchemy_event.listen(
+        session_factory, "before_flush", _require_explicit_session_time
+    )
+    try:
+        with session_factory() as db:
+            yield db, session_factory
+    finally:
+        engine.dispose()
+        _state_managers.clear()
+        _session_locks.clear()
+
+
 def _run_scripted_resident_return(db, *, record_observer=None):
     """Show the stop, due return, lost acknowledgement, and safe retry path."""
 
@@ -1148,6 +1180,339 @@ def _run_model_resident_return(
         return gym.result()
 
 
+def _run_counterfactual_model_fork(
+    db,
+    *,
+    record_observer=None,
+    model_id: str,
+    model_mode: str = "live",
+    transport_mode: str = "loopback",
+):
+    """Resume two independent model residents from one exact pre-event state."""
+
+    participant_session_id = "gym-afternoon-mara"
+    participant_actor_id = "gym-afternoon-actor-mara"
+    with (
+        tempfile.TemporaryDirectory(prefix="worldweaver-gym-fork-") as raw_temp,
+        _temporary_gym_node_configuration(),
+    ):
+        temp = Path(raw_temp)
+        source_home = temp / "source-resident"
+        source_package = temp / "resident-before.wwhearth"
+        host_key = temp / "gym-host-transport.key"
+        artifact = _agent_artifact_command(
+            "create-fixture",
+            "--home",
+            str(source_home),
+            "--package",
+            str(source_package),
+            "--host-key",
+            str(host_key),
+            "--actor-id",
+            participant_actor_id,
+            "--display-name",
+            "Mara",
+            "--world-id",
+            "gym-long-afternoon-world",
+            "--session-id",
+            participant_session_id,
+            "--model-id",
+            model_id,
+            "--started-at",
+            "2026-07-20T12:00:00+00:00",
+            "--return-at",
+            "2026-07-22T12:00:00+00:00",
+        )
+        process_binding = artifact["process"]
+        scheduled_return = artifact["scheduled_return"]
+        descriptor = artifact["descriptor"]
+        identity = artifact.get("identity")
+        if not isinstance(identity, dict):
+            raise RuntimeError("counterfactual fixture omitted resident identity proof")
+
+        source = prepare_quiet_interval(
+            db,
+            mara_implementation="reference_resident_model",
+            episode="The Forked Invitation",
+        )
+        source.bind_participant_artifacts(
+            participant_session_id,
+            adapter_id=process_binding["adapter"]["id"],
+            adapter_version=process_binding["adapter"]["version"],
+            model_id=process_binding["model"]["id"],
+            private_state=descriptor,
+        )
+        source.schedule_resident_return(
+            participant_session_id,
+            resident_event_id=str(scheduled_return["event_id"]),
+            activity_id=str(scheduled_return["activity_id"]),
+            due_at=datetime.fromisoformat(str(scheduled_return["due_at"])),
+        )
+        audience = current_shard_id()
+        certificate_result = _agent_artifact_command(
+            "issue-runtime-certificate",
+            "--home",
+            str(source_home),
+            "--host-key",
+            str(host_key),
+            "--audience",
+            audience,
+        )
+        certificate = ResidentRuntimeCertificate.decode_header(
+            str(certificate_result.get("certificate_header") or "").strip()
+        )
+        bind_resident_identity(
+            db,
+            actor_id=str(identity.get("actor_id") or ""),
+            hearth_shard_id=str(identity.get("hearth_shard_id") or ""),
+            identity_public_key=str(identity.get("identity_public_key") or ""),
+            recovery_policy_version=int(identity.get("recovery_policy_version") or 0),
+            admission_reason="synthetic counterfactual fixture",
+            admitted_by="resident-gym",
+        )
+        activate_resident_generation(
+            db, certificate=certificate, expected_audience=audience
+        )
+        bind_resident_session(
+            db,
+            session_id=participant_session_id,
+            actor_id=participant_actor_id,
+            runtime_generation=certificate.runtime_generation,
+        )
+        db.commit()
+
+        inspection = source.offer_next_scheduled()[0]
+        source.inspect_sublocation(
+            parent_location=str(inspection.payload["parent_location"]),
+            sublocation_id=str(inspection.payload["sublocation_id"]),
+        )
+        source.acknowledge_scheduled((inspection.event_id,))
+        checkpoint = json.loads(json.dumps(source.checkpoint()))
+        checkpoint_id = str(checkpoint.get("checkpoint_id") or "")
+        private_artifact_id = str(descriptor.get("artifact_id") or "")
+        common_records = list(checkpoint["gym"]["records"])
+        if not checkpoint_id or not private_artifact_id:
+            raise RuntimeError("counterfactual source checkpoint is incomplete")
+
+        descriptor_path = temp / "descriptor.json"
+        descriptor_path.write_text(json.dumps(descriptor), encoding="utf-8")
+        branch_specs = (
+            ("invitation", "exact_place_speech_present", True),
+            ("quiet", "exact_place_speech_absent", False),
+        )
+        branches: list[GymCounterfactualBranch] = []
+
+        for branch_id, condition, add_speech in branch_specs:
+            home = temp / f"resident-{branch_id}"
+            process_path = temp / f"process-{branch_id}.json"
+            process_path.write_text(json.dumps(process_binding), encoding="utf-8")
+            _agent_artifact_command(
+                "restore-synthetic-fork",
+                "--package",
+                str(source_package),
+                "--home",
+                str(home),
+                "--source-home",
+                str(source_home),
+                "--descriptor",
+                str(descriptor_path),
+                "--expected-process",
+                str(process_path),
+            )
+
+            with _temporary_branch_database(temp / f"{branch_id}.sqlite3") as (
+                branch_db,
+                branch_session_factory,
+            ):
+                branch = ProductionRuleGym.from_checkpoint(
+                    branch_db,
+                    checkpoint,
+                    record_observer=record_observer,
+                )
+                if add_speech:
+                    branch.speak(
+                        "gym-afternoon-ivo",
+                        "The bridge group will meet beside the dry bench.",
+                    )
+                due_events = branch.offer_next_scheduled()
+                if len(due_events) != 1 or due_events[0].kind != (
+                    "resident_private_return"
+                ):
+                    raise RuntimeError("counterfactual fork did not reach one return")
+                due = due_events[0]
+
+                if transport_mode == "stdio":
+                    transport_context = _temporary_gym_api(
+                        branch_db, world_clock=branch.clock
+                    )
+                elif transport_mode == "loopback":
+                    transport_context = _temporary_gym_loopback(
+                        branch_db,
+                        session_factory=branch_session_factory,
+                        world_clock=branch.clock,
+                        gym=branch,
+                        participant_session_id=participant_session_id,
+                    )
+                else:
+                    raise ValueError("unsupported counterfactual transport")
+
+                with transport_context as transport_endpoint:
+                    api_client = (
+                        transport_endpoint
+                        if isinstance(transport_endpoint, _GymAPIClient)
+                        else None
+                    )
+                    base_url = (
+                        "http://worldweaver-gym.local"
+                        if api_client is not None
+                        else str(transport_endpoint)
+                    )
+                    current_process = json.loads(
+                        process_path.read_text(encoding="utf-8")
+                    )
+
+                    def handle_return(event, _scene):
+                        return _model_adapter_command(
+                            branch,
+                            api_client=api_client,
+                            home=home,
+                            host_key=host_key,
+                            process_path=process_path,
+                            participant_session_id=participant_session_id,
+                            protocol_session_id=str(
+                                current_process["attachment"]["session_id"]
+                            ),
+                            now=event.due_at,
+                            model_id=model_id,
+                            model_mode=model_mode,
+                            event_id=str(event.payload["resident_event_id"]),
+                            transport_mode=transport_mode,
+                            base_url=base_url,
+                        )
+
+                    activation = branch.deliver_resident_return(due, handle_return)
+                    updated_process = activation.get("process")
+                    if not isinstance(updated_process, dict):
+                        raise RuntimeError(
+                            "counterfactual resident omitted its process checkpoint"
+                        )
+                    process_path.write_text(
+                        json.dumps(updated_process), encoding="utf-8"
+                    )
+                    attachment = updated_process.get("attachment")
+                    if not isinstance(attachment, dict) or attachment.get(
+                        "kind"
+                    ) not in {"city", "hearth"}:
+                        raise RuntimeError(
+                            "counterfactual resident checkpointed an invalid attachment"
+                        )
+                    if attachment.get("kind") == "hearth":
+                        hearth_result = _model_adapter_command(
+                            branch,
+                            api_client=api_client,
+                            home=home,
+                            host_key=host_key,
+                            process_path=process_path,
+                            participant_session_id=participant_session_id,
+                            protocol_session_id=str(attachment["session_id"]),
+                            now=branch.clock.now(),
+                            model_id=model_id,
+                            model_mode=model_mode,
+                            command="observe-hearth-model",
+                            transport_mode=transport_mode,
+                            base_url=base_url,
+                        )
+                        updated_process = hearth_result.get("process")
+                        if int(
+                            hearth_result.get("model_call_count") or 0
+                        ) != 0 or not isinstance(updated_process, dict):
+                            raise RuntimeError(
+                                "counterfactual hearth restart was not clean"
+                            )
+                        process_path.write_text(
+                            json.dumps(updated_process), encoding="utf-8"
+                        )
+
+                    final_attachment = updated_process.get("attachment")
+                    final_hosting = updated_process.get("hosting")
+                    attachment_kind = (
+                        str(final_attachment.get("kind") or "")
+                        if isinstance(final_attachment, dict)
+                        else ""
+                    )
+                    if (
+                        attachment_kind not in {"city", "hearth"}
+                        or not isinstance(final_hosting, dict)
+                        or final_hosting.get("state") != "suspended"
+                    ):
+                        raise RuntimeError(
+                            "counterfactual resident did not suspend cleanly"
+                        )
+                    active_sessions = (
+                        branch_db.query(SessionVars)
+                        .filter(SessionVars.actor_id == participant_actor_id)
+                        .count()
+                    )
+                    expected_sessions = 0 if attachment_kind == "hearth" else 1
+                    if active_sessions != expected_sessions:
+                        raise RuntimeError(
+                            "counterfactual resident attachment count is inconsistent"
+                        )
+                    branch.record_resident_attachment_verified(
+                        participant_session_id,
+                        attachment=attachment_kind,
+                        process_hosting_state="suspended",
+                        active_city_session_count=active_sessions,
+                    )
+
+                branch.acknowledge_scheduled((due.event_id,))
+                finish_quiet_interval(branch)
+                updated_descriptor = _agent_artifact_command(
+                    "export",
+                    "--home",
+                    str(home),
+                    "--package",
+                    str(temp / f"resident-{branch_id}-after.wwhearth"),
+                )
+                branch.bind_participant_artifacts(
+                    participant_session_id,
+                    adapter_id=process_binding["adapter"]["id"],
+                    adapter_version=process_binding["adapter"]["version"],
+                    model_id=process_binding["model"]["id"],
+                    private_state=updated_descriptor,
+                )
+                branch.audit_world_chronology()
+                episode = branch.result()
+                payload = episode.as_payload()
+                if payload["records"][: len(common_records)] != common_records:
+                    raise RuntimeError(
+                        "counterfactual branch changed its common prefix"
+                    )
+                summary = summarize_episode(
+                    payload,
+                    run_id=branch_id,
+                    duration_ms=0,
+                    report_name=f"{branch_id}.html",
+                )
+                branches.append(
+                    GymCounterfactualBranch(
+                        branch_id=branch_id,
+                        condition=condition,
+                        summary=summary,
+                        episode=episode,
+                    )
+                )
+
+        return GymCounterfactualResult(
+            episode="The Forked Invitation",
+            source_checkpoint_id=checkpoint_id,
+            private_artifact_id=private_artifact_id,
+            common_record_count=len(common_records),
+            controlled_variable="one exact-place public utterance before the due return",
+            branches=tuple(branches),
+        )
+
+
 def _run_willow_week(
     db,
     *,
@@ -1504,6 +1869,7 @@ def main() -> int:
             "quiet-interval",
             "resident-return",
             "resident-model",
+            "willow-fork",
             "willow-week",
         ),
         default="footbridge",
@@ -1586,13 +1952,14 @@ def main() -> int:
     sqlalchemy_event.listen(
         session_factory, "before_flush", _require_explicit_session_time
     )
-    stream = not args.json and not args.no_stream
+    stream = not args.json and not args.no_stream and args.episode != "willow-fork"
     episode_titles = {
         "footbridge": "The Footbridge Hello",
         "waiting-letter": "The Waiting Letter",
         "quiet-interval": "The Long Afternoon",
         "resident-return": "The Kept Appointment",
         "resident-model": "The Model Appointment",
+        "willow-fork": "The Forked Invitation",
         "willow-week": "Willow Week",
     }
     if stream:
@@ -1609,7 +1976,7 @@ def main() -> int:
                 "quiet-interval": run_quiet_interval,
                 "resident-return": _run_scripted_resident_return,
             }
-            if args.episode in {"resident-model", "willow-week"}:
+            if args.episode in {"resident-model", "willow-fork", "willow-week"}:
                 model_id = str(
                     args.model or os.environ.get("WW_INFERENCE_MODEL", "")
                 ).strip()
@@ -1624,6 +1991,18 @@ def main() -> int:
                         db,
                         session_factory=session_factory,
                         record_observer=show_record if stream else None,
+                        model_id=model_id,
+                        model_mode=args.model_mode,
+                        transport_mode=args.transport_mode,
+                    )
+                elif args.episode == "willow-fork":
+                    if args.departure_fault or args.transport_fault:
+                        parser.error(
+                            "The Forked Invitation does not accept fault modes"
+                        )
+                    result = _run_counterfactual_model_fork(
+                        db,
+                        record_observer=None,
                         model_id=model_id,
                         model_mode=args.model_mode,
                         transport_mode=args.transport_mode,
@@ -1650,6 +2029,7 @@ def main() -> int:
             "quiet-interval": "long-afternoon.html",
             "resident-return": "kept-appointment.html",
             "resident-model": "model-appointment.html",
+            "willow-fork": "forked-invitation.html",
             "willow-week": "willow-week.html",
         }
         default_name = default_names[args.episode]
@@ -1659,11 +2039,20 @@ def main() -> int:
             .resolve()
         )
         output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(render_html(result), encoding="utf-8")
+        output.write_text(
+            (
+                render_counterfactual_html(result)
+                if isinstance(result, GymCounterfactualResult)
+                else render_html(result)
+            ),
+            encoding="utf-8",
+        )
         if args.json:
             print(json.dumps(result.as_payload(), indent=2, ensure_ascii=False))
         elif stream:
             print(render_terminal_stream_footer(result), flush=True)
+        elif isinstance(result, GymCounterfactualResult):
+            print(render_counterfactual_terminal(result))
         else:
             print(render_terminal(result))
         print(f"Visual episode: {output}")

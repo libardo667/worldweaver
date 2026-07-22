@@ -333,9 +333,28 @@ resident. Final locations were Footbridge once, Market Hall 13 times, and Willow
 to leave the synthetic city in this cohort, so the aggregate correctly contains no retirement receipt rather
 than forcing a hearth ending.
 
-The next bounded slice is a checkpointed counterfactual Willow Week fork. Optional constructive-game
-capabilities and federation require their own explicit scenarios; do not grow a parallel list of gym-only world
-abilities in the meantime.
+The first checkpointed model counterfactual is now complete. `The Forked Invitation` stops immediately before a
+due private return, then restores one sealed engine checkpoint and one portable private artifact into two
+independent databases and two independent resident homes. One branch receives exactly one additional
+exact-place public utterance through the production speech service; the other does not. Both enter the normal
+signed resident host through real loopback FastAPI and retain the identical pre-fork structural record prefix.
+
+This exposed both halves of file-backed SQLite portability that the in-memory checkpoint tests missed. Capture
+now backs a committed WAL database into a private DELETE-journal snapshot before sealing it. Restore backs that
+validated snapshot into the target's still-file-attached connection, so the coordinator and request-scoped
+FastAPI sessions share both restored state and subsequent branch writes. A deterministic fork made two model
+calls per branch, moved both residents to Footbridge, observed two bounded speech records per call in the
+invitation branch versus one in the quiet branch, crossed 12 HTTP requests per branch, and produced no off-clock
+rows.
+
+Portable hearth artifacts still exclude host credentials, host activation, and city-local attachment files.
+An explicitly synthetic agent-side fork restore verifies the same identity and process, then installs those
+pieces from the disposable source home into each disposable branch. It is not a portable export and does not
+authorize cloning a live resident. The next acceptance is one external-model fork pair; repeated pairs remain
+necessary before treating behavioral differences as causal rather than sampling noise.
+
+After that, optional constructive-game capabilities and federation require their own explicit scenarios; do not
+grow a parallel list of gym-only world abilities in the meantime.
 
 The controlled-time HTTP prerequisite is now closed for the routes exercised by the model appointment. Live
 requests receive `SystemClock`; the isolated gym overrides the same FastAPI dependency with its controlled

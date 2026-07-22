@@ -52,6 +52,12 @@ bytes, imports into staging, rebuilds the derived checkpoint from the append-onl
 resident/process binding, and only then installs the restored home. This is a local synthetic restart proof,
 not authorization to clone or wake an existing resident.
 
+Counterfactual gym branches use that same portable artifact as their common private-state proof. Because a
+portable hearth deliberately excludes host activation, city-local attachment files, and the host-sealed signing
+key, an explicitly synthetic-only restore verifies the source identity and process before installing those
+pieces from the still-present disposable fixture home. This supports matched isolated branches without changing
+portable transfer semantics or authorizing a fork of any live resident.
+
 Each continuation also chooses a return between one minute and seven days and whether exact-place speech may
 offer an earlier model turn. While that return is in the future, it replaces the ordinary five-minute model
 baseline. Speech is still delivered and acknowledged when early activation is disabled; the host simply does

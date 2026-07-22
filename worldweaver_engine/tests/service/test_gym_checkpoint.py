@@ -8,12 +8,12 @@ import subprocess
 import sys
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from src.database import Base
-from src.models import SessionVars
+from src.database import Base, configure_sqlite_connection
+from src.models import LocationChat, SessionVars
 from src.services.gym_checkpoint import GymCheckpointError, seal_checkpoint
 from src.services.resident_gym import (
     ProductionRuleGym,
@@ -91,6 +91,54 @@ def test_quiet_interval_resumes_to_the_same_result_after_a_real_stop():
         )
     finally:
         _close(uninterrupted_engine, uninterrupted_db)
+        _close(source_engine, source_db)
+        _close(target_engine, target_db)
+
+
+def test_file_backed_wal_checkpoint_restores_into_an_independent_database(tmp_path):
+    source_engine = create_engine(
+        f"sqlite+pysqlite:///{tmp_path / 'source.sqlite3'}",
+        connect_args={"check_same_thread": False},
+    )
+    event.listen(source_engine, "connect", configure_sqlite_connection)
+    Base.metadata.create_all(source_engine)
+    source_db = sessionmaker(bind=source_engine)()
+    target_engine = create_engine(
+        f"sqlite+pysqlite:///{tmp_path / 'target.sqlite3'}",
+        connect_args={"check_same_thread": False},
+    )
+    event.listen(target_engine, "connect", configure_sqlite_connection)
+    Base.metadata.create_all(target_engine)
+    target_factory = sessionmaker(bind=target_engine)
+    target_db = target_factory()
+    try:
+        checkpoint = prepare_quiet_interval(source_db).checkpoint()
+
+        restored = ProductionRuleGym.from_checkpoint(target_db, checkpoint)
+
+        with target_factory() as request_db:
+            assert (
+                request_db.query(SessionVars)
+                .filter(
+                    SessionVars.session_id.in_(
+                        ("gym-afternoon-mara", "gym-afternoon-ivo")
+                    )
+                )
+                .count()
+                == 2
+            )
+        restored.speak("gym-afternoon-ivo", "A post-restore loopback check.")
+        with target_factory() as request_db:
+            assert request_db.query(LocationChat).count() == 2
+        assert (
+            restored.checkpoint()["gym"]["participants"]
+            == checkpoint["gym"]["participants"]
+        )
+        assert finish_quiet_interval(restored).final_locations == {
+            "Mara": "Willow Court",
+            "Ivo": "Willow Court",
+        }
+    finally:
         _close(source_engine, source_db)
         _close(target_engine, target_db)
 

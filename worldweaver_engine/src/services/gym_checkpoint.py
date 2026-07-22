@@ -8,7 +8,9 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+from pathlib import Path
 import sqlite3
+import tempfile
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -45,7 +47,24 @@ def capture_sqlite_database(db: Session) -> dict[str, Any]:
     raw = db.connection().connection.driver_connection
     if not isinstance(raw, sqlite3.Connection) or not hasattr(raw, "serialize"):
         raise GymCheckpointError("gym checkpoints currently require SQLite")
-    data = raw.serialize()
+    # A file-backed gym uses WAL like a local production shard. Serializing that
+    # connection directly preserves a WAL-mode database header which cannot be
+    # opened after ``deserialize`` into an isolated in-memory validator. Take a
+    # consistent SQLite backup and normalize only the portable copy.
+    with tempfile.TemporaryDirectory(prefix="worldweaver-gym-snapshot-") as raw_temp:
+        snapshot_path = Path(raw_temp) / "snapshot.sqlite3"
+        snapshot = sqlite3.connect(snapshot_path)
+        try:
+            raw.backup(snapshot)
+            mode = snapshot.execute("PRAGMA journal_mode=DELETE").fetchone()
+            if mode != ("delete",):
+                raise GymCheckpointError(
+                    "gym database snapshot could not leave WAL mode"
+                )
+            snapshot.commit()
+        finally:
+            snapshot.close()
+        data = snapshot_path.read_bytes()
     if len(data) > MAX_SQLITE_SNAPSHOT_BYTES:
         raise GymCheckpointError("gym database snapshot exceeds the size limit")
     return {
@@ -196,6 +215,14 @@ def restore_sqlite_database(db: Session, artifact: dict[str, Any]) -> None:
     raw = db.connection().connection.driver_connection
     if not isinstance(raw, sqlite3.Connection) or not hasattr(raw, "deserialize"):
         raise GymCheckpointError("gym checkpoints currently require SQLite")
+    database_path = next(
+        (
+            str(row[2] or "")
+            for row in raw.execute("PRAGMA database_list").fetchall()
+            if str(row[1] or "") == "main"
+        ),
+        "",
+    )
     existing_tables = {
         str(row[0])
         for row in raw.execute(
@@ -209,5 +236,13 @@ def restore_sqlite_database(db: Session, artifact: dict[str, Any]) -> None:
             raise GymCheckpointError(
                 "gym checkpoint restore target must contain no application data"
             )
-    raw.deserialize(data)
+    if database_path:
+        source = sqlite3.connect(":memory:")
+        try:
+            source.deserialize(data)
+            source.backup(raw)
+        finally:
+            source.close()
+    else:
+        raw.deserialize(data)
     db.expire_all()

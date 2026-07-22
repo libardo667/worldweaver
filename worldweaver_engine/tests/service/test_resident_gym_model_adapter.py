@@ -9,6 +9,78 @@ import sys
 import pytest
 
 
+def test_counterfactual_fork_restores_one_checkpoint_and_private_artifact_twice(
+    tmp_path,
+):
+    engine_root = Path(__file__).resolve().parents[2]
+    output = tmp_path / "forked-invitation.html"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/resident_gym.py",
+            "--episode",
+            "willow-fork",
+            "--model",
+            "test/gym-fork-v1",
+            "--model-mode",
+            "scripted-read-move",
+            "--transport-mode",
+            "loopback",
+            "--json",
+            "--output",
+            str(output),
+        ],
+        cwd=engine_root,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=180,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(completed.stdout.split("\nVisual episode:", 1)[0])
+    assert payload["schema"] == "worldweaver.resident-gym.counterfactual"
+    assert payload["schema_version"] == 1
+    assert payload["source_checkpoint_id"]
+    assert payload["private_artifact_id"]
+    assert payload["invariants"] == {
+        "same_engine_checkpoint": True,
+        "same_private_artifact": True,
+        "independent_engine_databases": True,
+        "independent_resident_homes": True,
+        "one_declared_intervention": True,
+    }
+    assert [branch["branch_id"] for branch in payload["branches"]] == [
+        "invitation",
+        "quiet",
+    ]
+    invitation, quiet = payload["branches"]
+    for branch in (invitation, quiet):
+        assert branch["summary"]["model_calls"] == 2
+        assert branch["summary"]["attachment"] == "city"
+        assert branch["summary"]["final_location"] == "Footbridge"
+        assert branch["summary"]["off_clock_rows"] == 0
+        assert branch["episode"]["records"][: payload["common_record_count"]] == (
+            invitation["episode"]["records"][: payload["common_record_count"]]
+        )
+
+    invitation_speech = next(
+        record
+        for record in invitation["episode"]["records"]
+        if record["kind"] == "participant_speech_ready"
+    )
+    quiet_speech = next(
+        record
+        for record in quiet["episode"]["records"]
+        if record["kind"] == "participant_speech_ready"
+    )
+    assert invitation_speech["detail"]["message_count"] == (
+        quiet_speech["detail"]["message_count"] + 1
+    )
+    assert "synthetic blue" not in completed.stdout
+    assert output.is_file()
+
+
 def test_two_way_model_adapter_reads_then_returns_home_through_production_rules(
     tmp_path,
 ):

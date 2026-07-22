@@ -35,6 +35,7 @@ _ICONS = {
     "scheduled_event_acknowledged": "✅",
     "observation_ready": "👁️",
     "participant_scene_ready": "🔭",
+    "participant_speech_ready": "👂",
     "resident_activation_started": "⚙️",
     "resident_activation_finished": "🕯️",
     "resident_activation_interrupted": "⛔",
@@ -241,6 +242,11 @@ def _record_sentence(record: GymRecord) -> str:
             f"{actor}'s HTTP scene exposed {detail.get('place_count', 0)} places, "
             f"{detail.get('present_count', 0)} others, and "
             f"{detail.get('trace_count', 0)} public traces at {record.location}."
+        )
+    if record.kind == "participant_speech_ready":
+        return (
+            f"{actor}'s client received {detail.get('message_count', 0)} bounded "
+            f"exact-place speech record(s) at {record.location}."
         )
     if record.kind == "world_chronology_audited":
         return (

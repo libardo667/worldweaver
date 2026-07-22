@@ -39,6 +39,12 @@ Run the first compressed multi-activation resident week:
 python dev.py gym --episode willow-week
 ```
 
+Fork one stopped model resident and synthetic world into a matched pair:
+
+```bash
+python dev.py gym --episode willow-fork --transport-mode loopback
+```
+
 Run one real model-backed activation inside the isolated gym:
 
 ```bash
@@ -108,6 +114,35 @@ observer now
 closes every model attempt with either `resident_inference_finished` or content-free
 `resident_inference_failed`, and aggregate reports count attempts and failures separately.
 
+## Counterfactual fork
+
+`The Forked Invitation` stops immediately before the model resident's due private return. It seals the complete
+synthetic engine state and refers to one portable private hearth artifact, then restores both twice into
+independent file-backed databases and independent resident homes. The invitation branch receives exactly one
+additional exact-place public utterance through the production speech service; the quiet branch does not. Both
+branches then run the same model ID through the normal `Resident`, signed `WorldWeaverClient`, real loopback
+FastAPI server, controlled clock, scheduled-return receipt, and clean suspension path.
+
+The structural result names the one source checkpoint and private artifact, preserves the identical pre-fork
+record prefix in both branches, and reports choices, attachments, locations, calls, failures, HTTP counts, and
+off-clock rows without model completions. It also records only the number of bounded exact-place speech records
+returned to the resident client. The deterministic conformance policy made two calls in each branch, moved to
+Footbridge in both, and observed two speech records per call in the invitation branch versus one in the quiet
+branch, with 12 HTTP requests and zero off-clock rows per branch.
+
+Portable hearth packages intentionally omit city-local attachment files, host activation, and the host-sealed
+resident signing key. Counterfactual execution does not weaken that contract. A narrowly named agent-side
+synthetic-fork restore verifies the same public identity and process binding, then installs those three pieces
+from the still-present disposable source home into each disposable branch. This is authorized only for
+synthetic gym fixtures; it is not a portable resident export and cannot be used to clone a live resident.
+
+File-backed WAL databases also need a truly portable checkpoint. Capture now backs the committed source into a
+temporary DELETE-journal snapshot before sealing it. Restore backs that validated snapshot into the target's
+still-file-attached connection, so later coordinator writes and request-scoped FastAPI sessions see the same
+branch. The conformance test verifies both cross-connection visibility and the exact speech-count difference.
+A single live-model pair is an apparatus proof, not causal evidence by itself; sampling effects require repeated
+matched pairs or a provider-supported deterministic seed.
+
 Each command prints a compact timeline and writes a self-contained visual report under `.runs/gym/`
 (`footbridge-hello.html`, `waiting-letter.html`, `long-afternoon.html`, `kept-appointment.html`,
 `model-appointment.html`, or `willow-week.html`). The reports
@@ -173,7 +208,7 @@ private-activity policy allows correspondence interruptions.
 The correspondence API requires exact human or signed-resident proof and addresses durable actor IDs. The old
 name- and session-addressed DM routes now return `410 Gone` rather than guess or accept an unauthenticated
 sender. This slice is local to one shard. Federated delivery, a public human correspondence interface,
-controlled-time correspondence, checkpoint forks, and training data remain later work.
+controlled-time correspondence and training data remain later work.
 
 ## What the mixed-time episode proves
 

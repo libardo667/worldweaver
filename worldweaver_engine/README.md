@@ -28,6 +28,9 @@ belong to `../ww_agent/` and the resident's hearth.
 The isolated resident gym uses this package's actual FastAPI routes and service rules over a temporary
 file-backed database. Its loopback server gives every request its own database session and injects controlled
 world time through the production dependency; security expiry and process timing remain real or monotonic.
+Checkpoint capture normalizes a committed WAL database into a portable snapshot, and file-backed restore keeps
+the coordinator and request-scoped routes on the same restored database. This supports independent matched
+counterfactual branches without changing production world rules.
 
 ## Source layout
 

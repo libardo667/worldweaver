@@ -40,6 +40,10 @@ inputs in the identity loader; they do not restore the old ownership model.
   engine may retain only its content-safe descriptor, never its path or bytes. Agent-side restore must verify
   the descriptor before extraction, rebuild derived state from the ledger in staging, check the exact process
   binding, and install only after success. This proof does not authorize cloning or waking a live resident.
+- A counterfactual may duplicate identity custody, host activation, and a city-local attachment only through the
+  explicitly named synthetic-fork restore, after verifying one disposable source identity and process binding.
+  Those files remain excluded from portable hearth packages. Never use this path for a live resident or present
+  it as portable transfer semantics.
 - The separate-process gym protocol treats request IDs as single-use. Child death, invalid framing, unknown
   message types, request replay, and mismatched responses must fail closed and reap the child. The loopback
   and disposable-container variants change only process and HTTP infrastructure; identity custody, `Resident`,
