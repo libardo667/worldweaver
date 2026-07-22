@@ -29,6 +29,7 @@ _ICONS = {
     "sublocation_active": "🌱",
     "sublocation_expired": "🍂",
     "scheduled_event_created": "🗓️",
+    "scheduled_event_cancelled": "✕",
     "scheduled_event_offered": "🔔",
     "scheduled_event_acknowledged": "✅",
     "observation_ready": "👁️",
@@ -43,6 +44,7 @@ _ICONS = {
     "resident_hearth_observed": "🔥",
     "resident_inference_started": "🧠",
     "resident_inference_finished": "💭",
+    "resident_inference_failed": "⚠️",
     "participant_http": "↔",
     "world_chronology_audited": "⏱️",
 }
@@ -160,6 +162,11 @@ def _record_sentence(record: GymRecord) -> str:
             f"{detail.get('trace_count', 0)} public trace(s)."
         )
     if record.kind == "resident_activation_started":
+        if "week_step" in record.detail:
+            return (
+                f"{actor}'s resident process began Willow Week host interval "
+                f"{int(record.detail['week_step']) + 1}."
+            )
         return f"{actor}'s resident process began handling its scheduled return."
     if record.kind == "resident_activation_finished":
         return (
@@ -184,6 +191,11 @@ def _record_sentence(record: GymRecord) -> str:
             f"{len(capabilities)} optional capability(s); sources: {sources or 'none'}."
         )
     if record.kind == "resident_attachment_verified":
+        if detail.get("attachment") == "city":
+            return (
+                f"{actor}'s stopped process retained one city attachment at "
+                f"{record.location}; the engine confirmed exactly one active city session."
+            )
         return (
             f"{actor}'s city session was retired and the stopped process checkpoint "
             "named only the private hearth attachment."
@@ -205,6 +217,11 @@ def _record_sentence(record: GymRecord) -> str:
             f"{actor}'s model call {detail.get('call_index', 0)} finished "
             f"({detail.get('prompt_tokens', 0)} prompt, "
             f"{detail.get('completion_tokens', 0)} completion tokens total)."
+        )
+    if record.kind == "resident_inference_failed":
+        return (
+            f"{actor}'s model call {detail.get('call_index', 0)} failed "
+            f"with {detail.get('reason') or 'an unknown error'}."
         )
     if record.kind == "participant_http":
         proof = "signed resident proof" if detail.get("resident_proof") else "public"

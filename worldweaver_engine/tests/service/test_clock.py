@@ -73,6 +73,17 @@ def test_queue_checkpoint_is_json_safe_and_preserves_future_ids():
     assert second.event_id == "scheduled-00000002"
 
 
+def test_queue_cancels_only_exact_pending_event_ids():
+    started = datetime(2026, 7, 20, 9, 0, tzinfo=timezone.utc)
+    queue = ScheduledEventQueue(ControlledClock(started))
+    first = queue.schedule_at(started + timedelta(hours=1), kind="first")
+    second = queue.schedule_at(started + timedelta(hours=2), kind="second")
+
+    assert queue.cancel((first.event_id, "missing", "")) == (first.event_id,)
+    assert queue.pending == (second,)
+    assert queue.cancel((first.event_id,)) == ()
+
+
 def test_queue_rejects_past_events_and_early_acknowledgement():
     started = datetime(2026, 7, 20, 9, 0, tzinfo=timezone.utc)
     queue = ScheduledEventQueue(ControlledClock(started))

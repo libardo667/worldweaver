@@ -288,9 +288,30 @@ ID, duration, and return code. It never copies prompts, completions, read querie
 prose, stderr, or resident artifacts. A two-member container proof produced four model calls, two durable
 retirements, 26 successful HTTP requests, and no failures or off-clock rows.
 
-The next bounded scenario slice is the multi-activation Willow Week. Optional constructive-game capabilities
-and federation require their own explicit scenarios. Do not grow a parallel list of gym-only world abilities
-in the meantime.
+The first multi-activation scenario, `Willow Week`, is now complete. One disposable model-backed resident
+reopens the same stopped synthetic home through up to six normal `Resident` host intervals over seven
+controlled days. Production events committed before those intervals provide exact-place speech, two private
+letters, movement between three city places, one exact private scheduled return, a deliberate wrong-place utterance,
+and later co-located speech. The deterministic conformance policy makes seven model calls, including one
+elective recall, and ends with signed city retirement plus a zero-model-call `LocalWorld` restart. Both letters
+are acknowledged, correspondence send/acknowledgement timestamps pass the controlled chronology audit, no city
+presence remains, and the process is suspended at its hearth. A live policy may go home early; later city-only
+offers are then recorded as skipped rather than forcing reattachment. The batch runner accepts
+`--episode willow-week`; a two-member rehearsal completed with 14 model calls and no failures.
+
+Each bounded activation now returns the resident's current content-free private-return descriptor. The engine
+keeps an identical queued appointment, replaces a changed one, or cancels a withdrawn one before offering the
+next event. A real containerized `google/gemini-3.5-flash` Willow Week exposed and then proved this seam: its
+first activation withdrew the initial return, the engine cancelled the stale appointment, and the remaining
+week completed without offering it. The policy moved to Footbridge and validly retained one suspended city
+attachment. Two of nine inference attempts failed before producing a consumable decision; those failures did
+not crash later intervals. Every attempt now has a structural finished-or-failed terminal boundary, and batch
+schema 2 counts attempts, content-free inference failures, and per-process cumulative token deltas without recording
+completion content.
+
+The next bounded slice is a scaled live-model Willow Week cohort and structural report. Optional constructive-
+game capabilities and federation require their own explicit scenarios. Do not grow a parallel list of gym-only
+world abilities in the meantime.
 
 The controlled-time HTTP prerequisite is now closed for the routes exercised by the model appointment. Live
 requests receive `SystemClock`; the isolated gym overrides the same FastAPI dependency with its controlled

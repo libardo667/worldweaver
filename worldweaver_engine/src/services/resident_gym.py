@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..models import (
+    DirectMessage,
     LocationChat,
     ResidentSessionRetirementReceipt,
     SessionVars,
@@ -424,6 +425,47 @@ class ProductionRuleGym:
         )
         return acknowledged
 
+    def reconcile_resident_return(
+        self,
+        session_id: str,
+        scheduled_return: dict[str, Any] | None,
+    ) -> None:
+        """Replace one participant's engine appointment from its private descriptor."""
+
+        self._participant(session_id)
+        pending = self._scheduled_queue().pending
+        existing = tuple(
+            event
+            for event in pending
+            if event.kind == "resident_private_return"
+            and str(event.payload.get("session_id") or "") == session_id
+        )
+        if isinstance(scheduled_return, dict):
+            resident_event_id = str(scheduled_return.get("event_id") or "").strip()
+            activity_id = str(scheduled_return.get("activity_id") or "").strip()
+            due_at = datetime.fromisoformat(str(scheduled_return.get("due_at") or ""))
+            if any(
+                str(event.payload.get("resident_event_id") or "") == resident_event_id
+                and str(event.payload.get("activity_id") or "") == activity_id
+                and event.due_at == due_at
+                for event in existing
+            ):
+                return
+        removed = self._scheduled_queue().cancel(event.event_id for event in existing)
+        if removed:
+            self._record(
+                "scheduled_event_cancelled",
+                participant=self._participant(session_id),
+                detail={"event_ids": list(removed)},
+            )
+        if isinstance(scheduled_return, dict):
+            self.schedule_resident_return(
+                session_id,
+                resident_event_id=resident_event_id,
+                activity_id=activity_id,
+                due_at=due_at,
+            )
+
     def scheduled_checkpoint(self) -> dict[str, Any]:
         """Return the queue's complete JSON-safe restart checkpoint."""
 
@@ -563,6 +605,17 @@ class ProductionRuleGym:
                 return str(record.location)
         return ""
 
+    def participant_location(self, session_id: str) -> str:
+        """Return one participant's current structural attachment location."""
+
+        return self._participant_location(session_id)
+
+    def has_city_presence(self, session_id: str) -> bool:
+        """Report whether the participant still has one canonical city session."""
+
+        self._participant(session_id)
+        return self.db.get(SessionVars, session_id) is not None
+
     def place_names(self, session_id: str) -> tuple[str, ...]:
         """Return the bounded scenario graph vocabulary to one joined participant."""
 
@@ -600,6 +653,7 @@ class ProductionRuleGym:
                 recipient_actor_id=recipient_actor_id,
                 body=message,
             ),
+            now=self.clock.now(),
         )
         self._record(
             "letter_sent",
@@ -641,6 +695,7 @@ class ProductionRuleGym:
             self.db,
             session_id=session_id,
             message_ids=message_ids,
+            now=self.clock.now(),
         )
         self._record(
             "letter_acknowledged",
@@ -866,6 +921,7 @@ class ProductionRuleGym:
             "resident_city_profile_loaded",
             "resident_inference_started",
             "resident_inference_finished",
+            "resident_inference_failed",
             "resident_attachment_checkpointed",
             "resident_hearth_observed",
         }
@@ -966,6 +1022,25 @@ class ProductionRuleGym:
                 "location": location,
                 "source_names": [str(name) for name in source_names],
                 "observed_at": observed_at.astimezone(timezone.utc).isoformat(),
+            }
+        elif kind == "resident_inference_failed":
+            if set(safe_detail) != {
+                "call_index",
+                "model_id",
+                "reason",
+                "prompt_tokens",
+                "completion_tokens",
+            }:
+                raise ValueError("resident inference failure fields are invalid")
+            reason = str(safe_detail.get("reason") or "").strip()
+            if not reason or len(reason) > 80 or not reason.replace("_", "").isalnum():
+                raise ValueError("resident inference failure reason is invalid")
+            safe_detail = {
+                "call_index": int(safe_detail.get("call_index") or 0),
+                "model_id": str(safe_detail.get("model_id") or ""),
+                "reason": reason,
+                "prompt_tokens": int(safe_detail.get("prompt_tokens") or 0),
+                "completion_tokens": int(safe_detail.get("completion_tokens") or 0),
             }
         elif set(safe_detail) - {
             "call_index",
@@ -1206,6 +1281,27 @@ class ProductionRuleGym:
             .filter(ResidentSessionRetirementReceipt.session_id.in_(participant_ids))
             .all()
         )
+        correspondence = (
+            self.db.query(DirectMessage)
+            .filter(
+                (DirectMessage.from_session_id.in_(participant_ids))
+                | (
+                    DirectMessage.recipient_actor_id.in_(
+                        tuple(
+                            participant.actor_id
+                            for participant in self._participants.values()
+                        )
+                    )
+                )
+            )
+            .all()
+        )
+        rows.extend(("direct_message_sent", row.sent_at) for row in correspondence)
+        rows.extend(
+            ("direct_message_acknowledged", row.acknowledged_at)
+            for row in correspondence
+            if row.acknowledged_at is not None
+        )
         rows.extend(
             ("world_fact", row.valid_from)
             for row in self.db.query(WorldFact)
@@ -1266,7 +1362,11 @@ class ProductionRuleGym:
         if not session_id or not expected_event_id or not activity_id:
             raise ValueError("resident return binding is incomplete")
         participant = self._participant(session_id)
-        scene = self.observe(session_id)
+        scene = (
+            self.observe(session_id)
+            if self.has_city_presence(session_id)
+            else {"location": self._participant_location(session_id)}
+        )
         self._record(
             "resident_activation_started",
             participant=participant,
@@ -1321,6 +1421,79 @@ class ProductionRuleGym:
                 f"resident return was not consumable: {status or 'unknown'}"
             )
         return result
+
+    def deliver_resident_tick(
+        self,
+        event: ScheduledEvent,
+        handler: Callable[[ScheduledEvent, dict[str, Any]], dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Run one normal bounded host tick for a due synthetic world event."""
+
+        if event.kind != "resident_host_tick":
+            raise ValueError("scheduled event is not a resident host tick")
+        if event.due_at > self.clock.now():
+            raise ValueError("resident host tick was offered before its deadline")
+        session_id = str(event.payload.get("session_id") or "").strip()
+        step = int(event.payload.get("step") or 0)
+        if not session_id:
+            raise ValueError("resident host tick binding is incomplete")
+        participant = self._participant(session_id)
+        scene = self.observe(session_id)
+        self._record(
+            "resident_activation_started",
+            participant=participant,
+            location=str(scene.get("location") or ""),
+            detail={"event_id": event.event_id, "week_step": step},
+        )
+        try:
+            result = handler(event, scene)
+        except Exception as exc:
+            self._record(
+                "resident_activation_interrupted",
+                participant=participant,
+                location=str(scene.get("location") or ""),
+                detail={"event_id": event.event_id, "reason": type(exc).__name__},
+            )
+            raise
+        if not isinstance(result, dict):
+            raise ValueError("resident tick handler must return an object")
+        if str(result.get("event_id") or "") != event.event_id:
+            raise ValueError("resident tick response does not match offered event")
+        status = str(result.get("status") or "")
+        self._record(
+            "resident_activation_finished",
+            participant=participant,
+            location=str(scene.get("location") or ""),
+            detail={
+                "event_id": event.event_id,
+                "status": status,
+                "activation_status": str(result.get("activation_status") or ""),
+                "choice": str(result.get("choice") or "none"),
+                "model_call_count": int(result.get("model_call_count") or 0),
+                "week_step": step,
+            },
+        )
+        if status != "processed":
+            raise ValueError(f"resident tick was not consumable: {status or 'unknown'}")
+        return result
+
+    def skip_resident_tick(self, event: ScheduledEvent, *, reason: str) -> None:
+        """Record that a due week tick had no valid city attachment to wake."""
+
+        if event.kind != "resident_host_tick" or event.due_at > self.clock.now():
+            raise ValueError("resident host tick cannot be skipped")
+        session_id = str(event.payload.get("session_id") or "").strip()
+        participant = self._participant(session_id)
+        self._record(
+            "resident_activation_skipped",
+            participant=participant,
+            location=self._participant_location(session_id),
+            detail={
+                "event_id": event.event_id,
+                "week_step": int(event.payload.get("step") or 0),
+                "reason": str(reason or "unavailable"),
+            },
+        )
 
     def speak(self, session_id: str, message: str) -> dict[str, Any]:
         """Speak through the production local-speech service."""

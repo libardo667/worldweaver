@@ -50,6 +50,14 @@ inputs in the identity loader; they do not restore the old ownership model.
   retain only whitelisted structural fields such as model ID, usage counts, choice kind, attachment, canonical
   receipt counts, HTTP status counts, timing, and report name. They must not scrape or retain prompts,
   completions, read queries or results, private activity prose, stderr, or resident artifacts.
+- Multi-activation gym scenarios must reopen the same stopped synthetic home through the normal `Resident`
+  host for every interval and carry its exact process checkpoint forward. World events and correspondence must
+  be committed before an activation at the injected instant. A resident who legitimately reaches the hearth
+  stays there; later city-only offers are recorded as skipped rather than silently reattaching or forcing a
+  preferred story. A final hearth observation may restart the host but must make zero model calls.
+- After every bounded activation, reconcile the engine queue against the resident core's current content-free
+  private-return descriptor. Keep an identical event, replace a changed event, and cancel a withdrawn event;
+  never offer a stale appointment that the resident no longer recognizes.
 - A waking host interval has one random run ID and explicit `hosted`/`suspended` checkpoint transitions. A
   clean stop records its time; the next start may record the measured suspended interval. If the previous
   record still says `hosted`, classify the stop as unclean or unknown and leave elapsed downtime unset. Never

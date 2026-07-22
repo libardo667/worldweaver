@@ -33,6 +33,12 @@ Run the separate-process scheduled-return rehearsal:
 python dev.py gym --episode resident-return
 ```
 
+Run the first compressed multi-activation resident week:
+
+```bash
+python dev.py gym --episode willow-week
+```
+
 Run one real model-backed activation inside the isolated gym:
 
 ```bash
@@ -58,9 +64,11 @@ python dev.py gym-batch --runs-per-model 20 --concurrency 4
 python dev.py gym-batch --container --runs-per-model 20 --concurrency 4
 ```
 
-Repeat `--model MODEL_ID` to compare model families. Every member gets its own process, temporary resident
-home, synthetic database, controlled clock, and ordinary episode report. The aggregate records only model ID,
-model-call and token counts, choice kind, attachment and final location, retirement and HTTP counts,
+Add `--episode willow-week` to batch the compressed week, and repeat `--model MODEL_ID` to compare model
+families. Every member gets its own process, temporary resident home, synthetic database, controlled clock,
+and ordinary episode report. The aggregate records only model ID,
+model-attempt, inference-failure, and token counts, choice kind, attachment and final location, retirement and
+HTTP counts,
 off-clock rows, duration, infrastructure, transport, and report filename. Failed members contribute only run
 ID, model ID, duration, and return code. Prompts, completions, read queries and results, private activity prose,
 stderr, and resident artifacts are not copied into the aggregate.
@@ -69,9 +77,40 @@ The model episode creates a disposable synthetic hearth under a temporary direct
 checkpoints before and after activation. It does not admit, clone, or wake a resident in Alderbank or any other
 live town.
 
+## Willow Week
+
+`Willow Week` keeps one disposable model-backed resident and one scripted neighbor in the same synthetic city
+for up to six legitimate host intervals over seven controlled days. Each interval reopens the same stopped
+home through the normal `Resident` host and carries the exact private process checkpoint forward. The week
+combines exact-place speech, two private letters, city movement, one exact private scheduled return, an
+elective recall, one deliberately out-of-place utterance followed by a co-located utterance, multi-day quiet
+jumps, a signed city retirement, and a zero-model-call restart at the real `LocalWorld` attachment.
+
+The deterministic conformance policy makes seven model calls and chooses move, speak, wait, wait, recall then
+move, and finally travel home. That policy is a transparent fixture, not a desired personality. A live model
+may choose differently, including returning home early; the scenario preserves that attachment and records
+later city-only offers as skipped instead of reattaching the resident or forcing the authored sequence.
+After every bounded interval, the resident publishes only its current content-free return descriptor. The
+engine keeps an identical appointment, replaces a changed one, or cancels a withdrawn one. It never offers a
+stale appointment merely because that event existed at the start of the week.
+
+All six deterministic activations cross the same signed loopback HTTP and production service boundaries as
+the model appointment. Correspondence send and acknowledgement times now join the persistent controlled-time audit.
+The completed conformance run proves two sent and acknowledged letters, seven elapsed virtual days, one public
+retirement receipt, no remaining city presence, one suspended hearth process, and no off-clock persistent row.
+
+One real `google/gemini-3.5-flash` Willow Week completed inside the disposable image on July 21, 2026. Its
+first interval chose `finish` and withdrew the initial private return; the engine cancelled that exact queued
+appointment before its deadline. The resident later moved to Footbridge and validly finished the week with
+one suspended city attachment rather than being forced home. Two inference attempts failed before returning a
+consumable decision and were handled as `inference_failed`; subsequent intervals still ran. The structural
+observer now
+closes every model attempt with either `resident_inference_finished` or content-free
+`resident_inference_failed`, and aggregate reports count attempts and failures separately.
+
 Each command prints a compact timeline and writes a self-contained visual report under `.runs/gym/`
-(`footbridge-hello.html`, `waiting-letter.html`, `long-afternoon.html`, `kept-appointment.html`, or
-`model-appointment.html`). The reports
+(`footbridge-hello.html`, `waiting-letter.html`, `long-afternoon.html`, `kept-appointment.html`,
+`model-appointment.html`, or `willow-week.html`). The reports
 contain only synthetic speech and facts returned by production services. Their icons and layout do not add a
 narrator's interpretation.
 
@@ -313,8 +352,9 @@ and database, and writes `aggregate.json`, `aggregate.html`, and one ordinary re
 A two-member container acceptance run completed with four model calls, two retirement receipts, 26 successful
 signed/public HTTP requests, and zero failed or off-clock rows.
 
-The next scenario slice is the multi-activation Willow Week. Federation and optional constructive-game
-capability episodes remain later slices.
+The next scenario slice is a scaled live-model Willow Week cohort and structural report. Counterfactual
+forking, optional constructive-game capabilities, concurrent model residents, and federation remain later
+slices.
 
 The database snapshot supports SQLite only and may restore only into an empty synthetic database. Its hash
 detects damage and internal mismatches; it is not a signature and does not make an envelope from an untrusted

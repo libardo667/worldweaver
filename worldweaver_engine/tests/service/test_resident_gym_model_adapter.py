@@ -388,3 +388,85 @@ def test_model_runner_accepts_a_valid_suspended_city_outcome(tmp_path):
     assert all(
         record["kind"] != "resident_departure_receipt" for record in payload["records"]
     )
+
+
+def test_willow_week_runs_six_host_intervals_across_seven_controlled_days(tmp_path):
+    engine_root = Path(__file__).resolve().parents[2]
+    output = tmp_path / "willow-week.html"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/resident_gym.py",
+            "--episode",
+            "willow-week",
+            "--model",
+            "test/willow-week-v1",
+            "--model-mode",
+            "scripted-week",
+            "--transport-mode",
+            "loopback",
+            "--json",
+            "--output",
+            str(output),
+        ],
+        cwd=engine_root,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=180,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    payload = json.loads(completed.stdout.split("\nVisual episode:", 1)[0])
+    records = payload["records"]
+    kinds = [record["kind"] for record in records]
+    activations = [
+        record for record in records if record["kind"] == "resident_activation_finished"
+    ]
+
+    assert payload["episode"] == "Willow Week"
+    assert payload["final_locations"]["Mara"] == "the hearth"
+    assert [record["detail"]["choice"] for record in activations] == [
+        "act",
+        "act",
+        "wait",
+        "wait",
+        "act",
+        "act",
+    ]
+    assert [record["detail"]["model_call_count"] for record in activations] == [
+        1,
+        1,
+        1,
+        1,
+        2,
+        1,
+    ]
+    assert kinds.count("resident_inference_finished") == 7
+    assert kinds.count("letter_sent") == 2
+    assert kinds.count("resident_departure_receipt") == 1
+    assert kinds.count("resident_hearth_observed") == 1
+    assert kinds.count("resident_attachment_verified") == 1
+    assert (
+        sum(
+            record["detail"]["elapsed_seconds"]
+            for record in records
+            if record["kind"] == "time_advanced"
+        )
+        == 7 * 24 * 60 * 60
+    )
+    chronology = next(
+        record for record in records if record["kind"] == "world_chronology_audited"
+    )
+    assert chronology["detail"]["off_clock_count"] == 0
+    assert chronology["detail"]["row_counts"]["direct_message_sent"] == 2
+    assert chronology["detail"]["row_counts"]["direct_message_acknowledged"] == 2
+    verified = next(
+        record for record in records if record["kind"] == "resident_attachment_verified"
+    )
+    assert verified["detail"] == {
+        "attachment": "hearth",
+        "process_hosting_state": "suspended",
+        "active_city_session_count": 0,
+    }
+    assert output.is_file()

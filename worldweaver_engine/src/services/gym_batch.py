@@ -39,10 +39,22 @@ def summarize_episode(
         raise GymBatchError("batch member structure is incomplete")
 
     structural_records = [record for record in records if isinstance(record, dict)]
-    inference = [
+    inference_finished = [
         record
         for record in structural_records
         if record.get("kind") == "resident_inference_finished"
+        and isinstance(record.get("detail"), dict)
+    ]
+    inference_started = [
+        record
+        for record in structural_records
+        if record.get("kind") == "resident_inference_started"
+        and isinstance(record.get("detail"), dict)
+    ]
+    inference_failed = [
+        record
+        for record in structural_records
+        if record.get("kind") == "resident_inference_failed"
         and isinstance(record.get("detail"), dict)
     ]
     activation = next(
@@ -63,16 +75,60 @@ def summarize_episode(
         ),
         None,
     )
-    last_usage = inference[-1].get("detail", {}) if inference else {}
     activation_detail = activation.get("detail", {}) if activation else {}
     attachment_detail = attachment.get("detail", {}) if attachment else {}
     model_ids = {
         str(record.get("detail", {}).get("model_id") or "").strip()
-        for record in inference
+        for record in inference_started + inference_finished + inference_failed
     }
     model_ids.discard("")
     if len(model_ids) > 1:
         raise GymBatchError("batch member reported multiple model IDs")
+
+    active_attempt: tuple[int, str] | None = None
+    previous_prompt_tokens = 0
+    previous_completion_tokens = 0
+    prompt_tokens = 0
+    completion_tokens = 0
+    for record in structural_records:
+        kind = record.get("kind")
+        if kind not in {
+            "resident_inference_started",
+            "resident_inference_finished",
+            "resident_inference_failed",
+        }:
+            continue
+        detail = record.get("detail")
+        if not isinstance(detail, dict):
+            raise GymBatchError("inference boundary detail is invalid")
+        call_index = int(detail.get("call_index") or 0)
+        model_id = str(detail.get("model_id") or "").strip()
+        if call_index < 1 or not model_id:
+            raise GymBatchError("inference boundary identity is invalid")
+        if kind == "resident_inference_started":
+            if active_attempt is not None:
+                raise GymBatchError("inference attempt has no terminal boundary")
+            if call_index == 1:
+                previous_prompt_tokens = 0
+                previous_completion_tokens = 0
+            active_attempt = (call_index, model_id)
+            continue
+        if active_attempt != (call_index, model_id):
+            raise GymBatchError("inference terminal boundary does not match its start")
+        cumulative_prompt = int(detail.get("prompt_tokens") or 0)
+        cumulative_completion = int(detail.get("completion_tokens") or 0)
+        if (
+            cumulative_prompt < previous_prompt_tokens
+            or cumulative_completion < previous_completion_tokens
+        ):
+            raise GymBatchError("inference usage moved backward")
+        prompt_tokens += cumulative_prompt - previous_prompt_tokens
+        completion_tokens += cumulative_completion - previous_completion_tokens
+        previous_prompt_tokens = cumulative_prompt
+        previous_completion_tokens = cumulative_completion
+        active_attempt = None
+    if active_attempt is not None:
+        raise GymBatchError("inference attempt has no terminal boundary")
 
     http_records = [
         record
@@ -95,9 +151,10 @@ def summarize_episode(
         "episode": str(payload.get("episode") or ""),
         "model_id": next(iter(model_ids), ""),
         "duration_ms": max(0, int(duration_ms)),
-        "model_calls": len(inference),
-        "prompt_tokens": max(0, int(last_usage.get("prompt_tokens") or 0)),
-        "completion_tokens": max(0, int(last_usage.get("completion_tokens") or 0)),
+        "model_calls": len(inference_started),
+        "inference_failures": len(inference_failed),
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
         "choice": str(activation_detail.get("choice") or "none"),
         "activation_status": str(
             activation_detail.get("activation_status") or "unknown"
@@ -135,6 +192,7 @@ def aggregate_batch(
     concurrency: int,
     transport: str,
     infrastructure: str,
+    episode: str = "resident-model",
 ) -> dict[str, Any]:
     """Build one versioned aggregate containing structural counts only."""
 
@@ -148,18 +206,22 @@ def aggregate_batch(
 
     return {
         "schema": "worldweaver.resident-gym.batch",
-        "schema_version": 1,
+        "schema_version": 2,
         "configuration": {
             "requested_runs": int(requested_runs),
             "models": list(models),
             "concurrency": int(concurrency),
             "transport": str(transport),
             "infrastructure": str(infrastructure),
+            "episode": str(episode),
         },
         "totals": {
             "completed_runs": len(completed),
             "failed_runs": len(failed),
             "model_calls": sum(int(item["model_calls"]) for item in completed),
+            "inference_failures": sum(
+                int(item["inference_failures"]) for item in completed
+            ),
             "prompt_tokens": sum(int(item["prompt_tokens"]) for item in completed),
             "completion_tokens": sum(
                 int(item["completion_tokens"]) for item in completed
@@ -197,6 +259,7 @@ def render_batch_html(payload: dict[str, Any]) -> str:
                 "attachment",
                 "final_location",
                 "model_calls",
+                "inference_failures",
                 "prompt_tokens",
                 "completion_tokens",
                 "duration_ms",
@@ -222,10 +285,11 @@ code,pre{{background:#edf2ed}} pre{{padding:1rem;overflow:auto}}
 <div class="card"><div class="number">{totals['completed_runs']}</div>completed</div>
 <div class="card"><div class="number">{totals['failed_runs']}</div>failed</div>
 <div class="card"><div class="number">{totals['model_calls']}</div>model calls</div>
+<div class="card"><div class="number">{totals['inference_failures']}</div>inference failures</div>
 <div class="card"><div class="number">{totals['prompt_tokens'] + totals['completion_tokens']}</div>tokens</div>
 </div>
 <h2>Structural outcomes</h2><table><thead><tr><th>Run</th><th>Model</th><th>Choice</th>
-<th>Attachment</th><th>Final location</th><th>Calls</th><th>Prompt tokens</th>
+<th>Attachment</th><th>Final location</th><th>Calls</th><th>Inference failures</th><th>Prompt tokens</th>
 <th>Completion tokens</th><th>Duration ms</th><th>Report</th></tr></thead><tbody>{rows}</tbody></table>
 <h2>Machine-readable aggregate</h2><pre>{embedded}</pre>
 </main></body></html>"""

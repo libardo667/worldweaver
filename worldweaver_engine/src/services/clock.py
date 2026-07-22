@@ -147,6 +147,21 @@ class ScheduledEventQueue:
     def pending(self) -> tuple[ScheduledEvent, ...]:
         return tuple(sorted(self._pending, key=self._sort_key))
 
+    def cancel(self, event_ids: Iterable[str]) -> tuple[str, ...]:
+        """Remove exact pending events when their authoritative owner withdraws them."""
+
+        requested = {str(event_id or "").strip() for event_id in event_ids}
+        requested.discard("")
+        removed = tuple(
+            event.event_id for event in self.pending if event.event_id in requested
+        )
+        if removed:
+            removed_set = set(removed)
+            self._pending = [
+                event for event in self._pending if event.event_id not in removed_set
+            ]
+        return removed
+
     def schedule_at(
         self,
         due_at: datetime,

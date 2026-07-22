@@ -251,6 +251,81 @@ def test_resident_return_response_must_match_before_queue_acknowledgement():
         _close(engine, db)
 
 
+def test_resident_return_reconciliation_replaces_and_withdraws_stale_appointment():
+    engine, db = _memory_session()
+    try:
+        gym = prepare_quiet_interval(db)
+        gym.bind_participant_artifacts(
+            "gym-afternoon-mara",
+            adapter_id="worldweaver.reference-resident",
+            adapter_version=2,
+            model_id="reference-policy-v1",
+            private_state={
+                "custody": "participant_private",
+                "format": "worldweaver.hearth-package",
+                "format_version": 1,
+                "artifact_id": "resident-checkpoint-17",
+                "sha256": "a" * 64,
+                "byte_length": 4096,
+            },
+        )
+        old_due_at = gym.clock.now() + timedelta(hours=1)
+        old = gym.schedule_resident_return(
+            "gym-afternoon-mara",
+            resident_event_id="resident-return-old",
+            activity_id="activity-old",
+            due_at=old_due_at,
+        )
+        unchanged = {
+            "event_id": "resident-return-old",
+            "activity_id": "activity-old",
+            "due_at": old_due_at.isoformat(),
+        }
+
+        gym.reconcile_resident_return("gym-afternoon-mara", unchanged)
+        assert old.event_id in {
+            item["event_id"] for item in gym.scheduled_checkpoint()["pending"]
+        }
+
+        replacement_due_at = gym.clock.now() + timedelta(days=2)
+        gym.reconcile_resident_return(
+            "gym-afternoon-mara",
+            {
+                "event_id": "resident-return-new",
+                "activity_id": "activity-new",
+                "due_at": replacement_due_at.isoformat(),
+            },
+        )
+        pending = gym.scheduled_checkpoint()["pending"]
+        participant_returns = [
+            item
+            for item in pending
+            if item["kind"] == "resident_private_return"
+            and item["payload"]["session_id"] == "gym-afternoon-mara"
+        ]
+        assert len(participant_returns) == 1
+        assert participant_returns[0]["payload"]["resident_event_id"] == (
+            "resident-return-new"
+        )
+        assert old.event_id not in {item["event_id"] for item in pending}
+
+        gym.reconcile_resident_return("gym-afternoon-mara", None)
+        pending = gym.scheduled_checkpoint()["pending"]
+        assert not any(
+            item["kind"] == "resident_private_return"
+            and item["payload"]["session_id"] == "gym-afternoon-mara"
+            for item in pending
+        )
+        cancellations = [
+            record
+            for record in gym.result().records
+            if record.kind == "scheduled_event_cancelled"
+        ]
+        assert len(cancellations) == 2
+    finally:
+        _close(engine, db)
+
+
 def test_engine_and_private_resident_artifact_restart_across_processes(tmp_path):
     uninterrupted_engine, uninterrupted_db = _memory_session()
     source_engine, source_db = _memory_session()

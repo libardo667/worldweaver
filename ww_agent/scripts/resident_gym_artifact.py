@@ -45,6 +45,7 @@ from src.runtime.private_artifact import (  # noqa: E402
 from src.runtime.process_state import ResidentProcessBinding  # noqa: E402
 from src.runtime.reference_core import (  # noqa: E402
     ReferenceResidentCore,
+    ReferenceScheduledReturn,
     build_reference_scheduled_return,
 )
 from src.world.client import (  # noqa: E402
@@ -392,6 +393,50 @@ class _ScriptedReadActModel:
         return None
 
 
+class _ScriptedWeekModel:
+    """Deterministic multi-activation policy for Willow Week conformance."""
+
+    def __init__(self, *, model_id: str, step: int) -> None:
+        self.default_model_id = model_id
+        self.step = int(step)
+        self.total_calls = 0
+        self.total_prompt_tokens = 0
+        self.total_completion_tokens = 0
+
+    async def complete_json(self, *_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        self.total_calls += 1
+        if self.step == 0:
+            return {
+                "choice": "act",
+                "action": {"kind": "move", "body": "", "target": "Footbridge"},
+            }
+        if self.step == 1:
+            return {
+                "choice": "act",
+                "action": {
+                    "kind": "speak",
+                    "body": "I can meet after the rain.",
+                    "target": None,
+                },
+            }
+        if self.step in {2, 3}:
+            return {"choice": "wait"}
+        if self.step == 4 and self.total_calls == 1:
+            return {"choice": "read", "source": "recall", "query": "bridge"}
+        if self.step == 4:
+            return {
+                "choice": "act",
+                "action": {"kind": "move", "body": "", "target": "Willow Court"},
+            }
+        return {
+            "choice": "act",
+            "action": {"kind": "move", "body": "", "target": "home"},
+        }
+
+    async def close(self) -> None:
+        return None
+
+
 class _ObservedModel:
     """Emit only content-free inference boundaries across the gym protocol."""
 
@@ -411,7 +456,29 @@ class _ObservedModel:
                 "detail": {"call_index": self.call_count, "model_id": self.model_id},
             }
         )
-        result = await self.inner.complete_json(*args, **kwargs)
+        try:
+            result = await self.inner.complete_json(*args, **kwargs)
+        except Exception as exc:
+            _write_protocol(
+                {
+                    "protocol": _GYM_ADAPTER_PROTOCOL,
+                    "protocol_version": _GYM_ADAPTER_PROTOCOL_VERSION,
+                    "type": "event",
+                    "event": "resident_inference_failed",
+                    "detail": {
+                        "call_index": self.call_count,
+                        "model_id": self.model_id,
+                        "reason": type(exc).__name__,
+                        "prompt_tokens": int(
+                            getattr(self.inner, "total_prompt_tokens", 0) or 0
+                        ),
+                        "completion_tokens": int(
+                            getattr(self.inner, "total_completion_tokens", 0) or 0
+                        ),
+                    },
+                }
+            )
+            raise
         _write_protocol(
             {
                 "protocol": _GYM_ADAPTER_PROTOCOL,
@@ -452,6 +519,11 @@ async def _run_model_return(args: argparse.Namespace) -> dict[str, Any]:
                 "home" if args.model_mode == "scripted-read-home" else "Footbridge"
             ),
         )
+    elif args.model_mode == "scripted-week":
+        raw_model = _ScriptedWeekModel(
+            model_id=model_id,
+            step=int(args.scenario_step),
+        )
     else:
         key = os.environ.get("WW_INFERENCE_KEY", "").strip()
         if not key:
@@ -482,7 +554,13 @@ async def _run_model_return(args: argparse.Namespace) -> dict[str, Any]:
         session_id=expected_process.session_id,
     )
 
+    last_tick_result: dict[str, Any] | None = None
+    last_scheduled_return: ReferenceScheduledReturn | None = None
+
     async def observe_host_tick(_identity, world, _core, _result, _tick_count):
+        nonlocal last_scheduled_return, last_tick_result
+        last_tick_result = dict(_result) if isinstance(_result, dict) else None
+        last_scheduled_return = _core.scheduled_return()
         if isinstance(world, LocalWorld):
             grounding = await world.get_grounding()
             process = load_resident_process_envelope(home / "memory") or {}
@@ -574,19 +652,37 @@ async def _run_model_return(args: argparse.Namespace) -> dict[str, Any]:
                 "detail": {},
             }
         )
-        if args.command == "observe-hearth-model":
+        if args.command in {"observe-hearth-model", "run-tick-model"}:
             if expected_process.attachment_kind != "hearth":
-                raise PrivateArtifactError(
-                    "hearth observation requires a hearth-bound process"
-                )
+                if args.command == "observe-hearth-model":
+                    raise PrivateArtifactError(
+                        "hearth observation requires a hearth-bound process"
+                    )
             await resident.run(max_ticks=1, pause_seconds=0.0)
-            result = {
-                "status": "observed",
-                "event_id": "",
-                "activation_status": "observed",
-                "choice": "none",
-            }
-            scheduled_return = None
+            if args.command == "observe-hearth-model":
+                result = {
+                    "status": "observed",
+                    "event_id": "",
+                    "activation_status": "observed",
+                    "choice": "none",
+                }
+            else:
+                result = {
+                    "status": "processed",
+                    "event_id": str(args.event_id),
+                    "activation_status": str(
+                        (last_tick_result or {}).get("status") or "completed"
+                    ),
+                    "choice": str((last_tick_result or {}).get("choice") or "none"),
+                    "action_outcome": str(
+                        (last_tick_result or {}).get("action_outcome") or ""
+                    ),
+                }
+            scheduled_return = (
+                None
+                if args.command == "observe-hearth-model"
+                else last_scheduled_return
+            )
         else:
             result, scheduled_return = await resident.run_scheduled_return(
                 args.event_id,
@@ -764,7 +860,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     model_return.add_argument(
         "--model-mode",
-        choices=("live", "scripted-read-home", "scripted-read-move"),
+        choices=("live", "scripted-read-home", "scripted-read-move", "scripted-week"),
         default="live",
         help=argparse.SUPPRESS,
     )
@@ -780,6 +876,9 @@ def _parser() -> argparse.ArgumentParser:
         ),
         default="",
         help=argparse.SUPPRESS,
+    )
+    model_return.add_argument(
+        "--scenario-step", type=int, default=0, help=argparse.SUPPRESS
     )
     hearth_observation = subparsers.add_parser(
         "observe-hearth-model",
@@ -803,7 +902,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     hearth_observation.add_argument(
         "--model-mode",
-        choices=("live", "scripted-read-home", "scripted-read-move"),
+        choices=("live", "scripted-read-home", "scripted-read-move", "scripted-week"),
         default="live",
         help=argparse.SUPPRESS,
     )
@@ -820,12 +919,40 @@ def _parser() -> argparse.ArgumentParser:
         default="",
         help=argparse.SUPPRESS,
     )
+    hearth_observation.add_argument(
+        "--scenario-step", type=int, default=0, help=argparse.SUPPRESS
+    )
+    tick = subparsers.add_parser(
+        "run-tick-model",
+        help="run one normally hosted model activation for a synthetic scenario event",
+    )
+    tick.add_argument("--home", type=Path, required=True)
+    tick.add_argument("--expected-process", type=Path, required=True)
+    tick.add_argument("--event-id", required=True)
+    tick.add_argument("--now", required=True)
+    tick.add_argument("--model", default="")
+    tick.add_argument("--host-key", type=Path, required=True)
+    tick.add_argument(
+        "--transport-mode", choices=("stdio", "loopback"), default="stdio"
+    )
+    tick.add_argument("--base-url", default="http://worldweaver-gym.local")
+    tick.add_argument(
+        "--model-mode",
+        choices=("live", "scripted-read-home", "scripted-read-move", "scripted-week"),
+        default="live",
+    )
+    tick.add_argument("--scenario-step", type=int, default=0)
+    tick.add_argument("--transport-fault", default="", help=argparse.SUPPRESS)
     return parser
 
 
 def main() -> int:
     args = _parser().parse_args()
-    interactive = args.command in {"handle-return-model", "observe-hearth-model"}
+    interactive = args.command in {
+        "handle-return-model",
+        "observe-hearth-model",
+        "run-tick-model",
+    }
     try:
         handlers = {
             "create-fixture": _create_fixture,
@@ -836,6 +963,7 @@ def main() -> int:
             "handle-return": _handle_return,
             "handle-return-model": _handle_model_return,
             "observe-hearth-model": _handle_model_return,
+            "run-tick-model": _handle_model_return,
         }
         result = handlers[args.command](args)
     except (OSError, PrivateArtifactError, ValueError) as exc:

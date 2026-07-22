@@ -18,7 +18,7 @@ import sys
 import tempfile
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import httpx
@@ -37,7 +37,7 @@ from main import app  # noqa: E402
 from src.config import settings  # noqa: E402
 from src.database import Base, get_db  # noqa: E402
 from src.models import ResidentSessionRetirementReceipt, SessionVars  # noqa: E402
-from src.services.clock import Clock, get_world_clock  # noqa: E402
+from src.services.clock import Clock, ControlledClock, get_world_clock  # noqa: E402
 from src.services.gym_presentation import (  # noqa: E402
     render_html,
     render_terminal,
@@ -46,6 +46,7 @@ from src.services.gym_presentation import (  # noqa: E402
     render_terminal_stream_header,
 )
 from src.services.resident_gym import (  # noqa: E402
+    GymParticipant,
     ProductionRuleGym,
     finish_quiet_interval,
     prepare_quiet_interval,
@@ -332,6 +333,7 @@ def _model_adapter_command(
     model_mode: str = "live",
     command: str = "handle-return-model",
     event_id: str = "",
+    scenario_step: int = 0,
     departure_fault: str = "",
     transport_fault: str = "",
     transport_mode: str = "stdio",
@@ -355,6 +357,8 @@ def _model_adapter_command(
         model_id,
         "--model-mode",
         model_mode,
+        "--scenario-step",
+        str(int(scenario_step)),
         "--transport-fault",
         transport_fault,
         "--transport-mode",
@@ -1021,6 +1025,346 @@ def _run_model_resident_return(
         return gym.result()
 
 
+def _run_willow_week(
+    db,
+    *,
+    record_observer=None,
+    model_id: str,
+    model_mode: str = "live",
+    transport_mode: str = "stdio",
+):
+    """Run one resident through six legitimate host intervals over seven days."""
+
+    started_at = datetime(2026, 7, 20, 9, 0, tzinfo=timezone.utc)
+    week_end = started_at + timedelta(days=7)
+    participant_session_id = "gym-week-mara"
+    participant_actor_id = "gym-week-actor-mara"
+    with (
+        tempfile.TemporaryDirectory(prefix="worldweaver-gym-week-") as raw_temp,
+        _temporary_gym_node_configuration(),
+    ):
+        temp = Path(raw_temp)
+        source_home = temp / "source-resident"
+        source_package = temp / "resident-before.wwhearth"
+        host_key = temp / "gym-host-transport.key"
+        artifact = _agent_artifact_command(
+            "create-fixture",
+            "--home",
+            str(source_home),
+            "--package",
+            str(source_package),
+            "--host-key",
+            str(host_key),
+            "--actor-id",
+            participant_actor_id,
+            "--display-name",
+            "Mara",
+            "--world-id",
+            "gym-willow-week-world",
+            "--session-id",
+            participant_session_id,
+            "--model-id",
+            model_id,
+            "--started-at",
+            started_at.isoformat(),
+            "--return-at",
+            (started_at + timedelta(days=2)).isoformat(),
+        )
+        process_binding = artifact["process"]
+        scheduled_return = artifact["scheduled_return"]
+        identity = artifact.get("identity")
+        if not isinstance(identity, dict):
+            raise RuntimeError("Willow Week fixture omitted resident identity proof")
+        process_path = temp / "process.json"
+        process_path.write_text(json.dumps(process_binding), encoding="utf-8")
+
+        gym = ProductionRuleGym(
+            db,
+            episode="Willow Week",
+            world_id="gym-willow-week-world",
+            clock=ControlledClock(started_at),
+            scenario_id="willow-week",
+            scenario_version=1,
+            scenario_seed=0,
+            record_observer=record_observer,
+        )
+        gym.arrange_world(("Willow Court", "Footbridge", "Market Hall"))
+        gym.join(
+            GymParticipant(
+                session_id=participant_session_id,
+                actor_id=participant_actor_id,
+                display_name="Mara",
+                implementation="reference_resident_model",
+            ),
+            location="Willow Court",
+        )
+        gym.join(
+            GymParticipant(
+                session_id="gym-week-ivo",
+                actor_id="gym-week-actor-ivo",
+                display_name="Ivo",
+                implementation="scripted_actor",
+            ),
+            location="Willow Court",
+        )
+        gym.bind_participant_artifacts(
+            participant_session_id,
+            adapter_id=process_binding["adapter"]["id"],
+            adapter_version=process_binding["adapter"]["version"],
+            model_id=process_binding["model"]["id"],
+            private_state=artifact["descriptor"],
+        )
+        audience = current_shard_id()
+        certificate_result = _agent_artifact_command(
+            "issue-runtime-certificate",
+            "--home",
+            str(source_home),
+            "--host-key",
+            str(host_key),
+            "--audience",
+            audience,
+        )
+        certificate = ResidentRuntimeCertificate.decode_header(
+            str(certificate_result.get("certificate_header") or "").strip()
+        )
+        bind_resident_identity(
+            db,
+            actor_id=str(identity.get("actor_id") or ""),
+            hearth_shard_id=str(identity.get("hearth_shard_id") or ""),
+            identity_public_key=str(identity.get("identity_public_key") or ""),
+            recovery_policy_version=int(identity.get("recovery_policy_version") or 0),
+            admission_reason="synthetic Willow Week fixture",
+            admitted_by="resident-gym",
+        )
+        activate_resident_generation(
+            db, certificate=certificate, expected_audience=audience
+        )
+        bind_resident_session(
+            db,
+            session_id=participant_session_id,
+            actor_id=participant_actor_id,
+            runtime_generation=certificate.runtime_generation,
+        )
+        db.commit()
+
+        gym.speak("gym-week-ivo", "The bridge group meets after the rain.")
+        for step, elapsed_days in ((0, 0), (1, 1), (3, 3), (4, 5), (5, 7)):
+            gym.schedule_in(
+                timedelta(days=elapsed_days),
+                kind="resident_host_tick",
+                payload={"session_id": participant_session_id, "step": step},
+            )
+        gym.schedule_resident_return(
+            participant_session_id,
+            resident_event_id=str(scheduled_return["event_id"]),
+            activity_id=str(scheduled_return["activity_id"]),
+            due_at=datetime.fromisoformat(str(scheduled_return["due_at"])),
+        )
+
+        if transport_mode == "stdio":
+            transport_context = _temporary_gym_api(db, world_clock=gym.clock)
+        elif transport_mode == "loopback":
+            transport_context = _temporary_gym_loopback(
+                db,
+                world_clock=gym.clock,
+                gym=gym,
+                participant_session_id=participant_session_id,
+            )
+        else:
+            raise ValueError("unsupported Willow Week transport")
+
+        def align_ivo_with_mara() -> None:
+            if not gym.has_city_presence(participant_session_id):
+                return
+            location = gym.participant_location(participant_session_id)
+            if gym.participant_location("gym-week-ivo") != location:
+                gym.move("gym-week-ivo", location)
+
+        def arrange_step(step: int) -> None:
+            if step in {1, 4}:
+                gym.send_letter(
+                    "gym-week-ivo",
+                    participant_actor_id,
+                    (
+                        "The bridge meeting moved to Thursday."
+                        if step == 1
+                        else "The rain changed the path back to Willow Court."
+                    ),
+                )
+            if not gym.has_city_presence(participant_session_id):
+                return
+            if step == 3:
+                mara_location = gym.participant_location(participant_session_id)
+                away = (
+                    "Willow Court" if mara_location != "Willow Court" else "Market Hall"
+                )
+                if gym.participant_location("gym-week-ivo") != away:
+                    gym.move("gym-week-ivo", away)
+                gym.speak("gym-week-ivo", "This first call is deliberately elsewhere.")
+            align_ivo_with_mara()
+            gym.speak(
+                "gym-week-ivo",
+                {
+                    1: "I sent the changed meeting time.",
+                    2: "The dry place is still here.",
+                    3: "Now we are speaking in the same place.",
+                    4: "The route back is clear.",
+                    5: "The week can close here.",
+                }.get(step, "The week begins at Willow Court."),
+            )
+
+        with transport_context as transport_endpoint:
+            api_client = (
+                transport_endpoint
+                if isinstance(transport_endpoint, _GymAPIClient)
+                else None
+            )
+            base_url = (
+                "http://worldweaver-gym.local"
+                if api_client is not None
+                else str(transport_endpoint)
+            )
+
+            def invoke(event, *, command: str, step: int) -> dict:
+                process = json.loads(process_path.read_text(encoding="utf-8"))
+                attachment = process.get("attachment")
+                if not isinstance(attachment, dict):
+                    raise RuntimeError("Willow Week process omitted its attachment")
+                result = _model_adapter_command(
+                    gym,
+                    api_client=api_client,
+                    home=source_home,
+                    host_key=host_key,
+                    process_path=process_path,
+                    participant_session_id=participant_session_id,
+                    protocol_session_id=str(attachment.get("session_id") or ""),
+                    now=event.due_at,
+                    model_id=model_id,
+                    model_mode=model_mode,
+                    command=command,
+                    event_id=(
+                        str(event.payload["resident_event_id"])
+                        if command == "handle-return-model"
+                        else event.event_id
+                    ),
+                    scenario_step=step,
+                    transport_mode=transport_mode,
+                    base_url=base_url,
+                )
+                updated = result.get("process")
+                if not isinstance(updated, dict):
+                    raise RuntimeError("Willow Week activation omitted its process")
+                process_path.write_text(json.dumps(updated), encoding="utf-8")
+                return result
+
+            while gym.scheduled_checkpoint()["pending"]:
+                for event in gym.offer_next_scheduled():
+                    if event.kind == "resident_private_return":
+                        arrange_step(2)
+                        result = gym.deliver_resident_return(
+                            event,
+                            lambda offered, _scene: invoke(
+                                offered, command="handle-return-model", step=2
+                            ),
+                        )
+                        future_return = result.get("scheduled_return")
+                        if isinstance(future_return, dict):
+                            due_at = datetime.fromisoformat(
+                                str(future_return.get("due_at") or "")
+                            )
+                            if due_at <= week_end:
+                                gym.schedule_resident_return(
+                                    participant_session_id,
+                                    resident_event_id=str(future_return["event_id"]),
+                                    activity_id=str(future_return["activity_id"]),
+                                    due_at=due_at,
+                                )
+                    elif event.kind == "resident_host_tick":
+                        step = int(event.payload.get("step") or 0)
+                        arrange_step(step)
+                        if gym.has_city_presence(participant_session_id):
+                            result = gym.deliver_resident_tick(
+                                event,
+                                lambda offered, _scene, step=step: invoke(
+                                    offered, command="run-tick-model", step=step
+                                ),
+                            )
+                            gym.reconcile_resident_return(
+                                participant_session_id,
+                                (
+                                    result.get("scheduled_return")
+                                    if isinstance(result.get("scheduled_return"), dict)
+                                    else None
+                                ),
+                            )
+                        else:
+                            gym.skip_resident_tick(event, reason="resident_at_hearth")
+                    else:
+                        raise RuntimeError("Willow Week scheduled an unknown event")
+                    gym.acknowledge_scheduled((event.event_id,))
+
+            final_process = json.loads(process_path.read_text(encoding="utf-8"))
+            final_attachment = final_process.get("attachment")
+            if not isinstance(final_attachment, dict):
+                raise RuntimeError("Willow Week final attachment is invalid")
+            attachment_kind = str(final_attachment.get("kind") or "")
+            if attachment_kind == "hearth":
+                hearth_result = _model_adapter_command(
+                    gym,
+                    api_client=api_client,
+                    home=source_home,
+                    host_key=host_key,
+                    process_path=process_path,
+                    participant_session_id=participant_session_id,
+                    protocol_session_id=str(final_attachment.get("session_id") or ""),
+                    now=gym.clock.now(),
+                    model_id=model_id,
+                    model_mode=model_mode,
+                    command="observe-hearth-model",
+                    scenario_step=6,
+                    transport_mode=transport_mode,
+                    base_url=base_url,
+                )
+                if int(hearth_result.get("model_call_count") or 0) != 0:
+                    raise RuntimeError("Willow Week hearth restart called the model")
+                final_process = hearth_result["process"]
+                process_path.write_text(json.dumps(final_process), encoding="utf-8")
+            elif attachment_kind != "city":
+                raise RuntimeError("Willow Week stopped at an invalid attachment")
+
+            active_city_sessions = (
+                db.query(SessionVars)
+                .filter(SessionVars.actor_id == participant_actor_id)
+                .count()
+            )
+            expected_sessions = 0 if attachment_kind == "hearth" else 1
+            if active_city_sessions != expected_sessions:
+                raise RuntimeError("Willow Week city attachment count is inconsistent")
+            gym.record_resident_attachment_verified(
+                participant_session_id,
+                attachment=attachment_kind,
+                process_hosting_state="suspended",
+                active_city_session_count=active_city_sessions,
+            )
+
+        updated_descriptor = _agent_artifact_command(
+            "export",
+            "--home",
+            str(source_home),
+            "--package",
+            str(temp / "resident-after.wwhearth"),
+        )
+        gym.bind_participant_artifacts(
+            participant_session_id,
+            adapter_id=process_binding["adapter"]["id"],
+            adapter_version=process_binding["adapter"]["version"],
+            model_id=process_binding["model"]["id"],
+            private_state=updated_descriptor,
+        )
+        gym.audit_world_chronology()
+        return gym.result()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Run a deterministic production-rule resident gym episode."
@@ -1033,6 +1377,7 @@ def main() -> int:
             "quiet-interval",
             "resident-return",
             "resident-model",
+            "willow-week",
         ),
         default="footbridge",
         help="episode to run (default: footbridge)",
@@ -1060,7 +1405,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--model-mode",
-        choices=("live", "scripted-read-home", "scripted-read-move"),
+        choices=("live", "scripted-read-home", "scripted-read-move", "scripted-week"),
         default="live",
         help=argparse.SUPPRESS,
     )
@@ -1113,6 +1458,7 @@ def main() -> int:
         "quiet-interval": "The Long Afternoon",
         "resident-return": "The Kept Appointment",
         "resident-model": "The Model Appointment",
+        "willow-week": "Willow Week",
     }
     if stream:
         print(render_terminal_stream_header(episode_titles[args.episode]), flush=True)
@@ -1128,23 +1474,34 @@ def main() -> int:
                 "quiet-interval": run_quiet_interval,
                 "resident-return": _run_scripted_resident_return,
             }
-            if args.episode == "resident-model":
+            if args.episode in {"resident-model", "willow-week"}:
                 model_id = str(
                     args.model or os.environ.get("WW_INFERENCE_MODEL", "")
                 ).strip()
                 if not model_id:
                     parser.error(
-                        "--episode resident-model requires --model or WW_INFERENCE_MODEL"
+                        "model-backed episodes require --model or WW_INFERENCE_MODEL"
                     )
-                result = _run_model_resident_return(
-                    db,
-                    record_observer=show_record if stream else None,
-                    model_id=model_id,
-                    model_mode=args.model_mode,
-                    departure_fault=args.departure_fault,
-                    transport_fault=args.transport_fault,
-                    transport_mode=args.transport_mode,
-                )
+                if args.episode == "willow-week":
+                    if args.departure_fault or args.transport_fault:
+                        parser.error("Willow Week does not accept fault modes")
+                    result = _run_willow_week(
+                        db,
+                        record_observer=show_record if stream else None,
+                        model_id=model_id,
+                        model_mode=args.model_mode,
+                        transport_mode=args.transport_mode,
+                    )
+                else:
+                    result = _run_model_resident_return(
+                        db,
+                        record_observer=show_record if stream else None,
+                        model_id=model_id,
+                        model_mode=args.model_mode,
+                        departure_fault=args.departure_fault,
+                        transport_fault=args.transport_fault,
+                        transport_mode=args.transport_mode,
+                    )
             else:
                 result = runners[args.episode](
                     db,
@@ -1156,6 +1513,7 @@ def main() -> int:
             "quiet-interval": "long-afternoon.html",
             "resident-return": "kept-appointment.html",
             "resident-model": "model-appointment.html",
+            "willow-week": "willow-week.html",
         }
         default_name = default_names[args.episode]
         output = (

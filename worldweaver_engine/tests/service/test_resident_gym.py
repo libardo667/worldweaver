@@ -19,6 +19,7 @@ from src.services.gym_presentation import (
     render_terminal_stream_header,
 )
 from src.services.resident_gym import (
+    GymRecord,
     ProductionRuleGym,
     prepare_quiet_interval,
     run_first_conversation,
@@ -165,6 +166,37 @@ def test_gym_can_stream_each_record_as_the_production_boundary_returns(db_sessio
     assert "Live structural record" in render_terminal_stream_header(result.episode)
     assert "🧭" in render_terminal_record(observed[0])
     assert "Episode complete" in render_terminal_stream_footer(result)
+
+
+def test_attachment_presentation_distinguishes_city_from_hearth():
+    city = GymRecord(
+        sequence=1,
+        occurred_at="2026-07-27T09:00:00+00:00",
+        kind="resident_attachment_verified",
+        actor="Mara",
+        location="Footbridge",
+        detail={
+            "attachment": "city",
+            "process_hosting_state": "suspended",
+            "active_city_session_count": 1,
+        },
+    )
+    hearth = GymRecord(
+        sequence=2,
+        occurred_at="2026-07-27T09:00:00+00:00",
+        kind="resident_attachment_verified",
+        actor="Mara",
+        location="the hearth",
+        detail={
+            "attachment": "hearth",
+            "process_hosting_state": "suspended",
+            "active_city_session_count": 0,
+        },
+    )
+
+    assert "exactly one active city session" in render_terminal_record(city)
+    assert "city session was retired" not in render_terminal_record(city)
+    assert "city session was retired" in render_terminal_record(hearth)
 
 
 def test_waiting_letter_survives_session_change_until_acknowledged(db_session):

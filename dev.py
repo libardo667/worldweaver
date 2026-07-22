@@ -119,6 +119,7 @@ def _gym(arguments: list[str]) -> int:
             "quiet-interval": "long-afternoon-container.html",
             "resident-return": "kept-appointment-container.html",
             "resident-model": "model-appointment-container.html",
+            "willow-week": "willow-week-container.html",
         }
         output = (
             ROOT
@@ -187,8 +188,18 @@ def _gym_batch(arguments: list[str]) -> int:
 
     runtime_env = _agent_runtime_env()
     if "--container" not in arguments:
+        host_arguments = list(arguments)
+        if "--output-dir" in host_arguments:
+            output_index = host_arguments.index("--output-dir")
+            if output_index + 1 >= len(host_arguments):
+                print("--output-dir requires a path.", file=sys.stderr)
+                return 2
+            output_dir = Path(host_arguments[output_index + 1]).expanduser()
+            if not output_dir.is_absolute():
+                output_dir = ROOT / output_dir
+            host_arguments[output_index + 1] = str(output_dir.resolve())
         return _run(
-            [sys.executable, "scripts/resident_gym_batch.py", *arguments],
+            [sys.executable, "scripts/resident_gym_batch.py", *host_arguments],
             cwd=ENGINE_DIR,
             env=runtime_env,
         )

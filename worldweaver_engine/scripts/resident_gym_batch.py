@@ -49,6 +49,7 @@ def _run_member(
     ordinal: int,
     model_id: str,
     model_mode: str,
+    episode: str,
     transport: str,
     output_dir: Path,
 ) -> tuple[dict | None, dict | None]:
@@ -59,7 +60,7 @@ def _run_member(
         sys.executable,
         "scripts/resident_gym.py",
         "--episode",
-        "resident-model",
+        episode,
         "--model",
         model_id,
         "--model-mode",
@@ -111,6 +112,11 @@ def main() -> int:
         "--runs-per-model", type=int, default=1, help="independent episodes per model"
     )
     parser.add_argument(
+        "--episode",
+        choices=("resident-model", "willow-week"),
+        default="resident-model",
+    )
+    parser.add_argument(
         "--model",
         action="append",
         default=[],
@@ -123,7 +129,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--model-mode",
-        choices=("live", "scripted-read-home", "scripted-read-move"),
+        choices=("live", "scripted-read-home", "scripted-read-move", "scripted-week"),
         default="live",
         help=argparse.SUPPRESS,
     )
@@ -164,6 +170,7 @@ def main() -> int:
                 ordinal=ordinal,
                 model_id=model_id,
                 model_mode=args.model_mode,
+                episode=args.episode,
                 transport=args.transport_mode,
                 output_dir=output_dir,
             ): ordinal
@@ -189,6 +196,7 @@ def main() -> int:
         concurrency=min(args.concurrency, len(specifications)),
         transport=args.transport_mode,
         infrastructure=infrastructure,
+        episode=args.episode,
     )
     json_path = output_dir / "aggregate.json"
     html_path = output_dir / "aggregate.html"

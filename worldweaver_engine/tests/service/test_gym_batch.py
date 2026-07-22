@@ -6,7 +6,9 @@ from pathlib import Path
 import subprocess
 import sys
 
-from src.services.gym_batch import aggregate_batch, summarize_episode
+import pytest
+
+from src.services.gym_batch import GymBatchError, aggregate_batch, summarize_episode
 
 
 def _payload() -> dict:
@@ -21,12 +23,31 @@ def _payload() -> dict:
         "final_locations": {"Mara": "the hearth"},
         "records": [
             {
+                "kind": "resident_inference_started",
+                "detail": {"call_index": 1, "model_id": "test/model"},
+            },
+            {
                 "kind": "resident_inference_finished",
                 "detail": {
+                    "call_index": 1,
                     "model_id": "test/model",
                     "prompt_tokens": 12,
                     "completion_tokens": 3,
                     "private_completion": "must not escape",
+                },
+            },
+            {
+                "kind": "resident_inference_started",
+                "detail": {"call_index": 2, "model_id": "test/model"},
+            },
+            {
+                "kind": "resident_inference_failed",
+                "detail": {
+                    "call_index": 2,
+                    "model_id": "test/model",
+                    "reason": "InferenceError",
+                    "prompt_tokens": 20,
+                    "completion_tokens": 5,
                 },
             },
             {
@@ -58,7 +79,10 @@ def test_batch_summary_is_structural_and_drops_episode_prose():
     assert summary["model_id"] == "test/model"
     assert summary["choice"] == "wait"
     assert summary["attachment"] == "hearth"
-    assert summary["prompt_tokens"] == 12
+    assert summary["model_calls"] == 2
+    assert summary["inference_failures"] == 1
+    assert summary["prompt_tokens"] == 20
+    assert summary["completion_tokens"] == 5
     assert "must not escape" not in json.dumps(summary)
 
     aggregate = aggregate_batch(
@@ -69,10 +93,28 @@ def test_batch_summary_is_structural_and_drops_episode_prose():
         concurrency=1,
         transport="loopback",
         infrastructure="host_process",
+        episode="resident-model",
     )
     assert aggregate["totals"]["completed_runs"] == 1
-    assert aggregate["totals"]["model_calls"] == 1
+    assert aggregate["configuration"]["episode"] == "resident-model"
+    assert aggregate["totals"]["model_calls"] == 2
+    assert aggregate["totals"]["inference_failures"] == 1
     assert aggregate["distributions"]["choices"] == {"wait": 1}
+
+
+def test_batch_summary_refuses_an_inference_attempt_without_a_terminal_boundary():
+    payload = _payload()
+    payload["records"].append(
+        {
+            "kind": "resident_inference_started",
+            "detail": {"call_index": 3, "model_id": "test/model"},
+        }
+    )
+
+    with pytest.raises(GymBatchError, match="no terminal boundary"):
+        summarize_episode(
+            payload, run_id="run-dangling", duration_ms=1, report_name="run.html"
+        )
 
 
 def test_batch_runner_aggregates_independent_model_processes(tmp_path):
