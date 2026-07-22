@@ -353,6 +353,13 @@ pieces from the disposable source home into each disposable branch. It is not a 
 authorize cloning a live resident. The next acceptance is one external-model fork pair; repeated pairs remain
 necessary before treating behavioral differences as causal rather than sampling noise.
 
+That first external `google/gemini-3.5-flash` pair completed. Both branches restored the same 16-record
+checkpoint and private artifact and retained one city attachment at Willow Court with no refusal, server error,
+or off-clock row. The invitation branch exposed two speech records, made two attempts with one content-free
+inference failure, and ended with no consumable choice. The quiet branch exposed one speech record on each of
+two successful calls and chose `finish`. This proves external-model traversal and controlled delivery, not a
+causal behavioral effect from one stochastic pair.
+
 After that, optional constructive-game capabilities and federation require their own explicit scenarios; do not
 grow a parallel list of gym-only world abilities in the meantime.
 

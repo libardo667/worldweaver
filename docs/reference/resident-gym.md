@@ -143,6 +143,14 @@ branch. The conformance test verifies both cross-connection visibility and the e
 A single live-model pair is an apparatus proof, not causal evidence by itself; sampling effects require repeated
 matched pairs or a provider-supported deterministic seed.
 
+The first external `google/gemini-3.5-flash` pair completed on July 21, 2026. Both branches restored the same
+16-record checkpoint and private artifact and retained one city attachment at Willow Court with no refusal,
+server error, or off-clock row. The invitation branch exposed two speech records, made two attempts with one
+content-free inference failure, and ended with no consumable choice. The quiet branch exposed one speech record
+on each of two successful calls and chose `finish`. This confirms that the external model can traverse both
+branches and receive the controlled difference; it does not establish that the utterance caused the different
+outcome.
+
 Each command prints a compact timeline and writes a self-contained visual report under `.runs/gym/`
 (`footbridge-hello.html`, `waiting-letter.html`, `long-afternoon.html`, `kept-appointment.html`,
 `model-appointment.html`, or `willow-week.html`). The reports
