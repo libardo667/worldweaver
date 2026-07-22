@@ -136,6 +136,10 @@ def summarize_episode(
         if record.get("kind") == "participant_http"
         and isinstance(record.get("detail"), dict)
     ]
+    http_statuses = [
+        int(record.get("detail", {}).get("status_code") or 500)
+        for record in http_records
+    ]
     chronology = next(
         (
             record
@@ -170,10 +174,9 @@ def summarize_episode(
             for record in structural_records
         ),
         "http_requests": len(http_records),
-        "http_errors": sum(
-            int(record.get("detail", {}).get("status_code") or 500) >= 400
-            for record in http_records
-        ),
+        "http_errors": sum(status >= 400 for status in http_statuses),
+        "http_refusals": sum(400 <= status < 500 for status in http_statuses),
+        "http_server_errors": sum(status >= 500 for status in http_statuses),
         "off_clock_rows": max(0, int(chronology_detail.get("off_clock_count") or 0)),
         "infrastructure": str(fidelity.get("infrastructure") or "unknown"),
         "participant_transport": str(
@@ -206,7 +209,7 @@ def aggregate_batch(
 
     return {
         "schema": "worldweaver.resident-gym.batch",
-        "schema_version": 2,
+        "schema_version": 4,
         "configuration": {
             "requested_runs": int(requested_runs),
             "models": list(models),
@@ -231,6 +234,10 @@ def aggregate_batch(
             ),
             "http_requests": sum(int(item["http_requests"]) for item in completed),
             "http_errors": sum(int(item["http_errors"]) for item in completed),
+            "http_refusals": sum(int(item["http_refusals"]) for item in completed),
+            "http_server_errors": sum(
+                int(item["http_server_errors"]) for item in completed
+            ),
             "off_clock_rows": sum(int(item["off_clock_rows"]) for item in completed),
         },
         "distributions": {
@@ -238,6 +245,14 @@ def aggregate_batch(
             "choices": distribution("choice"),
             "attachments": distribution("attachment"),
             "final_locations": distribution("final_location"),
+            "failure_classes": dict(
+                sorted(
+                    Counter(
+                        str(item.get("failure_class") or "unclassified")
+                        for item in failed
+                    ).items()
+                )
+            ),
         },
         "runs": completed,
         "failures": failed,
@@ -282,11 +297,11 @@ th,td{{padding:.55rem;border:1px solid #d7dfd8;text-align:left}} th{{background:
 code,pre{{background:#edf2ed}} pre{{padding:1rem;overflow:auto}}
 </style></head><body><main><h1>Resident gym batch</h1>
 <div class="cards">
-<div class="card"><div class="number">{totals['completed_runs']}</div>completed</div>
-<div class="card"><div class="number">{totals['failed_runs']}</div>failed</div>
-<div class="card"><div class="number">{totals['model_calls']}</div>model calls</div>
-<div class="card"><div class="number">{totals['inference_failures']}</div>inference failures</div>
-<div class="card"><div class="number">{totals['prompt_tokens'] + totals['completion_tokens']}</div>tokens</div>
+<div class="card"><div class="number">{totals["completed_runs"]}</div>completed</div>
+<div class="card"><div class="number">{totals["failed_runs"]}</div>failed</div>
+<div class="card"><div class="number">{totals["model_calls"]}</div>model calls</div>
+<div class="card"><div class="number">{totals["inference_failures"]}</div>inference failures</div>
+<div class="card"><div class="number">{totals["prompt_tokens"] + totals["completion_tokens"]}</div>tokens</div>
 </div>
 <h2>Structural outcomes</h2><table><thead><tr><th>Run</th><th>Model</th><th>Choice</th>
 <th>Attachment</th><th>Final location</th><th>Calls</th><th>Inference failures</th><th>Prompt tokens</th>

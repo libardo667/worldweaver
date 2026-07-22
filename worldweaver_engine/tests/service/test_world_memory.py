@@ -634,6 +634,38 @@ class TestDeltaHooks:
 
 
 class TestWorldProjection:
+    def test_repeated_projection_writes_keep_the_same_explicit_event_time(
+        self, db_session
+    ):
+        world_now = datetime(2026, 7, 23, 9, 0)
+        first = record_event(
+            db_session,
+            "proj-controlled-repeat",
+            "freeform_action",
+            "The bridge is watched.",
+            delta={"variables": {"bridge_watch": "first"}},
+            occurred_at=world_now,
+        )
+        second = record_event(
+            db_session,
+            "proj-controlled-repeat",
+            "freeform_action",
+            "The bridge watch changes.",
+            delta={"variables": {"bridge_watch": "second"}},
+            occurred_at=world_now,
+        )
+        db_session.commit()
+        db_session.expire_all()
+
+        row = (
+            db_session.query(WorldProjection)
+            .filter(WorldProjection.path == "variables.bridge_watch")
+            .one()
+        )
+        assert first.created_at == second.created_at == world_now
+        assert row.value == "second"
+        assert row.updated_at == world_now
+
     def test_record_event_updates_projection_rows(self, db_session):
         record_event(
             db_session,

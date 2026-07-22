@@ -33,6 +33,7 @@ from .clock import (
     ScheduledEvent,
     ScheduledEventQueue,
     SystemClock,
+    utc_datetime,
 )
 from .correspondence import (
     SendCorrespondenceCommand,
@@ -429,10 +430,13 @@ class ProductionRuleGym:
         self,
         session_id: str,
         scheduled_return: dict[str, Any] | None,
+        *,
+        not_after: datetime | None = None,
     ) -> None:
         """Replace one participant's engine appointment from its private descriptor."""
 
         self._participant(session_id)
+        horizon = utc_datetime(not_after) if not_after is not None else None
         pending = self._scheduled_queue().pending
         existing = tuple(
             event
@@ -443,8 +447,11 @@ class ProductionRuleGym:
         if isinstance(scheduled_return, dict):
             resident_event_id = str(scheduled_return.get("event_id") or "").strip()
             activity_id = str(scheduled_return.get("activity_id") or "").strip()
-            due_at = datetime.fromisoformat(str(scheduled_return.get("due_at") or ""))
-            if any(
+            due_at = utc_datetime(
+                datetime.fromisoformat(str(scheduled_return.get("due_at") or ""))
+            )
+            inside_horizon = horizon is None or due_at <= horizon
+            if inside_horizon and any(
                 str(event.payload.get("resident_event_id") or "") == resident_event_id
                 and str(event.payload.get("activity_id") or "") == activity_id
                 and event.due_at == due_at
@@ -458,13 +465,28 @@ class ProductionRuleGym:
                 participant=self._participant(session_id),
                 detail={"event_ids": list(removed)},
             )
-        if isinstance(scheduled_return, dict):
+        if isinstance(scheduled_return, dict) and not inside_horizon:
+            self._record(
+                "scheduled_event_deferred",
+                participant=self._participant(session_id),
+                detail={
+                    "resident_event_id": resident_event_id,
+                    "due_at": due_at.isoformat(),
+                    "not_after": horizon.isoformat(),
+                },
+            )
+        elif isinstance(scheduled_return, dict):
             self.schedule_resident_return(
                 session_id,
                 resident_event_id=resident_event_id,
                 activity_id=activity_id,
                 due_at=due_at,
             )
+
+    def has_scheduled_event(self, event_id: str) -> bool:
+        """Report whether an event from a previously offered batch is still pending."""
+
+        return self._scheduled_queue().contains(event_id)
 
     def scheduled_checkpoint(self) -> dict[str, Any]:
         """Return the queue's complete JSON-safe restart checkpoint."""
@@ -1253,21 +1275,21 @@ class ProductionRuleGym:
             .replace(tzinfo=None)
             for record in self._records
         }
-        rows: list[tuple[str, datetime | None]] = []
+        rows: list[tuple[str, str, datetime | None]] = []
         rows.extend(
-            ("world_event", row.created_at)
+            ("world_event", str(row.id), row.created_at)
             for row in self.db.query(WorldEvent)
             .filter(WorldEvent.session_id.in_(participant_ids))
             .all()
         )
         rows.extend(
-            ("location_chat", row.created_at)
+            ("location_chat", str(row.id), row.created_at)
             for row in self.db.query(LocationChat)
             .filter(LocationChat.session_id.in_(participant_ids))
             .all()
         )
         rows.extend(
-            ("session", row.updated_at)
+            ("session", str(row.session_id), row.updated_at)
             for row in self.db.query(SessionVars)
             .filter(
                 (SessionVars.session_id.in_(participant_ids))
@@ -1276,7 +1298,11 @@ class ProductionRuleGym:
             .all()
         )
         rows.extend(
-            ("resident_retirement_receipt", row.committed_at)
+            (
+                "resident_retirement_receipt",
+                str(row.transition_id),
+                row.committed_at,
+            )
             for row in self.db.query(ResidentSessionRetirementReceipt)
             .filter(ResidentSessionRetirementReceipt.session_id.in_(participant_ids))
             .all()
@@ -1296,14 +1322,16 @@ class ProductionRuleGym:
             )
             .all()
         )
-        rows.extend(("direct_message_sent", row.sent_at) for row in correspondence)
         rows.extend(
-            ("direct_message_acknowledged", row.acknowledged_at)
+            ("direct_message_sent", str(row.id), row.sent_at) for row in correspondence
+        )
+        rows.extend(
+            ("direct_message_acknowledged", str(row.id), row.acknowledged_at)
             for row in correspondence
             if row.acknowledged_at is not None
         )
         rows.extend(
-            ("world_fact", row.valid_from)
+            ("world_fact", str(row.id), row.valid_from)
             for row in self.db.query(WorldFact)
             .filter(WorldFact.session_id.in_(participant_ids))
             .all()
@@ -1315,14 +1343,14 @@ class ProductionRuleGym:
             .all()
         }
         rows.extend(
-            ("world_projection", row.updated_at)
+            ("world_projection", str(row.id), row.updated_at)
             for row in self.db.query(WorldProjection).all()
             if int(row.source_event_id or 0) in participant_event_ids
         )
-        missing = [kind for kind, value in rows if value is None]
+        missing = [(kind, row_id) for kind, row_id, value in rows if value is None]
         off_clock = [
-            (kind, value.isoformat())
-            for kind, value in rows
+            (kind, row_id, value.isoformat())
+            for kind, row_id, value in rows
             if value is not None and value not in allowed
         ]
         if missing or off_clock:
@@ -1333,7 +1361,7 @@ class ProductionRuleGym:
 
         counts: dict[str, int] = {}
         instants: set[str] = set()
-        for kind, value in rows:
+        for kind, _row_id, value in rows:
             counts[kind] = counts.get(kind, 0) + 1
             if value is not None:
                 instants.add(value.replace(tzinfo=timezone.utc).isoformat())

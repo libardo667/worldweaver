@@ -102,13 +102,14 @@ if not is_sqlite:
 engine = create_engine(database_url, **engine_kwargs)
 
 
-@event.listens_for(engine, "connect")
-def _configure_sqlite_connection(dbapi_conn, connection_record):
+def configure_sqlite_connection(dbapi_conn, connection_record):
     """Enable SQLite-specific pragmas for local dev concurrency."""
-    if not is_sqlite:
-        return
     dbapi_conn.execute("PRAGMA journal_mode=WAL")
     dbapi_conn.execute("PRAGMA busy_timeout=30000")
+
+
+if is_sqlite:
+    event.listen(engine, "connect", configure_sqlite_connection)
 
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)

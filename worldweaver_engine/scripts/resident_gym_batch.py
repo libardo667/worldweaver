@@ -44,6 +44,35 @@ def _safe_model_slug(model_id: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", model_id.lower()).strip("-")[:48] or "model"
 
 
+def _safe_failure(path: Path) -> dict[str, str]:
+    """Load only the runner-authored bounded failure envelope."""
+
+    fallback = {"failure_class": "unclassified", "exception_type": "Unknown"}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return fallback
+    if not isinstance(payload, dict) or set(payload) != {
+        "schema",
+        "schema_version",
+        "episode",
+        "failure_class",
+        "exception_type",
+    }:
+        return fallback
+    failure_class = str(payload.get("failure_class") or "")
+    exception_type = str(payload.get("exception_type") or "")
+    safe = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,79}$")
+    if (
+        payload.get("schema") != "worldweaver.resident-gym.failure"
+        or payload.get("schema_version") != 1
+        or not safe.fullmatch(failure_class)
+        or not safe.fullmatch(exception_type)
+    ):
+        return fallback
+    return {"failure_class": failure_class, "exception_type": exception_type}
+
+
 def _run_member(
     *,
     ordinal: int,
@@ -56,6 +85,7 @@ def _run_member(
     run_id = f"run-{ordinal:04d}"
     report_name = f"{run_id}-{_safe_model_slug(model_id)}.html"
     report = output_dir / report_name
+    failure_path = output_dir / f".{run_id}.failure.json"
     command = [
         sys.executable,
         "scripts/resident_gym.py",
@@ -70,6 +100,8 @@ def _run_member(
         "--json",
         "--output",
         str(report),
+        "--failure-output",
+        str(failure_path),
     ]
     started = time.monotonic()
     completed = subprocess.run(
@@ -81,11 +113,14 @@ def _run_member(
     )
     duration_ms = round((time.monotonic() - started) * 1000)
     if completed.returncode != 0:
+        safe_failure = _safe_failure(failure_path)
+        failure_path.unlink(missing_ok=True)
         return None, {
             "run_id": run_id,
             "model_id": model_id,
             "duration_ms": duration_ms,
             "return_code": completed.returncode,
+            **safe_failure,
         }
     try:
         summary = summarize_episode(
@@ -95,12 +130,16 @@ def _run_member(
             report_name=report_name,
         )
     except (GymBatchError, json.JSONDecodeError, TypeError, ValueError):
+        failure_path.unlink(missing_ok=True)
         return None, {
             "run_id": run_id,
             "model_id": model_id,
             "duration_ms": duration_ms,
             "return_code": 0,
+            "failure_class": "invalid_structural_output",
+            "exception_type": "GymBatchError",
         }
+    failure_path.unlink(missing_ok=True)
     return summary, None
 
 

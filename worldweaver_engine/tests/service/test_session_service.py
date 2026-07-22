@@ -2,6 +2,7 @@
 
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from threading import Lock
 from unittest.mock import Mock
 
@@ -51,6 +52,25 @@ def test_save_state_persists_v2_payload(db_session):
     assert row is not None
     assert row.vars.get("_v") == 2
     assert row.vars["variables"]["gold"] == 42
+
+
+def test_repeated_state_writes_at_one_world_instant_do_not_fall_back_to_wall_time(
+    db_session,
+):
+    _state_managers.clear()
+    session_id = "session-controlled-repeat"
+    world_now = datetime(2026, 7, 23, 9, 0, tzinfo=timezone.utc)
+    manager = get_state_manager(session_id, db_session)
+
+    manager.set_variable("location", "Willow Court")
+    save_state(manager, db_session, now=world_now)
+    manager.set_variable("location", "Footbridge")
+    save_state(manager, db_session, now=world_now)
+    db_session.expire_all()
+
+    row = db_session.get(SessionVars, session_id)
+    assert row is not None
+    assert row.updated_at == world_now.replace(tzinfo=None)
 
 
 def test_remove_cached_sessions_only_removes_requested_keys():

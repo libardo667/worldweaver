@@ -22,7 +22,12 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import httpx
-from sqlalchemy import create_engine, event as sqlalchemy_event
+from sqlalchemy import (
+    create_engine,
+    event as sqlalchemy_event,
+    inspect as sqlalchemy_inspect,
+)
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import uvicorn
@@ -35,7 +40,7 @@ if str(ENGINE_ROOT) not in sys.path:
 from src.api.game import _state_managers  # noqa: E402
 from main import app  # noqa: E402
 from src.config import settings  # noqa: E402
-from src.database import Base, get_db  # noqa: E402
+from src.database import Base, configure_sqlite_connection, get_db  # noqa: E402
 from src.models import ResidentSessionRetirementReceipt, SessionVars  # noqa: E402
 from src.services.clock import Clock, ControlledClock, get_world_clock  # noqa: E402
 from src.services.gym_presentation import (  # noqa: E402
@@ -84,6 +89,77 @@ _GYM_ADAPTER_PROTOCOL = "worldweaver.gym-participant-stdio"
 _GYM_ADAPTER_PROTOCOL_VERSION = 2
 
 
+def _safe_failure_class(exc: Exception) -> str:
+    """Map an exception to one bounded class without retaining its message."""
+
+    message = str(exc)
+    if isinstance(exc, SQLAlchemyError):
+        return "database"
+    if message.startswith("persistent world chronology escaped"):
+        return "world_chronology"
+    if "attachment" in message:
+        return "attachment_invariant"
+    if "scheduled" in message or "return" in message:
+        return "scheduler_contract"
+    if "loopback" in message or "transport" in message:
+        return "participant_transport"
+    if (
+        "resident process" in message
+        or "resident host" in message
+        or "resident adapter" in message
+    ):
+        return "resident_process"
+    if isinstance(exc, ValueError):
+        return "scenario_contract"
+    return "runtime_invariant"
+
+
+def _write_failure_envelope(path: Path | None, *, episode: str, exc: Exception) -> None:
+    """Write the only failure fields a batch member may disclose."""
+
+    if path is None:
+        return
+    output = path.expanduser().resolve()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(
+        json.dumps(
+            {
+                "schema": "worldweaver.resident-gym.failure",
+                "schema_version": 1,
+                "episode": str(episode),
+                "failure_class": _safe_failure_class(exc),
+                "exception_type": type(exc).__name__,
+            },
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+
+def _require_explicit_session_time(session, _flush_context, _instances) -> None:
+    """Fail before a controlled run can invoke SessionVars' wall-time fallback."""
+
+    for row in session.dirty:
+        if not isinstance(row, SessionVars):
+            continue
+        state = sqlalchemy_inspect(row)
+        if state.attrs.updated_at.history.has_changes():
+            continue
+        changed = sorted(
+            attribute.key
+            for attribute in state.attrs
+            if attribute.history.has_changes()
+        )
+        if set(changed) <= {"actor_id", "player_id"}:
+            # Bootstrap repairs this intermediate flush to the injected instant
+            # before committing the complete joined presence.
+            continue
+        raise RuntimeError(
+            "controlled SessionVars update omitted world time: "
+            f"session={row.session_id} fields={changed!r}"
+        )
+
+
 @contextmanager
 def _temporary_gym_dependencies(db, *, world_clock: Clock):
     """Bind the production app to one isolated database and world clock."""
@@ -93,6 +169,35 @@ def _temporary_gym_dependencies(db, *, world_clock: Clock):
 
     def override_database():
         yield db
+
+    def override_world_clock():
+        return world_clock
+
+    app.dependency_overrides[get_db] = override_database
+    app.dependency_overrides[get_world_clock] = override_world_clock
+    try:
+        yield
+    finally:
+        if previous_database_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous_database_override
+        if previous_clock_override is None:
+            app.dependency_overrides.pop(get_world_clock, None)
+        else:
+            app.dependency_overrides[get_world_clock] = previous_clock_override
+
+
+@contextmanager
+def _temporary_gym_request_dependencies(session_factory, *, world_clock: Clock):
+    """Give every real loopback request its own isolated database session."""
+
+    previous_database_override = app.dependency_overrides.get(get_db)
+    previous_clock_override = app.dependency_overrides.get(get_world_clock)
+
+    def override_database():
+        with session_factory() as request_db:
+            yield request_db
 
     def override_world_clock():
         return world_clock
@@ -173,16 +278,7 @@ class _ObservedLoopbackApp:
             return
         status_code = 500
         response_parts: list[bytes] = []
-
-        async def observe_send(message) -> None:
-            nonlocal status_code
-            if message.get("type") == "http.response.start":
-                status_code = int(message.get("status") or 500)
-            elif message.get("type") == "http.response.body":
-                response_parts.append(bytes(message.get("body") or b""))
-            await send(message)
-
-        await app(scope, receive, observe_send)
+        recorded = False
         raw_path = scope.get("raw_path") or str(scope.get("path") or "").encode("ascii")
         raw_query = scope.get("query_string") or b""
         target = bytes(raw_path).decode("ascii")
@@ -192,42 +288,63 @@ class _ObservedLoopbackApp:
             bytes(key).decode("latin1").lower(): bytes(value).decode("latin1")
             for key, value in scope.get("headers") or []
         }
-        try:
-            response_payload = json.loads(b"".join(response_parts))
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            response_payload = None
-        self._gym.record_participant_http(
-            self._participant_session_id,
-            method=str(scope.get("method") or ""),
-            target=target,
-            status_code=status_code,
-            resident_proof=all(
-                str(headers.get(name.lower()) or "").strip()
-                for name in (
-                    "X-WW-Resident-Certificate",
-                    "X-WW-Resident-Timestamp",
-                    "X-WW-Resident-Nonce",
-                    "X-WW-Resident-Signature",
-                )
-            ),
-            response_payload=response_payload,
-        )
-        if (
-            str(scope.get("method") or "").upper() == "POST"
-            and target.partition("?")[0] == "/api/session/leave"
-            and 200 <= status_code < 300
-            and isinstance(response_payload, dict)
-        ):
-            self._gym.record_resident_departure_receipt(
+
+        def record_response() -> None:
+            nonlocal recorded
+            if recorded:
+                return
+            recorded = True
+            try:
+                response_payload = json.loads(b"".join(response_parts))
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                response_payload = None
+            self._gym.db.expire_all()
+            self._gym.record_participant_http(
                 self._participant_session_id,
-                response_payload,
+                method=str(scope.get("method") or ""),
+                target=target,
+                status_code=status_code,
+                resident_proof=all(
+                    str(headers.get(name.lower()) or "").strip()
+                    for name in (
+                        "X-WW-Resident-Certificate",
+                        "X-WW-Resident-Timestamp",
+                        "X-WW-Resident-Nonce",
+                        "X-WW-Resident-Signature",
+                    )
+                ),
+                response_payload=response_payload,
             )
+            if (
+                str(scope.get("method") or "").upper() == "POST"
+                and target.partition("?")[0] == "/api/session/leave"
+                and 200 <= status_code < 300
+                and isinstance(response_payload, dict)
+            ):
+                self._gym.record_resident_departure_receipt(
+                    self._participant_session_id,
+                    response_payload,
+                )
+
+        async def observe_send(message) -> None:
+            nonlocal status_code
+            if message.get("type") == "http.response.start":
+                status_code = int(message.get("status") or 500)
+            elif message.get("type") == "http.response.body":
+                response_parts.append(bytes(message.get("body") or b""))
+                if not message.get("more_body", False):
+                    record_response()
+            await send(message)
+
+        await app(scope, receive, observe_send)
+        record_response()
 
 
 @contextmanager
 def _temporary_gym_loopback(
     db,
     *,
+    session_factory,
     world_clock: Clock,
     gym: ProductionRuleGym,
     participant_session_id: str,
@@ -255,7 +372,7 @@ def _temporary_gym_loopback(
         name="worldweaver-gym-loopback",
         daemon=True,
     )
-    with _temporary_gym_dependencies(db, world_clock=world_clock):
+    with _temporary_gym_request_dependencies(session_factory, world_clock=world_clock):
         thread.start()
         deadline = time.monotonic() + 10.0
         while not server.started and thread.is_alive() and time.monotonic() < deadline:
@@ -701,6 +818,7 @@ def _run_scripted_resident_return(db, *, record_observer=None):
 def _run_model_resident_return(
     db,
     *,
+    session_factory=None,
     record_observer=None,
     model_id: str,
     model_mode: str = "live",
@@ -817,8 +935,13 @@ def _run_model_resident_return(
         elif transport_mode == "loopback":
             if departure_fault or transport_fault:
                 raise ValueError("loopback transport does not accept stdio fault modes")
+            if session_factory is None:
+                raise RuntimeError(
+                    "loopback transport requires a database session factory"
+                )
             transport_context = _temporary_gym_loopback(
                 db,
+                session_factory=session_factory,
                 world_clock=gym.clock,
                 gym=gym,
                 participant_session_id=participant_session_id,
@@ -1028,6 +1151,7 @@ def _run_model_resident_return(
 def _run_willow_week(
     db,
     *,
+    session_factory=None,
     record_observer=None,
     model_id: str,
     model_mode: str = "live",
@@ -1164,8 +1288,13 @@ def _run_willow_week(
         if transport_mode == "stdio":
             transport_context = _temporary_gym_api(db, world_clock=gym.clock)
         elif transport_mode == "loopback":
+            if session_factory is None:
+                raise RuntimeError(
+                    "loopback transport requires a database session factory"
+                )
             transport_context = _temporary_gym_loopback(
                 db,
+                session_factory=session_factory,
                 world_clock=gym.clock,
                 gym=gym,
                 participant_session_id=participant_session_id,
@@ -1259,6 +1388,10 @@ def _run_willow_week(
 
             while gym.scheduled_checkpoint()["pending"]:
                 for event in gym.offer_next_scheduled():
+                    if not gym.has_scheduled_event(event.event_id):
+                        continue
+                    should_reconcile_return = False
+                    current_scheduled_return = None
                     if event.kind == "resident_private_return":
                         arrange_step(2)
                         result = gym.deliver_resident_return(
@@ -1267,18 +1400,8 @@ def _run_willow_week(
                                 offered, command="handle-return-model", step=2
                             ),
                         )
-                        future_return = result.get("scheduled_return")
-                        if isinstance(future_return, dict):
-                            due_at = datetime.fromisoformat(
-                                str(future_return.get("due_at") or "")
-                            )
-                            if due_at <= week_end:
-                                gym.schedule_resident_return(
-                                    participant_session_id,
-                                    resident_event_id=str(future_return["event_id"]),
-                                    activity_id=str(future_return["activity_id"]),
-                                    due_at=due_at,
-                                )
+                        should_reconcile_return = True
+                        current_scheduled_return = result.get("scheduled_return")
                     elif event.kind == "resident_host_tick":
                         step = int(event.payload.get("step") or 0)
                         arrange_step(step)
@@ -1289,19 +1412,23 @@ def _run_willow_week(
                                     offered, command="run-tick-model", step=step
                                 ),
                             )
-                            gym.reconcile_resident_return(
-                                participant_session_id,
-                                (
-                                    result.get("scheduled_return")
-                                    if isinstance(result.get("scheduled_return"), dict)
-                                    else None
-                                ),
-                            )
+                            should_reconcile_return = True
+                            current_scheduled_return = result.get("scheduled_return")
                         else:
                             gym.skip_resident_tick(event, reason="resident_at_hearth")
                     else:
                         raise RuntimeError("Willow Week scheduled an unknown event")
                     gym.acknowledge_scheduled((event.event_id,))
+                    if should_reconcile_return:
+                        gym.reconcile_resident_return(
+                            participant_session_id,
+                            (
+                                current_scheduled_return
+                                if isinstance(current_scheduled_return, dict)
+                                else None
+                            ),
+                            not_after=week_end,
+                        )
 
             final_process = json.loads(process_path.read_text(encoding="utf-8"))
             final_attachment = final_process.get("attachment")
@@ -1389,6 +1516,9 @@ def main() -> int:
         help="self-contained HTML result (default: .runs/gym/<episode>.html)",
     )
     parser.add_argument(
+        "--failure-output", type=Path, default=None, help=argparse.SUPPRESS
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="print the structural episode JSON instead of the terminal view",
@@ -1444,13 +1574,18 @@ def main() -> int:
 
     _state_managers.clear()
     _session_locks.clear()
+    database_directory = tempfile.TemporaryDirectory(prefix="worldweaver-gym-db-")
+    database_path = Path(database_directory.name) / "gym.sqlite3"
     engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
+        f"sqlite+pysqlite:///{database_path}",
         connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
     )
+    sqlalchemy_event.listen(engine, "connect", configure_sqlite_connection)
     Base.metadata.create_all(engine)
-    session_factory = sessionmaker(bind=engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    sqlalchemy_event.listen(
+        session_factory, "before_flush", _require_explicit_session_time
+    )
     stream = not args.json and not args.no_stream
     episode_titles = {
         "footbridge": "The Footbridge Hello",
@@ -1487,6 +1622,7 @@ def main() -> int:
                         parser.error("Willow Week does not accept fault modes")
                     result = _run_willow_week(
                         db,
+                        session_factory=session_factory,
                         record_observer=show_record if stream else None,
                         model_id=model_id,
                         model_mode=args.model_mode,
@@ -1495,6 +1631,7 @@ def main() -> int:
                 else:
                     result = _run_model_resident_return(
                         db,
+                        session_factory=session_factory,
                         record_observer=show_record if stream else None,
                         model_id=model_id,
                         model_mode=args.model_mode,
@@ -1530,8 +1667,16 @@ def main() -> int:
         else:
             print(render_terminal(result))
         print(f"Visual episode: {output}")
+    except Exception as exc:
+        _write_failure_envelope(
+            args.failure_output,
+            episode=args.episode,
+            exc=exc,
+        )
+        raise
     finally:
         engine.dispose()
+        database_directory.cleanup()
         _state_managers.clear()
         _session_locks.clear()
     return 0

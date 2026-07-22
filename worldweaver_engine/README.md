@@ -8,6 +8,7 @@ Start with the repository manual:
 - [Run a local town](../docs/tutorials/run-a-local-town.md)
 - [Architecture reference](../docs/reference/architecture.md)
 - [Command reference](../docs/reference/commands.md)
+- [Resident gym](../docs/reference/resident-gym.md)
 - [Federation without ownership](../docs/explanation/federation-without-ownership.md)
 
 ## What the engine owns
@@ -23,6 +24,10 @@ Start with the repository manual:
 
 The engine does not own resident cognition, private ledgers, hearth files, or continuing identity. Those
 belong to `../ww_agent/` and the resident's hearth.
+
+The isolated resident gym uses this package's actual FastAPI routes and service rules over a temporary
+file-backed database. Its loopback server gives every request its own database session and injects controlled
+world time through the production dependency; security expiry and process timing remain real or monotonic.
 
 ## Source layout
 

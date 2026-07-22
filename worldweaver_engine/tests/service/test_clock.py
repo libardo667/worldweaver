@@ -81,6 +81,8 @@ def test_queue_cancels_only_exact_pending_event_ids():
 
     assert queue.cancel((first.event_id, "missing", "")) == (first.event_id,)
     assert queue.pending == (second,)
+    assert not queue.contains(first.event_id)
+    assert queue.contains(second.event_id)
     assert queue.cancel((first.event_id,)) == ()
 
 

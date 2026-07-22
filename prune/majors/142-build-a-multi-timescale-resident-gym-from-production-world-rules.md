@@ -284,8 +284,9 @@ inside the disposable image. Models are repeatable arguments, batches are bounde
 concurrency 16, and successful members keep their normal episode reports. The aggregate whitelist contains
 only model and usage counts, choice kind, attachment, final location, canonical receipt and HTTP counts,
 off-clock count, duration, infrastructure, transport, and report filename. Failures retain only run ID, model
-ID, duration, and return code. It never copies prompts, completions, read queries or results, private activity
-prose, stderr, or resident artifacts. A two-member container proof produced four model calls, two durable
+ID, duration, return code, and bounded failure and exception classes from a runner-authored envelope. It never
+copies prompts, completions, exception messages, read queries or results, private activity prose, stderr, or
+resident artifacts. A two-member container proof produced four model calls, two durable
 retirements, 26 successful HTTP requests, and no failures or off-clock rows.
 
 The first multi-activation scenario, `Willow Week`, is now complete. One disposable model-backed resident
@@ -305,13 +306,27 @@ next event. A real containerized `google/gemini-3.5-flash` Willow Week exposed a
 first activation withdrew the initial return, the engine cancelled the stale appointment, and the remaining
 week completed without offering it. The policy moved to Footbridge and validly retained one suspended city
 attachment. Two of nine inference attempts failed before producing a consumable decision; those failures did
-not crash later intervals. Every attempt now has a structural finished-or-failed terminal boundary, and batch
-schema 2 counts attempts, content-free inference failures, and per-process cumulative token deltas without recording
-completion content.
+not crash later intervals. Every attempt now has a structural finished-or-failed terminal boundary, and the
+batch schema counts attempts, content-free inference failures, and per-process cumulative token deltas without
+recording completion content.
 
-The next bounded slice is a scaled live-model Willow Week cohort and structural report. Optional constructive-
-game capabilities and federation require their own explicit scenarios. Do not grow a parallel list of gym-only
-world abilities in the meantime.
+The first 20-member live launch was diagnostic rather than an accepted cohort: 12 completed and eight failed.
+It exposed that the loopback runner shared one SQLAlchemy session across its coordinator, Uvicorn middleware,
+and FastAPI worker thread. The runner now uses a temporary file-backed SQLite database with production WAL and
+busy-timeout settings, a separate coordinator session, and one request-scoped session per actual HTTP request.
+It also exposed same-instant updates where SQLAlchemy considered the assigned controlled timestamp unchanged
+and invoked a wall-time `onupdate` fallback. Session and world-projection writes now explicitly mark those
+timestamps modified, and a gym pre-flush guard rejects any remaining implicit session time.
+
+An eight-member host-process confirmation after those repairs completed eight of eight runs with 77 model
+calls, 25 content-free inference failures, 405 HTTP requests, no off-clock rows, and exactly one suspended city
+attachment per resident. One request was a valid 422 refusal after an elective places read omitted its required
+query; there were no 5xx server errors. Batch schema 4 therefore retains total HTTP non-successes while splitting
+4xx refusals from 5xx errors, and failed members expose only their bounded failure class rather than stderr.
+
+The next bounded acceptance is the clean 20-member disposable-container Willow Week cohort. Then add a
+counterfactual fork. Optional constructive-game capabilities and federation require their own explicit
+scenarios; do not grow a parallel list of gym-only world abilities in the meantime.
 
 The controlled-time HTTP prerequisite is now closed for the routes exercised by the model appointment. Live
 requests receive `SystemClock`; the isolated gym overrides the same FastAPI dependency with its controlled

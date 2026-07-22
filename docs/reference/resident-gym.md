@@ -66,12 +66,12 @@ python dev.py gym-batch --container --runs-per-model 20 --concurrency 4
 
 Add `--episode willow-week` to batch the compressed week, and repeat `--model MODEL_ID` to compare model
 families. Every member gets its own process, temporary resident home, synthetic database, controlled clock,
-and ordinary episode report. The aggregate records only model ID,
-model-attempt, inference-failure, and token counts, choice kind, attachment and final location, retirement and
-HTTP counts,
-off-clock rows, duration, infrastructure, transport, and report filename. Failed members contribute only run
-ID, model ID, duration, and return code. Prompts, completions, read queries and results, private activity prose,
-stderr, and resident artifacts are not copied into the aggregate.
+and ordinary episode report. The aggregate records only model ID, model-attempt, inference-failure, and token
+counts, choice kind, attachment and final location, retirement and HTTP counts, off-clock rows, duration,
+infrastructure, transport, and report filename. HTTP non-successes are split into expected 4xx refusals and 5xx
+server errors. Failed members contribute only run ID, model ID, duration, return code, and bounded failure and
+exception classes from a runner-authored envelope. Prompts, completions, exception messages, read queries and
+results, private activity prose, stderr, and resident artifacts are not copied into the aggregate.
 
 The model episode creates a disposable synthetic hearth under a temporary directory and exports portable
 checkpoints before and after activation. It does not admit, clone, or wake a resident in Alderbank or any other
@@ -315,6 +315,11 @@ second world API. The loopback mode serves the same app through a real local soc
 real `LocalWorld` after confirmed departure or remain suspended at its valid city attachment; it still does not
 activate optional game capabilities or contact federation.
 
+Real loopback requests use one request-scoped SQLAlchemy session each, while the scenario coordinator keeps a
+separate session over the same temporary file-backed SQLite database. The disposable database enables the same
+WAL and busy-timeout settings as a local production SQLite shard. This matters under concurrent batches: one
+session is not shared among the scenario thread, Uvicorn middleware, and FastAPI workers.
+
 The model episode now builds its direct activation scene and its signed HTTP scene at the same controlled
 instant. Their content-safe place, route, presence, and trace counts must match; at the two-day deadline the
 expired willow bench is absent from both. The same dependency governs sublocation listing, creation, and
@@ -328,6 +333,11 @@ it fails if a timestamp is missing, comes from wall time, or is not one of the e
 instants. The resident host passes that same injected instant to normal ticks and `LocalWorld`; grounding,
 whisper freshness, hearth scene events, private reads, and voice records no longer consult wall time in a
 controlled run.
+
+Repeated writes at one controlled instant explicitly mark both session and world-projection timestamps as
+changed. They therefore cannot fall through SQLAlchemy's column `onupdate` default to real wall time merely
+because the assigned virtual timestamp equals the previous value. The gym session adds a pre-flush guard that
+turns any remaining implicit session timestamp into a failed episode before it can contaminate a result.
 
 The same FastAPI dependency is threaded through correspondence, physical traces, doula polls, grounding,
 objects, making, exchanges, stoops, and access commands. Those capabilities still need their own behavioral gym
@@ -352,9 +362,16 @@ and database, and writes `aggregate.json`, `aggregate.html`, and one ordinary re
 A two-member container acceptance run completed with four model calls, two retirement receipts, 26 successful
 signed/public HTTP requests, and zero failed or off-clock rows.
 
-The next scenario slice is a scaled live-model Willow Week cohort and structural report. Counterfactual
-forking, optional constructive-game capabilities, concurrent model residents, and federation remain later
-slices.
+The first 20-member Willow Week launch was retained as diagnostic evidence rather than reported as a successful
+cohort: 12 completed and eight failed. It exposed shared-session SQLite misuse and then the two same-instant
+timestamp fallbacks above. After those repairs, an eight-member host-process confirmation completed eight of
+eight runs with 77 model calls, 25 content-free inference failures, 405 HTTP requests, no off-clock rows, and
+one valid 422 client refusal from an elective places read. There were no 5xx server errors, and every resident
+retained exactly one suspended city attachment. A clean 20-member disposable-container confirmation is the
+next acceptance run.
+
+After that scaled confirmation, the next scenario slice is a counterfactual Willow Week fork. Optional
+constructive-game capabilities, concurrent model residents, and federation remain later slices.
 
 The database snapshot supports SQLite only and may restore only into an empty synthetic database. Its hash
 detects damage and internal mismatches; it is not a signature and does not make an envelope from an untrusted

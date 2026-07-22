@@ -30,6 +30,7 @@ _ICONS = {
     "sublocation_expired": "🍂",
     "scheduled_event_created": "🗓️",
     "scheduled_event_cancelled": "✕",
+    "scheduled_event_deferred": "⏸️",
     "scheduled_event_offered": "🔔",
     "scheduled_event_acknowledged": "✅",
     "observation_ready": "👁️",
@@ -147,10 +148,16 @@ def _record_sentence(record: GymRecord) -> str:
             f"{detail.get('event_id')} scheduled {detail.get('event_kind')} for "
             f"{detail.get('due_at')}."
         )
-    if record.kind == "scheduled_event_offered":
+    if record.kind == "scheduled_event_cancelled":
+        event_ids = ", ".join(str(item) for item in detail.get("event_ids") or [])
+        return f"{actor}'s obsolete appointment {event_ids or 'event'} was cancelled."
+    if record.kind == "scheduled_event_deferred":
         return (
-            f"{detail.get('event_id')} was offered for " f"{detail.get('event_kind')}."
+            f"{actor}'s next private return falls after this scenario's "
+            f"{detail.get('not_after')} horizon and remains in private custody."
         )
+    if record.kind == "scheduled_event_offered":
+        return f"{detail.get('event_id')} was offered for {detail.get('event_kind')}."
     if record.kind == "scheduled_event_acknowledged":
         event_ids = ", ".join(str(item) for item in detail.get("event_ids") or [])
         return f"The queue acknowledged {event_ids or 'no scheduled event'}."
@@ -388,11 +395,11 @@ def render_html(result: GymEpisodeResult) -> str:
     <section class="panel post-panel">
       <h2>The post trail</h2>
       <div class="post-route" aria-label="The production correspondence states exercised by this episode">
-        <span class="post-state {'complete' if sent else ''}"><b>✉️</b> sent</span>
+        <span class="post-state {"complete" if sent else ""}"><b>✉️</b> sent</span>
         <span class="post-path" aria-hidden="true"><span class="courier">✉</span></span>
-        <span class="post-state {'complete' if waiting else ''}"><b>📬</b> waiting</span>
+        <span class="post-state {"complete" if waiting else ""}"><b>📬</b> waiting</span>
         <span class="post-path short" aria-hidden="true"></span>
-        <span class="post-state {'complete' if acknowledged else ''}"><b>📨</b> acknowledged</span>
+        <span class="post-state {"complete" if acknowledged else ""}"><b>📨</b> acknowledged</span>
       </div>
       <p class="post-note">These are stored correspondence states. The moving envelope is only a visual key.</p>
     </section>"""
@@ -505,13 +512,13 @@ def render_html(result: GymEpisodeResult) -> str:
     </section>
     <section class="panel">
       <h2>Participants</h2>
-      <ul class="participants">{''.join(participant_cards)}</ul>
+      <ul class="participants">{"".join(participant_cards)}</ul>
     </section>
     {mail_panel}
     {time_panel}
     <section class="panel">
       <h2>What happened</h2>
-      <ol class="timeline">{''.join(timeline)}</ol>
+      <ol class="timeline">{"".join(timeline)}</ol>
     </section>
     <footer>Every line comes from a production service receipt or exact-place signal read. The display adds layout and icons, not narration.</footer>
   </main>

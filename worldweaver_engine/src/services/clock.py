@@ -147,6 +147,14 @@ class ScheduledEventQueue:
     def pending(self) -> tuple[ScheduledEvent, ...]:
         return tuple(sorted(self._pending, key=self._sort_key))
 
+    def contains(self, event_id: str) -> bool:
+        """Report whether one exact event remains pending."""
+
+        normalized = str(event_id or "").strip()
+        return bool(normalized) and any(
+            event.event_id == normalized for event in self._pending
+        )
+
     def cancel(self, event_ids: Iterable[str]) -> tuple[str, ...]:
         """Remove exact pending events when their authoritative owner withdraws them."""
 

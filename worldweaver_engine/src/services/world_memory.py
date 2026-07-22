@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import desc, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, attributes
 
 from ..config import settings
 from ..models import WorldEdge, WorldEvent, WorldFact, WorldNode, WorldProjection
@@ -858,6 +858,7 @@ def apply_event_to_projection(db: Session, event: WorldEvent) -> int:
             merged_metadata.update(update.metadata)
         row.metadata_json = merged_metadata
         row.updated_at = event.created_at
+        attributes.flag_modified(row, "updated_at")
         applied += 1
 
     return applied

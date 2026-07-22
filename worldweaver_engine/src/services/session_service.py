@@ -10,7 +10,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Dict, Iterable, cast
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, attributes
 
 from ..config import settings
 from ..models import SessionVars
@@ -180,6 +180,7 @@ def stage_state(
     row.vars = state_manager.export_state()  # type: ignore
     if now is not None:
         row.updated_at = utc_naive(now)
+        attributes.flag_modified(row, "updated_at")
     db.flush()
     return row
 

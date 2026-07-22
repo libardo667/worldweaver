@@ -83,6 +83,8 @@ def test_batch_summary_is_structural_and_drops_episode_prose():
     assert summary["inference_failures"] == 1
     assert summary["prompt_tokens"] == 20
     assert summary["completion_tokens"] == 5
+    assert summary["http_refusals"] == 0
+    assert summary["http_server_errors"] == 0
     assert "must not escape" not in json.dumps(summary)
 
     aggregate = aggregate_batch(
@@ -99,7 +101,28 @@ def test_batch_summary_is_structural_and_drops_episode_prose():
     assert aggregate["configuration"]["episode"] == "resident-model"
     assert aggregate["totals"]["model_calls"] == 2
     assert aggregate["totals"]["inference_failures"] == 1
+    assert aggregate["totals"]["http_refusals"] == 0
+    assert aggregate["totals"]["http_server_errors"] == 0
     assert aggregate["distributions"]["choices"] == {"wait": 1}
+    assert aggregate["distributions"]["failure_classes"] == {}
+
+
+def test_batch_summary_distinguishes_refusals_from_server_errors():
+    payload = _payload()
+    payload["records"].extend(
+        [
+            {"kind": "participant_http", "detail": {"status_code": 422}},
+            {"kind": "participant_http", "detail": {"status_code": 503}},
+        ]
+    )
+
+    summary = summarize_episode(
+        payload, run_id="run-http", duration_ms=1, report_name="run.html"
+    )
+
+    assert summary["http_errors"] == 2
+    assert summary["http_refusals"] == 1
+    assert summary["http_server_errors"] == 1
 
 
 def test_batch_summary_refuses_an_inference_attempt_without_a_terminal_boundary():
@@ -115,6 +138,45 @@ def test_batch_summary_refuses_an_inference_attempt_without_a_terminal_boundary(
         summarize_episode(
             payload, run_id="run-dangling", duration_ms=1, report_name="run.html"
         )
+
+
+def test_episode_failure_envelope_is_bounded_and_contains_no_exception_message(
+    tmp_path,
+):
+    engine_root = Path(__file__).resolve().parents[2]
+    failure_path = tmp_path / "failure.json"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "scripts/resident_gym.py",
+            "--episode",
+            "resident-model",
+            "--model",
+            "test/gym-read-home-v1",
+            "--model-mode",
+            "scripted-read-home",
+            "--transport-mode",
+            "stdio",
+            "--transport-fault",
+            "child_exit",
+            "--failure-output",
+            str(failure_path),
+            "--no-stream",
+        ],
+        cwd=engine_root,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert completed.returncode == 1
+    assert json.loads(failure_path.read_text(encoding="utf-8")) == {
+        "episode": "resident-model",
+        "exception_type": "RuntimeError",
+        "failure_class": "resident_process",
+        "schema": "worldweaver.resident-gym.failure",
+        "schema_version": 1,
+    }
 
 
 def test_batch_runner_aggregates_independent_model_processes(tmp_path):
@@ -150,6 +212,8 @@ def test_batch_runner_aggregates_independent_model_processes(tmp_path):
     assert aggregate["totals"]["model_calls"] == 6
     assert aggregate["totals"]["retirement_receipts"] == 3
     assert aggregate["totals"]["http_errors"] == 0
+    assert aggregate["totals"]["http_refusals"] == 0
+    assert aggregate["totals"]["http_server_errors"] == 0
     assert aggregate["totals"]["off_clock_rows"] == 0
     assert aggregate["distributions"]["attachments"] == {"hearth": 3}
     assert len(list(output_dir.glob("run-*.html"))) == 3

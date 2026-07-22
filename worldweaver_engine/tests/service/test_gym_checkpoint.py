@@ -326,6 +326,49 @@ def test_resident_return_reconciliation_replaces_and_withdraws_stale_appointment
         _close(engine, db)
 
 
+def test_resident_return_reconciliation_preserves_private_return_after_horizon():
+    engine, db = _memory_session()
+    try:
+        gym = prepare_quiet_interval(db)
+        gym.bind_participant_artifacts(
+            "gym-afternoon-mara",
+            adapter_id="worldweaver.reference-resident",
+            adapter_version=2,
+            model_id="reference-policy-v1",
+            private_state={
+                "custody": "participant_private",
+                "format": "worldweaver.hearth-package",
+                "format_version": 1,
+                "artifact_id": "resident-checkpoint-17",
+                "sha256": "a" * 64,
+                "byte_length": 4096,
+            },
+        )
+        horizon = gym.clock.now() + timedelta(days=7)
+
+        gym.reconcile_resident_return(
+            "gym-afternoon-mara",
+            {
+                "event_id": "resident-return-after-week",
+                "activity_id": "activity-after-week",
+                "due_at": (horizon + timedelta(seconds=1)).isoformat(),
+            },
+            not_after=horizon,
+        )
+
+        assert not any(
+            item["kind"] == "resident_private_return"
+            and item["payload"]["session_id"] == "gym-afternoon-mara"
+            for item in gym.scheduled_checkpoint()["pending"]
+        )
+        deferred = gym.result().records[-1]
+        assert deferred.kind == "scheduled_event_deferred"
+        assert deferred.detail["resident_event_id"] == "resident-return-after-week"
+        assert deferred.detail["not_after"] == horizon.isoformat()
+    finally:
+        _close(engine, db)
+
+
 def test_engine_and_private_resident_artifact_restart_across_processes(tmp_path):
     uninterrupted_engine, uninterrupted_db = _memory_session()
     source_engine, source_db = _memory_session()

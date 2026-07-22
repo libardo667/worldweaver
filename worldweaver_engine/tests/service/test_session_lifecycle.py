@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Levi Banks
 
+from datetime import datetime, timezone
+
 import pytest
 
 from src.models import SessionVars, WorldEvent
@@ -50,6 +52,22 @@ def test_bootstrap_rolls_back_session_when_event_write_fails(db_session, monkeyp
         .count()
         == 0
     )
+
+
+def test_bootstrap_keeps_explicit_world_time_after_actor_attachment(db_session):
+    _seed_host_state(db_session)
+    world_now = datetime(2026, 7, 20, 9, 0, tzinfo=timezone.utc)
+
+    bootstrap_session(
+        db_session,
+        command=_command("controlled-bootstrap"),
+        now=world_now,
+    )
+    db_session.expire_all()
+
+    row = db_session.get(SessionVars, "controlled-bootstrap")
+    assert row is not None
+    assert row.updated_at == world_now.replace(tzinfo=None)
 
 
 def test_bootstrap_rolls_back_session_and_event_when_authority_binding_fails(
